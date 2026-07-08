@@ -1,0 +1,84 @@
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import L from 'leaflet';
+import { motoIcon, tomadorIcon, destinoIcon, ambuIcon, coletaIcon } from '@/lib/mapIcons';
+import { getRouteInfo } from '@/lib/geoService';
+import { MapRef, LIGHT_TILES, ATTRIBUTION, UBATUBA_CENTER } from '@/components/UBTMap';
+
+interface Props {
+  myLocation: { lat: number; lng: number } | null;
+  origin?: { lat: number; lng: number } | null;
+  destination?: { lat: number; lng: number } | null;
+  routeFrom?: { lat: number; lng: number } | null;
+  routeTo?: { lat: number; lng: number } | null;
+  providerType?: "mototaxi" | "ambulante" | "coco";
+}
+
+const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | null }) => (
+  <div className="absolute inset-0" style={{ background: '#E8ECF2' }}>
+    <div
+      className="absolute inset-0 opacity-60"
+      style={{
+        backgroundImage:
+          'linear-gradient(rgba(180,190,210,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(180,190,210,0.6) 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
+      }}
+    />
+    <div
+      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full"
+      style={{ background: '#0DB87E', boxShadow: '0 0 0 8px rgba(13,184,126,0.18)' }}
+    />
+    {myLocation && (
+      <div
+        className="absolute top-3 right-3 px-2 py-1 rounded font-sans text-[10px]"
+        style={{ background: 'rgba(255,255,255,0.85)', color: '#5B6178' }}
+      >
+        {myLocation.lat.toFixed(3)}, {myLocation.lng.toFixed(3)}
+      </div>
+    )}
+  </div>
+);
+
+const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo, providerType = "mototaxi" }: Props) => {
+  const mapRef = useRef<L.Map | null>(null);
+  const [polyline, setPolyline] = useState<[number, number][]>([]);
+
+  useEffect(() => {
+    if (!routeFrom || !routeTo) { setPolyline([]); return; }
+    getRouteInfo(routeFrom, routeTo).then(info => {
+      if (info) setPolyline(info.polyline);
+    });
+  }, [routeFrom?.lat, routeFrom?.lng, routeTo?.lat, routeTo?.lng]);
+
+  if (!myLocation) {
+    return <Fallback myLocation={myLocation} />;
+  }
+
+  const center: [number, number] = [myLocation.lat, myLocation.lng];
+
+  return (
+    <MapContainer
+      center={center}
+      zoom={15}
+      style={{ width: '100%', height: '400px' }}
+      zoomControl={false}
+      attributionControl={false}
+    >
+      <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} />
+      <MapRef mapRef={mapRef} />
+      {myLocation && (
+        <Marker 
+          position={[myLocation.lat, myLocation.lng]} 
+          icon={providerType === "ambulante" ? ambuIcon("comida") : providerType === "coco" ? coletaIcon("misto") : motoIcon(true)} 
+        />
+      )}
+      {origin && <Marker position={[origin.lat, origin.lng]} icon={tomadorIcon} />}
+      {destination && <Marker position={[destination.lat, destination.lng]} icon={destinoIcon} />}
+      {polyline.length > 0 && (
+        <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
+      )}
+    </MapContainer>
+  );
+};
+
+export default PrestadorMapLight;

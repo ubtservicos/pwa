@@ -1,0 +1,179 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* UBT Design System — All colors MUST be HSL */
+
+@layer base {
+  :root {
+    /* Brand */
+    --navy: 222 71% 14%;          /* #0B1B3E */
+    --navy-2: 222 56% 18%;        /* #132348 */
+    --navy-3: 222 56% 25%;        /* #1C3261 */
+    --green: 159 87% 38%;         /* #0DB87E */
+    --green-dark: 159 86% 32%;    /* #0C9562 */
+    --green-light: 159 70% 94%;   /* #E6FAF4 */
+    --amber: 35 91% 55%;          /* #F5A623 */
+    --red: 0 78% 58%;             /* #E84040 */
+    --blue: 219 81% 54%;          /* #2B6EE8 */
+    --purple: 282 39% 51%;        /* #9B59B6 */
+
+    --gray-50: 220 20% 97%;       /* #F7F8FA */
+    --gray-100: 228 14% 95%;      /* #EFF0F3 */
+    --gray-200: 225 15% 87%;      /* #D8DBE5 */
+    --gray-400: 226 14% 63%;      /* #9399AD */
+    --gray-600: 226 14% 41%;      /* #5B6178 */
+    --gray-800: 228 23% 23%;      /* #2C3148 */
+
+    /* Shadcn semantic mapping */
+    --background: 0 0% 100%;
+    --foreground: var(--navy);
+
+    --card: 0 0% 100%;
+    --card-foreground: var(--navy);
+
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--navy);
+
+    --primary: var(--green);
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: var(--gray-50);
+    --secondary-foreground: var(--navy);
+
+    --muted: var(--gray-100);
+    --muted-foreground: var(--gray-600);
+
+    --accent: var(--green-light);
+    --accent-foreground: var(--green-dark);
+
+    --destructive: var(--red);
+    --destructive-foreground: 0 0% 100%;
+
+    --border: var(--gray-200);
+    --input: var(--gray-200);
+    --ring: var(--green);
+
+    --radius: 12px;
+
+    /* Sidebar (kept for shadcn defaults) */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Prestador (light theme) */
+    --prestador-bg: 220 20% 97%;        /* #F7F8FA */
+    --prestador-surface: 0 0% 100%;     /* #FFFFFF */
+    --prestador-border: 225 15% 87%;    /* #D8DBE5 */
+    --prestador-text: 222 71% 14%;      /* #0B1B3E */
+    --prestador-subtle: 226 14% 41%;    /* #5B6178 */
+    --prestador-muted: 226 14% 63%;     /* #9399AD */
+
+    /* Effects */
+    --shadow-md: 0 4px 16px hsl(var(--navy) / 0.14);
+    --shadow-lg: 0 10px 30px hsl(var(--navy) / 0.18);
+    --gradient-hero: linear-gradient(to bottom, hsl(var(--navy) / 0.55) 0%, hsl(var(--navy) / 0.82) 100%);
+    --gradient-card: linear-gradient(to top, hsl(var(--navy) / 0.88) 0%, transparent 60%);
+    --gradient-resp: linear-gradient(to top, hsl(var(--navy) / 0.92) 0%, hsl(var(--navy) / 0.15) 70%);
+
+    /* Admin panel (own theme — raw hex via var()) */
+    --admin-sidebar:  #0F172A;
+    --admin-bg:       #F1F5F9;
+    --admin-surface:  #FFFFFF;
+    --admin-border:   #E2E8F0;
+    --admin-text:     #0F172A;
+    --admin-subtle:   #475569;
+    --admin-muted:    #94A3B8;
+    --admin-green:    #0DB87E;
+    --admin-red:      #E84040;
+    --admin-amber:    #F5A623;
+    --admin-blue:     #2B6EE8;
+    --admin-purple:   #9B59B6;
+  }
+
+  @keyframes admin-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .admin-pulse { animation: admin-pulse 1.5s ease-in-out infinite; }
+
+  @keyframes ubt-fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .dark {
+    /* Single-mode design — keep parity with light */
+    --background: var(--navy);
+    --foreground: 0 0% 100%;
+    --card: var(--navy-2);
+    --card-foreground: 0 0% 100%;
+    --popover: var(--navy-2);
+    --popover-foreground: 0 0% 100%;
+    --primary: var(--green);
+    --primary-foreground: 0 0% 100%;
+    --secondary: var(--navy-3);
+    --secondary-foreground: 0 0% 100%;
+    --muted: var(--navy-3);
+    --muted-foreground: var(--gray-400);
+    --accent: var(--navy-3);
+    --accent-foreground: 0 0% 100%;
+    --destructive: var(--red);
+    --destructive-foreground: 0 0% 100%;
+    --border: var(--navy-3);
+    --input: var(--navy-3);
+    --ring: var(--green);
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Fix for Leaflet maps overlapping UI globally */
+  .leaflet-container {
+    z-index: 10 !important;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Syne', system-ui, sans-serif;
+  }
+  .font-sans {
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 400ms ease-out, transform 400ms ease-out;
+    will-change: opacity, transform;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body {
+  background-color: #0B1B3E;
+}
