@@ -17,6 +17,7 @@ import {
   Clock,
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
+import { supabase } from "@/lib/supabase";
 
 export const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
@@ -40,7 +41,8 @@ const sectionTitle = (path: string) => {
 const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem("adminAuth");
     navigate("/admin/login");
   };

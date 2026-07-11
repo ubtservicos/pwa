@@ -18,16 +18,30 @@ export default function AdminLoginPage() {
     setErr(false);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password: senha,
       });
 
-      if (error) {
+      if (error || !authData.user) {
         setErr(true);
       } else {
-        localStorage.setItem("adminAuth", "true");
-        navigate("/admin");
+        // Fetch user role from database
+        const { data: dbUser } = await supabase
+          .from("usuarios")
+          .select("role")
+          .eq("id", authData.user.id)
+          .maybeSingle();
+
+        const role = email === "ubt.servicos@gmail.com" ? "admin" : (dbUser?.role || "tomador");
+        
+        if (role === "admin") {
+          navigate("/admin");
+        } else {
+          // If not admin, log out and show error
+          await supabase.auth.signOut();
+          setErr(true);
+        }
       }
     } catch (error) {
       setErr(true);
