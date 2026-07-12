@@ -8,13 +8,21 @@ const GlobalBottomNav = () => {
   const path = loc.pathname;
   const user = useCurrentUser();
 
-  // No nav for admin, login, register, index
+  // No nav for admin, login, register, index, onboarding, agendamentos, or checkouts
   if (
     path.startsWith("/admin") ||
     path === "/" ||
     path === "/login" ||
     path === "/cadastro" ||
-    path === "/recuperar-senha"
+    path === "/recuperar-senha" ||
+    path.includes("/onboarding") ||
+    path.includes("/agendar") ||
+    path.includes("/agendamento") ||
+    path.includes("/corrida") ||
+    path.includes("/transacao") ||
+    path.includes("/pedido") ||
+    path.includes("/suporte/ticket") ||
+    (path.includes("/servico/") && !path.startsWith("/app/config"))
   ) {
     return null;
   }

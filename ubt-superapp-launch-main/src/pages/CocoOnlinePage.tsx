@@ -11,6 +11,8 @@ import { useSimpleToast } from "@/hooks/useToast2";
 import { MapRef, LIGHT_TILES, ATTRIBUTION } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useGeolocation } from "@/hooks/useGeolocation";
+
 
 const MapFallback = () => (
   <div className="absolute inset-0" style={{ background: "#E8ECF2" }}>
@@ -81,6 +83,8 @@ const CocoOnlinePage = () => {
 
   const watchIdRef = useRef<number | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+
+  const { coords: geoCoords } = useGeolocation(isOnline);
 
   const NEIGHBORHOODS = ["Centro", "Itaguá", "Perequê-Açu", "Praia Grande", "Tenório", "Toninhas"];
 
@@ -240,11 +244,21 @@ const CocoOnlinePage = () => {
     return () => {
       supabase.removeChannel(channelCaminhao);
       supabase.removeChannel(channelPontos);
-      if (watchIdRef.current !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
     };
   }, [activeCaminhaoId]);
+
+  useEffect(() => {
+    if (isOnline && geoCoords && caminhaoId) {
+      setMyLocation({ lat: geoCoords.lat, lng: geoCoords.lng });
+      supabase
+        .from("coco_caminhoes")
+        .update({ lat: geoCoords.lat, lng: geoCoords.lng })
+        .eq("id", caminhaoId)
+        .then(({ error }) => {
+          if (error) console.error("Error updating location:", error.message);
+        });
+    }
+  }, [isOnline, geoCoords, caminhaoId]);
 
   useEffect(() => {
     if (!user.uid) return;
@@ -273,22 +287,6 @@ const CocoOnlinePage = () => {
         .from("coco_caminhoes")
         .update({ is_online: true })
         .eq("id", caminhaoId);
-      
-      if (navigator.geolocation) {
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          async (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            setMyLocation({ lat, lng });
-            await supabase
-              .from("coco_caminhoes")
-              .update({ lat, lng })
-              .eq("id", caminhaoId);
-          },
-          () => { },
-          { enableHighAccuracy: true, maximumAge: 5000 }
-        );
-      }
       showToast("🟢 Caminhão está online!");
     } catch (err: any) {
       showToast("Erro ao ficar online");
@@ -302,11 +300,6 @@ const CocoOnlinePage = () => {
         .from("coco_caminhoes")
         .update({ is_online: false })
         .eq("id", caminhaoId);
-
-      if (watchIdRef.current !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
       showToast("⚪ Caminhão está offline!");
     } catch (err) {
       console.error(err);

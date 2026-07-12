@@ -8,6 +8,8 @@ import SettingsGroup from "@/components/settings/SettingsGroup";
 import { useSimpleToast } from "@/hooks/useToast2";
 import Toast from "@/components/auth/Toast";
 import { maskPhone } from "@/utils/masks";
+import { supabase } from "@/lib/supabase";
+
 
 const Field = ({
   label,
@@ -118,22 +120,53 @@ const ConfigPerfilPage = () => {
     r.readAsDataURL(f);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!user.uid) return;
     setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
+    try {
+      await supabase.auth.updateUser({
+        data: { full_name: form.nome }
+      });
+
+      await supabase
+        .from("usuarios")
+        .update({ nome: form.nome })
+        .eq("id", user.uid);
+
+      await supabase
+        .from("profiles")
+        .update({ name: form.nome })
+        .eq("id", user.uid);
+
       showToast("Perfil atualizado! ✓");
-    }, 1000);
+    } catch (err: any) {
+      console.error(err);
+      showToast("Erro ao salvar alterações");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSavePwd = () => {
+  const handleSavePwd = async () => {
+    if (pwd.nova !== pwd.conf) {
+      showToast("As senhas não coincidem!");
+      return;
+    }
     setSavingPwd(true);
-    setTimeout(() => {
-      setSavingPwd(false);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: pwd.nova
+      });
+      if (error) throw error;
       setSenhaOpen(false);
       setPwd({ atual: "", nova: "", conf: "" });
       showToast("Senha alterada com sucesso! ✓");
-    }, 1000);
+    } catch (err: any) {
+      console.error(err);
+      showToast("Erro ao alterar senha");
+    } finally {
+      setSavingPwd(false);
+    }
   };
 
   const score = passwordStrength(pwd.nova);

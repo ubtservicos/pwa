@@ -15,6 +15,8 @@ import { reverseGeocode } from "@/lib/geoService";
 import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useGeolocation } from "@/hooks/useGeolocation";
+
 
 type Tab = "informar" | "acompanhar" | "contribuir";
 
@@ -83,6 +85,8 @@ const CocoPage = () => {
   const [selectedCaminhao, setSelectedCaminhao] = useState<CaminhaoCoco | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
+  const { coords: geoCoords, address: geoAddress, refresh: refreshGeo } = useGeolocation();
+
   const fetchCaminhoes = async () => {
     const { data, error } = await supabase
       .from("coco_caminhoes")
@@ -145,13 +149,10 @@ const CocoPage = () => {
   };
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => { },
-      { enableHighAccuracy: true, maximumAge: 30000 }
-    );
-  }, []);
+    if (geoCoords) {
+      setCenter({ lat: geoCoords.lat, lng: geoCoords.lng });
+    }
+  }, [geoCoords]);
 
   useEffect(() => {
     fetchCaminhoes();
@@ -186,14 +187,13 @@ const CocoPage = () => {
   }, [user.uid]);
 
   const useGps = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      setCoordenadas({ lat, lng });
-      mapRef.current?.panTo([lat, lng]);
-      reverseGeocode(lat, lng).then(setEndereco);
-    });
+    if (geoCoords) {
+      setCoordenadas(geoCoords);
+      mapRef.current?.panTo([geoCoords.lat, geoCoords.lng]);
+      if (geoAddress) setEndereco(geoAddress);
+    } else {
+      refreshGeo();
+    }
   };
 
   const confirmarPonto = async () => {

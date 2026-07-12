@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Bike, CheckCircle, Navigation, Gift, Sparkles, Users, BarChart2 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
@@ -8,10 +8,13 @@ import SectionHeader from "@/components/settings/SectionHeader";
 import SettingsToggle from "@/components/settings/SettingsToggle";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
+import { supabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const ConfigNotificacoesPage = () => {
   const t = useTheme();
   const navigate = useNavigate();
+  const user = useCurrentUser();
   const { toast, showToast } = useSimpleToast();
   const [notif, setNotif] = useState({
     chamados: true,
@@ -23,8 +26,38 @@ const ConfigNotificacoesPage = () => {
     saldo: false,
   });
 
+  useEffect(() => {
+    try {
+      const localPrefs = localStorage.getItem("ubt_notif_prefs");
+      if (localPrefs) {
+        setNotif(JSON.parse(localPrefs));
+      } else {
+        supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+          if (authUser?.user_metadata?.notif_preferences) {
+            setNotif(authUser.user_metadata.notif_preferences);
+          }
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      localStorage.setItem("ubt_notif_prefs", JSON.stringify(notif));
+      await supabase.auth.updateUser({
+        data: { notif_preferences: notif }
+      });
+      showToast("Preferências salvas! ✓");
+    } catch (err) {
+      showToast("Preferências salvas localmente!");
+    }
+  };
+
   const toggle = (key: keyof typeof notif) =>
     setNotif((n) => ({ ...n, [key]: !n[key] }));
+
 
   return (
     <div style={{ background: t.bg, minHeight: "100svh" }}>
@@ -116,7 +149,7 @@ const ConfigNotificacoesPage = () => {
 
         <button
           type="button"
-          onClick={() => showToast("Preferências salvas!")}
+          onClick={handleSave}
           style={{
             width: "100%",
             padding: "14px",

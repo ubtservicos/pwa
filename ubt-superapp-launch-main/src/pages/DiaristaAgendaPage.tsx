@@ -140,10 +140,7 @@ const DiaristaAgendaPage = () => {
   };
 
   useEffect(() => {
-    if (!user.uid) {
-      fetchAgendamentos();
-      return;
-    }
+    if (!user.uid) return;
 
     const fetchOnlineStatus = async () => {
       try {

@@ -176,14 +176,14 @@ export default function AdminSplitPage() {
     localStorage.setItem("ubt_split_config", JSON.stringify(split));
     localStorage.setItem("ubt_pix_keys", JSON.stringify(pixKeys));
     localStorage.setItem("ubt_pix_types", JSON.stringify(pixTypes));
-    toast.show("Split global atualizado!");
+    toast.show("Taxa global atualizada!");
   };
 
   return (
     <div style={{ padding: 32, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Split de Pagamento</h1>
+      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Configuração da Taxa de Serviço</h1>
       <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", marginTop: 8 }}>
-        Define como cada transação é dividida entre todos os participantes.
+        Define como a taxa de serviço de cada transação é dividida entre as contas beneficiárias.
       </p>
 
       <Card style={{ padding: 28, marginTop: 16 }}>

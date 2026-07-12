@@ -110,24 +110,31 @@ const PrestadorMototaxiOnboarding = () => {
     }
   }, [activeTab]);
 
-
-
-  // step 1
+  // step 1 - Pessoal
   const [cpf, setCpf] = useState("");
   const [sex, setSex] = useState<"M" | "F" | null>(null);
-  const [plate, setPlate] = useState("");
 
-  // step 2
+  // step 2 - Docs Condutor
   const [cnhFront, setCnhFront] = useState<File | null>(null);
   const [cnhBack, setCnhBack] = useState<File | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
 
-  // step 3
+  // step 3 - Dados Veículo
+  const [plate, setPlate] = useState("");
+  const [brandModel, setBrandModel] = useState("");
+
+  // step 4 - Docs Veículo
+  const [crlvFile, setCrlvFile] = useState<File | null>(null);
+  const [motoFile, setMotoFile] = useState<File | null>(null);
+
+  // step 5 - Modo
   const [modalidade, setModalidade] = useState<Modalidade | null>(null);
 
-  const canStep1 = cpf.length === 14 && sex && plate.length >= 7;
-  const canStep2 = true; // Bypassing photo requirement as per user request
-  const canStep3 = !!modalidade;
+  const canStepPessoal = cpf.length === 14 && sex;
+  const canStepDocsCondutor = true; // Bypassing photo requirement as per user request
+  const canStepDadosVeiculo = plate.length >= 7 && brandModel.trim().length >= 3;
+  const canStepDocsVeiculo = true; // Bypassing photo requirement
+  const canStepModo = !!modalidade;
 
   const [loading, setLoading] = useState(false);
 
@@ -142,6 +149,9 @@ const PrestadorMototaxiOnboarding = () => {
         }
         if (user.user_metadata.placa_moto) {
           setPlate(maskPlate(user.user_metadata.placa_moto));
+        }
+        if (user.user_metadata.modelo_moto) {
+          setBrandModel(user.user_metadata.modelo_moto);
         }
         if (user.user_metadata.modalidade_moto) {
           setModalidade(user.user_metadata.modalidade_moto);
@@ -163,8 +173,14 @@ const PrestadorMototaxiOnboarding = () => {
           cpf: cpf,
           sexo: sex,
           placa_moto: plate,
+          modelo_moto: brandModel,
           modalidade_moto: modalidade,
-          mototaxi_status: nextStatus
+          mototaxi_status: nextStatus,
+          has_crlv: !!crlvFile,
+          has_moto_photo: !!motoFile,
+          has_cnh_front: !!cnhFront,
+          has_cnh_back: !!cnhBack,
+          has_selfie: !!selfie,
         }
       });
     }
@@ -180,6 +196,8 @@ const PrestadorMototaxiOnboarding = () => {
     }
   };
 
+  const TABS = ["Pessoal", "Docs Condutor", "Dados Veículo", "Docs Veículo", "Modo"];
+
   return (
     <div
       className="min-h-[100svh] overflow-y-auto"
@@ -188,7 +206,7 @@ const PrestadorMototaxiOnboarding = () => {
       <TopBar />
 
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16, marginBottom: 16, scrollbarWidth: "none" }}>
-        {["Pessoal", "Veículo", "Modo"].map(t => (
+        {TABS.map(t => (
           <button
             key={t} id={`tab-${t}`} onClick={() => setActiveTab(t)}
             style={{
@@ -251,6 +269,25 @@ const PrestadorMototaxiOnboarding = () => {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "Docs Condutor" && (
+          <div className="space-y-3">
+            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+              Documentos do Condutor
+            </h2>
+            <UploadArea label="CNH — Frente" file={cnhFront} onFile={setCnhFront} />
+            <UploadArea label="CNH — Verso" file={cnhBack} onFile={setCnhBack} />
+            <UploadArea label="Selfie segurando a CNH" file={selfie} onFile={setSelfie} />
+          </div>
+        )}
+
+        {activeTab === "Dados Veículo" && (
+          <div className="space-y-4">
+            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+              Dados do Veículo
+            </h2>
             <FormFieldLight
               label="Placa da moto"
               icon={Hash}
@@ -259,19 +296,23 @@ const PrestadorMototaxiOnboarding = () => {
               placeholder="ABC-1234"
               className="uppercase"
             />
-
+            <FormFieldLight
+              label="Modelo, Cor e Ano da Moto"
+              icon={Bike}
+              value={brandModel}
+              onChange={(e) => setBrandModel(e.target.value)}
+              placeholder="Honda CG 160 Vermelha (2023)"
+            />
           </div>
         )}
 
-        {activeTab === "Veículo" && (
+        {activeTab === "Docs Veículo" && (
           <div className="space-y-3">
             <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
-              Documentos
+              Documentos do Veículo
             </h2>
-            <UploadArea label="CNH — Frente" file={cnhFront} onFile={setCnhFront} />
-            <UploadArea label="CNH — Verso" file={cnhBack} onFile={setCnhBack} />
-            <UploadArea label="Selfie segurando a CNH" file={selfie} onFile={setSelfie} />
-
+            <UploadArea label="CRLV (Certificado do Veículo)" file={crlvFile} onFile={setCrlvFile} />
+            <UploadArea label="Foto da Moto (com a Placa visível)" file={motoFile} onFile={setMotoFile} />
           </div>
         )}
 
@@ -327,12 +368,12 @@ const PrestadorMototaxiOnboarding = () => {
         <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "white", borderTop: "1px solid #E2E8F0", zIndex: 10 }}>
           {activeTab === "Pessoal" ? (
             <PrimaryButtonLight
-              onClick={() => setActiveTab("Veículo")}
-              disabled={!canStep1}
+              onClick={() => setActiveTab("Docs Condutor")}
+              disabled={!canStepPessoal}
             >
-              Avançar para Veículo
+              Avançar para Documentos
             </PrimaryButtonLight>
-          ) : activeTab === "Veículo" ? (
+          ) : activeTab === "Docs Condutor" ? (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -350,8 +391,58 @@ const PrestadorMototaxiOnboarding = () => {
               </button>
               <div className="flex-[2]">
                 <PrimaryButtonLight
+                  onClick={() => setActiveTab("Dados Veículo")}
+                  disabled={!canStepDocsCondutor}
+                >
+                  Avançar para Veículo
+                </PrimaryButtonLight>
+              </div>
+            </div>
+          ) : activeTab === "Dados Veículo" ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("Docs Condutor")}
+                className="flex-1 font-sans font-bold text-[14px]"
+                style={{
+                  border: "1px solid #D8DBE5",
+                  borderRadius: 12,
+                  color: "#5B6178",
+                  background: "white",
+                  padding: "14px 0",
+                }}
+              >
+                Voltar
+              </button>
+              <div className="flex-[2]">
+                <PrimaryButtonLight
+                  onClick={() => setActiveTab("Docs Veículo")}
+                  disabled={!canStepDadosVeiculo}
+                >
+                  Avançar para Fotos Veículo
+                </PrimaryButtonLight>
+              </div>
+            </div>
+          ) : activeTab === "Docs Veículo" ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("Dados Veículo")}
+                className="flex-1 font-sans font-bold text-[14px]"
+                style={{
+                  border: "1px solid #D8DBE5",
+                  borderRadius: 12,
+                  color: "#5B6178",
+                  background: "white",
+                  padding: "14px 0",
+                }}
+              >
+                Voltar
+              </button>
+              <div className="flex-[2]">
+                <PrimaryButtonLight
                   onClick={() => setActiveTab("Modo")}
-                  disabled={!canStep2}
+                  disabled={!canStepDocsVeiculo}
                 >
                   Avançar para Modo
                 </PrimaryButtonLight>
@@ -361,7 +452,7 @@ const PrestadorMototaxiOnboarding = () => {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab("Veículo")}
+                onClick={() => setActiveTab("Docs Veículo")}
                 className="flex-1 font-sans font-bold text-[14px]"
                 style={{
                   border: "1px solid #D8DBE5",
@@ -377,7 +468,7 @@ const PrestadorMototaxiOnboarding = () => {
                 <PrimaryButtonLight
                   onClick={submit}
                   loading={loading}
-                  disabled={!canStep1 || !canStep3}
+                  disabled={!canStepPessoal || !canStepDadosVeiculo || !canStepModo}
                 >
                   Salvar Configurações
                 </PrimaryButtonLight>

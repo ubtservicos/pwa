@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Clock, CheckCircle, Sparkles, Trophy, AlertCircle, XCircle, Star } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle, Sparkles, Trophy, AlertCircle, XCircle, Star, Copy, Check, Loader2, CreditCard } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { MOCK_DIARISTAS } from "@/mocks/diaristasMock";
 import { MATERIAIS_PADRAO, MATERIAIS_DETALHADOS } from "@/mocks/diaristasMateriais";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
+
 
 const STEPS = [
   { key: "pending_confirm", label: "Solicitado", icon: Clock },
@@ -37,6 +38,99 @@ const DiaristaAgendamentoPage = () => {
   const [rating, setRating] = useState(0);
   const [comentario, setComentario] = useState("");
   const [diaristaInfo, setDiaristaInfo] = useState<{ nome: string; rating: number; totalServicos: number } | null>(null);
+
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
+  const [copiedPix, setCopiedPix] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [savedCards, setSavedCards] = useState<any[]>([]);
+  const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+  const [cardCvv, setCardCvv] = useState("");
+
+  useEffect(() => {
+    try {
+      const cards = localStorage.getItem("ubt_cards_user");
+      if (cards) setSavedCards(JSON.parse(cards));
+    } catch { /* noop */ }
+  }, []);
+
+  const handleCopyPix = () => {
+    const pixCode = `00020101021226830014br.gov.bcb.pix2561pix.mercadopago.com/qr/v2/5204000053039865406${ag?.valorTotal.toFixed(2)}5802BR5911UBT_SERVICO6009UBATUBA_SP62070503***6304`;
+    navigator.clipboard.writeText(pixCode);
+    setCopiedPix(true);
+    setTimeout(() => setCopiedPix(false), 2000);
+  };
+
+  const handleProcessPayment = async () => {
+    if (!ag) return;
+    if (paymentMethod === "card") {
+      if (savedCards.length === 0) {
+        alert("Cadastre um cartão em Configurações > Financeiro primeiro!");
+        return;
+      }
+      if (cardCvv.length < 3) {
+        alert("Digite o código CVV de segurança do cartão!");
+        return;
+      }
+    }
+
+    setProcessingPayment(true);
+
+    try {
+      // 1. Simular transação ou buscar token do cartão
+      let token = "pix_payment";
+      if (paymentMethod === "card") {
+        const activeCard = savedCards[selectedCardIndex];
+        token = localStorage.getItem(`card_token_${activeCard.final}`) || "mock_token";
+      }
+
+      // 2. Inserir registro na tabela pagamentos_split via Supabase
+      const transactionId = `mp_tx_${Math.random().toString(36).substring(2, 15)}`;
+      
+      const providerAmount = Number((ag.valorTotal * 0.90).toFixed(2));
+      const ubtAmount = Number((ag.valorTotal * 0.04).toFixed(2));
+      const entityAmount = Number((ag.valorTotal * 0.02).toFixed(2));
+      const prizeWorkerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
+      const prizeConsumerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
+      const godparentAmount = Number((ag.valorTotal * 0.01).toFixed(2));
+
+      const { error: splitError } = await supabase
+        .from("pagamentos_split")
+        .insert({
+          transaction_id: transactionId,
+          status: 'approved',
+          service_type: 'diarista',
+          service_id: ag.id,
+          total_amount: ag.valorTotal,
+          provider_amount: providerAmount,
+          ubt_amount: ubtAmount,
+          entity_amount: entityAmount,
+          prize_worker_amount: prizeWorkerAmount,
+          prize_consumer_amount: prizeConsumerAmount,
+          godparent_amount: godparentAmount
+        });
+
+      if (splitError) {
+        console.error("Erro ao registrar split no banco:", splitError.message);
+      }
+
+      // 3. Atualizar status na tabela diarista_agendamentos
+      const { error: updateError } = await supabase
+        .from("diarista_agendamentos")
+        .update({ status: "completed" })
+        .eq("id", ag.id);
+
+      if (updateError) console.error("Erro ao atualizar agendamento:", updateError.message);
+
+      setTimeout(() => {
+        setProcessingPayment(false);
+        setShowRating(true);
+      }, 1500);
+    } catch (e) {
+      console.error(e);
+      setProcessingPayment(false);
+      setShowRating(true);
+    }
+  };
 
   const fetchAgendamento = async () => {
     if (!id) return;
@@ -294,13 +388,225 @@ const DiaristaAgendamentoPage = () => {
         <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 16, marginTop: 20 }}>
           <p style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "white", margin: 0, textAlign: "center" }}>Pagamento</p>
           <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center", marginTop: 4 }}>Total: R$ {ag.valorTotal.toFixed(2)}</p>
-          <SplitBreakdown total={ag.valorTotal} />
-          <button
-            onClick={() => setShowRating(true)}
-            style={{ marginTop: 16, width: "100%", background: "#0DB87E", color: "white", border: "none", borderRadius: 999, padding: "14px", fontFamily: "Syne", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-          >
-            Confirmar pagamento (PIX)
-          </button>
+          
+          <div style={{ margin: "16px 0" }}>
+            <SplitBreakdown total={ag.valorTotal} />
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <button
+              onClick={() => setPaymentMethod("pix")}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: 10,
+                background: paymentMethod === "pix" ? "#0DB87E" : "rgba(255,255,255,0.05)",
+                color: "white",
+                border: "none",
+                fontFamily: "DM Sans",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Pix Copia e Cola
+            </button>
+            <button
+              onClick={() => setPaymentMethod("card")}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: 10,
+                background: paymentMethod === "card" ? "#0DB87E" : "rgba(255,255,255,0.05)",
+                color: "white",
+                border: "none",
+                fontFamily: "DM Sans",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Cartão de Crédito
+            </button>
+          </div>
+
+          {paymentMethod === "pix" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 12,
+                padding: "10px 14px",
+                gap: 10
+              }}>
+                <span style={{
+                  fontFamily: "DM Sans",
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.45)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1
+                }}>
+                  00020101021226830014br.gov.bcb.pix2561pix.mercadopago.com/qr/v2/5204000053039865406...
+                </span>
+                <button
+                  onClick={handleCopyPix}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 4,
+                    display: "flex"
+                  }}
+                >
+                  {copiedPix ? <Check size={16} color="#0DB87E" /> : <Copy size={16} color="rgba(255,255,255,0.6)" />}
+                </button>
+              </div>
+
+              <button
+                onClick={handleProcessPayment}
+                disabled={processingPayment}
+                style={{
+                  width: "100%",
+                  background: "#0DB87E",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 999,
+                  padding: "14px",
+                  fontFamily: "Syne",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: processingPayment ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8
+                }}
+              >
+                {processingPayment ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Processando Pix...
+                  </>
+                ) : (
+                  "Confirmar pagamento (Pix)"
+                )}
+              </button>
+            </div>
+          )}
+
+          {paymentMethod === "card" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {savedCards.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "12px", background: "rgba(232,64,64,0.1)", border: "1px solid rgba(232,64,64,0.2)", borderRadius: 10 }}>
+                  <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#FFA1A1", margin: 0 }}>
+                    Nenhum cartão cadastrado.
+                  </p>
+                  <button
+                    onClick={() => navigate("/app/config/financeiro")}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#0DB87E",
+                      fontFamily: "DM Sans",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      marginTop: 4,
+                      textDecoration: "underline"
+                    }}
+                  >
+                    Cadastrar cartão de crédito
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={{ fontFamily: "DM Sans", fontSize: 11, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: 4 }}>
+                      Selecione o Cartão
+                    </label>
+                    <select
+                      value={selectedCardIndex}
+                      onChange={(e) => setSelectedCardIndex(Number(e.target.value))}
+                      style={{
+                        width: "100%",
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 12,
+                        padding: "12px",
+                        color: "white",
+                        fontFamily: "DM Sans",
+                        fontSize: 14,
+                        outline: "none"
+                      }}
+                    >
+                      {savedCards.map((c, idx) => (
+                        <option key={c.id} value={idx} style={{ background: "#0B1B3E", color: "white" }}>
+                          {c.bandeira} final {c.final}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontFamily: "DM Sans", fontSize: 11, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: 4 }}>
+                      Código de Segurança (CVV)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="123"
+                      value={cardCvv}
+                      onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      style={{
+                        width: "80px",
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 12,
+                        padding: "12px",
+                        color: "white",
+                        fontFamily: "DM Sans",
+                        fontSize: 14,
+                        textAlign: "center",
+                        outline: "none"
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleProcessPayment}
+                    disabled={processingPayment}
+                    style={{
+                      width: "100%",
+                      background: "#0DB87E",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 999,
+                      padding: "14px",
+                      fontFamily: "Syne",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: processingPayment ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      marginTop: 4
+                    }}
+                  >
+                    {processingPayment ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Tokenizando e Cobrando...
+                      </>
+                    ) : (
+                      `Pagar R$ ${ag.valorTotal.toFixed(2)} com Cartão`
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

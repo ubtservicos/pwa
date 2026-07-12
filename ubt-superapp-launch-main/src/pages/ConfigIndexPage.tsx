@@ -18,6 +18,8 @@ import SettingsGroup from "@/components/settings/SettingsGroup";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SectionHeader from "@/components/settings/SectionHeader";
 import BottomSheet from "@/components/settings/BottomSheet";
+import { supabase } from "@/lib/supabase";
+
 
 const ConfigIndexPage = () => {
   const t = useTheme();
@@ -211,7 +213,8 @@ const ConfigIndexPage = () => {
         </p>
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
+            await supabase.auth.signOut();
             localStorage.clear();
             navigate("/login");
           }}

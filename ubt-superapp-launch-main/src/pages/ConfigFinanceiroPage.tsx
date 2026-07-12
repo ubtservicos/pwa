@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Key, Trash2, Plus, Info, Users, Gift, Star, Heart, AlertCircle, CreditCard } from "lucide-react";
+import { Key, Trash2, Plus, Info, Users, Gift, Star, Heart, AlertCircle, CreditCard, Shield } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -9,7 +9,8 @@ import SectionHeader from "@/components/settings/SectionHeader";
 import BottomSheet from "@/components/settings/BottomSheet";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
-import { maskCPF, maskPhone } from "@/utils/masks";
+import { maskCPF, maskPhone, maskCardNumber, maskExpiry, maskCNPJ } from "@/utils/masks";
+
 
 type PixKey = { id: string; tipo: "CPF" | "E-mail" | "Telefone"; valor: string };
 type Card = { id: string; bandeira: string; final: string; vence: string };
@@ -34,6 +35,13 @@ const ConfigFinanceiroPage = () => {
   const [pixTipo, setPixTipo] = useState<"CPF" | "E-mail" | "Telefone">("CPF");
   const [pixValor, setPixValor] = useState("");
 
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardHolder, setCardHolder] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardCpfCnpj, setCardCpfCnpj] = useState("");
+
   const [split, setSplit] = useState<Record<string, number>>({
     comunidade: 2,
     trabalhador: 1.5,
@@ -44,30 +52,97 @@ const ConfigFinanceiroPage = () => {
   const total = Object.values(split).reduce((a, b) => a + b, 0);
   const totalRound = Math.round(total * 10) / 10;
 
+  const detectCardBrand = (num: string): string => {
+    const clean = num.replace(/\D/g, "");
+    if (clean.startsWith("4")) return "Visa";
+    if (/^5[1-5]/.test(clean) || /^2[2-7]/.test(clean)) return "Mastercard";
+    if (/^3[47]/.test(clean)) return "Amex";
+    if (/^(6011|622|64|65)/.test(clean) || /^50(67|90)/.test(clean) || /^63(62|63)/.test(clean)) return "Elo";
+    return "Elo";
+  };
+
+  useEffect(() => {
+    try {
+      const savedPix = localStorage.getItem("ubt_pix_keys_user");
+      if (savedPix) setPixKeys(JSON.parse(savedPix));
+      const savedCards = localStorage.getItem("ubt_cards_user");
+      if (savedCards) setCards(JSON.parse(savedCards));
+      const savedSplit = localStorage.getItem("ubt_split_user");
+      if (savedSplit) setSplit(JSON.parse(savedSplit));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   const updateSplit = (key: string, value: number) => {
     setSplit({ ...split, [key]: value });
   };
 
   const removePix = (id: string) => {
-    setPixKeys(pixKeys.filter((k) => k.id !== id));
+    const newKeys = pixKeys.filter((k) => k.id !== id);
+    setPixKeys(newKeys);
+    localStorage.setItem("ubt_pix_keys_user", JSON.stringify(newKeys));
     showToast("Chave removida");
   };
 
   const removeCard = (id: string) => {
-    setCards(cards.filter((c) => c.id !== id));
+    const target = cards.find(c => c.id === id);
+    const newCards = cards.filter((c) => c.id !== id);
+    setCards(newCards);
+    localStorage.setItem("ubt_cards_user", JSON.stringify(newCards));
+    if (target) {
+      localStorage.removeItem(`card_token_${target.final}`);
+    }
     showToast("Cartão removido");
   };
 
   const handleAddPix = () => {
     if (!pixValor.trim()) return;
-    setPixKeys([...pixKeys, { id: String(Date.now()), tipo: pixTipo, valor: pixValor }]);
+    const newKeys = [...pixKeys, { id: String(Date.now()), tipo: pixTipo, valor: pixValor }];
+    setPixKeys(newKeys);
+    localStorage.setItem("ubt_pix_keys_user", JSON.stringify(newKeys));
     setPixValor("");
     setShowPixModal(false);
     showToast("Chave adicionada!");
   };
 
+  const handleAddCard = () => {
+    if (!cardNumber || !cardHolder || !cardExpiry || !cardCvv || !cardCpfCnpj) {
+      showToast("Preencha todos os campos!");
+      return;
+    }
+    const cleanNum = cardNumber.replace(/\D/g, "");
+    if (cleanNum.length < 15) {
+      showToast("Número do cartão inválido!");
+      return;
+    }
+    const cleanExpiry = cardExpiry.replace(/\D/g, "");
+    if (cleanExpiry.length < 4) {
+      showToast("Vencimento inválido!");
+      return;
+    }
+    const final = cleanNum.slice(-4);
+    const bandeira = detectCardBrand(cleanNum);
+    const newCards = [...cards, { id: String(Date.now()), bandeira, final, vence: cardExpiry }];
+    setCards(newCards);
+    localStorage.setItem("ubt_cards_user", JSON.stringify(newCards));
+    
+    // Simular o Token gerado do MP
+    const mockToken = `mp_tok_${Math.random().toString(36).substring(2, 15)}`;
+    localStorage.setItem(`card_token_${final}`, mockToken);
+
+    setShowCardModal(false);
+    setCardNumber("");
+    setCardHolder("");
+    setCardExpiry("");
+    setCardCvv("");
+    setCardCpfCnpj("");
+    showToast("Cartão adicionado via Mercado Pago! ✓");
+  };
+
   const handleSaveSplit = () => {
-    showToast("Split atualizado!");
+    localStorage.setItem("ubt_split_user", JSON.stringify(split));
+    showToast("Distribuição da Taxa salva!");
   };
 
   const showSplit =
@@ -223,7 +298,7 @@ const ConfigFinanceiroPage = () => {
 
         <button
           type="button"
-          onClick={() => showToast("Em breve")}
+          onClick={() => setShowCardModal(true)}
           style={{
             width: "100%",
             border: "1.5px dashed rgba(13,184,126,0.40)",
@@ -243,10 +318,11 @@ const ConfigFinanceiroPage = () => {
           </span>
         </button>
 
+
         {showSplit && (
           <>
             <div style={{ marginTop: 24 }}>
-              <SectionHeader>CONTROLE DO SPLIT</SectionHeader>
+              <SectionHeader>TAXA DE SERVIÇO</SectionHeader>
             </div>
             <div
               style={{
@@ -261,9 +337,10 @@ const ConfigFinanceiroPage = () => {
             >
               <Info size={16} color="#0DB87E" style={{ flexShrink: 0, marginTop: 2 }} />
               <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0 }}>
-                Distribua os 6% do split entre as categorias. Você sempre recebe 90% e a UBT 4%.
+                Distribua os 6% da taxa de serviço UBT entre as categorias de benefício. Você sempre recebe 90% e a UBT 4%.
               </p>
             </div>
+
 
             {SPLIT_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -456,6 +533,215 @@ const ConfigFinanceiroPage = () => {
         <button
           type="button"
           onClick={() => setShowPixModal(false)}
+          style={{
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "transparent",
+            color: t.text,
+            border: `1px solid ${t.border}`,
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: "pointer",
+            marginTop: 12,
+          }}
+        >
+          Cancelar
+        </button>
+      </BottomSheet>
+
+      <BottomSheet open={showCardModal} onClose={() => setShowCardModal(false)}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: t.text, margin: 0 }}>
+          Novo Cartão de Crédito
+        </h2>
+        <p style={{ fontFamily: "DM Sans", fontSize: 12, color: t.subtle, marginTop: 4, marginBottom: 16 }}>
+          Preencha os dados do cartão para gerar o token criptografado via Mercado Pago.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: t.subtle, display: "block", marginBottom: 6 }}>
+              Número do Cartão
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(maskCardNumber(e.target.value))}
+                placeholder="4000 1234 5678 9010"
+                inputMode="numeric"
+                style={{
+                  width: "100%",
+                  background: t.inputBg,
+                  border: `1px solid ${t.inputBdr}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  paddingRight: 80,
+                  color: t.text,
+                  fontFamily: "DM Sans",
+                  fontSize: 15,
+                  outline: "none",
+                }}
+              />
+              <span style={{
+                position: "absolute",
+                right: 14,
+                top: 13,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "#0DB87E",
+                background: "rgba(13,184,126,0.1)",
+                padding: "2px 6px",
+                borderRadius: 4
+              }}>
+                {cardNumber.replace(/\D/g, "").length >= 2 ? detectCardBrand(cardNumber) : "Cartão"}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: t.subtle, display: "block", marginBottom: 6 }}>
+              Nome Impresso no Cartão
+            </label>
+            <input
+              type="text"
+              value={cardHolder}
+              onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+              placeholder="F S ANTANDER"
+              style={{
+                width: "100%",
+                background: t.inputBg,
+                border: `1px solid ${t.inputBdr}`,
+                borderRadius: 12,
+                padding: "12px 14px",
+                color: t.text,
+                fontFamily: "DM Sans",
+                fontSize: 15,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: t.subtle, display: "block", marginBottom: 6 }}>
+                Vencimento
+              </label>
+              <input
+                type="text"
+                value={cardExpiry}
+                onChange={(e) => setCardExpiry(maskExpiry(e.target.value))}
+                placeholder="MM/AA"
+                inputMode="numeric"
+                style={{
+                  width: "100%",
+                  background: t.inputBg,
+                  border: `1px solid ${t.inputBdr}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  color: t.text,
+                  fontFamily: "DM Sans",
+                  fontSize: 15,
+                  outline: "none",
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: t.subtle, display: "block", marginBottom: 6 }}>
+                Código (CVV)
+              </label>
+              <input
+                type="text"
+                value={cardCvv}
+                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="123"
+                inputMode="numeric"
+                style={{
+                  width: "100%",
+                  background: t.inputBg,
+                  border: `1px solid ${t.inputBdr}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  color: t.text,
+                  fontFamily: "DM Sans",
+                  fontSize: 15,
+                  outline: "none",
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: t.subtle, display: "block", marginBottom: 6 }}>
+              CPF/CNPJ do Titular
+            </label>
+            <input
+              type="text"
+              value={cardCpfCnpj}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.replace(/\D/g, "").length <= 11) {
+                  setCardCpfCnpj(maskCPF(v));
+                } else {
+                  setCardCpfCnpj(maskCNPJ(v));
+                }
+              }}
+              placeholder="000.000.000-00"
+              inputMode="numeric"
+              style={{
+                width: "100%",
+                background: t.inputBg,
+                border: `1px solid ${t.inputBdr}`,
+                borderRadius: 12,
+                padding: "12px 14px",
+                color: t.text,
+                fontFamily: "DM Sans",
+                fontSize: 15,
+                outline: "none",
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: "rgba(13,184,126,0.06)",
+          border: "1px solid rgba(13,184,126,0.15)",
+          borderRadius: 12,
+          padding: 12,
+          marginTop: 18
+        }}>
+          <Shield size={16} color="#0DB87E" style={{ flexShrink: 0 }} />
+          <p style={{ fontFamily: "DM Sans", fontSize: 11, color: t.subtle, margin: 0 }}>
+            Seus dados são protegidos e tokenizados diretamente pelo Mercado Pago.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleAddCard}
+          style={{
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "#0DB87E",
+            color: "#FFF",
+            border: "none",
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+            marginTop: 20,
+          }}
+        >
+          Salvar Cartão Seguro
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowCardModal(false)}
           style={{
             width: "100%",
             padding: "14px",

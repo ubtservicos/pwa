@@ -24,7 +24,7 @@ export const NAV_ITEMS = [
   { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes" },
   { icon: Users, label: "Clientes", path: "/admin/clientes" },
   { icon: BarChart2, label: "Financeiro", path: "/admin/financeiro" },
-  { icon: Divide, label: "Split", path: "/admin/split" },
+  { icon: Divide, label: "Taxa de Serviço", path: "/admin/split" },
   { icon: Building2, label: "Entidades", path: "/admin/entidades" },
   { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco" },
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem" },

@@ -6,6 +6,8 @@ import { MATERIAIS_PADRAO, MATERIAIS_DETALHADOS } from "@/mocks/diaristasMateria
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { useRide } from "@/contexts/RideContext";
+import { useGeolocation } from "@/hooks/useGeolocation";
+
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const DIAS_SEMANA_LBL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -34,6 +36,7 @@ const DiaristaAgendarPage = () => {
   const { prestadorId } = useParams<{ prestadorId: string }>();
   const user = useCurrentUser();
   const { state: rideState } = useRide();
+  const { address: geoAddress } = useGeolocation();
   const [diarista, setDiarista] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -99,18 +102,10 @@ const DiaristaAgendarPage = () => {
   useEffect(() => {
     if (rideState?.origin?.address) {
       setEndereco(rideState.origin.address);
-    } else if (!endereco && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setEndereco("Sua localização atual");
-        },
-        () => {
-          setEndereco("Ubatuba, SP");
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
+    } else if (!endereco && geoAddress) {
+      setEndereco(geoAddress);
     }
-  }, [rideState]);
+  }, [rideState, geoAddress]);
 
   if (loading) return <div style={{ padding: 24, color: "white", background: "#0B1B3E", minHeight: "100svh" }}>Carregando...</div>;
 
