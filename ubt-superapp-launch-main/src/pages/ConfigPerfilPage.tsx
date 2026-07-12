@@ -377,13 +377,13 @@ const ConfigPerfilPage = () => {
               <p style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: t.text, margin: 0, textAlign: "left" }}>
                 Seja um Padrinho/Madrinha
               </p>
-              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.5)", margin: 0, textAlign: "left" }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: t.muted, margin: 0, textAlign: "left" }}>
                 Ganhe 1% sobre todos os serviços de quem indicar
               </p>
             </div>
           </div>
 
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.7)", margin: "4px 0 8px 0", lineHeight: "1.4", textAlign: "left" }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.text, opacity: 0.7, margin: "4px 0 8px 0", lineHeight: "1.4", textAlign: "left" }}>
             Compartilhe seu link de indicação exclusivo. Cada novo usuário que se cadastrar através dele será vinculado a você como afilhado direto.
           </p>
 
