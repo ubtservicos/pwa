@@ -47,7 +47,6 @@ const Login = () => {
         setLoginError(true);
       } else {
         if (email === "ubt.servicos@gmail.com") {
-          localStorage.setItem("adminAuth", "true");
           navigate("/admin");
         } else {
           navigate("/app/home");
