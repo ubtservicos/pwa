@@ -54,3 +54,8 @@ CREATE POLICY "Remoção de splits restrita a admin" ON public.pagamentos_split
 
 -- Recarrega cache do esquema no PostgREST
 NOTIFY pgrst, 'reload schema';
+
+-- 3. Adicionar coluna padrinho_id nas tabelas public.profiles e public.usuarios
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS padrinho_id uuid REFERENCES public.usuarios(id) ON DELETE SET NULL;
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS padrinho_id uuid REFERENCES public.usuarios(id) ON DELETE SET NULL;
+

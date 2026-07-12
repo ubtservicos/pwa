@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -87,6 +87,7 @@ const ConfigPerfilPage = () => {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const initial = {
     nome: user.name,
@@ -95,6 +96,42 @@ const ConfigPerfilPage = () => {
   };
   const [form, setForm] = useState(initial);
 
+  useEffect(() => {
+    if (!user.uid) return;
+    
+    const loadProfileDetails = async () => {
+      try {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("name, phone")
+          .eq("id", user.uid)
+          .maybeSingle();
+
+        const { data: usuarioData } = await supabase
+          .from("usuarios")
+          .select("nome")
+          .eq("id", user.uid)
+          .maybeSingle();
+
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        const phoneVal = profileData?.phone || authUser?.user_metadata?.telefone || "";
+        const nameVal = usuarioData?.nome || profileData?.name || authUser?.user_metadata?.full_name || user.name || "";
+        const emailVal = authUser?.email || user.email || "";
+
+        setForm({
+          nome: nameVal,
+          telefone: maskPhone(phoneVal),
+          email: emailVal
+        });
+      } catch (e) {
+        console.error("Error loading profile fields:", e);
+      }
+    };
+
+    loadProfileDetails();
+  }, [user.uid, user.name, user.email]);
+
   const [senhaOpen, setSenhaOpen] = useState(false);
   const [pwd, setPwd] = useState({ atual: "", nova: "", conf: "" });
   const [showPwd, setShowPwd] = useState({ atual: false, nova: false, conf: false });
@@ -102,6 +139,14 @@ const ConfigPerfilPage = () => {
   const [saving, setSaving] = useState(false);
 
   const { toast, showToast } = useSimpleToast();
+
+  const handleShareLink = () => {
+    const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
+    navigator.clipboard.writeText(referralLink);
+    setCopiedLink(true);
+    showToast("Link de Padrinho copiado! ✓");
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   const initials = user.name
     .split(" ")
@@ -124,19 +169,34 @@ const ConfigPerfilPage = () => {
     if (!user.uid) return;
     setSaving(true);
     try {
-      await supabase.auth.updateUser({
-        data: { full_name: form.nome }
-      });
+      const updateData: any = {
+        data: {
+          full_name: form.nome,
+          telefone: form.telefone.replace(/\D/g, "")
+        }
+      };
 
-      await supabase
+      if (form.email !== user.email) {
+        updateData.email = form.email;
+      }
+
+      const { error: authErr } = await supabase.auth.updateUser(updateData);
+      if (authErr) throw authErr;
+
+      const { error: usrErr } = await supabase
         .from("usuarios")
         .update({ nome: form.nome })
         .eq("id", user.uid);
+      if (usrErr) throw usrErr;
 
-      await supabase
+      const { error: profErr } = await supabase
         .from("profiles")
-        .update({ name: form.nome })
+        .update({
+          name: form.nome,
+          phone: form.telefone.replace(/\D/g, "")
+        })
         .eq("id", user.uid);
+      if (profErr) throw profErr;
 
       showToast("Perfil atualizado! ✓");
     } catch (err: any) {
@@ -284,6 +344,80 @@ const ConfigPerfilPage = () => {
               Verificado ✓
             </span>
           </div>
+        </div>
+
+        {/* Card Padrinho/Madrinha (Indicação) */}
+        <div
+          style={{
+            background: "rgba(13,184,126,0.06)",
+            border: "1px solid rgba(13,184,126,0.18)",
+            borderRadius: 16,
+            padding: 20,
+            marginTop: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 999,
+                background: "rgba(13,184,126,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <Heart size={20} color="#0DB87E" fill="#0DB87E" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: t.text, margin: 0, textAlign: "left" }}>
+                Seja um Padrinho/Madrinha
+              </p>
+              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.5)", margin: 0, textAlign: "left" }}>
+                Ganhe 1% sobre todos os serviços de quem indicar
+              </p>
+            </div>
+          </div>
+
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.7)", margin: "4px 0 8px 0", lineHeight: "1.4", textAlign: "left" }}>
+            Compartilhe seu link de indicação exclusivo. Cada novo usuário que se cadastrar através dele será vinculado a você como afilhado direto.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleShareLink}
+            style={{
+              width: "100%",
+              padding: "14px",
+              borderRadius: 12,
+              background: "#0DB87E",
+              color: "#FFF",
+              border: "none",
+              fontFamily: "Syne",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              transition: "transform 150ms"
+            }}
+          >
+            {copiedLink ? (
+              <>
+                <Check size={18} color="#FFF" /> Link copiado!
+              </>
+            ) : (
+              <>
+                <Share2 size={18} color="#FFF" /> Compartilhar Link de Indicação
+              </>
+            )}
+          </button>
         </div>
 
         <div style={{ marginTop: 24 }}>

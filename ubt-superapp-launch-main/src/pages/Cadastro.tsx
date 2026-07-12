@@ -10,7 +10,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthTopBar from "@/components/auth/AuthTopBar";
 import BiometriaModal from "@/components/auth/BiometriaModal";
 import FormField from "@/components/auth/FormField";
@@ -89,13 +89,17 @@ const Cadastro = () => {
   };
 
 
+  const [searchParams] = useSearchParams();
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
     
     try {
-      const { error } = await supabase.auth.signUp({
+      const referral = searchParams.get("ref") || "";
+
+      const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.senha,
         options: {
@@ -104,11 +108,28 @@ const Cadastro = () => {
             cpf: form.cpf,
             telefone: form.telefone,
             pix: form.pix,
+            padrinho_id: referral || null,
           }
         }
       });
 
       if (error) throw error;
+
+      if (data?.user && referral) {
+        const userId = data.user.id;
+        try {
+          await supabase
+            .from("profiles")
+            .update({ padrinho_id: referral })
+            .eq("id", userId);
+          await supabase
+            .from("usuarios")
+            .update({ padrinho_id: referral })
+            .eq("id", userId);
+        } catch (dbErr) {
+          console.error("Error setting padrinho in DB tables:", dbErr);
+        }
+      }
 
       setLoading(false);
       setBiometriaOpen(true);
