@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart } from "lucide-react";
+import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart, Copy, MessageSquare, Instagram, Facebook } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -146,6 +146,26 @@ const ConfigPerfilPage = () => {
     setCopiedLink(true);
     showToast("Link de Padrinho copiado! ✓");
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleShareWhatsApp = () => {
+    const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
+    const text = encodeURIComponent(`Olá! Cadastre-se na UBT Serviços utilizando meu link de convite e tenha acesso aos melhores profissionais de Ubatuba: ${referralLink}`);
+    window.open(`https://wa.me/?text=${text}`, "_blank");
+  };
+
+  const handleShareInstagram = () => {
+    const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
+    navigator.clipboard.writeText(referralLink);
+    showToast("Link copiado! Cole no seu Stories ou Bio do Instagram. ✓");
+    setTimeout(() => {
+      window.open("https://instagram.com", "_blank");
+    }, 1500);
+  };
+
+  const handleShareFacebook = () => {
+    const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`, "_blank");
   };
 
   const initials = user.name
@@ -387,37 +407,103 @@ const ConfigPerfilPage = () => {
             Compartilhe seu link de indicação exclusivo. Cada novo usuário que se cadastrar através dele será vinculado a você como afilhado direto.
           </p>
 
-          <button
-            type="button"
-            onClick={handleShareLink}
-            style={{
-              width: "100%",
-              padding: "14px",
-              borderRadius: 12,
-              background: "#0DB87E",
-              color: "#FFF",
-              border: "none",
-              fontFamily: "Syne",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              transition: "transform 150ms"
-            }}
-          >
-            {copiedLink ? (
-              <>
-                <Check size={18} color="#FFF" /> Link copiado!
-              </>
-            ) : (
-              <>
-                <Share2 size={18} color="#FFF" /> Compartilhar Link de Indicação
-              </>
-            )}
-          </button>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 8 }}>
+            {/* Copiar Link */}
+            <button
+              type="button"
+              onClick={handleShareLink}
+              style={{
+                padding: "12px",
+                borderRadius: 12,
+                background: "rgba(13,184,126,0.1)",
+                border: "1px solid rgba(13,184,126,0.25)",
+                color: t.text,
+                fontFamily: "Syne",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              {copiedLink ? <Check size={16} color="#0DB87E" /> : <Copy size={16} color="#0DB87E" />}
+              {copiedLink ? "Copiado!" : "Copiar Link"}
+            </button>
+
+            {/* WhatsApp */}
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              style={{
+                padding: "12px",
+                borderRadius: 12,
+                background: "rgba(37,211,102,0.1)",
+                border: "1px solid rgba(37,211,102,0.25)",
+                color: t.text,
+                fontFamily: "Syne",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <MessageSquare size={16} color="#25D366" />
+              WhatsApp
+            </button>
+
+            {/* Instagram */}
+            <button
+              type="button"
+              onClick={handleShareInstagram}
+              style={{
+                padding: "12px",
+                borderRadius: 12,
+                background: "rgba(225,48,108,0.1)",
+                border: "1px solid rgba(225,48,108,0.25)",
+                color: t.text,
+                fontFamily: "Syne",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Instagram size={16} color="#E1306C" />
+              Instagram
+            </button>
+
+            {/* Facebook */}
+            <button
+              type="button"
+              onClick={handleShareFacebook}
+              style={{
+                padding: "12px",
+                borderRadius: 12,
+                background: "rgba(24,119,242,0.1)",
+                border: "1px solid rgba(24,119,242,0.25)",
+                color: t.text,
+                fontFamily: "Syne",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Facebook size={16} color="#1877F2" />
+              Facebook
+            </button>
+          </div>
         </div>
 
         <div style={{ marginTop: 24 }}>
