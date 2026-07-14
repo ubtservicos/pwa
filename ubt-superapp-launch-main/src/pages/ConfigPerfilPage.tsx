@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart, Copy, MessageSquare, Instagram, Facebook } from "lucide-react";
+import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart, Copy, MessageSquare, Instagram, Facebook, QrCode, X } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -88,6 +88,7 @@ const ConfigPerfilPage = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const initial = {
     nome: user.name,
@@ -409,10 +410,14 @@ const ConfigPerfilPage = () => {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 8 }}>
             {/* Copiar Link */}
-            <button
-              type="button"
-              onClick={handleShareLink}
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handleShareLink();
+              }}
               style={{
+                textDecoration: "none",
                 padding: "12px",
                 borderRadius: 12,
                 background: "rgba(13,184,126,0.1)",
@@ -430,13 +435,15 @@ const ConfigPerfilPage = () => {
             >
               {copiedLink ? <Check size={16} color="#0DB87E" /> : <Copy size={16} color="#0DB87E" />}
               {copiedLink ? "Copiado!" : "Copiar Link"}
-            </button>
+            </a>
 
             {/* WhatsApp */}
-            <button
-              type="button"
-              onClick={handleShareWhatsApp}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Olá! Cadastre-se na UBT Serviços utilizando meu link de convite e tenha acesso aos melhores profissionais de Ubatuba: ${window.location.origin}/cadastro?ref=${user.uid}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
+                textDecoration: "none",
                 padding: "12px",
                 borderRadius: 12,
                 background: "rgba(37,211,102,0.1)",
@@ -454,13 +461,20 @@ const ConfigPerfilPage = () => {
             >
               <MessageSquare size={16} color="#25D366" />
               WhatsApp
-            </button>
+            </a>
 
             {/* Instagram */}
-            <button
-              type="button"
-              onClick={handleShareInstagram}
+            <a
+              href="https://instagram.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
+                navigator.clipboard.writeText(referralLink);
+                showToast("Link copiado! Cole no seu Stories ou Bio do Instagram. ✓");
+              }}
               style={{
+                textDecoration: "none",
                 padding: "12px",
                 borderRadius: 12,
                 background: "rgba(225,48,108,0.1)",
@@ -478,13 +492,15 @@ const ConfigPerfilPage = () => {
             >
               <Instagram size={16} color="#E1306C" />
               Instagram
-            </button>
+            </a>
 
             {/* Facebook */}
-            <button
-              type="button"
-              onClick={handleShareFacebook}
+            <a
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/cadastro?ref=${user.uid}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
+                textDecoration: "none",
                 padding: "12px",
                 borderRadius: 12,
                 background: "rgba(24,119,242,0.1)",
@@ -502,6 +518,32 @@ const ConfigPerfilPage = () => {
             >
               <Facebook size={16} color="#1877F2" />
               Facebook
+            </a>
+
+            {/* QR Code de Indicação */}
+            <button
+              type="button"
+              onClick={() => setShowQrModal(true)}
+              style={{
+                gridColumn: "span 2",
+                padding: "12px",
+                borderRadius: 12,
+                background: "rgba(13,184,126,0.12)",
+                border: "1px solid rgba(13,184,126,0.3)",
+                color: t.text,
+                fontFamily: "Syne",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                marginTop: 4
+              }}
+            >
+              <QrCode size={16} color="#0DB87E" />
+              Mostrar QR Code de Indicação
             </button>
           </div>
         </div>
@@ -689,6 +731,133 @@ const ConfigPerfilPage = () => {
         </button>
       </div>
       <Toast message={toast.msg} visible={toast.visible} />
+
+      {showQrModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(4px)",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              background: t.surface,
+              borderRadius: 24,
+              width: "100%",
+              maxWidth: 380,
+              padding: 28,
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              position: "relative",
+              border: `1px solid ${t.border}`,
+            }}
+          >
+            <button
+              onClick={() => setShowQrModal(false)}
+              style={{
+                position: "absolute",
+                top: 16,
+                right: 16,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 4,
+                display: "flex"
+              }}
+            >
+              <X size={20} color={t.text} />
+            </button>
+
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 999,
+                background: "rgba(13,184,126,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 16
+              }}
+            >
+              <Heart size={24} color="#0DB87E" fill="#0DB87E" />
+            </div>
+
+            <h3
+              style={{
+                fontFamily: "Syne",
+                fontSize: 18,
+                fontWeight: 700,
+                color: t.text,
+                margin: 0,
+                textAlign: "center"
+              }}
+            >
+              QR Code de Indicação
+            </h3>
+
+            <p
+              style={{
+                fontFamily: "DM Sans",
+                fontSize: 13,
+                color: t.muted,
+                textAlign: "center",
+                marginTop: 8,
+                marginBottom: 20,
+                lineHeight: 1.4
+              }}
+            >
+              Aponte a câmera do seu celular para cadastrar-se e vincular-se automaticamente como afilhado(a) da UBT!
+            </p>
+
+            <div
+              style={{
+                background: "#FFF",
+                padding: 12,
+                borderRadius: 16,
+                border: "1px solid rgba(0,0,0,0.05)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 20
+              }}
+            >
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/cadastro?ref=${user.uid}`)}`}
+                alt="Referral QR Code"
+                style={{ width: 200, height: 200, display: "block" }}
+              />
+            </div>
+
+            <button
+              onClick={() => setShowQrModal(false)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                borderRadius: 12,
+                background: "#0DB87E",
+                color: "#FFF",
+                border: "none",
+                fontFamily: "Syne",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

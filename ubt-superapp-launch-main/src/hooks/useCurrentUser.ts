@@ -12,6 +12,7 @@ export type RealUser = {
   sexo?: "masculino" | "feminino" | string;
   kycStatus?: string;
   status?: string;
+  mototaxiActive?: boolean;
 };
 
 export const useCurrentUser = (): RealUser => {
@@ -60,6 +61,7 @@ export const useCurrentUser = (): RealUser => {
           cpf: authUser.user_metadata?.cpf,
           sexo: authUser.user_metadata?.sexo,
           status: userStatus,
+          mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
         });
       } catch (err) {
         console.error("Erro ao carregar perfil do db:", err);

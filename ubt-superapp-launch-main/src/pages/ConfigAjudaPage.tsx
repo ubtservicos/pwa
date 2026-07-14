@@ -170,11 +170,11 @@ const ConfigAjudaPage = () => {
             }}
           >
             <span style={{ fontFamily: "DM Sans", fontSize: 14, color: t.text }}>Ambiente</span>
-            <span style={{ fontFamily: "DM Sans", fontSize: 14, color: t.muted }}>Protótipo Lovable</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 14, color: t.muted }}>Plataforma UBT</span>
           </div>
           <div style={{ padding: "16px 20px", textAlign: "center" }}>
             <span style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle }}>
-              Desenvolvido com ❤ em Ubatuba, SP
+              Desenvolvido em Ubatuba, SP
             </span>
           </div>
         </SettingsGroup>

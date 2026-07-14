@@ -1,0 +1,17 @@
+{
+  "short_name": "UBT",
+  "name": "UBT — O Superapp do Trabalhador",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B1B3E",
+  "theme_color": "#0B1B3E",
+  "display": "standalone",
+  "orientation": "portrait"
+}

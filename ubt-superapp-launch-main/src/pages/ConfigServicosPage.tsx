@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bike, Info, ShoppingBag, Sparkles, Scissors, Waves, GraduationCap, Settings } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
@@ -10,6 +10,7 @@ import SettingsRow from "@/components/settings/SettingsRow";
 import BottomSheet from "@/components/settings/BottomSheet";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
+import { supabase } from "@/lib/supabase";
 
 const FUTURE = [
   { key: "beleza", label: "Beleza", icon: Scissors },
@@ -22,23 +23,48 @@ const ConfigServicosPage = () => {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const { toast, showToast } = useSimpleToast();
-  const [motoActive, setMotoActive] = useState((user as any)?.kycStatus === "approved");
+  const [motoActive, setMotoActive] = useState(false);
   const [showDesativar, setShowDesativar] = useState(false);
 
-  const handleMotoToggle = (v: boolean) => {
-    if (v && (user as any)?.kycStatus !== "approved") {
+  useEffect(() => {
+    if (user.uid) {
+      const isApproved = user.kycStatus === "approved";
+      const isActive = user.mototaxiActive !== false;
+      setMotoActive(isApproved && isActive);
+    }
+  }, [user.uid, user.kycStatus, user.mototaxiActive]);
+
+  const handleMotoToggle = async (v: boolean) => {
+    if (v && user.kycStatus !== "approved") {
       navigate("/app/prestador/mototaxi/onboarding");
     } else if (!v) {
       setShowDesativar(true);
     } else {
-      setMotoActive(v);
+      setMotoActive(true);
+      try {
+        await supabase.auth.updateUser({
+          data: { mototaxi_active: true }
+        });
+        showToast("Mototaxi ativado ✓");
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao ativar");
+      }
     }
   };
 
-  const handleDesativar = () => {
+  const handleDesativar = async () => {
     setMotoActive(false);
     setShowDesativar(false);
-    showToast("Mototaxi desativado");
+    try {
+      await supabase.auth.updateUser({
+        data: { mototaxi_active: false }
+      });
+      showToast("Mototaxi desativado ✓");
+    } catch (e) {
+      console.error(e);
+      showToast("Erro ao desativar");
+    }
   };
 
   return (

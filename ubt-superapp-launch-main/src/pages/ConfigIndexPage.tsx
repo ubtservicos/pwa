@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   User,
@@ -11,6 +11,8 @@ import {
   Bike,
   ShoppingBag,
   Sparkles,
+  Smartphone,
+  Download,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -26,6 +28,50 @@ const ConfigIndexPage = () => {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const [showLogout, setShowLogout] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
+  useEffect(() => {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(ios);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+
+    if (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone) {
+      setShowInstallBtn(false);
+    } else {
+      // Display install option if not already standalone
+      setShowInstallBtn(true);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      alert("Para instalar a UBT no seu iPhone/iPad:\n1. Toque no botão de Compartilhar (ícone com quadrado e seta para cima) no rodapé do Safari.\n2. Role as opções e toque em 'Adicionar à Tela de Início'. 📲");
+      return;
+    }
+    if (!deferredPrompt) {
+      alert("Para instalar a UBT:\n1. Clique no ícone de instalar na barra de endereços do navegador (ou no menu de 3 pontinhos).\n2. Selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'. 📲");
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setDeferredPrompt(null);
+      setShowInstallBtn(false);
+    }
+  };
 
   const initials = user.name
     .split(" ")
@@ -144,6 +190,14 @@ const ConfigIndexPage = () => {
 
         <SectionHeader>Sistema</SectionHeader>
         <SettingsGroup>
+          {showInstallBtn && (
+            <SettingsRow
+              icon={Smartphone}
+              label="Instalar Aplicativo UBT"
+              subtitle="Salve o atalho no seu celular com o logo oficial"
+              onClick={handleInstallClick}
+            />
+          )}
           <SettingsRow
             icon={Accessibility}
             label="Acessibilidade"
