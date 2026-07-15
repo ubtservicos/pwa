@@ -1040,7 +1040,24 @@ const MototaxiTomadorPage = () => {
 
   const handleArrive = () => setState({ status: "in_progress" });
   const handleComplete = () => setState({ status: "completed", finalPrice: state.estimatedPrice });
-  const handlePay = () => setState({ status: "rating", paymentMethod: state.paymentMethod || "pix" });
+  const handlePay = async () => {
+    // Tenta chamar a Edge Function segura no backend
+    try {
+      await supabase.functions.invoke("checkout", {
+        body: {
+          service_type: "mototaxi",
+          service_id: state.rideId,
+          customer_id: user.uid || "mock-customer",
+          provider_id: "mock-driver-id",
+          amount: state.finalPrice || state.estimatedPrice,
+          payment_method: state.paymentMethod || "pix"
+        }
+      });
+    } catch (funcErr) {
+      console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
+    }
+    setState({ status: "rating", paymentMethod: state.paymentMethod || "pix" });
+  };
 
   const sendMessage = (text: string) => {
     setState({

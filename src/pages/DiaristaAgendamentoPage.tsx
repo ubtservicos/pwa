@@ -83,34 +83,56 @@ const DiaristaAgendamentoPage = () => {
         token = localStorage.getItem(`card_token_${activeCard.final}`) || "mock_token";
       }
 
-      // 2. Inserir registro na tabela pagamentos_split via Supabase
-      const transactionId = `mp_tx_${Math.random().toString(36).substring(2, 15)}`;
-      
-      const providerAmount = Number((ag.valorTotal * 0.90).toFixed(2));
-      const ubtAmount = Number((ag.valorTotal * 0.04).toFixed(2));
-      const entityAmount = Number((ag.valorTotal * 0.02).toFixed(2));
-      const prizeWorkerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
-      const prizeConsumerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
-      const godparentAmount = Number((ag.valorTotal * 0.01).toFixed(2));
-
-      const { error: splitError } = await supabase
-        .from("pagamentos_split")
-        .insert({
-          transaction_id: transactionId,
-          status: 'approved',
-          service_type: 'diarista',
-          service_id: ag.id,
-          total_amount: ag.valorTotal,
-          provider_amount: providerAmount,
-          ubt_amount: ubtAmount,
-          entity_amount: entityAmount,
-          prize_worker_amount: prizeWorkerAmount,
-          prize_consumer_amount: prizeConsumerAmount,
-          godparent_amount: godparentAmount
+      // 2. Chamar a Edge Function de checkout segura no backend
+      let functionSuccess = false;
+      try {
+        const { data: checkData, error: checkError } = await supabase.functions.invoke("checkout", {
+          body: {
+            service_type: "diarista",
+            service_id: ag.id,
+            customer_id: localStorage.getItem("ubt_current_user_id") || "mock-customer",
+            provider_id: ag.diaristId,
+            amount: ag.valorTotal,
+            payment_method: paymentMethod
+          }
         });
+        if (!checkError && checkData) {
+          console.log("Checkout processado via Edge Function com sucesso:", checkData);
+          functionSuccess = true;
+        }
+      } catch (funcErr) {
+        console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
+      }
 
-      if (splitError) {
-        console.error("Erro ao registrar split no banco:", splitError.message);
+      // Fallback local se a Edge Function falhar ou não estiver ativa (ex: local dev ou falta de rota)
+      if (!functionSuccess) {
+        const transactionId = `mp_tx_${Math.random().toString(36).substring(2, 15)}`;
+        const providerAmount = Number((ag.valorTotal * 0.90).toFixed(2));
+        const ubtAmount = Number((ag.valorTotal * 0.04).toFixed(2));
+        const entityAmount = Number((ag.valorTotal * 0.02).toFixed(2));
+        const prizeWorkerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
+        const prizeConsumerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
+        const godparentAmount = Number((ag.valorTotal * 0.01).toFixed(2));
+
+        const { error: splitError } = await supabase
+          .from("pagamentos_split")
+          .insert({
+            transaction_id: transactionId,
+            status: 'approved',
+            service_type: 'diarista',
+            service_id: ag.id,
+            total_amount: ag.valorTotal,
+            provider_amount: providerAmount,
+            ubt_amount: ubtAmount,
+            entity_amount: entityAmount,
+            prize_worker_amount: prizeWorkerAmount,
+            prize_consumer_amount: prizeConsumerAmount,
+            godparent_amount: godparentAmount
+          });
+
+        if (splitError) {
+          console.error("Erro ao registrar split no banco:", splitError.message);
+        }
       }
 
       // 3. Atualizar status na tabela diarista_agendamentos

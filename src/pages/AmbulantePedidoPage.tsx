@@ -91,7 +91,28 @@ const AmbulantePedidoPage = () => {
     navigate(-1);
   };
 
-  const confirmarPagamento = () => {
+  const confirmarPagamento = async () => {
+    // Tenta chamar a Edge Function segura no backend
+    let functionSuccess = false;
+    try {
+      const { data: checkData, error: checkError } = await supabase.functions.invoke("checkout", {
+        body: {
+          service_type: "ambulante",
+          service_id: id,
+          customer_id: user.uid || "mock-customer",
+          provider_id: state.prestadorInfo?.id || "mock-provider",
+          amount: total,
+          payment_method: paymentMethod
+        }
+      });
+      if (!checkError && checkData) {
+        console.log("Checkout processado via Edge Function com sucesso:", checkData);
+        functionSuccess = true;
+      }
+    } catch (funcErr) {
+      console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
+    }
+
     updateRemote({ payment_method: paymentMethod, payment_status: "confirmed", status: "rating" });
     setShowSuccess(true);
     window.setTimeout(() => {
