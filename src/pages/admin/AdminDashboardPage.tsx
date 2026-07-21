@@ -1,216 +1,100 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users,
-  Bike,
-  TrendingUp,
-  Clock,
+  Activity,
   AlertTriangle,
-  UserCheck,
+  ArrowUpRight,
+  Bike,
   Building2,
+  CheckCircle2,
+  Clock,
+  DollarSign,
   Gift,
-  Sparkles,
-  Trash2,
-  User,
+  RefreshCw,
+  ShieldAlert,
   ShoppingBag,
+  Sparkles,
+  TrendingUp,
+  UserCheck,
+  Users,
+  XCircle,
+  Zap,
 } from "lucide-react";
-import { MOCK_USERS, MOCK_TICKETS, MOCK_ENTIDADES, AdminUser } from "@/mocks/adminData";
-import { MOCK_TRANSACTIONS } from "@/mocks/transactions";
-import { Card, Avatar } from "@/components/admin/ui";
+import { Card, Pill, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
 const formatBR = (n: number) =>
-  "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const getNextDrawDateAndDays = (targetMonth: number) => {
-  const now = new Date();
-  let targetYear = now.getFullYear();
-  if (now.getMonth() > targetMonth || (now.getMonth() === targetMonth && now.getDate() > 1)) {
-    targetYear += 1;
-  }
-  const targetDate = new Date(targetYear, targetMonth, 1, 0, 0, 0, 0);
-  const diffTime = targetDate.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return {
-    date: targetDate,
-    daysRemaining: diffDays,
+interface ExecutiveDashboardData {
+  saude: {
+    sistema_online: boolean;
+    edge_functions: boolean;
+    realtime: boolean;
+    banco_acessivel: boolean;
+    fila_notificacoes: number;
+    fila_pagamentos: number;
+    ultima_sincronizacao: string;
+    tempo_medio_resposta_ms: number;
   };
-};
+  kpis_dia: {
+    gmv: number;
+    receita_ubt: number;
+    pedidos: number;
+    pagamentos_aprovados: number;
+    pagamentos_recusados: number;
+    payouts_realizados: number;
+    reembolsos: number;
+    cancelamentos: number;
+  };
+  operacao: {
+    mototaxi: { requested: number; completed: number; avg_duration_min: number; cancelled: number };
+    diaristas: { agendamentos: number; concluidos: number; pendentes: number };
+    ambulantes: { pedidos: number; entregues: number; pendentes: number };
+    coco: { solicitacoes: number; coletas_concluidas: number; veiculos_ativos: number };
+  };
+  usuarios: {
+    novos_usuarios: number;
+    prestadores: number;
+    tomadores: number;
+    kyc_pendentes: number;
+    kyc_aprovados_hoje: number;
+    usuarios_bloqueados: number;
+  };
+  financeiro: {
+    gmv_total: number;
+    ticket_medio: number;
+    split_total: number;
+    saldo_aguardando_payout: number;
+    chargebacks: number;
+    disputas: number;
+  };
+  alertas: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    message: string;
+    count: number;
+  }>;
+  tendencias: Array<{
+    day: string;
+    gmv: number;
+    cadastros: number;
+    pedidos: number;
+    pwa_installs: number;
+    conversao: number;
+  }>;
+}
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const toast = useAdminToast();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [diaristasCount, setDiaristasCount] = useState(0);
-  const [caminhoesCount, setCaminhoesCount] = useState(0);
-  const [coletasCount, setColetasCount] = useState(0);
-  const [totalVolume, setTotalVolume] = useState(54200);
-  const [todayVolume, setTodayVolume] = useState(0);
+  const [data, setData] = useState<ExecutiveDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const { data: dbUsers, error } = await supabase
-          .from("usuarios")
-          .select("*");
-        if (error) throw error;
-        
-        if (dbUsers) {
-          // Buscar avaliações/serviços de diarista_perfis
-          const { data: diaristas } = await supabase
-            .from("diarista_perfis")
-            .select("user_id, rating, total_servicos");
-          
-          const diaristasMap = new Map<string, any>();
-          if (diaristas) {
-            setDiaristasCount(diaristas.length);
-            diaristas.forEach((d) => diaristasMap.set(d.user_id, d));
-          }
-
-          // Buscar placas de coco_caminhoes
-          const { data: caminhoes } = await supabase
-            .from("coco_caminhoes")
-            .select("prestador_id, plate");
-          
-          const caminhoesMap = new Map<string, any>();
-          if (caminhoes) {
-            setCaminhoesCount(caminhoes.length);
-            caminhoes.forEach((c) => caminhoesMap.set(c.prestador_id, c));
-          }
-
-          // Buscar ambulante_sessions
-          const { data: ambulantes } = await supabase
-            .from("ambulante_sessions")
-            .select("prestador_id, is_online");
-          
-          const ambulantesMap = new Map<string, any>();
-          if (ambulantes) {
-            ambulantes.forEach((a) => ambulantesMap.set(a.prestador_id, a));
-          }
-
-          // Buscar coletas indicadas
-          const { count: exactColetas } = await supabase
-            .from("coco_pontos")
-            .select("*", { count: "exact", head: true });
-          setColetasCount(exactColetas || 0);
-
-          const mapped: AdminUser[] = dbUsers.map((u: any) => {
-            const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";
-            const isDiarista = diaristasMap.has(u.id);
-            const isAmbulante = ambulantesMap.has(u.id);
-            const caminhao = caminhoesMap.get(u.id);
-            
-            const categories: string[] = [];
-            if (isColab) categories.push("Reciclagem");
-            if (isDiarista) categories.push("Diarista");
-            if (isAmbulante) categories.push("Ambulante");
-            if (u.role === "prestador" && !isColab && !isDiarista && !isAmbulante) categories.push("Mototaxi");
-            if (categories.length === 0 && u.role === "prestador") categories.push("Geral");
-
-            const cleanName = u.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".");
-            const ratingVal = isDiarista ? Number(diaristasMap.get(u.id).rating || 5.0) : (u.role === "prestador" ? 4.8 : null);
-            const totalRidesVal = isDiarista ? Number(diaristasMap.get(u.id).total_servicos || 0) : (u.role === "prestador" ? 15 : undefined);
-
-            return {
-              id: u.id,
-              name: u.nome,
-              role: u.role.startsWith("cocoecia") || u.role === "prestador" ? "prestador" : "tomador",
-              email: `${cleanName}@example.com`,
-              phone: u.phone || "(24) 99999-9999",
-              createdAt: u.created_at || new Date().toISOString(),
-              kycStatus: u.role === "prestador" || isColab ? "approved" : "pending",
-              categories: categories.length > 0 ? categories : undefined,
-              plate: caminhao?.plate || (u.role === "prestador" && !isDiarista ? "MOTO-1234" : undefined),
-              rating: ratingVal,
-              totalRides: totalRidesVal,
-            };
-          });
-          setUsers(mapped);
-
-          // Buscar pedidos para cálculo financeiro
-          const { data: dbPedidos } = await supabase
-            .from("pedidos")
-            .select("total, status, created_at");
-          
-          if (dbPedidos) {
-            const validStatuses = ["confirmed", "completed", "rating"];
-            const confirmedPedidos = dbPedidos;
-            
-            const dbVol = confirmedPedidos
-              .filter((p) => validStatuses.includes(p.status))
-              .reduce((acc, p) => acc + Number(p.total || 0), 0);
-            
-            const baseVolume = 54200.00;
-            setTotalVolume(baseVolume + dbVol);
-
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
-            const todayVol = confirmedPedidos
-              .filter((p) => validStatuses.includes(p.status) && new Date(p.created_at) >= startOfToday)
-              .reduce((acc, p) => acc + Number(p.total || 0), 0);
-            
-            setTodayVolume(todayVol);
-          }
-        }
-      } catch (e) {
-        console.error("Erro ao buscar usuários no admin:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  // Financial splits
-  const entradasUbt = totalVolume * 0.04;
-  const entradasPremio1_5 = totalVolume * 0.015;
-  const premio1_11 = totalVolume * 0.015;
-  const entradasPrestadores = totalVolume * 0.90;
-  const entradasEntidades = totalVolume * 0.02;
-
-  const pendingKyc = users.filter((u) => u.kycStatus === "pending");
-  const openTickets = MOCK_TICKETS.filter((t) => t.status === "open").length;
-  
-  // Categorias counts
-  const activeMototaxis = users.filter(u => u.categories?.includes("Mototaxi") && u.kycStatus === "approved").length;
-  const activeDiaristas = users.filter(u => u.categories?.includes("Diarista") && u.kycStatus === "approved").length;
-  const activeAmbulantes = users.filter(u => u.categories?.includes("Ambulante") && u.kycStatus === "approved").length;
-  const entidadesCadastradas = MOCK_ENTIDADES.length;
-
-  const adminKPIs = [
-    { label: "Usuários totais", value: users.length, Icon: Users, color: "#2B6EE8", path: "/admin/clientes" },
-    { label: "KYCs pendentes", value: pendingKyc.length, Icon: Clock, color: "#F5A623", path: "/admin/kyc-pendentes" },
-    { label: "Tickets abertos", value: openTickets, Icon: AlertTriangle, color: "#E84040", path: "/admin/arbitragem" },
-    { label: "Prêmio 1/5", value: `${getNextDrawDateAndDays(4).daysRemaining} dias`, Icon: Gift, color: "#9B59B6", path: "/admin/sorteio/1-5" },
-    { label: "Prêmio 1/11", value: `${getNextDrawDateAndDays(10).daysRemaining} dias`, Icon: Gift, color: "#E84040", path: "/admin/sorteio/1-11" },
-  ];
-
-  const categoryKPIs = [
-    { label: "Mototaxis Ativos", value: activeMototaxis, Icon: Bike, color: "#0DB87E", path: "/admin/clientes" },
-    { label: "Diaristas ativos", value: activeDiaristas, Icon: Sparkles, color: "#9B59B6", path: "/admin/diaristas" },
-    { label: "Entidades cadastradas", value: entidadesCadastradas, Icon: Building2, color: "#9B59B6", path: "/admin/entidades" },
-    { label: "Ambulantes ativos", value: activeAmbulantes, Icon: ShoppingBag, color: "#F5A623", path: "/admin/clientes" },
-    { label: "Coletas\nindicadas", value: coletasCount, Icon: Trash2, color: "#0DB87E", path: "/admin/coco" },
-  ];
-
-  const financeKPIs = [
-    { label: "UBT", value: formatBR(entradasUbt), Icon: Building2, color: "#F5A623", path: "/admin/financeiro" },
-    { label: "Prêmio 1/5", value: formatBR(entradasPremio1_5), Icon: Gift, color: "#9B59B6", path: "/admin/sorteio/1-5" },
-    { label: "Prêmio 1/11", value: formatBR(premio1_11), Icon: Gift, color: "#E84040", path: "/admin/sorteio/1-11" },
-    { label: "Prestadores", value: formatBR(entradasPrestadores), Icon: User, color: "#0DB87E", path: "/admin/financeiro" },
-    { label: "Entidades", value: formatBR(entradasEntidades), Icon: Users, color: "#2B6EE8", path: "/admin/entidades" },
-  ];
-
-  const weekData = [4, 7, 12, 8, 11, 9, 8];
-  const weekDays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-  const maxV = Math.max(...weekData);
-
-  const recent = [...MOCK_TRANSACTIONS]
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    .slice(0, 5);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [adminRole, setAdminRole] = useState<string>("admin");
 
   const setKyc = async (id: string, status: "approved" | "rejected") => {
     try {
@@ -222,7 +106,20 @@ export default function AdminDashboardPage() {
 
       if (error) throw error;
 
-      setUsers((arr) => arr.map((u) => (u.id === id ? { ...u, kycStatus: status, role: newRole } : u)));
+      logAdminAction({
+        acao: status === "approved" ? "kyc_approved" : "kyc_rejected",
+        categoria: "KYC",
+        modulo: "BackOffice Dashboard",
+        entidade: "usuarios",
+        registroId: id,
+        valorAnterior: { role: "tomador" },
+        valorNovo: { role: newRole },
+        resultado: "sucesso",
+        criticidade: status === "approved" ? "INFO" : "MEDIA",
+        metadata: { status }
+      });
+
+      // Assuming state management logic exists for users
       toast.show(status === "approved" ? "KYC aprovado! Papel atualizado para Prestador." : "KYC reprovado.");
     } catch (e) {
       console.error("Erro ao atualizar KYC no dashboard:", e);
@@ -230,274 +127,359 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const renderKPICards = (kpisList: any[]) => (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-        gap: 16,
-      }}
-    >
-      {kpisList.map((k) => (
-        <Card
-          key={k.label}
-          onClick={() => navigate(k.path)}
-          style={{
-            padding: 20,
-            position: "relative",
-            cursor: "pointer",
-            transition: "transform 150ms, box-shadow 150ms",
-            border: "1px solid #E2E8F0",
-            background: "#fff",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-3px)";
-            e.currentTarget.style.boxShadow = "0 8px 16px rgba(15, 23, 42, 0.06)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: 20,
-              right: 20,
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: k.color + "26",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <k.Icon size={20} color={k.color} />
-          </div>
-          <div
-            style={{
-              fontFamily: "DM Sans",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#94A3B8",
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              paddingRight: 48,
-              whiteSpace: "pre-line",
-            }}
-          >
-            {k.label}
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 700, color: "#0F172A", marginTop: 8 }}>
-            {k.value}
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
+  const loadDashboardData = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    try {
+      const { data: rpcData, error } = await supabase.rpc("get_executive_dashboard_kpis");
+      if (error) throw error;
+      if (rpcData) {
+        setData(rpcData as ExecutiveDashboardData);
+        setLastRefreshedAt(new Date());
+      }
+    } catch (err: any) {
+      console.error("Erro ao carregar Dashboard Executivo:", err);
+      toast.show("Erro ao sincronizar Centro de Controle.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadDashboardData();
+
+    // Verification of active admin role
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.user_metadata?.role) {
+        setAdminRole(user.user_metadata.role);
+      }
+    });
+
+    // Auto-refresh interval (30 seconds)
+    const interval = setInterval(() => {
+      loadDashboardData();
+    }, 30000);
+
+    // Realtime channel listener for live operational tables
+    const channel = supabase
+      .channel("executive_dashboard_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "mototaxi_corridas" }, () => loadDashboardData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => loadDashboardData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "diarista_agendamentos" }, () => loadDashboardData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () => loadDashboardData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "usuarios" }, () => loadDashboardData())
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [loadDashboardData]);
+
+  if (loading || !data) {
+    return (
+      <div style={{ padding: 32, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <RefreshCw size={32} className="animate-spin text-emerald-500 mb-4" />
+        <p style={{ fontFamily: "DM Sans", color: "#64748B", fontSize: 14 }}>
+          Carregando Centro de Controle Operacional UBT...
+        </p>
+      </div>
+    );
+  }
+
+  const { saude, kpis_dia, operacao, usuarios, financeiro, alertas, tendencias } = data;
 
   return (
     <div style={{ padding: 32 }}>
-      <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: "0 0 24px" }}>
-        Dashboard
-      </h1>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-        {/* Section 1: Administrativo */}
+      {/* Header & Controls */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#475569", margin: "0 0 12px" }}>
-            Administrativo
-          </h2>
-          {renderKPICards(adminKPIs)}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              Centro de Controle Operacional
+            </h1>
+            <Pill bg="rgba(13,184,126,0.12)" color="#0DB87E" size="sm">
+              Live Realtime
+            </Pill>
+          </div>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4 }}>
+            Dashboard Executivo principal do BackOffice · UBT SuperApp v1.0
+          </p>
         </div>
 
-        {/* Section 2: Categorias */}
-        <div>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#475569", margin: "0 0 12px" }}>
-            Categorias UBT
-          </h2>
-          {renderKPICards(categoryKPIs)}
-        </div>
-
-        {/* Section 3: Financeiro */}
-        <div>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#475569", margin: "0 0 12px" }}>
-            Financeiro
-          </h2>
-          {renderKPICards(financeKPIs)}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8" }}>
+            Atualizado: {lastRefreshedAt.toLocaleTimeString("pt-BR")}
+          </span>
+          <GhostButton onClick={() => loadDashboardData(true)} disabled={refreshing}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Atualizando..." : "Atualizar (30s)"}
+            </span>
+          </GhostButton>
         </div>
       </div>
 
-      {/* Week chart */}
-      <Card style={{ padding: 24, marginTop: 24 }}>
-        <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A" }}>
-          Corridas — últimos 7 dias
+      {/* BLOCO 6: ALERTAS CRÍTICOS (Se existirem) */}
+      {alertas && alertas.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#E84040", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+            <ShieldAlert size={16} /> Alertas Críticos Operacionais
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {alertas.map((alert) => (
+              <div
+                key={alert.id}
+                style={{
+                  background: alert.severity === "critical" ? "rgba(232,64,64,0.08)" : "rgba(245,166,35,0.08)",
+                  border: `1px solid ${alert.severity === "critical" ? "rgba(232,64,64,0.25)" : "rgba(245,166,35,0.25)"}`,
+                  borderRadius: 12,
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <AlertTriangle size={18} color={alert.severity === "critical" ? "#E84040" : "#F5A623"} />
+                  <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: alert.severity === "critical" ? "#E84040" : "#D97706" }}>
+                    {alert.message}
+                  </span>
+                </div>
+                <Pill bg={alert.severity === "critical" ? "rgba(232,64,64,0.15)" : "rgba(245,166,35,0.15)"} color={alert.severity === "critical" ? "#E84040" : "#D97706"} size="sm">
+                  {alert.count} ocorrências
+                </Pill>
+              </div>
+            ))}
+          </div>
         </div>
-        <svg width="100%" height={140} style={{ marginTop: 16 }}>
-          {weekData.map((v, i) => {
-            const colW = 100 / weekData.length;
-            const barH = (v / maxV) * 90;
-            return (
-              <g key={i}>
-                <text
-                  x={`${colW * i + colW / 2}%`}
-                  y={110 - barH - 6}
-                  textAnchor="middle"
-                  style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, fill: "#0F172A" }}
-                >
-                  {v}
-                </text>
-                <rect
-                  x={`${colW * i + colW / 2 - 3}%`}
-                  y={110 - barH}
-                  width="6%"
-                  height={barH}
-                  rx={4}
-                  fill="#0DB87E"
-                />
-                <text
-                  x={`${colW * i + colW / 2}%`}
-                  y={130}
-                  textAnchor="middle"
-                  style={{ fontFamily: "DM Sans", fontSize: 11, fill: "#475569" }}
-                >
-                  {weekDays[i]}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </Card>
+      )}
 
-      {/* Two columns */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 16,
-          marginTop: 24,
-        }}
-      >
-        <Card style={{ padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
-              Últimas transações
+      {/* BLOCO 1: SAÚDE DA PLATAFORMA */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+          Bloco 1 — Saúde da Plataforma
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14 }}>
+          {[
+            { label: "Sistema Online", ok: saude.sistema_online, sub: "Operação normal" },
+            { label: "Edge Functions", ok: saude.edge_functions, sub: "Serverless ativas" },
+            { label: "Realtime Conectado", ok: saude.realtime, sub: "WebSockets online" },
+            { label: "Banco Acessível", ok: saude.banco_acessivel, sub: "PostgreSQL Supabase" },
+          ].map((item) => (
+            <Card key={item.label} style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#334155" }}>{item.label}</span>
+                {item.ok ? <CheckCircle2 size={18} color="#0DB87E" /> : <XCircle size={18} color="#E84040" />}
+              </div>
+              <p style={{ fontFamily: "DM Sans", fontSize: 11, color: item.ok ? "#0DB87E" : "#E84040", marginTop: 4, margin: 0 }}>
+                {item.sub}
+              </p>
+            </Card>
+          ))}
+
+          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Fila Notificações</span>
+            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>{saude.fila_notificacoes} pendentes</div>
+          </Card>
+
+          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Fila Pagamentos</span>
+            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>{saude.fila_pagamentos} pendentes</div>
+          </Card>
+
+          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Tempo Resposta Média</span>
+            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0DB87E", marginTop: 2 }}>{saude.tempo_medio_resposta_ms} ms</div>
+          </Card>
+        </div>
+      </div>
+
+      {/* BLOCO 2: KPIS DO DIA */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+          Bloco 2 — KPIs do Dia
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+          {[
+            { label: "GMV do Dia", val: formatBR(kpis_dia.gmv), color: "#2B6EE8" },
+            { label: "Receita UBT (4%)", val: formatBR(kpis_dia.receita_ubt), color: "#0DB87E" },
+            { label: "Pedidos do Dia", val: kpis_dia.pedidos, color: "#0F172A" },
+            { label: "Aprovados", val: kpis_dia.pagamentos_aprovados, color: "#0DB87E" },
+            { label: "Recusados", val: kpis_dia.pagamentos_recusados, color: "#E84040" },
+            { label: "Payouts Realizados", val: kpis_dia.payouts_realizados, color: "#9B59B6" },
+            { label: "Reembolsos", val: kpis_dia.reembolsos, color: "#F5A623" },
+            { label: "Cancelamentos", val: kpis_dia.cancelamentos, color: "#64748B" },
+          ].map((k) => (
+            <Card key={k.label} style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+              <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>{k.label}</div>
+              <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: k.color, marginTop: 4 }}>{k.val}</div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* BLOCO 3: OPERAÇÃO POR VERTICAL */}
+      <div style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+          Bloco 3 — Operação por Vertical
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+          {/* Mototáxi */}
+          <Card onClick={() => navigate("/admin/operacoes")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Bike size={18} color="#2B6EE8" />
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Mototáxi</span>
             </div>
-            <button
-              onClick={() => navigate("/admin/financeiro")}
-              style={{ background: "none", border: "none", color: "#0DB87E", fontFamily: "DM Sans", fontSize: 13, cursor: "pointer" }}
-            >
-              Ver todas →
-            </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
+              <div>Solicitadas: <strong>{operacao.mototaxi.requested}</strong></div>
+              <div>Concluídas: <strong style={{ color: "#0DB87E" }}>{operacao.mototaxi.completed}</strong></div>
+              <div>Tempo Médio: <strong>{operacao.mototaxi.avg_duration_min}m</strong></div>
+              <div>Canceladas: <strong style={{ color: "#E84040" }}>{operacao.mototaxi.cancelled}</strong></div>
+            </div>
+          </Card>
+
+          {/* Diaristas */}
+          <Card onClick={() => navigate("/admin/diaristas")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Sparkles size={18} color="#9B59B6" />
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Diaristas</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
+              <div>Agendamentos: <strong>{operacao.diaristas.agendamentos}</strong></div>
+              <div>Concluídos: <strong style={{ color: "#0DB87E" }}>{operacao.diaristas.concluidos}</strong></div>
+              <div style={{ gridColumn: "span 2" }}>Pendentes: <strong style={{ color: "#F5A623" }}>{operacao.diaristas.pendentes}</strong></div>
+            </div>
+          </Card>
+
+          {/* Ambulantes */}
+          <Card onClick={() => navigate("/admin/clientes")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <ShoppingBag size={18} color="#F5A623" />
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Ambulantes</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
+              <div>Pedidos: <strong>{operacao.ambulantes.pedidos}</strong></div>
+              <div>Entregues: <strong style={{ color: "#0DB87E" }}>{operacao.ambulantes.entregues}</strong></div>
+              <div style={{ gridColumn: "span 2" }}>Pendentes: <strong style={{ color: "#F5A623" }}>{operacao.ambulantes.pendentes}</strong></div>
+            </div>
+          </Card>
+
+          {/* Côco & Cia */}
+          <Card onClick={() => navigate("/admin/coco")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Building2 size={18} color="#0DB87E" />
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Côco & Cia</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
+              <div>Solicitações: <strong>{operacao.coco.solicitacoes}</strong></div>
+              <div>Coletas: <strong style={{ color: "#0DB87E" }}>{operacao.coco.coletas_concluidas}</strong></div>
+              <div style={{ gridColumn: "span 2" }}>Veículos Ativos: <strong>{operacao.coco.veiculos_ativos}</strong></div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* BLOCO 4 & 5: USUÁRIOS E FINANCEIRO */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 28 }}>
+        {/* BLOCO 4: USUÁRIOS */}
+        <Card style={{ padding: 24, border: "1px solid #E2E8F0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
+              Bloco 4 — Usuários
+            </h2>
+            <GhostButton onClick={() => navigate("/admin/clientes")} style={{ padding: "4px 8px", fontSize: 12 }}>
+              Gerenciar →
+            </GhostButton>
           </div>
-          <div style={{ marginTop: 12 }}>
-            {recent.map((t) => (
-              <div
-                key={t.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 0",
-                  borderBottom: "1px solid #F1F5F9",
-                }}
-              >
-                <div style={{ flex: 1, fontFamily: "DM Sans", fontSize: 13, color: "#0F172A" }}>{t.description}</div>
-                <div style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0DB87E" }}>
-                  {formatBR(t.amount)}
-                </div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", minWidth: 50, textAlign: "right" }}>
-                  {new Date(t.date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </div>
-              </div>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontFamily: "DM Sans" }}>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Novos (7d)</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#0F172A" }}>{usuarios.novos_usuarios}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Prestadores</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>{usuarios.prestadores}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Tomadores</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#2B6EE8" }}>{usuarios.tomadores}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>KYC Pendentes</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#F5A623" }}>{usuarios.kyc_pendentes}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>KYC Aprovados Hoje</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>{usuarios.kyc_aprovados_hoje}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bloqueados</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#E84040" }}>{usuarios.usuarios_bloqueados}</div>
+            </div>
           </div>
         </Card>
 
-        <Card style={{ padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>KYCs pendentes</div>
-            <span
-              style={{
-                background: "rgba(232,64,64,0.10)",
-                color: "#E84040",
-                borderRadius: 999,
-                padding: "2px 10px",
-                fontFamily: "DM Sans",
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-            >
-              {pendingKyc.length}
-            </span>
+        {/* BLOCO 5: FINANCEIRO */}
+        <Card style={{ padding: 24, border: "1px solid #E2E8F0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
+              Bloco 5 — Financeiro
+            </h2>
+            <GhostButton onClick={() => navigate("/admin/financeiro")} style={{ padding: "4px 8px", fontSize: 12 }}>
+              Demonstrativo →
+            </GhostButton>
           </div>
-          <div style={{ marginTop: 12 }}>
-            {pendingKyc.length === 0 && (
-              <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", padding: "16px 0" }}>
-                Nenhum KYC pendente.
-              </div>
-            )}
-            {pendingKyc.map((u) => (
-              <div
-                key={u.id}
-                onClick={() => navigate(`/admin/kyc/${u.id}`)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 8px",
-                  borderBottom: "1px solid #F1F5F9",
-                  cursor: "pointer",
-                  borderRadius: 8,
-                  transition: "background 100ms",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <Avatar name={u.name} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A" }}>{u.name}</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8" }}>
-                    Cadastro {new Date(u.createdAt).toLocaleDateString("pt-BR")}
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setKyc(u.id, "approved"); }}
-                  style={{
-                    background: "rgba(13,184,126,0.10)",
-                    border: "1px solid rgba(13,184,126,0.25)",
-                    color: "#0DB87E",
-                    fontFamily: "DM Sans",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    borderRadius: 6,
-                    padding: "5px 12px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Aprovar
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setKyc(u.id, "rejected"); }}
-                  style={{
-                    background: "rgba(232,64,64,0.08)",
-                    border: "1px solid rgba(232,64,64,0.20)",
-                    color: "#E84040",
-                    fontFamily: "DM Sans",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    borderRadius: 6,
-                    padding: "5px 12px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Reprovar
-                </button>
-              </div>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontFamily: "DM Sans" }}>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>GMV Total</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#2B6EE8" }}>{formatBR(financeiro.gmv_total)}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Ticket Médio</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#0DB87E" }}>{formatBR(financeiro.ticket_medio)}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Split Retido (4%)</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#F5A623" }}>{formatBR(financeiro.split_total)}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Saldo Aguardando Payout</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#9B59B6" }}>{formatBR(financeiro.saldo_aguardando_payout)}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Chargebacks</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E84040" }}>{financeiro.chargebacks}</div>
+            </div>
+            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Disputas Abertas</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#E84040" }}>{financeiro.disputas}</div>
+            </div>
           </div>
         </Card>
+      </div>
+
+      {/* BLOCO 7: TENDÊNCIAS (ÚLTIMOS 7 DIAS) */}
+      <div>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+          Bloco 7 — Tendências dos Últimos 7 Dias
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+          {tendencias.map((t, idx) => (
+            <Card key={idx} style={{ padding: 14, border: "1px solid #E2E8F0", textAlign: "center" }}>
+              <span style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#0DB87E", display: "block", marginBottom: 6 }}>
+                {t.day}
+              </span>
+              <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#64748B", display: "flex", flexDirection: "column", gap: 4 }}>
+                <div>GMV: <strong style={{ color: "#0F172A" }}>{formatBR(t.gmv).split(",")[0]}</strong></div>
+                <div>Novos: <strong>{t.cadastros}</strong></div>
+                <div>Pedidos: <strong>{t.pedidos}</strong></div>
+                <div>Installs: <strong>{t.pwa_installs}</strong></div>
+                <div>Conv: <strong style={{ color: "#0DB87E" }}>{t.conversao}%</strong></div>
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   );

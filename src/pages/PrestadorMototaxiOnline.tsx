@@ -6,6 +6,8 @@ import GhostButtonLight from "@/components/prestador/GhostButtonLight";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { isLocationInUbatuba } from "@/services/GeofenceService";
 
 const UBATUBA = { lat: -23.4336, lng: -45.0838 };
 
@@ -201,6 +203,12 @@ const PrestadorMototaxiOnline = () => {
   useEffect(() => {
     if (!user.uid || !myLocation) return;
     async function syncSession() {
+      const isInside = isLocationInUbatuba(myLocation.lat, myLocation.lng);
+      if (!isInside) {
+        toast.error("Serviço indisponível: Você está fora dos limites de atendimento de Ubatuba-SP.");
+        goOffline();
+        return;
+      }
       await supabase
         .from('mototaxi_sessoes')
         .upsert({

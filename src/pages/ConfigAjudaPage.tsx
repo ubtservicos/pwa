@@ -33,6 +33,10 @@ const FAQS = [
 const DOC_TEXT = {
   termos: [
     "Bem-vindo à UBT — O Superapp do Trabalhador. Estes Termos de Uso regulam o acesso e a utilização da plataforma. Ao criar uma conta, você concorda integralmente com as condições aqui descritas.",
+    "A UBT busca ampliar oportunidades de trabalho e geração de renda para a comunidade local, respeitando princípios de inclusão e responsabilidade social.",
+    "O processo de credenciamento considera a documentação exigida para cada atividade, a regularidade operacional e o comportamento dentro da plataforma.",
+    "A segurança dos usuários é reforçada por mecanismos de verificação documental, avaliações da comunidade, monitoramento operacional, auditoria antifraude e moderação contínua.",
+    "A UBT mantém política de tolerância zero para fraude, violência, assédio ou qualquer atividade ilegal.",
     "A UBT atua como intermediadora entre Tomadores e Prestadores de serviços, oferecendo a infraestrutura tecnológica para conectar as partes. Não nos responsabilizamos pela qualidade ou execução dos serviços, mas asseguramos canais de mediação e suporte.",
     "É proibido o uso da plataforma para atividades ilícitas, fraude, ou que violem a dignidade de outros usuários. O descumprimento poderá resultar em suspensão imediata da conta.",
     "A UBT poderá atualizar estes Termos a qualquer momento, comunicando os usuários por meio do aplicativo. O uso contínuo após a alteração configura aceitação das novas condições.",

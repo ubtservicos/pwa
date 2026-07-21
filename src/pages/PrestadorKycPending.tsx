@@ -1,13 +1,19 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 const PrestadorKycPending = () => {
   const navigate = useNavigate();
 
-  // Simulação: aprova após 6s (em produção: onValue Firebase)
   useEffect(() => {
+    trackEvent("kyc_submitted", "operational");
+    logSystem("INFO", "PWA", "kyc_submitted", "started");
+
     const t = setTimeout(() => {
+      trackEvent("kyc_approved", "operational");
+      logSystem("INFO", "PWA", "kyc_approved", "success");
       navigate("/app/prestador/home");
     }, 6000);
     return () => clearTimeout(t);

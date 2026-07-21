@@ -10,6 +10,8 @@ import { useSimpleToast } from "@/hooks/useToast2";
 import { isValidEmail } from "@/utils/masks";
 
 import { supabase } from "@/lib/supabase";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,6 +38,8 @@ const Login = () => {
     setLoginError(false);
     if (!validate()) return;
     setLoading(true);
+    const startTime = Date.now();
+    logSystem("INFO", "AUTH", "login_submit", "started", undefined, undefined, undefined, { email });
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -43,17 +47,26 @@ const Login = () => {
         password: senha,
       });
 
+      const duration = Date.now() - startTime;
+
       if (error) {
         setLoginError(true);
+        trackEvent("login_failed", "ux", { reason: error.message });
+        logSystem("WARNING", "AUTH", "login_submit", "failed", duration, error.message, error.status?.toString() || "AUTH_FAILED", { email });
       } else {
+        trackEvent("login", "ux", { user_id: data.user.id });
+        logSystem("INFO", "AUTH", "login_submit", "success", duration, undefined, undefined, { email });
         if (email === "ubt.servicos@gmail.com") {
           navigate("/admin");
         } else {
           navigate("/app/home");
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      const duration = Date.now() - startTime;
       setLoginError(true);
+      trackEvent("login_failed", "ux", { reason: error?.message });
+      logSystem("ERROR", "AUTH", "login_submit", "failed", duration, error?.message, "UNEXPECTED_ERROR", { email });
     } finally {
       setLoading(false);
     }

@@ -270,38 +270,27 @@ export default function AdminClienteDetailPage() {
   const [rules, setRules] = useState<StatusRule[]>([]);
 
   useEffect(() => {
-    if (!id) return;
-    const saved = localStorage.getItem("ubt_users_status");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed[id]) {
-          setUserStatus(parsed[id]);
-        } else {
-          setUserStatus("active");
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    if (dbUser) {
+      setUserStatus(dbUser.status || "active");
     }
     setRules(getStatusRules());
-  }, [id]);
+  }, [dbUser]);
 
-  const changeStatus = (newStatus: string) => {
+  const changeStatus = async (newStatus: string) => {
     if (!id) return;
-    const saved = localStorage.getItem("ubt_users_status");
-    let currentMap: Record<string, string> = {};
-    if (saved) {
-      try {
-        currentMap = JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
+    try {
+      const { error } = await supabase
+        .from("usuarios")
+        .update({ status: newStatus })
+        .eq("id", id);
+
+      if (error) throw error;
+      setUserStatus(newStatus);
+      toast.show("Status do usuário alterado com sucesso!");
+    } catch (e) {
+      console.error("Erro ao alterar status:", e);
+      toast.show("Erro ao alterar status no banco.");
     }
-    currentMap[id] = newStatus;
-    localStorage.setItem("ubt_users_status", JSON.stringify(currentMap));
-    setUserStatus(newStatus);
-    toast.show("Status do usuário alterado com sucesso!");
   };
 
   if (loading) {

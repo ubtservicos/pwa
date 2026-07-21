@@ -108,14 +108,12 @@ export default function AdminKycDetailPage() {
         return [
           { id: "rg_cnh", label: "RG/CNH legível e dentro do prazo de validade" },
           { id: "residencia", label: "Comprovante de residência emitido nos últimos 90 dias" },
-          { id: "antecedentes", label: "Certidão de Antecedentes Criminais sem ocorrências" },
           { id: "selfie", label: "Selfie com documento em mãos bate com a foto de perfil" },
         ];
       case "Mototaxi":
         return [
           { id: "cnh_a", label: "CNH categoria A ativa com observação EAR (Exerce Ativ. Remunerada)" },
           { id: "crlv_moto", label: "CRLV da motocicleta regularizado e licenciado" },
-          { id: "antecedentes", label: "Certidão de Antecedentes Criminais sem ocorrências" },
           { id: "prontuario", label: "Prontuário de infrações da CNH limpo ou sem infrações gravíssimas" },
         ];
       case "Reciclagem":
@@ -129,7 +127,6 @@ export default function AdminKycDetailPage() {
         return [
           { id: "rg_cnh", label: "Documento de identificação oficial válido (RG/CNH)" },
           { id: "residencia", label: "Comprovante de residência atualizado" },
-          { id: "antecedentes", label: "Certidão de Antecedentes Criminais" },
         ];
     }
   })();
@@ -148,12 +145,6 @@ export default function AdminKycDetailPage() {
         type: "Conta de Consumo",
         status: "valid",
         description: "Conta de água, luz ou telefone recente.",
-      },
-      {
-        name: "Atestado de Antecedentes Criminais",
-        type: "Certidão Estadual",
-        status: "valid",
-        description: "Emitido pelo portal da Polícia Civil.",
       },
     ];
 
@@ -324,6 +315,35 @@ export default function AdminKycDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Posicionamento Institucional UBT */}
+      <div style={{
+        background: "rgba(13,184,126,0.06)",
+        border: "1px solid rgba(13,184,126,0.15)",
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 24,
+        fontFamily: "DM Sans",
+        fontSize: 13,
+        lineHeight: 1.5,
+        color: "#475569"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#0DB87E", marginBottom: 6 }}>
+          <ShieldCheck size={18} /> Inclusão e Oportunidade UBT
+        </div>
+        <p style={{ margin: 0 }}>
+          A UBT busca ampliar oportunidades de trabalho e geração de renda para a comunidade local, respeitando princípios de inclusão e responsabilidade social.
+        </p>
+        <p style={{ margin: "8px 0 0" }}>
+          O processo de credenciamento considera a documentação exigida para cada atividade, a regularidade operacional e o comportamento dentro da plataforma.
+        </p>
+        <p style={{ margin: "8px 0 0" }}>
+          A segurança dos usuários é reforçada por mecanismos de verificação documental, avaliações da comunidade, monitoramento operacional, auditoria antifraude e moderação contínua.
+        </p>
+        <p style={{ margin: "8px 0 0" }}>
+          A UBT mantém política de tolerância zero para fraude, violência, assédio ou qualquer atividade ilegal.
+        </p>
       </div>
 
       {/* Tabs */}

@@ -10,6 +10,8 @@ import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 const ConfigNotificacoesPage = () => {
   const t = useTheme();
@@ -49,8 +51,11 @@ const ConfigNotificacoesPage = () => {
       await supabase.auth.updateUser({
         data: { notif_preferences: notif }
       });
+      trackEvent("notification_opened", "ux", { action: "save_prefs" });
+      logSystem("INFO", "NOTIFICATIONS", "update_preferences", "success", undefined, undefined, undefined, { notif });
       showToast("Preferências salvas! ✓");
-    } catch (err) {
+    } catch (err: any) {
+      logSystem("ERROR", "NOTIFICATIONS", "update_preferences", "failed", undefined, err.message, err.code);
       showToast("Preferências salvas localmente!");
     }
   };

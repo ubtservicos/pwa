@@ -142,6 +142,12 @@ const ConfigIndexPage = () => {
             label="Financeiro"
             subtitle="Pix · Cartões · Split"
             onClick={() => navigate("/app/config/financeiro")}
+          />
+          <SettingsRow
+            icon={Download}
+            label="Privacidade & LGPD"
+            subtitle="Portabilidade · Baixar meus dados"
+            onClick={() => navigate("/app/config/privacidade")}
             isLast
           />
         </SettingsGroup>

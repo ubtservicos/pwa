@@ -188,19 +188,7 @@ export default function AdminClientesPage() {
         : 0;
       const contribComunidade = (pagos + recebidos) * 0.01;
       const donations = getDonations(u.id, contribComunidade);
-
-      const savedStatuses = localStorage.getItem("ubt_users_status");
-      let status: string = "active";
-      if (savedStatuses) {
-        try {
-          const parsed = JSON.parse(savedStatuses);
-          if (parsed[u.id]) {
-            status = parsed[u.id];
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
+      const status = u.status || "active";
 
       return {
         id: u.id,

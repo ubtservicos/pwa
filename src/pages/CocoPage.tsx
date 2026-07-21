@@ -16,6 +16,7 @@ import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from "@/components/UB
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { validateGeofence } from "@/services/GeofenceService";
 
 
 type Tab = "informar" | "acompanhar" | "contribuir";
@@ -203,6 +204,13 @@ const CocoPage = () => {
     }
     const lat = coordenadas?.lat ?? center.lat;
     const lng = coordenadas?.lng ?? center.lng;
+
+    // Validar Geofence
+    const geoRes = validateGeofence(endereco, { lat, lng });
+    if (!geoRes.inside) {
+      alert(geoRes.reason || "Atendimento indisponível: A UBT atende apenas no município de Ubatuba-SP.");
+      return;
+    }
 
     try {
       const { data, error } = await supabase

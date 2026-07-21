@@ -8,6 +8,9 @@ import { calcSplit, SPLIT_META, formatBRL } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { reverseGeocode } from "@/lib/geoService";
+import { validateGeofence } from "@/services/GeofenceService";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 const ICONS = { User, Building2, Users, Gift, Star, Heart } as const;
 
@@ -100,6 +103,16 @@ const AmbulanteCarrinhoPage = () => {
   const confirmarPedido = async () => {
     if (!modalidade || submitting) return;
     setSubmitting(true);
+    const startTime = Date.now();
+
+    if (modalidade === "delivery") {
+      const geoRes = validateGeofence(endereco, coords || undefined);
+      if (!geoRes.inside) {
+        alert(geoRes.reason || "Atendimento indisponível: A UBT atende apenas no município de Ubatuba-SP.");
+        setSubmitting(false);
+        return;
+      }
+    }
 
     const itens = state.itens.map((i) => ({
       prodId: i.prodId, nome: i.nome, emoji: i.emoji,
@@ -126,6 +139,8 @@ const AmbulanteCarrinhoPage = () => {
       delivery_referencia: referencia,
     }).select().single();
     
+    const duration = Date.now() - startTime;
+
     if (error) console.error("Erro ao inserir pedido:", error);
     
     if (dbData) {
@@ -139,12 +154,16 @@ const AmbulanteCarrinhoPage = () => {
         subtotal: i.subtotal
       }));
       await supabase.from('pedido_itens').insert(itensPayload);
+
+      trackEvent("order_requested", "operational", { vertical: "ambulantes", order_id: dbData.id, price: total, modalidade });
+      logSystem("INFO", "AMBULANTES", "order_requested", "success", duration, undefined, undefined, { order_id: dbData.id, price: total });
     }
 
     if (dbData) {
       setState({ pedidoId: dbData.id, modalidade, status: "pending" });
       navigate(`/app/ambulantes/pedido/${dbData.id}`);
     } else {
+      logSystem("ERROR", "AMBULANTES", "order_requested", "failed", duration, error?.message || "Erro ao criar pedido", "ORDER_CREATE_FAILED");
       setSubmitting(false);
       alert("Erro ao criar pedido!");
     }

@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowRight, Bell, CheckCircle, ChevronDown, Loader2, Star, B
 import { useAmbulantePedido } from "@/contexts/AmbulantePedidoContext";
 import { calcSplit, SPLIT_META, formatBRL } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
 
 const ICONS = { User, Building2, Users, Gift, Star, Heart } as const;
 
@@ -13,6 +15,7 @@ const AmbulantePedidoPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state, setState, resetPedido } = useAmbulantePedido();
+  const user = useCurrentUser();
 
   const [status, setStatus] = useState<RemoteStatus>("pending");
   const [secondsLeft, setSecondsLeft] = useState(120);
@@ -91,10 +94,11 @@ const AmbulantePedidoPage = () => {
     navigate(-1);
   };
 
-  const confirmarPagamento = async () => {
+    const confirmarPagamento = async () => {
     // Tenta chamar a Edge Function segura no backend
     let functionSuccess = false;
     try {
+      const securityMetadata = collectPaymentMetadata();
       const { data: checkData, error: checkError } = await supabase.functions.invoke("checkout", {
         body: {
           service_type: "ambulante",
@@ -102,7 +106,8 @@ const AmbulantePedidoPage = () => {
           customer_id: user.uid || "mock-customer",
           provider_id: state.prestadorInfo?.id || "mock-provider",
           amount: total,
-          payment_method: paymentMethod
+          payment_method: paymentMethod,
+          metadata: securityMetadata
         }
       });
       if (!checkError && checkData) {

@@ -2,9 +2,17 @@ import { Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+export const ADMIN_ROLES = ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"];
+
+interface AdminRouteProps {
+  children: React.ReactNode;
+  allowedRoles?: string[];
+  permission?: string;
+}
+
+export const AdminRoute = ({ children, allowedRoles, permission }: AdminRouteProps) => {
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -17,27 +25,46 @@ export const AdminRoute = ({ children }: { children: React.ReactNode }) => {
             .eq("id", user.id)
             .maybeSingle();
 
-          const role = user.email === "ubt.servicos@gmail.com" ? "admin" : (dbUser?.role || "tomador");
-          if (role === "admin") {
-            setIsAdmin(true);
+          const role = user.email === "ubt.servicos@gmail.com" ? "super_admin" : (dbUser?.role || "tomador");
+          
+          if (role === "super_admin") {
+            setIsAuthorized(true);
+          } else if (permission) {
+            const { data: hasPerm } = await supabase.rpc("has_permission", {
+              p_user_id: user.id,
+              p_permission_code: permission,
+            });
+            if (hasPerm) {
+              setIsAuthorized(true);
+            } else if (allowedRoles && allowedRoles.includes(role)) {
+              setIsAuthorized(true);
+            }
+          } else if (allowedRoles && allowedRoles.length > 0) {
+            if (allowedRoles.includes(role)) {
+              setIsAuthorized(true);
+            }
+          } else {
+            if (ADMIN_ROLES.includes(role)) {
+              setIsAuthorized(true);
+            }
           }
         }
       } catch (err) {
-        console.error("Erro ao validar credenciais admin:", err);
+        console.error("Erro ao validar credenciais admin RBAC:", err);
       } finally {
         setLoading(false);
       }
     };
     checkAdmin();
-  }, []);
+  }, [allowedRoles, permission]);
 
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#0F172A", color: "#fff", fontFamily: "DM Sans" }}>
-        Validando credenciais administrativas...
+        Validando credenciais administrativas (RBAC)...
       </div>
     );
   }
 
-  return isAdmin ? <>{children}</> : <Navigate to="/admin/login" replace />;
+  return isAuthorized ? <>{children}</> : <Navigate to="/admin/login" replace />;
 };

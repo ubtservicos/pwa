@@ -15,22 +15,45 @@ import {
   Menu,
   X,
   Clock,
+  CreditCard,
+  Landmark,
+  ShieldAlert,
+  RefreshCw,
+  Ban,
+  Activity,
+  ShieldCheck,
+  BarChart3
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
 export const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-  { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes" },
-  { icon: Users, label: "Clientes", path: "/admin/clientes" },
-  { icon: BarChart2, label: "Financeiro", path: "/admin/financeiro" },
-  { icon: Divide, label: "Taxa de Serviço", path: "/admin/split" },
-  { icon: Building2, label: "Entidades", path: "/admin/entidades" },
-  { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco" },
-  { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem" },
-  { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo" },
-  { icon: Recycle, label: "Côco & Cia", path: "/admin/coco" },
-  { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["operator", "financeiro", "moderador", "admin", "super_admin"] },
+  { icon: Activity, label: "Saúde da Plataforma", path: "/admin/health", roles: ["operations_manager", "operator", "admin", "super_admin"] },
+  { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
+  { icon: Users, label: "Clientes", path: "/admin/clientes", roles: ["operator", "moderador", "admin", "super_admin"] },
+  { icon: BarChart2, label: "Financeiro", path: "/admin/financeiro", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: CreditCard, label: "Pagamentos", path: "/admin/payments", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: Landmark, label: "Saques / Payouts", path: "/admin/payouts", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: ShieldAlert, label: "Mediações", path: "/admin/disputes", roles: ["moderador", "admin", "super_admin"] },
+  { icon: RefreshCw, label: "Estornos", path: "/admin/refunds", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: Ban, label: "Cancelamentos", path: "/admin/cancellations", roles: ["operator", "financeiro", "admin", "super_admin"] },
+  { icon: Activity, label: "Operações Realtime", path: "/admin/operacoes", roles: ["operator", "admin", "super_admin"] },
+  { icon: ShieldCheck, label: "Privacidade / LGPD", path: "/admin/lgpd", roles: ["super_admin"] },
+  { icon: Clock, label: "Auditoria / Logs", path: "/admin/auditoria", roles: ["super_admin"] },
+  { icon: ShieldAlert, label: "Antifraude", path: "/admin/antifraude", roles: ["admin", "super_admin"] },
+  { icon: BarChart3, label: "Analytics Operacional", path: "/admin/analytics", roles: ["admin", "super_admin"] },
+  { icon: ShieldCheck, label: "Permissões RBAC", path: "/admin/permissoes", roles: ["admin", "super_admin"] },
+  { icon: CheckCircle2, label: "Quality Center", path: "/admin/quality", roles: ["admin", "super_admin"] },
+  { icon: Shield, label: "Security Center", path: "/admin/security", roles: ["admin", "super_admin"] },
+  { icon: Settings, label: "Configurações", path: "/admin/configuracoes", roles: ["admin", "super_admin"] },
+  { icon: Divide, label: "Taxa de Serviço", path: "/admin/split", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: Building2, label: "Entidades", path: "/admin/entidades", roles: ["operator", "admin", "super_admin"] },
+  { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco", roles: ["operator", "admin", "super_admin"] },
+  { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
+  { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
+  { icon: Recycle, label: "Côco & Cia", path: "/admin/coco", roles: ["operator", "admin", "super_admin"] },
+  { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
 ];
 
 const sectionTitle = (path: string) => {
@@ -41,11 +64,44 @@ const sectionTitle = (path: string) => {
 const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [role, setRole] = useState<string>("tomador");
+  const [adminName, setAdminName] = useState<string>("Admin UBT");
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: dbUser } = await supabase
+          .from("usuarios")
+          .select("nome, role")
+          .eq("id", user.id)
+          .maybeSingle();
+        
+        const resolvedRole = user.email === "ubt.servicos@gmail.com" ? "super_admin" : (dbUser?.role || "tomador");
+        setRole(resolvedRole);
+        setAdminName(dbUser?.nome || user.email || "Admin UBT");
+      }
+    };
+    fetchUserRole();
+  }, []);
+
   const logout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem("adminAuth");
     navigate("/admin/login");
   };
+
+  const initials = adminName
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const filteredItems = NAV_ITEMS.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(role);
+  });
+
   return (
     <aside
       style={{
@@ -70,13 +126,14 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
             borderRadius: 999,
             padding: "3px 8px",
             letterSpacing: 1,
+            textTransform: "uppercase"
           }}
         >
-          ADMIN
+          {role.replace("_", " ")}
         </span>
       </div>
       <nav style={{ flex: 1, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {NAV_ITEMS.map((item) => {
+        {filteredItems.map((item) => {
           const active = pathname === item.path;
           const Icon = item.icon;
           return (
@@ -134,9 +191,16 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
             fontWeight: 600,
           }}
         >
-          AU
+          {initials}
         </div>
-        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.70)", flex: 1 }}>Admin UBT</span>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.90)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {adminName}
+          </span>
+          <span style={{ fontFamily: "DM Sans", fontSize: 10, color: "rgba(255,255,255,0.40)", textTransform: "capitalize" }}>
+            {role.replace("_", " ")}
+          </span>
+        </div>
         <button onClick={logout} aria-label="Sair" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
           <LogOut size={16} color="rgba(255,255,255,0.40)" />
         </button>

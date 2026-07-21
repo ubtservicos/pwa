@@ -24,6 +24,11 @@ import { useRide, type RideType } from "@/contexts/RideContext";
 import { searchAddresses } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { validateGeofence } from "@/services/GeofenceService";
+import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 const UBATUBA_FALLBACK = { lat: -23.4336, lng: -45.0838 };
 
@@ -934,9 +939,9 @@ const MototaxiTomadorPage = () => {
     };
   }, [state.rideId, state.origin]);
 
-  // Escuta a localização em tempo real do prestador aceito
+  // Escuta a localização em tempo real do prestador aceito e em andamento
   useEffect(() => {
-    if (state.status !== 'accepted' || !state.prestadorInfo || !state.rideId) return;
+    if ((state.status !== 'accepted' && state.status !== 'in_progress') || !state.prestadorInfo || !state.rideId) return;
 
     let activePrestadorId: string | null = null;
     let channel: any = null;
@@ -968,7 +973,48 @@ const MototaxiTomadorPage = () => {
             { event: 'UPDATE', schema: 'public', table: 'mototaxi_sessoes', filter: `prestador_id=eq.${activePrestadorId}` },
             (payload: any) => {
               if (payload.new) {
-                setState({ prestadorLocation: { lat: Number(payload.new.lat), lng: Number(payload.new.lng) } });
+                const driverLat = Number(payload.new.lat);
+                const driverLng = Number(payload.new.lng);
+                setState({ prestadorLocation: { lat: driverLat, lng: driverLng } });
+
+                // Regra 1: Distancia cliente-motorista superior a 100m durante a corrida
+                if (state.status === 'in_progress' && navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition((pos) => {
+                    const clientLat = pos.coords.latitude;
+                    const clientLng = pos.coords.longitude;
+                    
+                    const R = 6371000; // metros
+                    const dLat = ((driverLat - clientLat) * Math.PI) / 180;
+                    const dLng = ((driverLng - clientLng) * Math.PI) / 180;
+                    const a =
+                      Math.sin(dLat / 2) ** 2 +
+                      Math.cos((clientLat * Math.PI) / 180) *
+                        Math.cos((driverLat * Math.PI) / 180) *
+                        Math.sin(dLng / 2) ** 2;
+                    const distMeters = 2 * R * Math.asin(Math.sqrt(a));
+
+                    if (distMeters > 100) {
+                      supabase
+                        .from('telemetry_flags')
+                        .insert({
+                          ride_id: state.rideId,
+                          flag_type: 'driver_client_distance',
+                          severity: 'critical',
+                          metadata: {
+                            driver_lat: driverLat,
+                            driver_lng: driverLng,
+                            client_lat: clientLat,
+                            client_lng: clientLng,
+                            distance_meters: distMeters,
+                            message: 'Distancia cliente-motorista superior a 100 metros durante corrida.'
+                          }
+                        })
+                        .then(({ error }) => {
+                          if (error) console.error('Erro ao registrar flag de telemetria:', error);
+                        });
+                    }
+                  });
+                }
               }
             }
           )
@@ -985,6 +1031,17 @@ const MototaxiTomadorPage = () => {
 
   const handleConfirm = async () => {
     if (!state.origin || !state.destination || !user.uid) return;
+    const startTime = Date.now();
+
+    // Validar Geofence de Origem e Destino
+    const originGeo = validateGeofence(state.origin.address, { lat: state.origin.lat, lng: state.origin.lng });
+    const destGeo = validateGeofence(state.destination.address, { lat: state.destination.lat, lng: state.destination.lng });
+
+    // Bloqueia apenas se ambos estiverem fora de Ubatuba
+    if (!originGeo.inside && !destGeo.inside) {
+      toast.error("Serviço indisponível: A UBT opera apenas quando a origem ou o destino estão localizados no município de Ubatuba-SP.");
+      return;
+    }
 
     const newRide = {
       tomador_id: user.uid,
@@ -1012,11 +1069,17 @@ const MototaxiTomadorPage = () => {
       .select()
       .single();
 
+    const duration = Date.now() - startTime;
+
     if (error) {
       console.error('Error creating ride:', error);
+      logSystem("ERROR", "MOTOTAXI", "ride_requested", "failed", duration, error.message, error.code, { type: state.type });
       alert('Erro ao solicitar mototáxi.');
       return;
     }
+
+    trackEvent("ride_requested", "operational", { vertical: "mototaxi", type: state.type, price: state.estimatedPrice, distance_km: state.distanceKm });
+    logSystem("INFO", "MOTOTAXI", "ride_requested", "success", duration, undefined, undefined, { type: state.type, price: state.estimatedPrice });
 
     setState({
       status: 'searching',
@@ -1026,6 +1089,8 @@ const MototaxiTomadorPage = () => {
 
   const handleCancel = async () => {
     if (state.rideId) {
+      trackEvent("ride_cancelled", "operational", { vertical: "mototaxi", ride_id: state.rideId });
+      logSystem("INFO", "MOTOTAXI", "ride_cancelled", "success", undefined, undefined, undefined, { ride_id: state.rideId });
       await supabase
         .from('mototaxi_corridas')
         .update({ status: 'cancelled' })
@@ -1043,6 +1108,7 @@ const MototaxiTomadorPage = () => {
   const handlePay = async () => {
     // Tenta chamar a Edge Function segura no backend
     try {
+      const securityMetadata = collectPaymentMetadata();
       await supabase.functions.invoke("checkout", {
         body: {
           service_type: "mototaxi",
@@ -1050,7 +1116,8 @@ const MototaxiTomadorPage = () => {
           customer_id: user.uid || "mock-customer",
           provider_id: "mock-driver-id",
           amount: state.finalPrice || state.estimatedPrice,
-          payment_method: state.paymentMethod || "pix"
+          payment_method: state.paymentMethod || "pix",
+          metadata: securityMetadata
         }
       });
     } catch (funcErr) {

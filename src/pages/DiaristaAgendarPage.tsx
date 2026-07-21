@@ -7,6 +7,10 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { useRide } from "@/contexts/RideContext";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { toast } from "sonner";
+import { validateGeofence } from "@/services/GeofenceService";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -227,6 +231,9 @@ const DiaristaAgendarPage = () => {
       localStorage.setItem(`diarista_ag_${agId}`, JSON.stringify(payload));
     } catch { /* noop */ }
 
+    trackEvent("booking_requested", "operational", { vertical: "diaristas", agendamento_id: agId, price: valorTotal });
+    logSystem("INFO", "DIARISTAS", "booking_requested", "success", undefined, undefined, undefined, { agendamento_id: agId, price: valorTotal });
+
     // 4. Mostrar o Splash e Redirecionar
     setShowSuccessSplash(true);
     setSubmitting(false);
@@ -388,7 +395,14 @@ const DiaristaAgendarPage = () => {
 
           <button
             disabled={!endereco || !m2 || +m2 < diarista.minimoM2}
-            onClick={() => setStep(3)}
+            onClick={() => {
+              const geoRes = validateGeofence(endereco);
+              if (!geoRes.inside) {
+                toast.error(geoRes.reason || "A UBT opera exclusivamente no município de Ubatuba-SP.");
+                return;
+              }
+              setStep(3);
+            }}
             style={{ width: "100%", height: 52, background: (!endereco || !m2 || +m2 < diarista.minimoM2) ? "rgba(255,255,255,0.1)" : "#0DB87E", color: (!endereco || !m2 || +m2 < diarista.minimoM2) ? "rgba(255,255,255,0.4)" : "white", border: "none", borderRadius: 12, fontFamily: "Syne", fontSize: 15, fontWeight: 600, marginTop: 32, cursor: "pointer" }}
           >
             Avançar para Data

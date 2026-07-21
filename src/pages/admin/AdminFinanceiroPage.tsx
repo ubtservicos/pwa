@@ -21,6 +21,8 @@ import {
 import { Card, GhostButton, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 // Types matching the system domain
 type Periodo = "semana" | "mes" | "ano" | "todos";
@@ -108,10 +110,14 @@ export default function AdminFinanceiroPage() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
 
-  // Database transactions
-  const [dbPedidos, setDbPedidos] = useState<any[]>([]);
-  const [dbDiaristas, setDbDiaristas] = useState<any[]>([]);
+  // Real Database state
   const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [splits, setSplits] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [refunds, setRefunds] = useState<any[]>([]);
+  const [cancellations, setCancellations] = useState<any[]>([]);
 
   // Simulation settings (sliders state)
   const [simSplit, setSimSplit] = useState({
@@ -124,22 +130,42 @@ export default function AdminFinanceiroPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const startTime = Date.now();
       try {
         setLoading(true);
-        // Load pedidos
-        const { data: pData } = await supabase
-          .from("pedidos")
-          .select("id, total, status, created_at, modalidade");
-        
-        // Load diarista agendamentos
-        const { data: dData } = await supabase
-          .from("diarista_agendamentos")
-          .select("id, valor_total, status, data, hora");
+        const [
+          { data: payData },
+          { data: splitData },
+          { data: payoutData },
+          { data: disputeData },
+          { data: refundData },
+          { data: cancelData }
+        ] = await Promise.all([
+          supabase.from("payments").select("*"),
+          supabase.from("payment_splits").select("*"),
+          supabase.from("payouts").select("*"),
+          supabase.from("disputes").select("*"),
+          supabase.from("refunds").select("*"),
+          supabase.from("cancellations").select("*")
+        ]);
 
-        if (pData) setDbPedidos(pData);
-        if (dData) setDbDiaristas(dData);
-      } catch (err) {
-        console.error("Erro ao buscar dados do Supabase para financeiro:", err);
+        const duration = Date.now() - startTime;
+
+        if (payData) setPayments(payData);
+        if (splitData) setSplits(splitData);
+        if (payoutData) setPayouts(payoutData);
+        if (disputeData) setDisputes(disputeData);
+        if (refundData) setRefunds(refundData);
+        if (cancelData) setCancellations(cancelData);
+
+        logSystem("INFO", "PAYMENTS", "fetch_financial_dashboard", "success", duration, undefined, undefined, {
+          paymentsCount: payData?.length || 0,
+          payoutsCount: payoutData?.length || 0
+        });
+      } catch (err: any) {
+        const duration = Date.now() - startTime;
+        logSystem("ERROR", "PAYMENTS", "fetch_financial_dashboard", "failed", duration, err.message, err.code);
+        console.error("Erro ao carregar dados financeiros reais:", err);
       } finally {
         setLoading(false);
       }
@@ -147,47 +173,110 @@ export default function AdminFinanceiroPage() {
     fetchData();
   }, []);
 
-  // Merge database with baseline mockup data
+  // Merge database tables into transaction list
   const allTransactions = useMemo(() => {
-    const baseTxs = generateBaselineTransactions();
-    
-    // Add real pedidos
-    dbPedidos.forEach((p) => {
+    const txs: TransactionRow[] = [];
+
+    // Map payments
+    payments.forEach((p) => {
       const validStatus: TransactionRow["status"] = 
-        p.status === "completed" || p.status === "confirmed" ? "confirmed" :
-        p.status === "cancelled" ? "cancelled" : "pending";
+        p.status === "captured" || p.status === "authorized" ? "confirmed" :
+        p.status === "pending" ? "pending" : "cancelled";
       
-      baseTxs.push({
+      let category: TransactionRow["category"] = "Geral";
+      if (p.service_type === "mototaxi") category = "Mototáxi";
+      else if (p.service_type === "diarista") category = "Diarista";
+      else if (p.service_type === "ambulante") category = "Ambulante";
+      else if (p.service_type === "coco") category = "Reciclagem";
+
+      txs.push({
         id: p.id,
         date: p.created_at || new Date().toISOString(),
-        category: "Ambulante",
+        category,
         type: "entrada",
-        description: `Pedido Real Ambulante #${p.id.slice(0, 4)} (${p.modalidade || "venda"})`,
-        amount: Number(p.total || 0),
+        description: `Pagamento #${p.id.slice(0, 4)} via ${p.payment_method || "desconhecido"}`,
+        amount: Number(p.amount || 0),
         status: validStatus
       });
     });
 
-    // Add real diarista bookings
-    dbDiaristas.forEach((d) => {
+    // Map payouts
+    payouts.forEach((po) => {
       const validStatus: TransactionRow["status"] = 
-        d.status === "completed" ? "confirmed" :
-        d.status === "cancelled_diarista" || d.status === "cancelled_tomador" ? "cancelled" : "pending";
-      
-      baseTxs.push({
-        id: d.id,
-        date: `${d.data}T${d.hora || "12:00"}:00`,
-        category: "Diarista",
-        type: "entrada",
-        description: `Agendamento Real Diarista #${d.id.slice(0, 4)}`,
-        amount: Number(d.valor_total || 0),
+        po.status === "paid" ? "confirmed" :
+        po.status === "failed" ? "cancelled" : "pending";
+
+      txs.push({
+        id: po.id,
+        date: po.created_at || new Date().toISOString(),
+        category: "Geral",
+        type: "saida",
+        description: `Saque Pix #${po.id.slice(0, 4)}`,
+        amount: Number(po.amount || 0),
         status: validStatus
       });
     });
 
-    // Sort by date descending
-    return baseTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [dbPedidos, dbDiaristas]);
+    // Map disputes
+    disputes.forEach((disp) => {
+      const validStatus: TransactionRow["status"] = 
+        disp.status === "closed" || disp.status.startsWith("resolved") ? "confirmed" : "pending";
+
+      let category: TransactionRow["category"] = "Geral";
+      if (disp.service_type === "mototaxi") category = "Mototáxi";
+      else if (disp.service_type === "diarista") category = "Diarista";
+      else if (disp.service_type === "ambulante") category = "Ambulante";
+      else if (disp.service_type === "coco") category = "Reciclagem";
+
+      txs.push({
+        id: disp.id,
+        date: disp.created_at || new Date().toISOString(),
+        category,
+        type: "saida",
+        description: `Disputa #${disp.id.slice(0, 4)}: ${disp.reason}`,
+        amount: Number(disp.amount || 0),
+        status: validStatus
+      });
+    });
+
+    // Map refunds
+    refunds.forEach((ref) => {
+      const validStatus: TransactionRow["status"] = 
+        ref.status === "processed" ? "confirmed" :
+        ref.status === "failed" ? "cancelled" : "pending";
+
+      txs.push({
+        id: ref.id,
+        date: ref.created_at || new Date().toISOString(),
+        category: "Geral",
+        type: "saida",
+        description: `Reembolso #${ref.id.slice(0, 4)} - ${ref.reason}`,
+        amount: Number(ref.amount || 0),
+        status: validStatus
+      });
+    });
+
+    // Map cancellations
+    cancellations.forEach((can) => {
+      let category: TransactionRow["category"] = "Geral";
+      if (can.service_type === "mototaxi") category = "Mototáxi";
+      else if (can.service_type === "diarista") category = "Diarista";
+      else if (can.service_type === "ambulante") category = "Ambulante";
+      else if (can.service_type === "coco") category = "Reciclagem";
+
+      txs.push({
+        id: can.id,
+        date: can.created_at || new Date().toISOString(),
+        category,
+        type: "entrada",
+        description: `Cancelamento #${can.id.slice(0, 4)}: ${can.reason}`,
+        amount: Number(can.cancellation_fee || 0),
+        status: "confirmed"
+      });
+    });
+
+    return txs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [payments, payouts, disputes, refunds, cancellations]);
 
   // Filter transactions by selected Period
   const periodFilteredTransactions = useMemo(() => {
@@ -203,25 +292,23 @@ export default function AdminFinanceiroPage() {
 
   // Volume calculations for the active period
   const financialTotals = useMemo(() => {
-    const confirmed = periodFilteredTransactions.filter(t => t.status === "confirmed");
-    const pending = periodFilteredTransactions.filter(t => t.status === "pending");
+    const confirmedPayments = periodFilteredTransactions.filter(t => t.type === "entrada" && t.status === "confirmed");
+    const pendingPayments = periodFilteredTransactions.filter(t => t.type === "entrada" && t.status === "pending");
     
-    // Add baseline constant to total GMV
-    const periodFactor = periodo === "semana" ? 0.25 : periodo === "mes" ? 1.0 : periodo === "ano" ? 12.0 : 15.0;
-    const periodBaseline = BASELINE_VOLUME * periodFactor;
+    const totalGmv = confirmedPayments.reduce((acc, t) => acc + t.amount, 0);
+    const totalPending = pendingPayments.reduce((acc, t) => acc + t.amount, 0);
+    const totalTransactions = confirmedPayments.length + pendingPayments.length;
+
+    // Split breakdowns based on splits table
+    const releasedSplits = splits.filter(s => s.status === "released" || s.status === "approved" || s.status === "pending");
     
-    const dbConfirmedTotal = confirmed.reduce((acc, t) => acc + t.amount, 0);
-    const dbPendingTotal = pending.reduce((acc, t) => acc + t.amount, 0);
+    const platformRevenue = releasedSplits.filter(s => s.recipient_role === "ubt").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const prizeWorker = releasedSplits.filter(s => s.recipient_role === "prize_worker").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const prizeConsumer = releasedSplits.filter(s => s.recipient_role === "prize_consumer").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const awardsAccumulated = prizeWorker + prizeConsumer;
 
-    const totalGmv = periodBaseline + dbConfirmedTotal;
-    const totalPending = dbPendingTotal;
-    const totalTransactions = confirmed.length + pending.length;
-
-    // Split breakdowns based on default UBT rules (4% platform, 1.5% trab, 1.5% cons, 2% collective, 90% provider)
-    const platformRevenue = totalGmv * 0.04;
-    const awardsAccumulated = totalGmv * 0.03; // 1.5% each
-    const collectiveDonations = totalGmv * 0.02;
-    const providerVolume = totalGmv * 0.90;
+    const collectiveDonations = releasedSplits.filter(s => s.recipient_role === "comunidade").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const providerVolume = releasedSplits.filter(s => s.recipient_role === "provider").reduce((acc, s) => acc + Number(s.amount || 0), 0);
 
     return {
       totalGmv,
@@ -232,39 +319,35 @@ export default function AdminFinanceiroPage() {
       collectiveDonations,
       providerVolume
     };
-  }, [periodFilteredTransactions, periodo]);
+  }, [periodFilteredTransactions, splits]);
 
   // Category breakdown calculations
   const categoryData = useMemo(() => {
-    const confirmed = periodFilteredTransactions.filter(t => t.status === "confirmed");
-    
-    // Percent distribution baseline factors
-    const distributions = {
-      "Mototáxi": 0.40,
-      "Diarista": 0.30,
-      "Ambulante": 0.20,
-      "Reciclagem": 0.10
+    const categories: TransactionRow["category"][] = ["Mototáxi", "Diarista", "Ambulante", "Reciclagem"];
+    const colors = {
+      "Mototáxi": "#2B6EE8",
+      "Diarista": "#0DB87E",
+      "Ambulante": "#F5A623",
+      "Reciclagem": "#9B59B6"
     };
 
-    return Object.entries(distributions).map(([cat, factor]) => {
-      const catConfirmed = confirmed.filter(t => t.category === cat);
-      const dbAmount = catConfirmed.reduce((acc, t) => acc + t.amount, 0);
-      const baselineAmount = financialTotals.totalGmv * factor;
-      const totalAmount = baselineAmount + dbAmount;
-      
-      const count = catConfirmed.length + Math.floor(factor * 120 * (periodo === "semana" ? 0.25 : periodo === "mes" ? 1.0 : 4.0));
+    return categories.map((cat) => {
+      const catConfirmed = periodFilteredTransactions.filter(t => t.category === cat && t.status === "confirmed" && t.type === "entrada");
+      const totalAmount = catConfirmed.reduce((acc, t) => acc + t.amount, 0);
+      const count = catConfirmed.length;
       const ticketMedio = count > 0 ? totalAmount / count : 0;
+      const percentage = financialTotals.totalGmv > 0 ? (totalAmount / financialTotals.totalGmv) * 100 : 0;
 
       return {
         name: cat,
         amount: totalAmount,
-        percentage: (totalAmount / financialTotals.totalGmv) * 100,
+        percentage,
         count,
         ticketMedio,
-        color: cat === "Mototáxi" ? "#2B6EE8" : cat === "Diarista" ? "#0DB87E" : cat === "Ambulante" ? "#F5A623" : "#9B59B6"
+        color: colors[cat]
       };
     });
-  }, [periodFilteredTransactions, financialTotals, periodo]);
+  }, [periodFilteredTransactions, financialTotals]);
 
   // Calculations for simulated split
   const simulatedTotals = useMemo(() => {
@@ -317,19 +400,16 @@ export default function AdminFinanceiroPage() {
       next.setDate(d.getDate() + 1);
       const dayTx = periodFilteredTransactions.filter((t) => {
         const td = new Date(t.date);
-        return td >= d && td < next && t.status === "confirmed";
+        return td >= d && td < next && t.status === "confirmed" && t.type === "entrada";
       });
       const realAmount = dayTx.reduce((a, t) => a + t.amount, 0);
       
-      // Add dynamic baseline noise to chart look good
-      const seedVal = d.getDate() * 17 + d.getMonth() * 31;
-      const fakeAmount = (financialTotals.totalGmv / size) * (0.7 + (seedVal % 50) / 100);
       return {
         label: d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" }),
-        amount: fakeAmount + realAmount
+        amount: realAmount
       };
     });
-  }, [periodFilteredTransactions, periodo, financialTotals]);
+  }, [periodFilteredTransactions, periodo]);
 
   const maxTimelineVal = Math.max(1, ...timelinePoints.map((p) => p.amount));
 

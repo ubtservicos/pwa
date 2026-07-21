@@ -12,6 +12,8 @@ import { MapRef, LIGHT_TILES, ATTRIBUTION } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 
 const MapFallback = () => (
@@ -307,6 +309,7 @@ const CocoOnlinePage = () => {
   };
 
   const agendarColeta = async (pontoId: string) => {
+    const startTime = Date.now();
     try {
       const { error } = await supabase
         .from("coco_pontos")
@@ -317,12 +320,17 @@ const CocoOnlinePage = () => {
         })
         .eq("id", pontoId);
 
+      const duration = Date.now() - startTime;
+
       if (error) throw error;
+      trackEvent("pickup_requested", "operational", { vertical: "coco", ponto_id: pontoId, caminhao_id: caminhaoId });
+      logSystem("INFO", "COCO", "pickup_requested", "success", duration, undefined, undefined, { ponto_id: pontoId, caminhao_id: caminhaoId });
       showToast("🚚 Rota de coleta confirmada!");
       setShowAgendarModal(null);
       setSelectedPonto(null);
       fetchPontos();
     } catch (err: any) {
+      logSystem("ERROR", "COCO", "pickup_requested", "failed", undefined, err.message, err.code, { ponto_id: pontoId });
       alert("Erro ao agendar: " + err.message);
     }
   };
@@ -348,6 +356,7 @@ const CocoOnlinePage = () => {
   };
 
   const marcarColetado = async (pontoId: string) => {
+    const startTime = Date.now();
     try {
       const { error: errorP } = await supabase
         .from("coco_pontos")
@@ -379,10 +388,15 @@ const CocoOnlinePage = () => {
         }));
       }
 
+      const duration = Date.now() - startTime;
+      trackEvent("pickup_completed", "operational", { vertical: "coco", ponto_id: pontoId, collections_today: newToday });
+      logSystem("INFO", "COCO", "pickup_completed", "success", duration, undefined, undefined, { ponto_id: pontoId, collections_today: newToday });
+
       showToast("♻️ Coleta registrada!");
       setSelectedPonto(null);
       fetchPontos();
     } catch (err: any) {
+      logSystem("ERROR", "COCO", "pickup_completed", "failed", undefined, err.message, err.code, { ponto_id: pontoId });
       alert("Erro ao salvar coleta: " + err.message);
     }
   };

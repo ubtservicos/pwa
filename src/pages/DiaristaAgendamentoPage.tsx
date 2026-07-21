@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { MOCK_DIARISTAS } from "@/mocks/diaristasMock";
 import { MATERIAIS_PADRAO, MATERIAIS_DETALHADOS } from "@/mocks/diaristasMateriais";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
+import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
 
 
 const STEPS = [
@@ -86,6 +87,7 @@ const DiaristaAgendamentoPage = () => {
       // 2. Chamar a Edge Function de checkout segura no backend
       let functionSuccess = false;
       try {
+        const securityMetadata = collectPaymentMetadata(paymentMethod === "card" ? token : undefined);
         const { data: checkData, error: checkError } = await supabase.functions.invoke("checkout", {
           body: {
             service_type: "diarista",
@@ -93,7 +95,8 @@ const DiaristaAgendamentoPage = () => {
             customer_id: localStorage.getItem("ubt_current_user_id") || "mock-customer",
             provider_id: ag.diaristId,
             amount: ag.valorTotal,
-            payment_method: paymentMethod
+            payment_method: paymentMethod,
+            metadata: securityMetadata
           }
         });
         if (!checkError && checkData) {

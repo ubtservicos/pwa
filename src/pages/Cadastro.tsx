@@ -9,7 +9,7 @@ import {
   User,
   UserPlus,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthTopBar from "@/components/auth/AuthTopBar";
 import BiometriaModal from "@/components/auth/BiometriaModal";
@@ -19,6 +19,8 @@ import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
 import { isValidEmail, maskCPF, maskPhone } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 
 type FormState = {
   nome: string;
@@ -53,6 +55,10 @@ const GoogleIcon = () => (
 const Cadastro = () => {
   const navigate = useNavigate();
   const { toast, showToast } = useSimpleToast();
+
+  useEffect(() => {
+    trackEvent("signup_started");
+  }, []);
 
   const [form, setForm] = useState<FormState>({
     nome: "",
@@ -95,6 +101,8 @@ const Cadastro = () => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
+    const startTime = Date.now();
+    logSystem("INFO", "AUTH", "signup_submit", "started", undefined, undefined, undefined, { email: form.email });
     
     try {
       const referral = searchParams.get("ref") || "";
@@ -114,6 +122,13 @@ const Cadastro = () => {
       });
 
       if (error) throw error;
+
+      const duration = Date.now() - startTime;
+      logSystem("INFO", "AUTH", "signup_submit", "success", duration, undefined, undefined, { email: form.email, referral });
+
+      if (data?.user) {
+        trackEvent("signup_completed", { method: "email" }, data.user.id);
+      }
 
       if (data?.user && referral) {
         const userId = data.user.id;
@@ -135,6 +150,8 @@ const Cadastro = () => {
       setBiometriaOpen(true);
     } catch (err: any) {
       setLoading(false);
+      const duration = Date.now() - startTime;
+      logSystem("ERROR", "AUTH", "signup_submit", "failed", duration, err.message, err.code || "SIGNUP_ERROR", { email: form.email });
       showToast(err.message || "Erro ao criar conta.");
     }
   };

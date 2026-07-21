@@ -4,10 +4,19 @@ import { Bike, ChevronRight, Recycle, ShoppingBag, Sparkles, Wallet, MapPin, Che
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
+import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 
 const PrestadorHome = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    const onboarded = localStorage.getItem("ubt_onboarded_prestador");
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   // Load status rules and find rule for current user status
   const rules = getStatusRules();
@@ -586,6 +595,16 @@ const PrestadorHome = () => {
           50% { opacity: 0.5; transform: scale(0.85); }
         }
       `}</style>
+
+      {showOnboarding && (
+        <GuidedOnboarding
+          role="prestador"
+          onClose={() => {
+            localStorage.setItem("ubt_onboarded_prestador", "true");
+            setShowOnboarding(false);
+          }}
+        />
+      )}
     </div>
   );
 };

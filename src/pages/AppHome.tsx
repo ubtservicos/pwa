@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 import {
   MapPin,
   Bike,
@@ -37,6 +39,14 @@ const services: ServiceItem[] = [
 const AppHome = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    const onboarded = localStorage.getItem("ubt_onboarded_cliente");
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   // Load status rules and find rule for current user status
   const rules = getStatusRules();
@@ -342,6 +352,16 @@ const AppHome = () => {
           </div>
         </div>
       </section>
+      
+      {showOnboarding && (
+        <GuidedOnboarding
+          role="cliente"
+          onClose={() => {
+            localStorage.setItem("ubt_onboarded_cliente", "true");
+            setShowOnboarding(false);
+          }}
+        />
+      )}
     </div>
   );
 };
