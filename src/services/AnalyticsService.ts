@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { logSystem } from "@/services/LoggingService";
 
 export type AnalyticsEventName =
   | "landing_view"
@@ -76,8 +77,15 @@ export interface AnalyticsEvent {
 const BATCH_SIZE_LIMIT = 20;
 const BATCH_TIME_LIMIT_MS = 10000; // 10 segundos
 
+interface FailedBatch {
+  events: AnalyticsEvent[];
+  attempts: number;
+  nextRetryTime: number;
+}
+
 class AnalyticsManager {
   private buffer: AnalyticsEvent[] = [];
+  private failedBatches: FailedBatch[] = [];
   private flushTimeout: any = null;
   private deviceId: string = "";
   private sessionId: string = "";
@@ -90,6 +98,12 @@ class AnalyticsManager {
       this.startFlushTimer();
       window.addEventListener("beforeunload", () => this.flushSync());
     }
+  }
+
+  private isValidUUID(uuid: string | null): boolean {
+    if (!uuid) return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
   }
 
   private initDeviceAndSession() {
@@ -142,19 +156,70 @@ class AnalyticsManager {
     try {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.user) {
-        this.currentUserId = data.session.user.id;
+        await this.updateCurrentUser(data.session.user.id);
+      } else {
+        this.currentUserId = null;
       }
-      supabase.auth.onAuthStateChange((_event, session) => {
-        this.currentUserId = session?.user?.id || null;
+      supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session?.user?.id) {
+          await this.updateCurrentUser(session.user.id);
+        } else {
+          this.currentUserId = null;
+        }
       });
     } catch (e) {
       console.warn("Erro ao escutar mudanças de autenticação no Analytics:", e);
     }
   }
 
+  private async checkUserExists(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) return false;
+      return !!data;
+    } catch {
+      return false;
+    }
+  }
+
+  private async updateCurrentUser(userId: string | null) {
+    if (!userId) {
+      this.currentUserId = null;
+      return;
+    }
+    const exists = await this.checkUserExists(userId);
+    if (exists) {
+      this.currentUserId = userId;
+    } else {
+      this.currentUserId = null;
+    }
+  }
+
+  private safeLogSystem(
+    severity: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL",
+    module: "ANALYTICS",
+    operation: string,
+    status: "success" | "failed" | "pending" | "started" | "timeout",
+    executionTimeMs?: number,
+    errorMsg?: string,
+    errorCode?: string,
+    metadata?: Record<string, any>
+  ) {
+    try {
+      logSystem(severity, module, operation, status, executionTimeMs, errorMsg, errorCode, metadata);
+    } catch (e) {
+      console.warn("[Analytics] Falha ao registrar log no sistema:", e);
+    }
+  }
+
   private startFlushTimer() {
-    this.flushTimeout = setTimeout(() => {
-      this.flush();
+    this.flushTimeout = setTimeout(async () => {
+      await this.flush();
+      await this.processFailedBatches();
       this.startFlushTimer();
     }, BATCH_TIME_LIMIT_MS);
   }
@@ -182,9 +247,27 @@ class AnalyticsManager {
     eventName: string,
     category: string,
     properties: Record<string, any> = {},
-    vertical?: string
+    vertical?: string,
+    explicitUserId?: string | null
   ) {
     try {
+      let userId: string | null = explicitUserId || this.currentUserId;
+      if (userId) {
+        const s = String(userId).trim();
+        if (
+          s === "" ||
+          s.toLowerCase() === "null" ||
+          s.toLowerCase() === "undefined" ||
+          !this.isValidUUID(s)
+        ) {
+          userId = null;
+        } else {
+          userId = s;
+        }
+      } else {
+        userId = null;
+      }
+
       const event: AnalyticsEvent = {
         event_name: eventName,
         event_category: category,
@@ -192,7 +275,7 @@ class AnalyticsManager {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         session_id: this.sessionId,
         device_id: this.deviceId,
-        user_id: this.currentUserId,
+        user_id: userId,
         anonymous_id: this.deviceId,
         platform: "web_pwa",
         app_version: "1.0.0",
@@ -217,15 +300,212 @@ class AnalyticsManager {
     const batch = [...this.buffer];
     this.buffer = [];
 
+    // Temporariamente registrar detalhes antes do insert
+    batch.forEach(event => {
+      console.log("[Analytics Debug Log] Pre-insert check:", {
+        typeof_user_id: typeof event.user_id,
+        user_id_value: event.user_id,
+        anonymous_id: event.anonymous_id,
+        session_id: event.session_id,
+        origem_source: "AnalyticsService.ts track buffer"
+      });
+    });
+
     try {
       const { error } = await supabase.from("analytics_events").insert(batch);
       if (error) {
         console.warn("Erro ao fazer flush do lote de analytics:", error.message);
-        this.buffer = [...batch, ...this.buffer].slice(0, 100);
+        
+        const isFkError = error.code === "23503" || error.message?.includes("analytics_events_user_id_fkey");
+        
+        // Se for um erro de chave estrangeira (visitante com id incorreto ou stale session), corrigir para null e salvar lote
+        if (isFkError) {
+          console.warn("[Analytics] Foreign key constraint violation on user_id. Salvaging batch with user_id = null.");
+          const salvagedBatch = batch.map(e => ({ ...e, user_id: null }));
+          try {
+            const { error: salvageError } = await supabase.from("analytics_events").insert(salvagedBatch);
+            if (!salvageError) {
+              console.log("[Analytics] Batch salvaged successfully after resetting user_ids to null.");
+              this.safeLogSystem(
+                "INFO",
+                "ANALYTICS",
+                "flush_analytics_events_salvaged",
+                "success",
+                undefined,
+                undefined,
+                undefined,
+                { batchSize: batch.length }
+              );
+              return;
+            } else {
+              console.error("[Analytics] Failed to insert salvaged batch:", salvageError.message);
+            }
+          } catch (salvageEx: any) {
+            console.error("[Analytics] Exception inserting salvaged batch:", salvageEx.message);
+          }
+        }
+
+        this.safeLogSystem(
+          "WARNING",
+          "ANALYTICS",
+          "flush_analytics_events_failed",
+          "failed",
+          undefined,
+          error.message,
+          error.code,
+          { batchSize: batch.length, isFkError }
+        );
+
+        this.failedBatches.push({
+          events: batch,
+          attempts: 1,
+          nextRetryTime: Date.now() + 2000
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Falha de rede ao descarregar analytics buffer:", e);
-      this.buffer = [...batch, ...this.buffer].slice(0, 100);
+      this.safeLogSystem(
+        "WARNING",
+        "ANALYTICS",
+        "flush_analytics_events_network_error",
+        "failed",
+        undefined,
+        e.message || "Unknown network error",
+        "NET_ERROR",
+        { batchSize: batch.length }
+      );
+
+      this.failedBatches.push({
+        events: batch,
+        attempts: 1,
+        nextRetryTime: Date.now() + 2000
+      });
+    }
+  }
+
+  private async processFailedBatches() {
+    if (this.failedBatches.length === 0) return;
+
+    const now = Date.now();
+    const dueBatches = this.failedBatches.filter(b => b.nextRetryTime <= now);
+    if (dueBatches.length === 0) return;
+
+    this.failedBatches = this.failedBatches.filter(b => b.nextRetryTime > now);
+
+    for (const batch of dueBatches) {
+      await this.retryBatch(batch);
+    }
+  }
+
+  private async retryBatch(failedBatch: FailedBatch) {
+    // Temporariamente registrar detalhes antes do insert na retentativa
+    failedBatch.events.forEach(event => {
+      console.log("[Analytics Debug Log] Pre-retry-insert check:", {
+        typeof_user_id: typeof event.user_id,
+        user_id_value: event.user_id,
+        anonymous_id: event.anonymous_id,
+        session_id: event.session_id,
+        origem_source: `AnalyticsService.ts retry queue (attempt ${failedBatch.attempts})`
+      });
+    });
+
+    try {
+      const { error } = await supabase.from("analytics_events").insert(failedBatch.events);
+      if (!error) {
+        this.safeLogSystem(
+          "INFO",
+          "ANALYTICS",
+          "retry_analytics_events",
+          "success",
+          undefined,
+          undefined,
+          undefined,
+          { attempts: failedBatch.attempts, batchSize: failedBatch.events.length }
+        );
+        return;
+      }
+
+      console.warn(`[Analytics] Retry failed (attempt ${failedBatch.attempts}):`, error.message);
+
+      const isFkError = error.code === "23503" || error.message?.includes("analytics_events_user_id_fkey");
+
+      // Corrigir erro de chave estrangeira na retentativa para evitar loop
+      if (isFkError) {
+        console.warn("[Analytics] Foreign key constraint violation on user_id in retry. Salvaging with user_id = null.");
+        const salvagedBatch = failedBatch.events.map(e => ({ ...e, user_id: null }));
+        try {
+          const { error: salvageError } = await supabase.from("analytics_events").insert(salvagedBatch);
+          if (!salvageError) {
+            console.log("[Analytics] Retry batch salvaged successfully after resetting user_ids to null.");
+            this.safeLogSystem(
+              "INFO",
+              "ANALYTICS",
+              "retry_analytics_events_salvaged",
+              "success",
+              undefined,
+              undefined,
+              undefined,
+              { batchSize: failedBatch.events.length }
+            );
+            return;
+          }
+        } catch (salvageEx) {
+          // ignorar
+        }
+      }
+
+      if (failedBatch.attempts >= 5) {
+        this.safeLogSystem(
+          "ERROR",
+          "ANALYTICS",
+          "discard_analytics_events",
+          "failed",
+          undefined,
+          `Lote descartado apos ${failedBatch.attempts} tentativas: ${error.message}`,
+          error.code,
+          { batchSize: failedBatch.events.length, isFkError }
+        );
+        console.error(`[Analytics] Erro critico no Supabase. Lote descartado definitivamente apos 5 tentativas:`, error.message);
+        
+        // Lote descartado definitivamente, nenhuma retentativa ou timer agendado
+        return;
+      }
+
+      failedBatch.attempts++;
+      const backoffMs = Math.pow(2, failedBatch.attempts) * 1000;
+      failedBatch.nextRetryTime = Date.now() + backoffMs;
+      this.failedBatches.push(failedBatch);
+
+      this.safeLogSystem(
+        "WARNING",
+        "ANALYTICS",
+        "retry_analytics_events_failed",
+        "failed",
+        undefined,
+        `Retentativa ${failedBatch.attempts - 1} falhou: ${error.message}. Nova tentativa em ${backoffMs/1000}s.`,
+        error.code,
+        { attempt: failedBatch.attempts - 1, isFkError }
+      );
+    } catch (e: any) {
+      console.error(`[Analytics] Network error during retry (attempt ${failedBatch.attempts}):`, e.message);
+
+      if (failedBatch.attempts >= 5) {
+        this.safeLogSystem(
+          "ERROR",
+          "ANALYTICS",
+          "discard_analytics_events_network",
+          "failed",
+          undefined,
+          `Lote descartado devido a excecoes de rede apos 5 tentativas: ${e.message}`,
+          "NET_ERROR",
+          { batchSize: failedBatch.events.length }
+        );
+        return;
+      }
+      failedBatch.attempts++;
+      const backoffMs = Math.pow(2, failedBatch.attempts) * 1000;
+      failedBatch.nextRetryTime = Date.now() + backoffMs;
+      this.failedBatches.push(failedBatch);
     }
   }
 
@@ -243,12 +523,10 @@ class AnalyticsManager {
         "Content-Type": "application/json"
       };
       
-      // Constrói o request de beacons
       const blob = new Blob([JSON.stringify(batch)], { type: "application/json" });
       try {
         navigator.sendBeacon(url, blob);
       } catch (e) {
-        // Fallback fetch
         fetch(url, {
           method: "POST",
           headers,
@@ -269,9 +547,9 @@ const getManager = (): AnalyticsManager => {
 };
 
 /**
- * Interface definitiva para registrar eventos de Analytics de forma assíncrona,
+ * Interface definitiva para registrar eventos de Analytics de forma assincrona,
  * desacoplada e amortecida por buffer local em lote.
- * Suporta retrocompatibilidade automática com chamadas antigas.
+ * Suporta retrocompatibilidade automatica com chamadas antigas.
  */
 export function trackEvent(
   eventName: string,
@@ -284,6 +562,7 @@ export function trackEvent(
       let finalCategory: AnalyticsCategory = "ux";
       let finalProperties: Record<string, any> = {};
       const finalVertical = vertical;
+      let legacyUserId: string | null = null;
 
       const validCategories: AnalyticsCategory[] = ["operational", "ux", "marketing", "system"];
 
@@ -293,6 +572,9 @@ export function trackEvent(
       } else {
         // Assinatura legada: trackEvent(eventType, metadata, userId)
         finalProperties = categoryOrProperties || {};
+        if (typeof propertiesOrUserId === "string") {
+          legacyUserId = propertiesOrUserId;
+        }
         if (
           eventName.includes("signup") || 
           eventName.includes("login") || 
@@ -305,7 +587,7 @@ export function trackEvent(
         }
       }
 
-      // Normalizar nomes de eventos antigos para a nova especificação
+      // Normalizar nomes de eventos antigos para a nova especificacao
       let finalEventName: AnalyticsEventName = eventName as AnalyticsEventName;
       if (eventName === "order_created") finalEventName = "request_created";
       if (eventName === "order_accepted") finalEventName = "request_accepted";
@@ -322,7 +604,7 @@ export function trackEvent(
         finalProperties = { ...finalProperties, step: "onboarding_completed" };
       }
 
-      getManager().track(finalEventName, finalCategory, finalProperties, finalVertical);
+      getManager().track(finalEventName, finalCategory, finalProperties, finalVertical, legacyUserId);
     } catch (e) {
       console.warn("Erro no pipeline de Analytics:", e);
     }

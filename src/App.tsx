@@ -17,6 +17,7 @@ import AmbulantesOnboardingPage from "./pages/AmbulantesOnboardingPage.tsx";
 import AmbulantesOnlinePage from "./pages/AmbulantesOnlinePage.tsx";
 import AmbulantesGerenciarPedidoPage from "./pages/AmbulantesGerenciarPedidoPage.tsx";
 import Index from "./pages/Index.tsx";
+import ConceptExperience from "./pages/ConceptExperience.tsx";
 import Login from "./pages/Login.tsx";
 import Cadastro from "./pages/Cadastro.tsx";
 import RecuperarSenha from "./pages/RecuperarSenha.tsx";
@@ -78,6 +79,7 @@ import AdminPermissoesPage from "./pages/admin/AdminPermissoesPage.tsx";
 import AdminConfiguracoesPage from "./pages/admin/AdminConfiguracoesPage.tsx";
 import AdminQualityCenterPage from "./pages/admin/AdminQualityCenterPage.tsx";
 import AdminSecurityCenterPage from "./pages/admin/AdminSecurityCenterPage.tsx";
+import AdminWaitlistPage from "./pages/admin/AdminWaitlistPage.tsx";
 import CocoPage from "./pages/CocoPage.tsx";
 import CocoOnboardingPage from "./pages/CocoOnboardingPage.tsx";
 import CocoOnlinePage from "./pages/CocoOnlinePage.tsx";
@@ -100,11 +102,12 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <RideProvider>
           <AmbulantePedidoProvider>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/experience" element={<ConceptExperience />} />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Cadastro />} />
               <Route path="/recuperar-senha" element={<RecuperarSenha />} />
@@ -169,6 +172,7 @@ const App = () => (
               <Route path="/admin/configuracoes" element={adminGuard(<AdminConfiguracoesPage />, ["admin", "super_admin"], "config.edit")} />
               <Route path="/admin/quality" element={adminGuard(<AdminQualityCenterPage />, ["admin", "super_admin"], "quality.view")} />
               <Route path="/admin/security" element={adminGuard(<AdminSecurityCenterPage />, ["admin", "super_admin"], "security.view")} />
+              <Route path="/admin/waitlist" element={adminGuard(<AdminWaitlistPage />, ["marketing", "admin", "super_admin"])} />
               <Route path="/admin/split" element={adminGuard(<AdminSplitPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/sorteio/1-5" element={adminGuard(<AdminSorteioTrabPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/sorteio/1-11" element={adminGuard(<AdminSorteioConsPage />, ["financeiro", "admin", "super_admin"])} />

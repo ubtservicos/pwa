@@ -22,7 +22,10 @@ import {
   Ban,
   Activity,
   ShieldCheck,
-  BarChart3
+  BarChart3,
+  CheckCircle2,
+  Shield,
+  Settings
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +47,7 @@ export const NAV_ITEMS = [
   { icon: ShieldAlert, label: "Antifraude", path: "/admin/antifraude", roles: ["admin", "super_admin"] },
   { icon: BarChart3, label: "Analytics Operacional", path: "/admin/analytics", roles: ["admin", "super_admin"] },
   { icon: ShieldCheck, label: "Permissões RBAC", path: "/admin/permissoes", roles: ["admin", "super_admin"] },
+  { icon: Users, label: "Fila de Espera (Waitlist)", path: "/admin/waitlist", roles: ["marketing", "admin", "super_admin"] },
   { icon: CheckCircle2, label: "Quality Center", path: "/admin/quality", roles: ["admin", "super_admin"] },
   { icon: Shield, label: "Security Center", path: "/admin/security", roles: ["admin", "super_admin"] },
   { icon: Settings, label: "Configurações", path: "/admin/configuracoes", roles: ["admin", "super_admin"] },
