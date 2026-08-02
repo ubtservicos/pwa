@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 
 interface LgpdGuardProps {
@@ -14,7 +13,6 @@ const REQUIRED_VERSIONS = {
 };
 
 export default function LgpdGuard({ children }: LgpdGuardProps) {
-  const user = useCurrentUser();
   const navigate = useNavigate();
   const location = useLocation();
   const [checking, setChecking] = useState(true);
@@ -23,28 +21,38 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
     let active = true;
 
     const checkConsents = async () => {
-      // If visitor/not logged in yet, wait or allow public access (App.tsx handles login routing)
-      if (!user || !user.uid) {
-        setChecking(false);
-        return;
-      }
-
-      // Check fast session cache
-      const cached = sessionStorage.getItem(`ubt_lgpd_verified_${user.uid}`);
-      if (cached === "true") {
-        if (location.pathname === "/app/consentimento") {
-          navigate("/app/home");
-        }
-        setChecking(false);
-        return;
-      }
-
       try {
-        // Query accepted consents for this user
+        // 1. Get current authenticated user securely from Supabase
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+        if (authError || !authUser) {
+          // User not authenticated -> redirect to /login
+          if (active) {
+            setChecking(false);
+            if (location.pathname !== "/login") {
+              navigate("/login", { replace: true });
+            }
+          }
+          return;
+        }
+
+        // 2. Check fast session cache
+        const cached = sessionStorage.getItem(`ubt_lgpd_verified_${authUser.id}`);
+        if (cached === "true") {
+          if (active) {
+            setChecking(false);
+            if (location.pathname === "/app/consentimento") {
+              navigate("/app/home");
+            }
+          }
+          return;
+        }
+
+        // 3. Query accepted consents for this user
         const { data, error } = await supabase
           .from("user_consents")
           .select("document_type, document_version")
-          .eq("user_id", user.uid);
+          .eq("user_id", authUser.id);
 
         if (error) throw error;
 
@@ -59,20 +67,25 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
 
         if (hasTerms && hasPrivacy && hasCookies) {
           // Cache check result in session storage
-          sessionStorage.setItem(`ubt_lgpd_verified_${user.uid}`, "true");
+          sessionStorage.setItem(`ubt_lgpd_verified_${authUser.id}`, "true");
           
-          if (location.pathname === "/app/consentimento") {
-            navigate("/app/home");
+          if (active) {
+            setChecking(false);
+            if (location.pathname === "/app/consentimento") {
+              navigate("/app/home");
+            }
           }
         } else {
           // Missing one or more consents -> Redirect to consent page
-          if (location.pathname !== "/app/consentimento") {
-            navigate("/app/consentimento", { replace: true });
+          if (active) {
+            setChecking(false);
+            if (location.pathname !== "/app/consentimento") {
+              navigate("/app/consentimento", { replace: true });
+            }
           }
         }
       } catch (err) {
         console.error("Erro ao verificar consentimentos LGPD:", err);
-      } finally {
         if (active) setChecking(false);
       }
     };
@@ -82,7 +95,7 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
     return () => {
       active = false;
     };
-  }, [user, location.pathname, navigate]);
+  }, [location.pathname, navigate]);
 
   if (checking) {
     return (

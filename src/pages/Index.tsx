@@ -102,6 +102,43 @@ interface KineticParticle {
   color: string;
 }
 
+// Helper functions for waitlist database anonymized fingerprinting
+async function sha256(message: string): Promise<string> {
+  try {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) {
+    let hash = 0;
+    for (let i = 0; i < message.length; i++) {
+      hash = (hash << 5) - hash + message.charCodeAt(i);
+      hash |= 0;
+    }
+    return "fb_" + Math.abs(hash).toString(16) + Math.random().toString(36).substring(2, 10);
+  }
+}
+
+function parseUserAgent(userAgent: string) {
+  let device_type = "Desktop";
+  if (/mobile/i.test(userAgent)) device_type = "Mobile";
+  if (/tablet/i.test(userAgent)) device_type = "Tablet";
+  
+  let browser = "Outro";
+  if (/chrome|crios/i.test(userAgent)) browser = "Chrome";
+  else if (/firefox|fxios/i.test(userAgent)) browser = "Firefox";
+  else if (/safari/i.test(userAgent) && !/chrome/i.test(userAgent)) browser = "Safari";
+  else if (/edge|edg/i.test(userAgent)) browser = "Edge";
+  
+  let os = "Outro";
+  if (/iphone|ipad|ipod/i.test(userAgent)) os = "iOS";
+  else if (/windows/i.test(userAgent)) os = "Windows";
+  else if (/macintosh|mac os x/i.test(userAgent)) os = "MacOS";
+  else if (/android/i.test(userAgent)) os = "Android";
+
+  return { device_type, browser, os };
+}
+
 export default function Index() {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [activeVideoChapter, setActiveVideoChapter] = useState(0);
@@ -114,10 +151,13 @@ export default function Index() {
   const [formPhone, setFormPhone] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formCity, setFormCity] = useState("Ubatuba");
-  const [formProfile, setFormProfile] = useState("morador");
+  const [formProfiles, setFormProfiles] = useState<string[]>(["morador"]);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  const isSubmitDisabled = isSubmitting || !formName.trim() || !formPhone.trim() || !formEmail.trim() || formProfiles.length === 0 || !acceptTerms;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -382,6 +422,11 @@ export default function Index() {
       return;
     }
 
+    if (formProfiles.length === 0) {
+      setSubmitError("Por favor, selecione pelo menos um perfil.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError("");
 
@@ -402,6 +447,13 @@ export default function Index() {
 
       const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
+      const ua = navigator.userAgent;
+      const lang = navigator.language || "pt-BR";
+      const screenRes = `${window.screen.width}x${window.screen.height}`;
+      const seed = `${ua}-${lang}-${screenRes}`;
+      const ipHashVal = await sha256(seed);
+      const parsedUA = parseUserAgent(ua);
+
       const { error: insertError } = await supabase
         .from("waitlist")
         .insert({
@@ -409,17 +461,21 @@ export default function Index() {
           email: formEmail.trim(),
           telefone: formPhone.trim(),
           cidade: formCity,
-          perfil: formProfile,
+          perfil: formProfiles,
           consentimento_lgpd: true,
           status: "novo",
           created_at_local: createdLocal,
-          origem: "direto"
+          origem: "direto",
+          ip_hash: ipHashVal,
+          device_type: parsedUA.device_type,
+          browser: parsedUA.browser,
+          os: parsedUA.os
         });
 
       if (insertError) throw insertError;
 
       setSubmitSuccess(true);
-      trackEvent("landing_waitlist_success", "marketing", { perfil: formProfile });
+      trackEvent("landing_waitlist_success", "marketing", { perfil: formProfiles });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
@@ -559,7 +615,7 @@ export default function Index() {
             {/* Botão secundário */}
             <button
               onClick={() => openVideoModal(0)}
-              className="w-full h-16 rounded-2xl font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all text-white flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95"
+              className="hidden w-full h-16 rounded-2xl font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all text-white items-center justify-center gap-3 hover:scale-[1.02] active:scale-95"
               style={{
                 background: "linear-gradient(#030712, #030712) padding-box, linear-gradient(to right, #005BFF, #22C55E) border-box",
                 border: "2px solid transparent"
@@ -675,12 +731,7 @@ export default function Index() {
                   className="w-full h-full object-cover opacity-60 hover:opacity-85 transition-opacity duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
-                <button 
-                  onClick={() => openVideoModal(idx + 1)}
-                  className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-white/10 hover:bg-green backdrop-blur-md border border-white/15 flex items-center justify-center hover:scale-105 active:scale-95 transition-all text-white"
-                >
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                </button>
+                {/* Play button removed per UBT-COMM-003 */}
               </div>
 
               {/* Text Description Column */}
@@ -704,7 +755,7 @@ export default function Index() {
       </section>
 
       {/* CHAPTER 3: A TECNOLOGIA CONECTA (Simulated Live Connections & Transaction Dashboard) */}
-      <section id="conecta-cap" className="px-6 md:px-12 border-y border-white/5 relative z-20" style={{ backgroundColor: "#083928", paddingTop: "2rem", paddingBottom: "2rem" }}>
+      <section id="conecta-cap" className="hidden px-6 md:px-12 border-y border-white/5 relative z-20" style={{ backgroundColor: "#083928", paddingTop: "2rem", paddingBottom: "2rem" }}>
         <div className="max-w-[1200px] mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
@@ -789,7 +840,7 @@ export default function Index() {
       </section>
 
       {/* CHAPTER 4: TODOS GANHAM (Bento Grid layout) */}
-      <section id="todos-ganham-cap" className="px-6 md:px-12 max-w-[1200px] mx-auto relative z-20" style={{ paddingTop: "1rem", paddingBottom: "1rem" }}>
+      <section id="todos-ganham-cap" className="px-6 md:px-12 max-w-[1200px] mx-auto relative z-20" style={{ paddingTop: "1rem", paddingBottom: "1rem", backgroundColor: "rgb(8, 57, 40)" }}>
         
         <div className="text-center max-w-xl mx-auto mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-mono text-green uppercase tracking-widest mb-4">
@@ -874,7 +925,7 @@ export default function Index() {
                 <span className="text-[10px] tracking-widest font-mono text-purple uppercase bg-purple/10 border border-purple/20 px-3 py-1 rounded-full">
                   Associações
                 </span>
-                <span className="text-2xl font-display font-bold text-purple">2%</span>
+                {/* 2% span removed per UBT-COMM-003 */}
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 group-hover:text-purple transition-colors">
                 Associações mais fortes.
@@ -1018,7 +1069,7 @@ export default function Index() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 <div>
                   <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Cidade</label>
                   <select 
@@ -1031,24 +1082,54 @@ export default function Index() {
                     <option value="Outra" className="bg-[#0B1B3E]">Outra</option>
                   </select>
                 </div>
+                
                 <div>
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Seu Perfil</label>
-                  <select 
-                    value={formProfile}
-                    onChange={(e) => setFormProfile(e.target.value)}
-                    className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all appearance-none"
-                    style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>")`, backgroundPosition: 'right 20px center', backgroundRepeat: 'no-repeat' }}
-                  >
-                    <option value="morador" className="bg-[#0B1B3E]">Consumidor (Contratar)</option>
-                    <option value="prestador" className="bg-[#0B1B3E]">Prestador (Trabalhar)</option>
-                    <option value="empresa" className="bg-[#0B1B3E]">Empresa</option>
-                    <option value="associacao" className="bg-[#0B1B3E]">Associação</option>
-                  </select>
+                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Seu Perfil (Selecione um ou mais)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                    {[
+                      { id: "morador", label: "Consumidor (Contratar)" },
+                      { id: "prestador", label: "Prestador (Trabalhar)" },
+                      { id: "associacao", label: "Associado Côco & Cia" },
+                      { id: "empresa", label: "Empresa / Parceiro" }
+                    ].map((perf) => {
+                      const checked = formProfiles.includes(perf.id);
+                      return (
+                        <label 
+                          key={perf.id} 
+                          className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer select-none transition-all ${
+                            checked 
+                              ? "bg-green/10 border-green text-green" 
+                              : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                          }`}
+                        >
+                          <input 
+                            type="checkbox" 
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormProfiles([...formProfiles, perf.id]);
+                              } else {
+                                setFormProfiles(formProfiles.filter(p => p !== perf.id));
+                              }
+                            }}
+                            className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                          />
+                          <span className="text-sm font-sans font-medium">{perf.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
               <div className="flex gap-3 items-start mt-2">
-                <input type="checkbox" required id="consent-lgpd" className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer" />
+                <input 
+                  type="checkbox" 
+                  checked={acceptTerms} 
+                  onChange={(e) => setAcceptTerms(e.target.checked)} 
+                  id="consent-lgpd" 
+                  className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer" 
+                />
                 <label htmlFor="consent-lgpd" className="text-xs text-white/50 leading-relaxed font-sans cursor-pointer select-none">
                   Aceito os Termos de Uso e autorizo a coleta dos meus dados para fins exclusivos de desenvolvimento da UBT, conforme a LGPD.
                 </label>
@@ -1056,8 +1137,12 @@ export default function Index() {
 
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="w-full py-5 mt-4 rounded-2xl bg-green hover:bg-green-dark active:scale-95 transition-all text-white font-display font-extrabold text-[0.6rem] tracking-wider uppercase flex items-center justify-center gap-3 shadow-lg shadow-green/20"
+                disabled={isSubmitDisabled}
+                className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-[0.6rem] tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
+                  isSubmitDisabled 
+                    ? "bg-white/10 text-white/30 cursor-not-allowed" 
+                    : "bg-green hover:bg-green-dark active:scale-95 text-white shadow-lg shadow-green/20"
+                }`}
               >
                 {isSubmitting ? "Enviando..." : "Quero ser um Fundador"}
                 <Send className="w-5 h-5" />
@@ -1082,7 +1167,7 @@ export default function Index() {
       </section>
 
       {/* CHAPTER 6: FINAL / A CIDADE ILUMINADA */}
-      <section id="iluminada-cap" className="relative py-40 bg-black overflow-hidden flex items-center justify-center min-h-screen z-20">
+      <section id="iluminada-cap" className="hidden relative py-40 bg-black overflow-hidden flex items-center justify-center min-h-screen z-20">
         <video 
           src="/videos/Cena13.mp4" 
           loop 
@@ -1114,14 +1199,15 @@ export default function Index() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-black py-16 px-6 md:px-12 border-t border-white/5 relative z-20">
+      <footer className="bg-black px-6 md:px-12 border-t border-white/5 relative z-20" style={{ paddingTop: 0, paddingBottom: 0 }}>
         <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center md:items-start justify-between gap-12">
           
           <div className="flex flex-col items-center md:items-start gap-4">
             <img 
               src="/logo-02.png" 
               alt="UBT Logotipo Oficial" 
-              className="h-10 w-auto object-contain"
+              className="w-auto object-contain"
+              style={{ height: "13rem" }}
             />
             <p className="text-xs text-white/40 font-sans max-w-xs text-center md:text-left leading-relaxed">
               Fortalecendo a economia caiçara através da tecnologia e da colaboração.
@@ -1134,15 +1220,12 @@ export default function Index() {
               <a href="#" className="hover:text-white transition-colors">Termos de Uso</a>
               <a href="#" className="hover:text-white transition-colors">Políticas de Privacidade</a>
             </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Contato</span>
-              <span className="text-white/60">contato@ubt.com</span>
-            </div>
+            {/* Contato column removed per UBT-COMM-003 */}
             <div className="flex flex-col gap-3">
               <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Redes Sociais</span>
-              <a href="#" className="hover:text-white transition-colors flex items-center gap-1.5"><Instagram className="w-3.5 h-3.5" /> Instagram</a>
-              <a href="#" className="hover:text-white transition-colors flex items-center gap-1.5"><Facebook className="w-3.5 h-3.5" /> Facebook</a>
-              <a href="#" className="hover:text-white transition-colors flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> WhatsApp</a>
+              <a href="https://www.instagram.com/ubt_servicos" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1.5"><Instagram className="w-3.5 h-3.5" /> Instagram</a>
+              <a href="https://www.facebook.com/share/1VTCFi4vLo/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1.5"><Facebook className="w-3.5 h-3.5" /> Facebook</a>
+              {/* WhatsApp link removed per UBT-COMM-003 */}
             </div>
           </div>
 
@@ -1152,89 +1235,7 @@ export default function Index() {
         </div>
       </footer>
 
-      {/* FULLSCREEN CINEMA PLAYER MODAL */}
-      {isVideoModalOpen && (
-        <div className="fixed inset-0 bg-black/98 z-50 flex items-center justify-center p-0 md:p-6 backdrop-blur-lg">
-          <div className="relative w-full h-full max-w-[1200px] max-h-[85vh] bg-[#0A0F1D]/80 border border-white/10 rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
-            
-            {/* Close Button */}
-            <button 
-              onClick={closeVideoModal}
-              className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:text-green hover:border-green/20 transition-all active:scale-95"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Video viewport area */}
-            <div className="flex-1 relative bg-black flex items-center justify-center aspect-video md:aspect-auto">
-              <video
-                ref={videoRef}
-                src={`/videos/${VIDEO_PLAYLIST[activeVideoChapter].file}`}
-                autoPlay
-                playsInline
-                controls
-                className="w-full h-full object-contain"
-                onEnded={() => {
-                  if (activeVideoChapter < VIDEO_PLAYLIST.length - 1) {
-                    setActiveVideoChapter(activeVideoChapter + 1);
-                  }
-                }}
-              />
-
-              {/* Mobile horizontal notice */}
-              <div className="absolute top-4 left-4 z-20 md:hidden pointer-events-none">
-                <span className="text-[9px] font-mono tracking-wider bg-black/60 px-2.5 py-1 rounded border border-white/10 text-white/60">
-                  Vire o celular para assistir.
-                </span>
-              </div>
-            </div>
-
-            {/* Chapter list sidebar */}
-            <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-5 bg-[#080B16] overflow-y-auto flex flex-col">
-              <h3 className="font-display font-extrabold text-sm text-white mb-1.5 uppercase tracking-wider">
-                Capítulos
-              </h3>
-              <p className="text-[10px] text-white/40 font-sans mb-4 leading-relaxed">
-                Navegue pelas cenas do curta-metragem
-              </p>
-              
-              <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-3 md:pb-0 scrollbar-none flex-1">
-                {VIDEO_PLAYLIST.map((chap, idx) => {
-                  const active = activeVideoChapter === idx;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => handleChapterSelect(idx)}
-                      className={`text-left p-3 rounded-xl border text-xs transition-all flex flex-col gap-1 min-w-[160px] md:min-w-0 shrink-0 ${
-                        active 
-                          ? "bg-green/10 border-green text-green" 
-                          : "bg-white/[0.01] border-white/5 text-white/60 hover:border-white/15"
-                      }`}
-                    >
-                      <span className="font-mono text-[9px] text-white/30 uppercase">Cena {String(idx + 1).padStart(2, "0")}</span>
-                      <span className="font-bold block truncate">{chap.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Sidebar actions */}
-              <div className="mt-4 pt-4 border-t border-t-white/5 flex items-center justify-between text-[11px] font-mono text-white/40">
-                <button 
-                  onClick={toggleMute}
-                  className="hover:text-white flex items-center gap-1"
-                >
-                  {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                  {isMuted ? "Desmutado" : "Mutar"}
-                </button>
-                <span>Curta-Metragem</span>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* Fullscreen Video Player Modal disabled per UBT-COMM-003 */}
 
       {/* Styled component styles for fade animations */}
       <style>{`

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { BarChart3, Users, ClipboardList, Activity, RefreshCw, Calendar, Eye, FileJson } from "lucide-react";
+import { BarChart3, Users, ClipboardList, Activity, RefreshCw, Calendar, Eye, FileJson, X } from "lucide-react";
 import { Card, PageTitle, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -7,21 +7,29 @@ import { supabase } from "@/lib/supabase";
 interface AnalyticsEventRecord {
   id: string;
   user_id: string | null;
-  event_type: string;
-  device_info: any;
-  metadata: any;
-  created_at: string;
+  event_name: string;
+  event_category: string;
+  created_at_utc: string;
+  timezone: string;
+  session_id: string;
+  device_id: string;
+  anonymous_id: string | null;
+  platform: string | null;
+  app_version: string | null;
+  origin: string | null;
+  vertical: string | null;
+  properties: any;
 }
 
 const EVENT_COLORS: Record<string, { bg: string; text: string }> = {
   signup_started: { bg: "rgba(43,110,232,0.1)", text: "#2B6EE8" },
   signup_completed: { bg: "rgba(13,184,126,0.1)", text: "#0DB87E" },
-  order_created: { bg: "rgba(245,166,35,0.1)", text: "#F5A623" },
-  order_accepted: { bg: "rgba(147,51,234,0.1)", text: "#9333EA" },
-  order_cancelled: { bg: "rgba(239,68,68,0.1)", text: "#EF4444" },
+  request_created: { bg: "rgba(245,166,35,0.1)", text: "#F5A623" },
+  request_accepted: { bg: "rgba(147,51,234,0.1)", text: "#9333EA" },
+  request_cancelled: { bg: "rgba(239,68,68,0.1)", text: "#EF4444" },
   payment_started: { bg: "rgba(16,185,129,0.1)", text: "#10B981" },
-  payment_approved: { bg: "rgba(16,185,129,0.2)", text: "#059669" },
-  service_completed: { bg: "rgba(59,130,246,0.2)", text: "#2563EB" }
+  payment_success: { bg: "rgba(16,185,129,0.2)", text: "#059669" },
+  payout_completed: { bg: "rgba(59,130,246,0.2)", text: "#2563EB" }
 };
 
 export default function AdminAnalyticsPage() {
@@ -38,7 +46,7 @@ export default function AdminAnalyticsPage() {
       const { data, error } = await supabase
         .from("analytics_events")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at_utc", { ascending: false });
 
       if (error) throw error;
       if (data) setEvents(data);
@@ -63,10 +71,10 @@ export default function AdminAnalyticsPage() {
     else if (period === "30d") periodThreshold.setDate(now.getDate() - 30);
 
     return events.filter(e => {
-      const date = new Date(e.created_at);
+      const date = new Date(e.created_at_utc);
       const matchPeriod = date >= periodThreshold;
       
-      const eventVert = e.metadata?.vertical || "generic";
+      const eventVert = e.vertical || "generic";
       const matchVertical = verticalFilter === "all" || eventVert === verticalFilter;
 
       return matchPeriod && matchVertical;
@@ -78,19 +86,19 @@ export default function AdminAnalyticsPage() {
     const totals: Record<string, number> = {
       signup_started: 0,
       signup_completed: 0,
-      order_created: 0,
-      order_accepted: 0,
-      order_cancelled: 0,
+      request_created: 0,
+      request_accepted: 0,
+      request_cancelled: 0,
       payment_started: 0,
-      payment_approved: 0,
-      service_completed: 0
+      payment_success: 0,
+      payout_completed: 0
     };
 
     const uniqueUsers = new Set<string>();
 
     filteredEvents.forEach(e => {
-      if (totals[e.event_type] !== undefined) {
-        totals[e.event_type]++;
+      if (totals[e.event_name] !== undefined) {
+        totals[e.event_name]++;
       }
       if (e.user_id) uniqueUsers.add(e.user_id);
     });
@@ -100,12 +108,12 @@ export default function AdminAnalyticsPage() {
       ? (totals.signup_completed / totals.signup_started) * 100 
       : 0;
 
-    const orderToAccept = totals.order_created > 0 
-      ? (totals.order_accepted / totals.order_created) * 100 
+    const orderToAccept = totals.request_created > 0 
+      ? (totals.request_accepted / totals.request_created) * 100 
       : 0;
 
-    const orderToComplete = totals.order_created > 0 
-      ? (totals.service_completed / totals.order_created) * 100 
+    const orderToComplete = totals.request_created > 0 
+      ? (totals.payout_completed / totals.request_created) * 100 
       : 0;
 
     return {
@@ -218,7 +226,7 @@ export default function AdminAnalyticsPage() {
             <ClipboardList size={20} color="#F5A623" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.order_created}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.request_created}</div>
             <div style={{ fontSize: 12, color: "#64748B" }}>Pedidos Criados</div>
           </div>
         </Card>
@@ -228,7 +236,7 @@ export default function AdminAnalyticsPage() {
             <BarChart3 size={20} color="#3B82F6" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.service_completed}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.payout_completed}</div>
             <div style={{ fontSize: 12, color: "#64748B" }}>Serviços Concluídos</div>
           </div>
         </Card>
@@ -274,11 +282,11 @@ export default function AdminAnalyticsPage() {
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { label: "1. Criado (order_created)", val: metrics.totals.order_created, color: "#F5A623" },
-              { label: "2. Aceito (order_accepted)", val: metrics.totals.order_accepted, color: "#9333EA" },
+              { label: "1. Criado (request_created)", val: metrics.totals.request_created, color: "#F5A623" },
+              { label: "2. Aceito (request_accepted)", val: metrics.totals.request_accepted, color: "#9333EA" },
               { label: "3. Checkout (payment_started)", val: metrics.totals.payment_started, color: "#10B981" },
-              { label: "4. Pago (payment_approved)", val: metrics.totals.payment_approved, color: "#059669" },
-              { label: "5. Concluído (service_completed)", val: metrics.totals.service_completed, color: "#2563EB" }
+              { label: "4. Pago (payment_success)", val: metrics.totals.payment_success, color: "#059669" },
+              { label: "5. Concluído (payout_completed)", val: metrics.totals.payout_completed, color: "#2563EB" }
             ].map((step, idx, arr) => {
               const base = arr[0].val || 1;
               const pct = (step.val / base) * 100;
@@ -340,13 +348,13 @@ export default function AdminAnalyticsPage() {
               </thead>
               <tbody>
                 {filteredEvents.slice(0, 15).map((e) => {
-                  const badge = EVENT_COLORS[e.event_type] || { bg: "#F1F5F9", text: "#64748B" };
+                  const badge = EVENT_COLORS[e.event_name] || { bg: "#F1F5F9", text: "#64748B" };
                   return (
                     <tr key={e.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
                       
                       {/* Date/Time */}
                       <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
-                        {new Date(e.created_at).toLocaleDateString("pt-BR")} às {new Date(e.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(e.created_at_utc).toLocaleDateString("pt-BR")} às {new Date(e.created_at_utc).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </td>
                       
                       {/* Event Type Badge */}
@@ -362,7 +370,7 @@ export default function AdminAnalyticsPage() {
                             fontFamily: "monospace"
                           }}
                         >
-                          {e.event_type}
+                          {e.event_name}
                         </span>
                       </td>
 
@@ -373,7 +381,7 @@ export default function AdminAnalyticsPage() {
 
                       {/* Details preview */}
                       <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
-                        {e.metadata?.vertical ? `Vertical: ${e.metadata.vertical}` : "Dispositivo / Sistema"}
+                        {e.vertical ? `Vertical: ${e.vertical}` : "Dispositivo / Sistema"}
                       </td>
 
                       {/* Inspector Action */}
@@ -423,11 +431,11 @@ export default function AdminAnalyticsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "#64748B" }}>Tipo do Evento:</span>
-                <span style={{ fontWeight: 600, color: "#0F172A" }}>{selectedEvent.event_type}</span>
+                <span style={{ fontWeight: 600, color: "#0F172A" }}>{selectedEvent.event_name}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "#64748B" }}>Timestamp:</span>
-                <span style={{ color: "#334155" }}>{new Date(selectedEvent.created_at).toLocaleString("pt-BR")}</span>
+                <span style={{ color: "#334155" }}>{new Date(selectedEvent.created_at_utc).toLocaleString("pt-BR")}</span>
               </div>
 
               {/* Metadata */}
@@ -436,7 +444,7 @@ export default function AdminAnalyticsPage() {
                   <FileJson size={12} /> Metadados do Evento
                 </div>
                 <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
-                  {JSON.stringify(selectedEvent.metadata, null, 2)}
+                  {JSON.stringify(selectedEvent.properties, null, 2)}
                 </pre>
               </div>
 
@@ -446,7 +454,16 @@ export default function AdminAnalyticsPage() {
                   <Activity size={12} /> Dados do Navegador / Dispositivo
                 </div>
                 <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
-                  {JSON.stringify(selectedEvent.device_info, null, 2)}
+                  {JSON.stringify({
+                    platform: selectedEvent.platform,
+                    app_version: selectedEvent.app_version,
+                    timezone: selectedEvent.timezone,
+                    session_id: selectedEvent.session_id,
+                    device_id: selectedEvent.device_id,
+                    anonymous_id: selectedEvent.anonymous_id,
+                    origin: selectedEvent.origin,
+                    vertical: selectedEvent.vertical
+                  }, null, 2)}
                 </pre>
               </div>
             </div>

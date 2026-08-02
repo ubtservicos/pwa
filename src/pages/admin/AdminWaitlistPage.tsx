@@ -13,7 +13,8 @@ import {
   HelpCircle,
   Link,
   Smartphone,
-  Globe
+  Globe,
+  ShieldCheck
 } from "lucide-react";
 import { Card, PageTitle, Pill, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -27,7 +28,7 @@ export interface WaitlistItem {
   email: string;
   telefone: string;
   cidade: string;
-  perfil: string;
+  perfil: string | string[];
   origem: string | null;
   utm_source: string | null;
   utm_medium: string | null;
@@ -86,9 +87,10 @@ export default function AdminWaitlistPage() {
         const aggregated = data.reduce(
           (acc, item) => {
             acc.total++;
-            if (item.perfil === "morador") acc.moradores++;
-            else if (item.perfil === "prestador") acc.prestadores++;
-            else if (item.perfil === "visitante") acc.visitantes++;
+            const perfilArr = Array.isArray(item.perfil) ? item.perfil : [item.perfil];
+            if (perfilArr.includes("morador")) acc.moradores++;
+            if (perfilArr.includes("prestador")) acc.prestadores++;
+            if (perfilArr.includes("visitante") || perfilArr.includes("visitantes")) acc.visitantes++;
             
             if (item.origem && item.origem !== "direto") acc.com_referral++;
             return acc;
@@ -113,7 +115,7 @@ export default function AdminWaitlistPage() {
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
       if (selectedPerfil !== "Todos") {
-        query = query.eq("perfil", selectedPerfil);
+        query = query.cs("perfil", [selectedPerfil]);
       }
 
       if (selectedStatus !== "Todos") {
@@ -368,9 +370,18 @@ export default function AdminWaitlistPage() {
                       {lead.cidade}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      {lead.perfil === "morador" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Morador</Pill>}
-                      {lead.perfil === "prestador" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Prestador</Pill>}
-                      {lead.perfil === "visitante" && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623" size="sm">Turista</Pill>}
+                      {(() => {
+                        const perfilArr = Array.isArray(lead.perfil) ? lead.perfil : [lead.perfil];
+                        return (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Morador</Pill>}
+                            {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Prestador</Pill>}
+                            {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623" size="sm">Turista</Pill>}
+                            {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Empresa</Pill>}
+                            {perfilArr.includes("associacao") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA" size="sm">Associação</Pill>}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B" }}>
                       {lead.origem === "direto" ? (
@@ -486,10 +497,19 @@ export default function AdminWaitlistPage() {
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
-                  <div style={{ fontSize: 14, color: "#334155", display: "flex", gap: 6, marginTop: 2 }}>
-                    {selectedLeadModal.perfil === "morador" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Morador</Pill>}
-                    {selectedLeadModal.perfil === "prestador" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">Prestador</Pill>}
-                    {selectedLeadModal.perfil === "visitante" && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Turista</Pill>}
+                  <div style={{ fontSize: 14, color: "#334155", display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                    {(() => {
+                      const perfilArr = Array.isArray(selectedLeadModal.perfil) ? selectedLeadModal.perfil : [selectedLeadModal.perfil];
+                      return (
+                        <>
+                          {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Morador</Pill>}
+                          {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">Prestador</Pill>}
+                          {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Turista</Pill>}
+                          {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Empresa</Pill>}
+                          {perfilArr.includes("associacao") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA">Associação</Pill>}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
