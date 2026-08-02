@@ -20,32 +20,61 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
   build: {
+    sourcemap: true,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
+            const normalizedPath = id.replace(/\\/g, "/");
+            const parts = normalizedPath.split("/node_modules/");
+            const packagePath = parts[parts.length - 1];
+            let packageName = "";
+            if (packagePath.startsWith("@")) {
+              const scopeParts = packagePath.split("/");
+              packageName = scopeParts.slice(0, 2).join("/");
+            } else {
+              packageName = packagePath.split("/")[0];
+            }
+
+            // Core React runtime packages and routing/state management
             if (
-              id.includes("react-dom") ||
-              id.includes("react-router-dom") ||
-              id.includes("@tanstack") ||
-              id.includes("/react/") ||
-              id.includes("\\react\\")
+              packageName === "react" ||
+              packageName === "react-dom" ||
+              packageName === "react-router" ||
+              packageName === "react-router-dom" ||
+              packageName === "@remix-run/router" ||
+              packageName === "scheduler" ||
+              packageName.includes("tanstack")
             ) {
               return "vendor-core";
             }
-            if (id.includes("lucide-react") || id.includes("@radix-ui") || id.includes("framer-motion")) {
+
+            // UI library components and icons
+            if (
+              packageName.includes("radix-ui") ||
+              packageName === "lucide-react" ||
+              packageName === "framer-motion"
+            ) {
               return "vendor-ui";
             }
-            if (id.includes("leaflet")) {
+
+            // Maps and location services
+            if (packageName.includes("leaflet")) {
               return "vendor-maps";
             }
-            if (id.includes("recharts") || id.includes("d3-")) {
+
+            // Charts and data visualization libraries
+            if (packageName === "recharts" || packageName.includes("d3")) {
               return "vendor-charts";
             }
-            if (id.includes("@supabase")) {
+
+            // Supabase client and integrations
+            if (packageName.includes("supabase")) {
               return "vendor-supabase";
             }
+
+            // Fallback for all other third-party dependencies
             return "vendor-libs";
           }
         },
