@@ -156,8 +156,50 @@ export default function Index() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  
+  // Geolocation fields
+  const [formCep, setFormCep] = useState("");
+  const [formBairroMora, setFormBairroMora] = useState("");
+  const [formBairroTrab, setFormBairroTrab] = useState("");
+  const [isCepSearching, setIsCepSearching] = useState(false);
 
-  const isSubmitDisabled = isSubmitting || !formName.trim() || !formPhone.trim() || !formEmail.trim() || formProfiles.length === 0 || !acceptTerms;
+  const isSubmitDisabled =
+    isSubmitting ||
+    !formName.trim() ||
+    !formPhone.trim() ||
+    !formEmail.trim() ||
+    formProfiles.length === 0 ||
+    !acceptTerms ||
+    (formCity === "Ubatuba" && (!formCep.trim() || !formBairroMora.trim()));
+
+  const handleCepChange = async (val: string) => {
+    const cleaned = val.replace(/[^\d-]/g, "");
+    setFormCep(cleaned);
+
+    const rawDigits = cleaned.replace(/\D/g, "");
+    if (rawDigits.length === 8) {
+      const formatted = `${rawDigits.slice(0, 5)}-${rawDigits.slice(5)}`;
+      setFormCep(formatted);
+
+      setIsCepSearching(true);
+      try {
+        const { data, error } = await supabase
+          .from("ceps_ubatuba")
+          .select("bairro")
+          .eq("cep", formatted)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data?.bairro) {
+          setFormBairroMora(data.bairro);
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar CEP localmente:", err);
+      } finally {
+        setIsCepSearching(false);
+      }
+    }
+  };
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -469,7 +511,10 @@ export default function Index() {
           ip_hash: ipHashVal,
           device_type: parsedUA.device_type,
           browser: parsedUA.browser,
-          os: parsedUA.os
+          os: parsedUA.os,
+          cep_moradia: formCity === "Ubatuba" ? formCep.trim() : null,
+          bairro_moradia: formCity === "Ubatuba" ? formBairroMora.trim() : null,
+          bairro_trabalho: formCity === "Ubatuba" ? formBairroTrab.trim() : null
         });
 
       if (insertError) throw insertError;
@@ -1026,7 +1071,7 @@ export default function Index() {
               </div>
 
               {submitError && (
-                <div className="p-3.5 rounded-xl bg-red/10 border border-red/20 text-xs text-red font-semibold leading-relaxed text-center">
+                <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive font-semibold leading-relaxed text-center">
                   {submitError}
                 </div>
               )}
@@ -1082,15 +1127,55 @@ export default function Index() {
                     <option value="Outra" className="bg-[#0B1B3E]">Outra</option>
                   </select>
                 </div>
+
+                {formCity === "Ubatuba" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        CEP onde moro {isCepSearching && <span className="text-[10px] text-green animate-pulse pl-1">(Buscando...)</span>}
+                      </label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ex: 11680-000" 
+                        value={formCep}
+                        onChange={(e) => handleCepChange(e.target.value)}
+                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro onde moro</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="Ex: Centro" 
+                        value={formBairroMora}
+                        onChange={(e) => setFormBairroMora(e.target.value)}
+                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro onde trabalha</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Itaguá (Opcional)" 
+                        value={formBairroTrab}
+                        onChange={(e) => setFormBairroTrab(e.target.value)}
+                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
                 
                 <div>
                   <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Seu Perfil (Selecione um ou mais)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
                     {[
-                      { id: "morador", label: "Consumidor (Contratar)" },
-                      { id: "prestador", label: "Prestador (Trabalhar)" },
-                      { id: "associacao", label: "Associado Côco & Cia" },
-                      { id: "empresa", label: "Empresa / Parceiro" }
+                      { id: "morador", label: "Sou morador / tomador de serviços" },
+                      { id: "diarista", label: "Sou diarista" },
+                      { id: "mototaxista", label: "Sou mototaxista" },
+                      { id: "ambulante", label: "Sou ambulante" },
+                      { id: "associacao", label: "Sou uma Associação de Trabalhadores" }
                     ].map((perf) => {
                       const checked = formProfiles.includes(perf.id);
                       return (

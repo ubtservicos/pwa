@@ -43,6 +43,9 @@ export interface WaitlistItem {
   consentimento_lgpd: boolean;
   status: string;
   observacoes: string | null;
+  cep_moradia?: string | null;
+  bairro_moradia?: string | null;
+  bairro_trabalho?: string | null;
 }
 
 interface WaitlistStats {
@@ -266,9 +269,12 @@ export default function AdminWaitlistPage() {
               style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             >
               <option value="Todos">Todos</option>
-              <option value="morador">Contratar (Morador)</option>
-              <option value="prestador">Trabalhar (Prestador)</option>
-              <option value="visitante">Turista / Visitante</option>
+              <option value="morador">Morador / Tomador</option>
+              <option value="diarista">Diarista</option>
+              <option value="mototaxista">Mototaxista</option>
+              <option value="ambulante">Ambulante</option>
+              <option value="associacao">Associação</option>
+              <option value="prestador">Trabalhar (Prestador - Legado)</option>
             </select>
           </div>
 
@@ -375,10 +381,13 @@ export default function AdminWaitlistPage() {
                         return (
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                             {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Morador</Pill>}
+                            {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA" size="sm">Diarista</Pill>}
+                            {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6" size="sm">Mototaxista</Pill>}
+                            {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Ambulante</Pill>}
+                            {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981" size="sm">Associação</Pill>}
                             {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Prestador</Pill>}
                             {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623" size="sm">Turista</Pill>}
                             {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Empresa</Pill>}
-                            {perfilArr.includes("associacao") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA" size="sm">Associação</Pill>}
                           </div>
                         );
                       })()}
@@ -503,16 +512,36 @@ export default function AdminWaitlistPage() {
                       return (
                         <>
                           {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Morador</Pill>}
+                          {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA">Diarista</Pill>}
+                          {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6">Mototaxista</Pill>}
+                          {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Ambulante</Pill>}
+                          {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981">Associação</Pill>}
                           {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">Prestador</Pill>}
                           {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Turista</Pill>}
                           {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Empresa</Pill>}
-                          {perfilArr.includes("associacao") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA">Associação</Pill>}
                         </>
                       );
                     })()}
                   </div>
                 </div>
               </div>
+
+              {(selectedLeadModal.cep_moradia || selectedLeadModal.bairro_moradia || selectedLeadModal.bairro_trabalho) && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#F8FAFC", border: "1px solid #E2E8F0", padding: 12, borderRadius: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>CEP Moradia</span>
+                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.cep_moradia || "—"}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Bairro Moradia</span>
+                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.bairro_moradia || "—"}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Bairro Trabalho</span>
+                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.bairro_trabalho || "—"}</div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>LGPD Consentimento</span>
