@@ -21,6 +21,7 @@ import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { SecurityAuditService, SecurityFinding, SecuritySummaryData } from "@/services/SecurityAuditService";
 import { useCan } from "@/hooks/usePermissions";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 const CATEGORIES = [
   "Todas",
@@ -258,7 +259,10 @@ export default function AdminSecurityCenterPage() {
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16, marginBottom: 28 }}>
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Security Score</span>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+            Security Score
+            <HelpTooltip concept="admin.security.score" />
+          </span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 800, color: (data?.score || 0) >= 90 ? "#0DB87E" : (data?.score || 0) >= 75 ? "#2B6EE8" : "#E84040", marginTop: 4 }}>
             {data ? `${data.score}%` : "—"}
           </div>
@@ -270,7 +274,10 @@ export default function AdminSecurityCenterPage() {
         </Card>
 
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Riscos Críticos</span>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+            Riscos Críticos
+            <HelpTooltip concept="admin.security.riscos_criticos" />
+          </span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: (data?.riscos_criticos || 0) > 0 ? "#E84040" : "#0DB87E", marginTop: 4 }}>
             {data ? data.riscos_criticos : 0}
           </div>

@@ -18,6 +18,7 @@ import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ResilienceService } from "@/services/ResilienceService";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 export interface HealthAlert {
   id: string;
@@ -183,7 +184,10 @@ export default function AdminHealthCenterPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 28 }}>
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Alertas Críticos</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+              Alertas Críticos
+              <HelpTooltip concept="admin.health.alertas_criticos" />
+            </span>
             <ShieldAlert size={20} color="#E84040" />
           </div>
           <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 700, color: data.alertas_criticos > 0 ? "#E84040" : "#0DB87E", marginTop: 6 }}>
@@ -196,7 +200,10 @@ export default function AdminHealthCenterPage() {
 
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Alertas Ativos</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+              Alertas Ativos
+              <HelpTooltip concept="admin.health.alertas_ativos" />
+            </span>
             <Activity size={20} color="#F5A623" />
           </div>
           <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 700, color: "#0F172A", marginTop: 6 }}>
@@ -222,7 +229,10 @@ export default function AdminHealthCenterPage() {
 
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Tempo Média Resolução</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+              Tempo Média Resolução
+              <HelpTooltip concept="admin.health.tempo_resolucao" />
+            </span>
             <Clock size={20} color="#2B6EE8" />
           </div>
           <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 700, color: "#2B6EE8", marginTop: 6 }}>

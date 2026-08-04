@@ -18,6 +18,7 @@ import {
 import { Card, PageTitle, Pill, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 export interface AuditLogItem {
   id: string;
@@ -237,7 +238,10 @@ export default function AdminAuditPage() {
       {/* KPI Cards Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16, marginBottom: 24 }}>
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Total Registrado Hoje</span>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+            Total Registrado Hoje
+            <HelpTooltip concept="admin.audit.total_hoje" />
+          </span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>
             {summary.total_hoje}
           </div>
@@ -251,7 +255,10 @@ export default function AdminAuditPage() {
         </Card>
 
         <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Ações Críticas</span>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+            Ações Críticas
+            <HelpTooltip concept="admin.audit.acoes_criticas" />
+          </span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: summary.criticas > 0 ? "#E84040" : "#0DB87E", marginTop: 4 }}>
             {summary.criticas}
           </div>

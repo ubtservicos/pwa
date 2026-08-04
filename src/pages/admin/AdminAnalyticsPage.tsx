@@ -3,6 +3,7 @@ import { BarChart3, Users, ClipboardList, Activity, RefreshCw, Calendar, Eye, Fi
 import { Card, PageTitle, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 interface AnalyticsEventRecord {
   id: string;
@@ -207,7 +208,10 @@ export default function AdminAnalyticsPage() {
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{filteredEvents.length}</div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>Eventos Capturados</div>
+            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+              Eventos Capturados
+              <HelpTooltip concept="admin.analytics.eventos_capturados" />
+            </div>
           </div>
         </Card>
         
@@ -217,7 +221,10 @@ export default function AdminAnalyticsPage() {
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.uniqueUsersCount}</div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>Usuários Ativos (Logados)</div>
+            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+              Usuários Ativos (Logados)
+              <HelpTooltip concept="admin.analytics.usuarios_ativos" />
+            </div>
           </div>
         </Card>
 
@@ -227,7 +234,10 @@ export default function AdminAnalyticsPage() {
           </div>
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.request_created}</div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>Pedidos Criados</div>
+            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+              Pedidos Criados
+              <HelpTooltip concept="admin.analytics.pedidos_criados" />
+            </div>
           </div>
         </Card>
 

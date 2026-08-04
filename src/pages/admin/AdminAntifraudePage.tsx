@@ -3,6 +3,7 @@ import { ShieldAlert, AlertTriangle, CheckCircle, Search, Eye, X, Check, ArrowRi
 import { Card, PageTitle, Pill, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 interface TelemetryFlag {
   id: string;
@@ -187,7 +188,10 @@ export default function AdminAntifraudePage() {
           </div>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "#E84040" }}>{criticalAlerts}</div>
-            <div style={{ fontSize: 13, color: "#64748B" }}>Críticos Pendentes (Saques bloqueados)</div>
+            <div style={{ fontSize: 13, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+              Críticos Pendentes (Saques bloqueados)
+              <HelpTooltip concept="admin.antifraude.criticos_pendentes" />
+            </div>
           </div>
         </Card>
         

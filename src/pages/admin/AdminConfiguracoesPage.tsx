@@ -19,6 +19,7 @@ import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { SettingsService, SystemSetting, SystemSettingVersion } from "@/services/SettingsService";
 import { useRole } from "@/hooks/usePermissions";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 const CATEGORIES = [
   "Todas",
@@ -200,7 +201,12 @@ export default function AdminConfiguracoesPage() {
 
   return (
     <div style={{ padding: 32 }}>
-      <PageTitle sub="Parâmetros operacionais centralizados, versionados e com atualização em tempo real">
+      <PageTitle sub={
+        <span style={{ display: "inline-flex", alignItems: "center" }}>
+          Parâmetros operacionais centralizados, versionados e com atualização em tempo real
+          <HelpTooltip concept="admin.configuracoes.centro_configuracoes" />
+        </span>
+      }>
         Central de Configurações
       </PageTitle>
 

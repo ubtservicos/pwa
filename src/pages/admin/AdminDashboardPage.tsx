@@ -23,6 +23,7 @@ import {
 import { Card, Pill, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 const formatBR = (n: number) =>
   "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -289,7 +290,10 @@ export default function AdminDashboardPage() {
           </Card>
 
           <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Tempo Resposta Média</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+              Tempo Resposta Média
+              <HelpTooltip concept="admin.dashboard.tempo_resposta" />
+            </span>
             <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0DB87E", marginTop: 2 }}>{saude.tempo_medio_resposta_ms} ms</div>
           </Card>
         </div>
@@ -312,7 +316,12 @@ export default function AdminDashboardPage() {
             { label: "Cancelamentos", val: kpis_dia.cancelamentos, color: "#64748B" },
           ].map((k) => (
             <Card key={k.label} style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-              <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>{k.label}</div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+                {k.label}
+                {k.label === "GMV do Dia" && <HelpTooltip concept="admin.dashboard.gmv" />}
+                {k.label === "Receita UBT (4%)" && <HelpTooltip concept="admin.dashboard.receita_ubt" />}
+                {k.label === "Pedidos do Dia" && <HelpTooltip concept="admin.dashboard.pedidos" />}
+              </div>
               <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: k.color, marginTop: 4 }}>{k.val}</div>
             </Card>
           ))}

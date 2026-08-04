@@ -17,6 +17,7 @@ import {
 import { Card, PageTitle, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { HelpTooltip } from "@/components/admin/HelpTooltip";
 
 interface LiveLogItem {
   id: string;
@@ -304,8 +305,9 @@ export default function AdminOperacoesPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
               Pedidos & Corridas Ativos
+              <HelpTooltip concept="admin.operacoes.corridas_ativas" />
             </span>
             <ShoppingBag size={20} color="#2B6EE8" />
           </div>
@@ -316,8 +318,9 @@ export default function AdminOperacoesPage() {
 
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
               Alertas de Ghost Ride
+              <HelpTooltip concept="admin.operacoes.ghost_ride_alerts" />
             </span>
             <AlertTriangle size={20} color="#E84040" />
           </div>
