@@ -157,6 +157,8 @@ export default function Index() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
   
+  const [possuiContaMercadoPago, setPossuiContaMercadoPago] = useState<boolean | null>(null);
+  
   // Geolocation fields
   const [formCep, setFormCep] = useState("");
   const [formBairroMora, setFormBairroMora] = useState("");
@@ -170,7 +172,8 @@ export default function Index() {
     !formEmail.trim() ||
     formProfiles.length === 0 ||
     !acceptTerms ||
-    (formCity === "Ubatuba" && (!formCep.trim() || !formBairroMora.trim()));
+    (formCity === "Ubatuba" && (!formCep.trim() || !formBairroMora.trim())) ||
+    possuiContaMercadoPago === null;
 
   const handleCepChange = async (val: string) => {
     const cleaned = val.replace(/[^\d-]/g, "");
@@ -514,7 +517,8 @@ export default function Index() {
           os: parsedUA.os,
           cep_moradia: formCity === "Ubatuba" ? formCep.trim() : null,
           bairro_moradia: formCity === "Ubatuba" ? formBairroMora.trim() : null,
-          bairro_trabalho: formCity === "Ubatuba" ? formBairroTrab.trim() : null
+          bairro_trabalho: formCity === "Ubatuba" ? formBairroTrab.trim() : null,
+          observacoes: possuiContaMercadoPago !== null ? `Mercado Pago: ${possuiContaMercadoPago ? 'Sim' : 'Não'}` : null
         });
 
       if (insertError) throw insertError;
@@ -1204,6 +1208,32 @@ export default function Index() {
                       );
                     })}
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Você já possui uma conta no Mercado Pago?</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { value: true, label: "Sim" },
+                    { value: false, label: "Não" }
+                  ].map((opt) => {
+                    const selected = possuiContaMercadoPago === opt.value;
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setPossuiContaMercadoPago(opt.value)}
+                        className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all ${
+                          selected
+                            ? "bg-green/10 border-green text-green"
+                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
