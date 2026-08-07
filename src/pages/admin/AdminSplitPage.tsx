@@ -53,7 +53,7 @@ export default function AdminSplitPage() {
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    // Read from localStorage on mount
+    // Read from localStorage on mount as basic fallback
     const savedSplit = localStorage.getItem("ubt_split_config");
     if (savedSplit) {
       try {
@@ -83,7 +83,27 @@ export default function AdminSplitPage() {
       try {
         let trabSplit = 1.5;
         let consSplit = 1.5;
-        if (savedSplit) {
+
+        // Fetch primary split_config from Supabase
+        const { data: dbSplitConfig, error: dbSplitError } = await supabase
+          .from("split_config")
+          .select("*")
+          .eq("id", 1)
+          .single();
+
+        if (!dbSplitError && dbSplitConfig) {
+          const loadedSplit = {
+            prestador: Number(dbSplitConfig.prestador_pct),
+            ubt: Number(dbSplitConfig.ubt_pct),
+            comunidade: Number(dbSplitConfig.comunidade_pct),
+            premioTrabalhador: Number(dbSplitConfig.premio_trabalhador_pct),
+            premioConsumidor: Number(dbSplitConfig.premio_consumidor_pct),
+            padrinho: Number(dbSplitConfig.padrinho_pct),
+          };
+          setSplit(loadedSplit);
+          trabSplit = loadedSplit.premioTrabalhador;
+          consSplit = loadedSplit.premioConsumidor;
+        } else if (savedSplit) {
           try {
             const parsed = JSON.parse(savedSplit);
             if (parsed.premioTrabalhador !== undefined) trabSplit = Number(parsed.premioTrabalhador);
@@ -172,11 +192,52 @@ export default function AdminSplitPage() {
   const destinado1_5 = totalVolumeCalculated * (split.premioTrabalhador / 100);
   const destinado1_11 = totalVolumeCalculated * (split.premioConsumidor / 100);
 
-  const handleSave = () => {
-    localStorage.setItem("ubt_split_config", JSON.stringify(split));
-    localStorage.setItem("ubt_pix_keys", JSON.stringify(pixKeys));
-    localStorage.setItem("ubt_pix_types", JSON.stringify(pixTypes));
-    toast.show("Taxa global atualizada!");
+  const handleSave = async () => {
+    try {
+      // 1. Update primary split_config table
+      const { error: splitError } = await supabase
+        .from("split_config")
+        .update({
+          prestador_pct: split.prestador,
+          ubt_pct: split.ubt,
+          comunidade_pct: split.comunidade,
+          premio_trabalhador_pct: split.premioTrabalhador,
+          premio_consumidor_pct: split.premioConsumidor,
+          padrinho_pct: split.padrinho,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", 1);
+
+      if (splitError) throw splitError;
+
+      // 2. Sync with system_settings table (authenticated admins only via RLS)
+      await Promise.all([
+        supabase
+          .from("system_settings")
+          .update({ valor: split.ubt / 100 })
+          .eq("chave", "taxa_ubt"),
+        supabase
+          .from("system_settings")
+          .update({ valor: split.premioConsumidor / 100 })
+          .eq("chave", "premio_consumidor"),
+        supabase
+          .from("system_settings")
+          .update({ valor: split.premioTrabalhador / 100 })
+          .eq("chave", "premio_prestador"),
+        supabase
+          .from("system_settings")
+          .update({ valor: split.comunidade / 100 })
+          .eq("chave", "percentual_associacao")
+      ]);
+
+      localStorage.setItem("ubt_split_config", JSON.stringify(split));
+      localStorage.setItem("ubt_pix_keys", JSON.stringify(pixKeys));
+      localStorage.setItem("ubt_pix_types", JSON.stringify(pixTypes));
+      toast.show("Configurações financeiras sincronizadas com o banco de dados!");
+    } catch (err: any) {
+      console.error("Erro ao salvar configuração no banco:", err);
+      toast.show("Erro ao salvar no banco: " + (err.message || err));
+    }
   };
 
   return (

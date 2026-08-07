@@ -47,22 +47,33 @@ export default function AdminSorteioTrabPage() {
   const [showWinnerModal, setShowWinnerModal] = useState(false);
 
   useEffect(() => {
-    let currentSplit = 1.5;
-    const savedSplit = localStorage.getItem("ubt_split_config");
-    if (savedSplit) {
-      try {
-        const parsed = JSON.parse(savedSplit);
-        if (parsed.premioTrabalhador !== undefined) {
-          currentSplit = Number(parsed.premioTrabalhador);
-          setSplitTrab(currentSplit);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
     const loadData = async () => {
       try {
+        let currentSplit = 1.5;
+        const savedSplit = localStorage.getItem("ubt_split_config");
+        if (savedSplit) {
+          try {
+            const parsed = JSON.parse(savedSplit);
+            if (parsed.premioTrabalhador !== undefined) {
+              currentSplit = Number(parsed.premioTrabalhador);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        // Fetch from Supabase
+        const { data: dbSplitConfig, error: dbSplitError } = await supabase
+          .from("split_config")
+          .select("premio_trabalhador_pct")
+          .eq("id", 1)
+          .single();
+
+        if (!dbSplitError && dbSplitConfig) {
+          currentSplit = Number(dbSplitConfig.premio_trabalhador_pct);
+        }
+        setSplitTrab(currentSplit);
+
         const { data: dbUsers, error: errUsers } = await supabase.from("usuarios").select("*");
         if (errUsers) throw errUsers;
 
