@@ -80,6 +80,118 @@ export default function AdminWaitlistPage() {
   const [selectedCidade, setSelectedCidade] = useState("Todas");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLeadModal, setSelectedLeadModal] = useState<WaitlistItem | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+
+  const handleApproveLeads = async (leadIds: string[], motivo = "Aprovação operacional de fila de espera") => {
+    setUpdatingStatus(true);
+    try {
+      // 1. Fetch current admin user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const adminId = user?.id || null;
+
+      // 2. Call RPC to approve leads and return approved leads metadata
+      const { data, error } = await supabase.rpc("approve_waitlist_leads", {
+        p_lead_ids: leadIds,
+        p_admin_id: adminId,
+        p_motivo: motivo
+      });
+
+      if (error) throw error;
+
+      const approvedLeads = (data || []) as { id: string; nome: string; email: string; telefone: string; onboarding_url: string }[];
+      
+      let successCount = 0;
+      let commSuccessCount = 0;
+      let commFailedCount = 0;
+
+      // 3. Process individual approved leads for whatsapp-agent API trigger
+      for (const lead of approvedLeads) {
+        successCount++;
+        try {
+          const agentApiUrl = import.meta.env.VITE_WHATSAPP_AGENT_URL || "https://api.ubtsuperapp.com.br/mock-whatsapp-agent";
+          
+          const payload = {
+            event: "WAITLIST_APPROVED",
+            user_id: null,
+            waitlist_id: lead.id,
+            approved_at: new Date().toISOString(),
+            approved_by: adminId,
+            onboarding_url: lead.onboarding_url,
+            recipient: {
+              nome: lead.nome,
+              email: lead.email,
+              telefone: lead.telefone
+            }
+          };
+
+          let responseOk = false;
+          let errorMsg = "";
+
+          if (agentApiUrl.includes("mock") || agentApiUrl.includes("api.ubtsuperapp.com.br")) {
+            // Simulate API roundtrip delay
+            await new Promise(resolve => setTimeout(resolve, 300));
+            responseOk = true; // Mock success
+          } else {
+            try {
+              const res = await fetch(agentApiUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer sb_publishable_WpSlHCmKqb3WMbtT-wWU0w_drB6GksT"
+                },
+                body: JSON.stringify(payload)
+              });
+              responseOk = res.ok;
+              if (!res.ok) {
+                errorMsg = await res.text();
+              }
+            } catch (netErr: any) {
+              errorMsg = netErr.message || String(netErr);
+            }
+          }
+
+          if (responseOk) {
+            commSuccessCount++;
+            // Update communication_status in user_onboarding
+            await supabase
+              .from("user_onboarding")
+              .update({ communication_status: "sent" })
+              .eq("waitlist_id", lead.id);
+          } else {
+            throw new Error(errorMsg || "Erro desconhecido na API do whatsapp-agent");
+          }
+
+        } catch (commErr: any) {
+          console.warn(`Falha ao comunicar lead ${lead.nome} via whatsapp-agent:`, commErr);
+          commFailedCount++;
+          
+          // Update communication_status with error details
+          await supabase
+            .from("user_onboarding")
+            .update({ 
+              communication_status: "failed",
+              communication_error: commErr.message || String(commErr)
+            })
+            .eq("waitlist_id", lead.id);
+        }
+      }
+
+      toast.show(
+        `Aprovados: ${successCount} lead(s). Comunicação: ${commSuccessCount} enviada(s), ${commFailedCount} com falha.`
+      );
+
+      // Clear selection
+      setSelectedLeadIds(new Set());
+      setSelectedLeadModal(null);
+      fetchLeads();
+      fetchStats();
+    } catch (err: any) {
+      console.error("Erro ao aprovar leads:", err);
+      toast.show("Erro ao aprovar leads: " + (err.message || err));
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -342,6 +454,51 @@ export default function AdminWaitlistPage() {
           </GhostButton>
         </div>
 
+        {selectedLeadIds.size > 0 && (
+          <div style={{ padding: "12px 20px", background: "rgba(43,110,232,0.06)", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#2B6EE8" }}>
+              {selectedLeadIds.size} lead(s) selecionado(s)
+            </span>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                disabled={updatingStatus}
+                onClick={() => {
+                  if (confirm(`Aprovar ${selectedLeadIds.size} lead(s) em lote?`)) {
+                    handleApproveLeads(Array.from(selectedLeadIds));
+                  }
+                }}
+                style={{
+                  background: "#0DB87E",
+                  color: "#fff",
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "none",
+                  cursor: "pointer"
+                }}
+              >
+                Aprovar Lote
+              </button>
+              <button
+                disabled={updatingStatus}
+                onClick={() => setSelectedLeadIds(new Set())}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #E2E8F0",
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  cursor: "pointer"
+                }}
+              >
+                Limpar Seleção
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
             Carregando fila de espera...
@@ -355,9 +512,26 @@ export default function AdminWaitlistPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans" }}>
               <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
                 <tr style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase" }}>
+                  <th style={{ padding: "12px 16px", width: 40 }}>
+                    <input
+                      type="checkbox"
+                      checked={leads.length > 0 && leads.every(l => selectedLeadIds.has(l.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedLeadIds(new Set([...selectedLeadIds, ...leads.map(l => l.id)]));
+                        } else {
+                          const newSelection = new Set(selectedLeadIds);
+                          leads.forEach(l => newSelection.delete(l.id));
+                          setSelectedLeadIds(newSelection);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    />
+                  </th>
                   <th style={{ padding: "12px 16px" }}>Nome</th>
                   <th style={{ padding: "12px 16px" }}>Cidade</th>
                   <th style={{ padding: "12px 16px" }}>Perfil</th>
+                  <th style={{ padding: "12px 16px" }}>Mercado Pago?</th>
                   <th style={{ padding: "12px 16px" }}>Origem / Indicação</th>
                   <th style={{ padding: "12px 16px" }}>UTM Source</th>
                   <th style={{ padding: "12px 16px" }}>Status</th>
@@ -368,6 +542,22 @@ export default function AdminWaitlistPage() {
               <tbody>
                 {leads.map((lead) => (
                   <tr key={lead.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedLeadIds.has(lead.id)}
+                        onChange={(e) => {
+                          const newSelection = new Set(selectedLeadIds);
+                          if (e.target.checked) {
+                            newSelection.add(lead.id);
+                          } else {
+                            newSelection.delete(lead.id);
+                          }
+                          setSelectedLeadIds(newSelection);
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{lead.nome}</div>
                       <div style={{ fontSize: 11, color: "#64748B" }}>{lead.email} | {lead.telefone}</div>
@@ -392,6 +582,15 @@ export default function AdminWaitlistPage() {
                         );
                       })()}
                     </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {lead.observacoes?.includes("Mercado Pago: Sim") || (lead as any).possui_conta_mercado_pago === true ? (
+                        <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Sim</Pill>
+                      ) : lead.observacoes?.includes("Mercado Pago: Não") || (lead as any).possui_conta_mercado_pago === false ? (
+                        <Pill bg="rgba(239,68,68,0.08)" color="#EF4444" size="sm">Não</Pill>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic" }}>—</span>
+                      )}
+                    </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B" }}>
                       {lead.origem === "direto" ? (
                         <span style={{ fontStyle: "italic", color: "#94A3B8" }}>Direto</span>
@@ -408,6 +607,7 @@ export default function AdminWaitlistPage() {
                       {lead.status === "novo" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Novo</Pill>}
                       {lead.status === "contatado" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Contatado</Pill>}
                       {lead.status === "arquivado" && <Pill bg="rgba(148,163,184,0.08)" color="#64748B" size="sm">Arquivado</Pill>}
+                      {lead.status === "approved" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Aprovado</Pill>}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B", whiteSpace: "nowrap" }}>
                       {lead.created_at_local}
@@ -526,6 +726,19 @@ export default function AdminWaitlistPage() {
                 </div>
               </div>
 
+              <div>
+                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
+                <div style={{ marginTop: 4 }}>
+                  {selectedLeadModal.observacoes?.includes("Mercado Pago: Sim") || (selectedLeadModal as any).possui_conta_mercado_pago === true ? (
+                    <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Sim</Pill>
+                  ) : selectedLeadModal.observacoes?.includes("Mercado Pago: Não") || (selectedLeadModal as any).possui_conta_mercado_pago === false ? (
+                    <Pill bg="rgba(239,68,68,0.08)" color="#EF4444">Não</Pill>
+                  ) : (
+                    <span style={{ fontSize: 13, color: "#64748B", fontStyle: "italic" }}>Não informado</span>
+                  )}
+                </div>
+              </div>
+
               {(selectedLeadModal.cep_moradia || selectedLeadModal.bairro_moradia || selectedLeadModal.bairro_trabalho) && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#F8FAFC", border: "1px solid #E2E8F0", padding: 12, borderRadius: 8 }}>
                   <div>
@@ -608,6 +821,28 @@ export default function AdminWaitlistPage() {
                     >
                       Arquivar
                     </button>
+                    {selectedLeadModal.status !== "approved" && (
+                      <button
+                        type="button"
+                        disabled={updatingStatus}
+                        onClick={() => handleApproveLeads([selectedLeadModal.id])}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: 11,
+                          borderRadius: 6,
+                          border: "1px solid #0DB87E",
+                          background: "#0DB87E",
+                          color: "#fff",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4
+                        }}
+                      >
+                        <CheckCircle size={12} /> Aprovar Lead
+                      </button>
+                    )}
                   </div>
                 </div>
 
