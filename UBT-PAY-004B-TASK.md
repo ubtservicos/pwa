@@ -1,0 +1,13 @@
+- `[x]` Validar identidade e acessibilidade do Supabase PROD (`bfqidoduceusbqlnrsol`)
+- `[x]` Confirmar região e estado limpo inicial (tabelas `[]`)
+- `[x]` Mapear e preparar migração `38_missing_tables_bootstrap.sql` para sanear lacunas do banco Legado
+- `[x]` Aplicar sequência completa de 42 migrations no banco de Produção
+- `[x]` Sincronizar split_config com as taxas oficiais PO (Prestador: 90%, UBT: 5%, etc.)
+- `[x]` Sincronizar system_settings em Produção (`taxa_ubt = 0.05`, etc.)
+- `[x]` Auditar RLS e RLS policies no banco de Produção
+- `[x]` Testar isolamento entre DEV/HOMOLOG e PROD
+- `[x]` Compilar e buildar aplicação front-end (`npm run build`)
+- `[x]` Executar e validar suíte de 23 testes unitários (`npx vitest run`)
+- `[x]` Gerar relatório técnico `UBT-PAY-004B-PRODUCTION-SUPABASE-BOOTSTRAP-REPORT.md`
+- `[x]` Gerar walkthrough `UBT-PAY-004B-WALKTHROUGH.md`
+- `[x]` Fechar Release Gate (STATUS = PASS / COMPLETE)
