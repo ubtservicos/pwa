@@ -26,10 +26,10 @@ export default function AdminSplitPage() {
 
   const [split, setSplit] = useState<Record<SplitKey, number>>({
     prestador: 90,
-    ubt: 4,
+    ubt: 5,
     comunidade: 2,
-    premioTrabalhador: 1.5,
-    premioConsumidor: 1.5,
+    premioTrabalhador: 1,
+    premioConsumidor: 1,
     padrinho: 1,
   });
   const [pixKeys, setPixKeys] = useState<Record<string, string>>({

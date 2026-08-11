@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { Key, Trash2, Plus, Info, Users, Gift, Star, Heart, AlertCircle, CreditCard, Shield } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -12,7 +13,211 @@ import { useSimpleToast } from "@/hooks/useToast2";
 import { maskCPF, maskPhone, maskCardNumber, maskExpiry, maskCNPJ } from "@/utils/masks";
 
 
-type PixKey = { id: string; tipo: "CPF" | "E-mail" | "Telefone"; valor: string };
+interface SegmentedSliderProps {
+  poolSize: number;
+  values: { comunidade: number; trabalhador: number; tomador: number; padrinho: number };
+  onChange: (newValues: { comunidade: number; trabalhador: number; tomador: number; padrinho: number }) => void;
+  theme: any;
+}
+
+const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSliderProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const colors = {
+    trabalhador: "#9B59B6",
+    tomador: "#E84040",
+    padrinho: "#0DB87E",
+    comunidade: "#2B6EE8",
+  };
+
+  const t = values.trabalhador;
+  const o = values.tomador;
+  const p = values.padrinho;
+  const c = values.comunidade;
+
+  const d1 = t;
+  const d2 = t + o;
+  const d3 = t + o + p;
+
+  const handleDrag = (handleIndex: number, clientX: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const percent = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    const rawVal = percent * poolSize;
+    const snapped = Math.round(rawVal * 2) / 2;
+    const minPct = 0.5;
+
+    if (handleIndex === 1) {
+      const minD1 = minPct;
+      const maxD1 = d2 - minPct;
+      const newD1 = Math.max(minD1, Math.min(snapped, maxD1));
+      onChange({
+        trabalhador: newD1,
+        tomador: Number((d2 - newD1).toFixed(1)),
+        padrinho: p,
+        comunidade: c,
+      });
+    } else if (handleIndex === 2) {
+      const minD2 = d1 + minPct;
+      const maxD2 = d3 - minPct;
+      const newD2 = Math.max(minD2, Math.min(snapped, maxD2));
+      onChange({
+        trabalhador: t,
+        tomador: Number((newD2 - d1).toFixed(1)),
+        padrinho: Number((d3 - newD2).toFixed(1)),
+        comunidade: c,
+      });
+    } else if (handleIndex === 3) {
+      const minD3 = d2 + minPct;
+      const maxD3 = poolSize - minPct;
+      const newD3 = Math.max(minD3, Math.min(snapped, maxD3));
+      onChange({
+        trabalhador: t,
+        tomador: o,
+        padrinho: Number((newD3 - d2).toFixed(1)),
+        comunidade: Number((poolSize - newD3).toFixed(1)),
+      });
+    }
+  };
+
+  const setupDrag = (handleIndex: number) => (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const isTouch = "touches" in e;
+    
+    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const clientX = "touches" in moveEvent ? (moveEvent as TouchEvent).touches[0].clientX : (moveEvent as MouseEvent).clientX;
+      handleDrag(handleIndex, clientX);
+    };
+
+    const onEnd = () => {
+      window.removeEventListener(isTouch ? "touchmove" : "mousemove", onMove);
+      window.removeEventListener(isTouch ? "touchend" : "mouseup", onEnd);
+    };
+
+    window.addEventListener(isTouch ? "touchmove" : "mousemove", onMove);
+    window.addEventListener(isTouch ? "touchend" : "mouseup", onEnd);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {[
+          { key: "trabalhador", label: "Prêmio Trabalhador", val: t, color: colors.trabalhador },
+          { key: "tomador", label: "Prêmio Tomador", val: o, color: colors.tomador },
+          { key: "padrinho", label: "Padrinho/Madrinha", val: p, color: colors.padrinho },
+          { key: "comunidade", label: "Associação", val: c, color: colors.comunidade },
+        ].map((item) => (
+          <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: item.color }} />
+            <span style={{ fontFamily: "DM Sans", fontSize: 13, color: theme.text, flex: 1 }}>{item.label}</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: theme.text }}>{item.val.toFixed(1).replace(".", ",")}%</span>
+          </div>
+        ))}
+      </div>
+
+      <div 
+        ref={containerRef}
+        style={{
+          position: "relative",
+          height: 36,
+          background: "#F1F5F9",
+          borderRadius: 12,
+          display: "flex",
+          overflow: "visible",
+          userSelect: "none"
+        }}
+      >
+        <div style={{ width: `${(t / poolSize) * 100}%`, background: colors.trabalhador, borderRadius: "12px 0 0 12px" }} />
+        <div style={{ width: `${(o / poolSize) * 100}%`, background: colors.tomador }} />
+        <div style={{ width: `${(p / poolSize) * 100}%`, background: colors.padrinho }} />
+        <div style={{ width: `${(c / poolSize) * 100}%`, background: colors.comunidade, borderRadius: "0 12px 12px 0" }} />
+
+        <button
+          type="button"
+          onMouseDown={setupDrag(1)}
+          onTouchStart={setupDrag(1)}
+          style={{
+            position: "absolute",
+            top: -4,
+            left: `calc(${(d1 / poolSize) * 100}% - 8px)`,
+            width: 16,
+            height: 44,
+            borderRadius: 4,
+            background: "#FFF",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            border: "1px solid #CBD5E1",
+            cursor: "col-resize",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            zIndex: 10,
+            outline: "none"
+          }}
+        >
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+        </button>
+
+        <button
+          type="button"
+          onMouseDown={setupDrag(2)}
+          onTouchStart={setupDrag(2)}
+          style={{
+            position: "absolute",
+            top: -4,
+            left: `calc(${(d2 / poolSize) * 100}% - 8px)`,
+            width: 16,
+            height: 44,
+            borderRadius: 4,
+            background: "#FFF",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            border: "1px solid #CBD5E1",
+            cursor: "col-resize",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            zIndex: 10,
+            outline: "none"
+          }}
+        >
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+        </button>
+
+        <button
+          type="button"
+          onMouseDown={setupDrag(3)}
+          onTouchStart={setupDrag(3)}
+          style={{
+            position: "absolute",
+            top: -4,
+            left: `calc(${(d3 / poolSize) * 100}% - 8px)`,
+            width: 16,
+            height: 44,
+            borderRadius: 4,
+            background: "#FFF",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            border: "1px solid #CBD5E1",
+            cursor: "col-resize",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            zIndex: 10,
+            outline: "none"
+          }}
+        >
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+type PixKey = { id: string; tipo: "CPF" | "E-mail" | "Telefone" | "CNPJ"; valor: string };
 type Card = { id: string; bandeira: string; final: string; vence: string };
 
 const SPLIT_ITEMS = [
@@ -32,7 +237,7 @@ const ConfigFinanceiroPage = () => {
   const [cards, setCards] = useState<Card[]>([]);
 
   const [showPixModal, setShowPixModal] = useState(false);
-  const [pixTipo, setPixTipo] = useState<"CPF" | "E-mail" | "Telefone">("CPF");
+  const [pixTipo, setPixTipo] = useState<"CPF" | "E-mail" | "Telefone" | "CNPJ">("CPF");
   const [pixValor, setPixValor] = useState("");
 
   const [showCardModal, setShowCardModal] = useState(false);
@@ -42,15 +247,26 @@ const ConfigFinanceiroPage = () => {
   const [cardCvv, setCardCvv] = useState("");
   const [cardCpfCnpj, setCardCpfCnpj] = useState("");
 
+  const [mpStatus, setMpStatus] = useState<"NOT_CONNECTED" | "CONNECTED" | "ERROR" | "TOKEN_EXPIRING" | "AUTHORIZATION_STARTED">("NOT_CONNECTED");
+  const [showMpRegisterModal, setShowMpRegisterModal] = useState(false);
+
   const [split, setSplit] = useState<Record<string, number>>({
     comunidade: 2,
-    trabalhador: 1.5,
-    tomador: 1.5,
+    trabalhador: 1,
+    tomador: 1,
     padrinho: 1,
   });
+  const [poolSize, setPoolSize] = useState(5.0);
+  const [prestadorPct, setPrestadorPct] = useState(90);
+  const [ubtPct, setUbtPct] = useState(5);
+  const [loadingSplit, setLoadingSplit] = useState(true);
 
-  const total = Object.values(split).reduce((a, b) => a + b, 0);
-  const totalRound = Math.round(total * 10) / 10;
+  const [providerAssoc, setProviderAssoc] = useState<any[]>([]);
+  const [allAssocs, setAllAssocs] = useState<any[]>([]);
+  const [showAssocModal, setShowAssocModal] = useState(false);
+  const [selectedServiceType, setSelectedServiceType] = useState("mototaxi");
+  const [selectedAssocId, setSelectedAssocId] = useState("");
+  const [changeReason, setChangeReason] = useState("");
 
   const detectCardBrand = (num: string): string => {
     const clean = num.replace(/\D/g, "");
@@ -67,15 +283,149 @@ const ConfigFinanceiroPage = () => {
       if (savedPix) setPixKeys(JSON.parse(savedPix));
       const savedCards = localStorage.getItem("ubt_cards_user");
       if (savedCards) setCards(JSON.parse(savedCards));
-      const savedSplit = localStorage.getItem("ubt_split_user");
-      if (savedSplit) setSplit(JSON.parse(savedSplit));
+      const savedMpStatus = localStorage.getItem("ubt_mp_status_user");
+      if (savedMpStatus) setMpStatus(savedMpStatus as any);
     } catch (e) {
       console.error(e);
     }
   }, []);
 
-  const updateSplit = (key: string, value: number) => {
-    setSplit({ ...split, [key]: value });
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const loadSplitAndAssociations = async () => {
+      setLoadingSplit(true);
+      try {
+        const { data: dbConfig } = await supabase
+          .from("split_config")
+          .select("*")
+          .eq("id", 1)
+          .single();
+
+        let baseP = 90;
+        let baseU = 5;
+        let baseC = 2;
+        let baseT = 1;
+        let baseO = 1;
+        let baseG = 1;
+
+        if (dbConfig) {
+          baseP = Number(dbConfig.prestador_pct);
+          baseU = Number(dbConfig.ubt_pct);
+          baseC = Number(dbConfig.comunidade_pct);
+          baseT = Number(dbConfig.premio_trabalhador_pct);
+          baseO = Number(dbConfig.premio_consumidor_pct);
+          baseG = Number(dbConfig.padrinho_pct);
+        }
+
+        setPrestadorPct(baseP);
+        setUbtPct(baseU);
+        const resolvedPool = baseC + baseT + baseO + baseG;
+        setPoolSize(resolvedPool);
+
+        const { data: customConfig } = await supabase
+          .from("provider_split_settings")
+          .select("*")
+          .eq("provider_id", user.uid)
+          .maybeSingle();
+
+        if (customConfig) {
+          const sumCustom = 
+            Number(customConfig.comunidade_pct) +
+            Number(customConfig.premio_trabalhador_pct) +
+            Number(customConfig.premio_consumidor_pct) +
+            Number(customConfig.padrinho_pct);
+
+          if (Math.abs(sumCustom - resolvedPool) < 0.01) {
+            setSplit({
+              comunidade: Number(customConfig.comunidade_pct),
+              trabalhador: Number(customConfig.premio_trabalhador_pct),
+              tomador: Number(customConfig.premio_consumidor_pct),
+              padrinho: Number(customConfig.padrinho_pct),
+            });
+          } else {
+            setSplit({ comunidade: baseC, trabalhador: baseT, tomador: baseO, padrinho: baseG });
+          }
+        } else {
+          setSplit({ comunidade: baseC, trabalhador: baseT, tomador: baseO, padrinho: baseG });
+        }
+
+        const { data: assocData } = await supabase
+          .from("provider_associations")
+          .select("service_type, association_id, associations(name)")
+          .eq("provider_id", user.uid);
+        
+        if (assocData) {
+          setProviderAssoc(assocData);
+        }
+
+        const { data: allAssocData } = await supabase
+          .from("associations")
+          .select("*")
+          .eq("is_active", true);
+
+        if (allAssocData) {
+          setAllAssocs(allAssocData);
+          if (allAssocData.length > 0) {
+            setSelectedAssocId(allAssocData[0].id);
+          }
+        }
+
+      } catch (err) {
+        console.error("Erro ao carregar configurações de split/associações:", err);
+      } finally {
+        setLoadingSplit(false);
+      }
+    };
+
+    loadSplitAndAssociations();
+  }, [user?.uid]);
+
+  const handleSaveSplit = async () => {
+    if (!user?.uid) return;
+    try {
+      const { error } = await supabase
+        .from("provider_split_settings")
+        .upsert({
+          provider_id: user.uid,
+          comunidade_pct: split.comunidade,
+          premio_trabalhador_pct: split.trabalhador,
+          premio_consumidor_pct: split.tomador,
+          padrinho_pct: split.padrinho,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "provider_id" });
+
+      if (error) throw error;
+      showToast("Configuração de split salva com sucesso! ✓");
+    } catch (err: any) {
+      console.error("Erro ao salvar split individual:", err);
+      showToast("Erro ao salvar: " + (err.message || err));
+    }
+  };
+
+  const handleRequestAssocChange = async () => {
+    if (!user?.uid) return;
+    try {
+      const current = providerAssoc.find(a => a.service_type === selectedServiceType);
+      const { error } = await supabase
+        .from("association_change_requests")
+        .insert({
+          provider_id: user.uid,
+          service_type: selectedServiceType,
+          current_association_id: current?.association_id || null,
+          requested_association_id: selectedAssocId,
+          reason: changeReason,
+          status: "pending"
+        });
+
+      if (error) throw error;
+      showToast("Solicitação de troca enviada para moderação! ✓");
+      setShowAssocModal(false);
+      setChangeReason("");
+    } catch (err: any) {
+      console.error("Erro ao enviar solicitação de troca:", err);
+      showToast("Erro ao enviar solicitação: " + (err.message || err));
+    }
   };
 
   const removePix = (id: string) => {
@@ -140,10 +490,7 @@ const ConfigFinanceiroPage = () => {
     showToast("Cartão adicionado via Mercado Pago! ✓");
   };
 
-  const handleSaveSplit = () => {
-    localStorage.setItem("ubt_split_user", JSON.stringify(split));
-    showToast("Distribuição da Taxa salva!");
-  };
+
 
   const showSplit =
     ["prestador", "cocoecia", "cocoecia-colaborador", "cocoecia-dirigentes", "admin"].includes(user.role) ||
@@ -337,88 +684,36 @@ const ConfigFinanceiroPage = () => {
             >
               <Info size={16} color="#0DB87E" style={{ flexShrink: 0, marginTop: 2 }} />
               <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0 }}>
-                Distribua os 6% da taxa de serviço UBT entre as categorias de benefício. Você sempre recebe 90% e a UBT 4%.
+                Você sempre recebe {prestadorPct}% e a UBT {ubtPct}%. Utilize o slider segmentado abaixo para redistribuir os {poolSize}% da taxa de benefícios conforme sua preferência:
               </p>
             </div>
 
-
-            {SPLIT_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const v = split[item.key];
-              return (
-                <SettingsGroup key={item.key}>
-                  <div style={{ padding: "16px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <Icon size={16} color={item.color} />
-                      <span
-                        style={{
-                          flex: 1,
-                          fontFamily: "DM Sans",
-                          fontSize: 14,
-                          color: t.text,
-                        }}
-                      >
-                        {item.label}
-                      </span>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0DB87E" }}>
-                        {v.toFixed(1).replace(".", ",")}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={6}
-                      step={0.5}
-                      value={v}
-                      onChange={(e) => updateSplit(item.key, Number(e.target.value))}
-                      style={{ width: "100%", marginTop: 10, accentColor: "#0DB87E" }}
-                    />
-                    <div
-                      style={{
-                        fontFamily: "DM Sans",
-                        fontSize: 11,
-                        color: t.muted,
-                        marginTop: 4,
-                      }}
-                    >
-                      ≈ R$ {(40 * (v / 100)).toFixed(2).replace(".", ",")} por corrida de R$ 40
-                    </div>
-                  </div>
-                </SettingsGroup>
-              );
-            })}
-
-            <div
-              style={{
-                background: t.surface,
-                borderRadius: 12,
-                padding: 14,
-                marginTop: 4,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle }}>Total:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {totalRound !== 6 && <AlertCircle size={14} color="#F5A623" />}
-                <span
-                  style={{
-                    fontFamily: "DM Sans",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: totalRound === 6 ? "#0DB87E" : "#F5A623",
-                  }}
-                >
-                  {totalRound.toFixed(1).replace(".", ",")}% / 6,0%
-                </span>
+            {loadingSplit ? (
+              <div style={{ padding: 24, textAlign: "center", color: t.subtle, fontFamily: "DM Sans" }}>
+                Carregando configurações financeiras...
               </div>
-            </div>
+            ) : (
+              <SettingsGroup>
+                <div style={{ padding: "20px" }}>
+                  <SegmentedPoolSlider
+                    poolSize={poolSize}
+                    values={{
+                      comunidade: split.comunidade,
+                      trabalhador: split.trabalhador,
+                      tomador: split.tomador,
+                      padrinho: split.padrinho,
+                    }}
+                    onChange={(newVal) => setSplit(newVal)}
+                    theme={t}
+                  />
+                </div>
+              </SettingsGroup>
+            )}
 
             <button
               type="button"
               onClick={handleSaveSplit}
-              disabled={totalRound !== 6}
+              disabled={loadingSplit}
               style={{
                 width: "100%",
                 padding: "14px",
@@ -429,12 +724,108 @@ const ConfigFinanceiroPage = () => {
                 fontFamily: "DM Sans",
                 fontSize: 15,
                 fontWeight: 600,
-                cursor: totalRound !== 6 ? "not-allowed" : "pointer",
-                opacity: totalRound !== 6 ? 0.5 : 1,
+                cursor: loadingSplit ? "not-allowed" : "pointer",
+                opacity: loadingSplit ? 0.5 : 1,
                 marginTop: 16,
               }}
             >
               Salvar distribuição
+            </button>
+
+            {/* ASSOCIATIONS SECTION */}
+            <div style={{ marginTop: 24 }}>
+              <SectionHeader>ASSOCIAÇÃO DE MORADORES</SectionHeader>
+            </div>
+            <div
+              style={{
+                background: "rgba(43,110,232,0.06)",
+                border: "1px solid rgba(43,110,232,0.15)",
+                borderRadius: 12,
+                padding: 14,
+                display: "flex",
+                gap: 10,
+                marginBottom: 16,
+              }}
+            >
+              <Users size={16} color="#2B6EE8" style={{ flexShrink: 0, marginTop: 2 }} />
+              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0 }}>
+                Vincule-se à associação de moradores do seu bairro para destinar a sua contribuição comunitária.
+              </p>
+            </div>
+
+            {providerAssoc.length === 0 ? (
+              <div style={{ padding: "16px 20px", background: t.surface, borderRadius: 12, textAlign: "center", color: t.muted, fontFamily: "DM Sans", fontSize: 14, border: `1px solid ${t.border}` }}>
+                Nenhuma associação vinculada.
+              </div>
+            ) : (
+              providerAssoc.map((pa) => (
+                <SettingsGroup key={pa.service_type}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px" }}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        background: "rgba(43,110,232,0.12)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Users size={20} color="#2B6EE8" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontFamily: "DM Sans",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: "#2B6EE8",
+                          background: "rgba(43,110,232,0.10)",
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          display: "inline-block",
+                          marginBottom: 4,
+                          textTransform: "uppercase"
+                        }}
+                      >
+                        {pa.service_type}
+                      </span>
+                      <p style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: t.text, margin: 0 }}>
+                        {pa.associations?.name || "Associação Vinculada"}
+                      </p>
+                    </div>
+                  </div>
+                </SettingsGroup>
+              ))
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (allAssocs.length > 0) {
+                  setSelectedAssocId(allAssocs[0].id);
+                }
+                setShowAssocModal(true);
+              }}
+              style={{
+                width: "100%",
+                border: "1.5px dashed rgba(43,110,232,0.40)",
+                borderRadius: 14,
+                padding: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                background: "transparent",
+                cursor: "pointer",
+                marginTop: 12
+              }}
+            >
+              <Plus size={18} color="#2B6EE8" />
+              <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#2B6EE8" }}>
+                Solicitar Troca / Vínculo de Associação
+              </span>
             </button>
           </>
         )}
@@ -754,6 +1145,123 @@ const ConfigFinanceiroPage = () => {
             fontWeight: 500,
             cursor: "pointer",
             marginTop: 12,
+          }}
+        >
+          Cancelar
+        </button>
+      </BottomSheet>
+
+      {/* ASSOCIATION CHANGE REQUEST SHEET */}
+      <BottomSheet open={showAssocModal} onClose={() => setShowAssocModal(false)}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: t.text, margin: 0 }}>
+          Solicitar Troca de Associação
+        </h2>
+        <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, marginTop: 10, lineHeight: 1.5 }}>
+          Selecione a nova associação de moradores à qual deseja se vincular e informe o motivo. Sua solicitação passará por aprovação administrativa.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
+          <label style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: t.text }}>Modalidade de Serviço</label>
+          <select
+            value={selectedServiceType}
+            onChange={(e) => setSelectedServiceType(e.target.value)}
+            style={{
+              fontFamily: "DM Sans",
+              fontSize: 14,
+              color: t.text,
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 8,
+              padding: "10px",
+              outline: "none",
+            }}
+          >
+            <option value="mototaxi">Mototáxi</option>
+            <option value="diarista">Diarista</option>
+            <option value="cocoecia">Coco&Cia</option>
+            <option value="ambulante">Ambulante</option>
+          </select>
+
+          <label style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: t.text }}>Associação Destino</label>
+          <select
+            value={selectedAssocId}
+            onChange={(e) => setSelectedAssocId(e.target.value)}
+            style={{
+              fontFamily: "DM Sans",
+              fontSize: 14,
+              color: t.text,
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 8,
+              padding: "10px",
+              outline: "none",
+            }}
+          >
+            {allAssocs.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+
+          <label style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: t.text }}>Justificativa</label>
+          <textarea
+            placeholder="Informe o motivo da troca..."
+            value={changeReason}
+            onChange={(e) => setChangeReason(e.target.value)}
+            rows={3}
+            style={{
+              fontFamily: "DM Sans",
+              fontSize: 14,
+              color: t.text,
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 8,
+              padding: "10px",
+              outline: "none",
+              resize: "none"
+            }}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRequestAssocChange}
+          disabled={!selectedAssocId || !changeReason.trim()}
+          style={{
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "#2B6EE8",
+            color: "#FFF",
+            border: "none",
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: (!selectedAssocId || !changeReason.trim()) ? "not-allowed" : "pointer",
+            opacity: (!selectedAssocId || !changeReason.trim()) ? 0.5 : 1,
+            marginTop: 24,
+          }}
+        >
+          Enviar Solicitação
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowAssocModal(false);
+            setChangeReason("");
+          }}
+          style={{
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "transparent",
+            color: t.text,
+            border: `1px solid ${t.border}`,
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: "pointer",
+            marginTop: 12,
+            marginBottom: 10,
           }}
         >
           Cancelar
