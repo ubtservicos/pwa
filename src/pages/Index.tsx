@@ -562,7 +562,7 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-[#030712] text-white font-sans overflow-x-hidden selection:bg-green selection:text-white">
+    <div className="min-h-screen bg-[#09090B] text-white font-sans overflow-x-hidden selection:bg-green selection:text-navy">
       
       {/* Background Interactive Particles Overlay */}
       <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none opacity-60" />
@@ -595,7 +595,7 @@ export default function Index() {
           
           <button 
             onClick={scrollToCta}
-            className="hidden md:inline-block px-6 py-2.5 rounded-full bg-green hover:bg-green-dark hover:shadow-lg hover:shadow-green/20 hover:scale-[1.03] active:scale-95 text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+            className="hidden md:inline-block px-6 py-2.5 rounded-full bg-green hover:bg-green-dark hover:shadow-lg hover:shadow-green/20 hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all"
           >
             Seja um Fundador
           </button>
@@ -631,7 +631,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <button
               onClick={handlePwaInstallClick}
-              className="px-5 py-2.5 rounded-full bg-green hover:bg-green-dark hover:scale-[1.03] active:scale-95 text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+              className="px-5 py-2.5 rounded-full bg-green hover:bg-green-dark hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all"
             >
               Instalar UBT
             </button>
@@ -661,7 +661,7 @@ export default function Index() {
           <a href="#faq-section" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-display font-bold text-white hover:text-green">FAQ</a>
           <button 
             onClick={() => { setIsMobileMenuOpen(false); scrollToCta(); }}
-            className="mt-4 px-8 py-3.5 rounded-full bg-green text-white font-display font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-green/20"
+            className="mt-4 px-8 py-3.5 rounded-full bg-green text-navy font-display font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-green/20"
           >
             Seja um Fundador
           </button>
@@ -721,7 +721,7 @@ export default function Index() {
               onClick={() => openVideoModal(0)}
               className="hidden w-full h-16 rounded-2xl font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all text-white items-center justify-center gap-3 hover:scale-[1.02] active:scale-95"
               style={{
-                background: "linear-gradient(#030712, #030712) padding-box, linear-gradient(to right, #005BFF, #22C55E) border-box",
+                background: "linear-gradient(#09090B, #09090B) padding-box, linear-gradient(to right, #005BFF, #22C55E) border-box",
                 border: "2px solid transparent"
               }}
             >
@@ -1332,7 +1332,7 @@ export default function Index() {
                 className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-[0.6rem] tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
                   isSubmitDisabled 
                     ? "bg-white/10 text-white/30 cursor-not-allowed" 
-                    : "bg-green hover:bg-green-dark active:scale-95 text-white shadow-lg shadow-green/20"
+                    : "bg-green hover:bg-green-dark active:scale-95 text-navy shadow-lg shadow-green/20"
                 }`}
               >
                 {isSubmitting ? "Enviando..." : "Quero ser um Fundador"}
@@ -1367,7 +1367,7 @@ export default function Index() {
           playsInline 
           className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#030712] via-transparent to-black z-10" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#09090B] via-transparent to-black z-10" />
         
         <div className="relative z-20 text-center px-6 max-w-2xl mx-auto flex flex-col items-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-mono text-green uppercase tracking-widest mb-6">
@@ -1461,7 +1461,7 @@ export default function Index() {
 
             <button
               onClick={() => setShowIosGuide(false)}
-              className="w-full py-3 rounded-full bg-green text-white font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
+              className="w-full py-3 rounded-full bg-green text-navy font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
             >
               Entendido
             </button>
@@ -1502,7 +1502,7 @@ export default function Index() {
 
             <button
               onClick={() => setShowGenericGuide(false)}
-              className="w-full py-3 rounded-full bg-green text-white font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
+              className="w-full py-3 rounded-full bg-green text-navy font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
             >
               Entendido
             </button>

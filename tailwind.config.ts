@@ -23,6 +23,12 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        bet: {
+          bg: "#09090B",
+          card: "#18181B",
+          border: "#27272A",
+          neon: "#00FF66",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
