@@ -90,8 +90,8 @@ import NotFound from "./pages/NotFound.tsx";
 import * as Sentry from "@sentry/react";
 
 
-const adminGuard = (el: React.ReactNode, allowedRoles?: string[]) => (
-  <AdminRoute allowedRoles={allowedRoles}>
+const adminGuard = (el: React.ReactNode, allowedRoles?: string[], permission?: string) => (
+  <AdminRoute allowedRoles={allowedRoles} permission={permission}>
     <AdminLayout>{el}</AdminLayout>
   </AdminRoute>
 );
