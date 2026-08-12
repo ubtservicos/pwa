@@ -1,19 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-
-export type RealUser = {
-  uid: string;
-  name: string;
-  email?: string;
-  role: "tomador" | "prestador" | "admin" | "cocoecia" | "cocoecia-colaborador" | "cocoecia-dirigentes";
-  plate?: string;
-  modalidade?: "carona_entrega" | "so_entrega" | "so_carona";
-  cpf?: string;
-  sexo?: "masculino" | "feminino" | string;
-  kycStatus?: string;
-  status?: string;
-  mototaxiActive?: boolean;
-};
+import { RealUser, RealUserRole } from "@/types/database.types";
 
 export const useCurrentUser = (): RealUser => {
   const [user, setUser] = useState<RealUser>({
@@ -54,7 +41,7 @@ export const useCurrentUser = (): RealUser => {
           uid: authUser.id,
           name: dbUser?.nome || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || "Usuário",
           email: authUser.email,
-          role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as any) || "tomador"),
+          role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
           kycStatus: authUser.user_metadata?.mototaxi_status === "kyc-pending" ? "approved" : (authUser.user_metadata?.mototaxi_status || "none"),
           modalidade: authUser.user_metadata?.modalidade_moto,
           plate: authUser.user_metadata?.placa_moto,
