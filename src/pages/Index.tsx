@@ -26,6 +26,7 @@ import {
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import { supabase } from "@/lib/supabase";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 
 interface FaqItemProps {
   question: string;
@@ -140,6 +141,25 @@ function parseUserAgent(userAgent: string) {
 }
 
 export default function Index() {
+  const { showInstallBtn, isStandalone, isIOS, hasNativePrompt, install } = usePwaInstall();
+  const [showIosGuide, setShowIosGuide] = useState(false);
+  const [showGenericGuide, setShowGenericGuide] = useState(false);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+
+  const handlePwaInstallClick = async () => {
+    trackEvent("pwa_install_click", "engagement");
+    if (isIOS) {
+      setShowIosGuide(true);
+      return;
+    }
+    if (!hasNativePrompt) {
+      setShowGenericGuide(true);
+      return;
+    }
+    const outcome = await install();
+    trackEvent("pwa_install_prompt_outcome", "engagement", { outcome });
+  };
+
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [activeVideoChapter, setActiveVideoChapter] = useState(0);
   const [activeChapter, setActiveChapter] = useState(0); // 0: Paraíso, 1: Quem Faz, 2: Conecta, 3: Ganham, 4: Fundador, 5: Iluminada
@@ -590,6 +610,41 @@ export default function Index() {
           </button>
         </div>
       </nav>
+
+      {/* PWA INSTALL BANNER */}
+      {showInstallBtn && !isBannerDismissed && (
+        <div className="fixed top-20 left-0 right-0 z-40 bg-[#0b1329]/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between gap-4 animate-fadeIn shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
+              <img src="/favicon.png" className="w-6 h-6 object-contain" alt="UBT" />
+            </div>
+            <div>
+              <h4 className="font-display font-bold text-xs sm:text-sm text-white">Tenha a UBT sempre à mão</h4>
+              <p className="text-[11px] text-white/70 hidden sm:block">
+                Instale a UBT no seu celular e acesse rapidamente a plataforma, como qualquer outro aplicativo.
+              </p>
+              <p className="text-[11px] text-white/70 sm:hidden">
+                Instale a UBT no seu celular para acesso rápido.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePwaInstallClick}
+              className="px-5 py-2.5 rounded-full bg-green hover:bg-green-dark hover:scale-[1.03] active:scale-95 text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+            >
+              Instalar UBT
+            </button>
+            <button
+              onClick={() => setIsBannerDismissed(true)}
+              className="p-2 text-white/60 hover:text-white transition-colors"
+              aria-label="Dispensar instalação"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Menu Drawer */}
       {isMobileMenuOpen && (
@@ -1053,15 +1108,36 @@ export default function Index() {
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-green/10 blur-[90px] pointer-events-none" />
 
           {submitSuccess ? (
-            <div className="text-center py-12 max-w-md mx-auto">
+            <div className="text-center py-12 max-w-md mx-auto px-4">
               <div className="w-20 h-20 rounded-full bg-green/10 border border-green/30 flex items-center justify-center text-green mx-auto mb-8 animate-bounce">
                 <CheckCircle2 size={40} />
               </div>
               <span className="text-[10px] tracking-[0.2em] font-mono text-green uppercase block mb-2">Sucesso no Cadastro</span>
-              <h3 className="font-display font-extrabold text-3xl text-white mb-4">Você é um Fundador!</h3>
-              <p className="text-sm text-white/70 leading-relaxed font-sans mb-8">
+              <h3 className="font-display font-extrabold text-3xl text-white mb-4">Você já é um Fundador da UBT! 🎉</h3>
+              <p className="text-sm text-white/70 leading-relaxed font-sans mb-6">
                 Parabéns, seu cadastro foi registrado com sucesso na nossa fila de espera pública. Juntos vamos construir uma Ubatuba muito mais próspera e conectada.
               </p>
+
+              {/* PWA Install CTA within Success Modal */}
+              <div className="mb-8 p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
+                {isStandalone ? (
+                  <p className="text-xs text-green font-semibold font-sans">
+                    A UBT já está instalada neste celular.
+                  </p>
+                ) : (
+                  <>
+                    <h4 className="font-display font-bold text-sm text-white mb-2">Deixe a UBT sempre à mão</h4>
+                    <p className="text-xs text-white/60 mb-4 font-sans">Instale a UBT no seu celular para acesso rápido.</p>
+                    <button
+                      onClick={handlePwaInstallClick}
+                      className="px-6 py-2.5 rounded-full bg-[#005BFF] hover:bg-[#005BFF]/90 hover:scale-[1.02] text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+                    >
+                      Instalar UBT
+                    </button>
+                  </>
+                )}
+              </div>
+
               <div className="p-4 rounded-xl bg-white/5 border border-white/5 text-[11px] text-white/40 leading-relaxed font-sans flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-green shrink-0" />
                 Seus dados estão protegidos nos termos estritos da Lei Geral de Proteção de Dados (LGPD).
@@ -1351,6 +1427,88 @@ export default function Index() {
       </footer>
 
       {/* Fullscreen Video Player Modal disabled per UBT-COMM-003 */}
+
+      {/* iOS/Safari Install Guide Modal */}
+      {showIosGuide && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/85 backdrop-blur-sm animate-fadeIn">
+          <div className="relative max-w-sm w-full bg-[#0b1329] border border-white/10 rounded-[32px] p-8 shadow-2xl text-center">
+            <button
+              onClick={() => setShowIosGuide(false)}
+              className="absolute top-4 right-4 p-2 text-white/60 hover:text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            
+            <div className="w-16 h-16 rounded-full bg-[#005BFF]/10 border border-[#005BFF]/30 flex items-center justify-center text-[#005BFF] mx-auto mb-6">
+              <Share2 className="w-8 h-8" />
+            </div>
+
+            <h3 className="font-display font-extrabold text-xl text-white mb-2">Como colocar a UBT no celular</h3>
+            <p className="text-xs text-white/70 leading-relaxed mb-6 font-sans">
+              Abra o menu de compartilhamento do Safari e escolha <strong>“Adicionar à Tela de Início”</strong> para colocar o ícone na tela inicial.
+            </p>
+
+            <div className="space-y-4 text-left text-xs text-white/80 mb-6 bg-white/5 p-4 rounded-2xl border border-white/5 font-sans">
+              <div className="flex gap-3">
+                <span className="font-mono text-green font-bold">1.</span>
+                <p>Toque no botão de compartilhamento (ícone de quadrado com seta para cima) na barra inferior do Safari.</p>
+              </div>
+              <div className="flex gap-3">
+                <span className="font-mono text-green font-bold">2.</span>
+                <p>Role o menu de compartilhamento para baixo e toque em <strong>"Adicionar à Tela de Início"</strong>. 📲</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowIosGuide(false)}
+              className="w-full py-3 rounded-full bg-green text-white font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Generic/Unsupported Install Guide Modal */}
+      {showGenericGuide && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/85 backdrop-blur-sm animate-fadeIn">
+          <div className="relative max-w-sm w-full bg-[#0b1329] border border-white/10 rounded-[32px] p-8 shadow-2xl text-center">
+            <button
+              onClick={() => setShowGenericGuide(false)}
+              className="absolute top-4 right-4 p-2 text-white/60 hover:text-white transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            
+            <div className="w-16 h-16 rounded-full bg-[#005BFF]/10 border border-[#005BFF]/30 flex items-center justify-center text-[#005BFF] mx-auto mb-6">
+              <HelpCircle className="w-8 h-8" />
+            </div>
+
+            <h3 className="font-display font-extrabold text-xl text-white mb-2">Como colocar a UBT no celular</h3>
+            <p className="text-xs text-white/70 leading-relaxed mb-6 font-sans">
+              Para instalar a UBT usando seu navegador atual:
+            </p>
+
+            <div className="space-y-4 text-left text-xs text-white/80 mb-6 bg-white/5 p-4 rounded-2xl border border-white/5 font-sans">
+              <div className="flex gap-3">
+                <span className="font-mono text-green font-bold">1.</span>
+                <p>Clique no ícone de opções do navegador (três pontinhos no canto superior ou inferior).</p>
+              </div>
+              <div className="flex gap-3">
+                <span className="font-mono text-green font-bold">2.</span>
+                <p>Selecione a opção <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>. 📲</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowGenericGuide(false)}
+              className="w-full py-3 rounded-full bg-green text-white font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Styled component styles for fade animations */}
       <style>{`
