@@ -68,18 +68,18 @@ export const useCurrentUser = (): RealUser => {
       }
     };
 
-    const fetchUser = async () => {
+    const fetchSession = async () => {
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser && active) {
-          await loadProfile(authUser);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && active) {
+          await loadProfile(session.user);
         }
       } catch (err) {
-        console.error("Erro em fetchUser:", err);
+        console.error("Erro em fetchSession:", err);
       }
     };
     
-    fetchUser();
+    fetchSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user && active) {

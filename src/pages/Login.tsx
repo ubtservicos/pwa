@@ -51,6 +51,7 @@ const Login = () => {
 
       if (error) {
         setLoginError(true);
+        showToast("Credenciais inválidas. Por favor, verifique seu e-mail e senha. ❌");
         trackEvent("login_failed", "ux", { reason: error.message });
         logSystem("WARNING", "AUTH", "login_submit", "failed", duration, error.message, error.status?.toString() || "AUTH_FAILED", { email });
       } else {

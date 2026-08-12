@@ -213,18 +213,7 @@ const DiaristaAgendarPage = () => {
       console.error("Erro ao salvar no Supabase:", e);
     }
 
-    // 2. Salvar no Firebase Realtime Database
-    try {
-      const db = (await import("@/lib/firebase")).db;
-      const { push, ref, set } = await import("firebase/database");
-      if (db && push && ref && set) {
-        const r = push(ref(db, "diarista_agendamentos"));
-        await set(r, payload);
-        if (r.key) agId = r.key;
-      }
-    } catch {
-      /* noop */
-    }
+
 
     // 3. Salvar no LocalStorage
     try {

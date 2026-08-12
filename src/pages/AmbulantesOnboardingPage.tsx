@@ -6,8 +6,6 @@ import FormFieldLight from "@/components/prestador/FormFieldLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 import { CATALOGO_PADRAO, type Produto } from "@/mocks/ambulantesProdutos";
 import { maskCPF } from "@/utils/masks";
-import { db } from "@/lib/firebase";
-import { ref, set } from "firebase/database";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { useEffect } from "react";
