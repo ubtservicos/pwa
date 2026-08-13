@@ -106,6 +106,11 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     .join("")
     .toUpperCase();
 
+  const filteredItems = NAV_ITEMS.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(role);
+  });
+
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
   const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/coco", "/admin/entidades", "/admin/conteudo"].includes(item.path));
