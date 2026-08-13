@@ -31,8 +31,18 @@ export default function LgpdConsentPage() {
     try {
       setSaving(true);
 
-      // Previne erro 23503 (Foreign Key Constraint) realizando um upsert silencioso do usuário logado
-      await supabase.from("usuarios").upsert({ id: user.uid }, { onConflict: "id" });
+      // Previne erro 23503 (Foreign Key Constraint) realizando um upsert do usuário logado com dados básicos
+      const { error: upsertError } = await supabase.from("usuarios").upsert({
+        id: user.uid,
+        nome: user.name || "Usuário UBT",
+        role: user.role || "tomador",
+        status: "active",
+      }, { onConflict: "id" });
+
+      if (upsertError) {
+        console.error("Erro no upsert de usuarios na pagina lgpd:", upsertError);
+        throw upsertError;
+      }
 
       const consentsToInsert = [
         {
