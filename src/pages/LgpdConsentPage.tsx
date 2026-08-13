@@ -31,6 +31,9 @@ export default function LgpdConsentPage() {
     try {
       setSaving(true);
 
+      // Previne erro 23503 (Foreign Key Constraint) realizando um upsert silencioso do usuário logado
+      await supabase.from("usuarios").upsert({ id: user.uid }, { onConflict: "id" });
+
       const consentsToInsert = [
         {
           user_id: user.uid,
@@ -72,13 +75,13 @@ export default function LgpdConsentPage() {
 
   return (
     <div
-      className="min-h-[100svh] bg-[#0A1128] text-white flex flex-col p-6"
+      className="min-h-[100svh] bg-[#09090B] text-white flex flex-col p-6 pb-32"
       style={{ fontFamily: "DM Sans" }}
     >
       {/* Header */}
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={28} color="#0DB87E" />
+          <ShieldCheck size={28} color="#00FF66" />
           <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700 }}>Privacidade UBT</span>
         </div>
         <button
@@ -115,7 +118,7 @@ export default function LgpdConsentPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
         
         {/* Termos de Uso */}
-        <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ background: "#18181B", border: "1px solid #27272A", borderRadius: 12, overflow: "hidden" }}>
           <button
             onClick={() => toggleSection("terms")}
             style={{
@@ -137,7 +140,7 @@ export default function LgpdConsentPage() {
             {openSection === "terms" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
           {openSection === "terms" && (
-            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid #27272A" }}>
               <p>Estes Termos de Uso regem o acesso e uso do UBT SuperApp no município de Ubatuba, SP. Ao aceitar, você concorda que:</p>
               <ul>
                 <li>O UBT atua como intermediador entre prestadores de serviço e clientes.</li>
@@ -149,7 +152,7 @@ export default function LgpdConsentPage() {
         </div>
 
         {/* Politica de Privacidade */}
-        <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ background: "#18181B", border: "1px solid #27272A", borderRadius: 12, overflow: "hidden" }}>
           <button
             onClick={() => toggleSection("privacy")}
             style={{
@@ -171,7 +174,7 @@ export default function LgpdConsentPage() {
             {openSection === "privacy" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
           {openSection === "privacy" && (
-            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid #27272A" }}>
               <p>Nossa Política de Privacidade detalha como coletamos e protegemos seus dados locacionais e cadastrais sob a LGPD:</p>
               <ul>
                 <li>Sua geolocalização é rastreada apenas em serviço ativo para fins de segurança e antifraude.</li>
@@ -183,7 +186,7 @@ export default function LgpdConsentPage() {
         </div>
 
         {/* Politica de Cookies */}
-        <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ background: "#18181B", border: "1px solid #27272A", borderRadius: 12, overflow: "hidden" }}>
           <button
             onClick={() => toggleSection("cookies")}
             style={{
@@ -205,7 +208,7 @@ export default function LgpdConsentPage() {
             {openSection === "cookies" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
           {openSection === "cookies" && (
-            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ padding: "0 16px 16px 16px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, maxHeight: 200, overflowY: "auto", borderTop: "1px solid #27272A" }}>
               <p>Utilizamos cookies estritamente necessários para manter sua sessão de login conectada de forma criptografada no navegador:</p>
               <ul>
                 <li>Cookies de segurança para autenticação via tokens JWT no Supabase Auth.</li>
@@ -224,7 +227,7 @@ export default function LgpdConsentPage() {
             type="checkbox"
             checked={acceptTerms}
             onChange={(e) => setAcceptTerms(e.target.checked)}
-            style={{ width: 18, height: 18, accentColor: "#0DB87E", cursor: "pointer" }}
+            style={{ width: 18, height: 18, accentColor: "#00FF66", cursor: "pointer" }}
           />
           <span>Li e aceito os <strong>Termos de Uso</strong></span>
         </label>
@@ -234,7 +237,7 @@ export default function LgpdConsentPage() {
             type="checkbox"
             checked={acceptPrivacy}
             onChange={(e) => setAcceptPrivacy(e.target.checked)}
-            style={{ width: 18, height: 18, accentColor: "#0DB87E", cursor: "pointer" }}
+            style={{ width: 18, height: 18, accentColor: "#00FF66", cursor: "pointer" }}
           />
           <span>Li e aceito a <strong>Política de Privacidade</strong></span>
         </label>
@@ -244,7 +247,7 @@ export default function LgpdConsentPage() {
             type="checkbox"
             checked={acceptCookies}
             onChange={(e) => setAcceptCookies(e.target.checked)}
-            style={{ width: 18, height: 18, accentColor: "#0DB87E", cursor: "pointer" }}
+            style={{ width: 18, height: 18, accentColor: "#00FF66", cursor: "pointer" }}
           />
           <span>Li e aceito a <strong>Política de Cookies</strong></span>
         </label>
@@ -257,8 +260,8 @@ export default function LgpdConsentPage() {
         style={{
           width: "100%",
           height: 52,
-          background: acceptTerms && acceptPrivacy && acceptCookies ? "#0DB87E" : "rgba(255,255,255,0.06)",
-          color: acceptTerms && acceptPrivacy && acceptCookies ? "white" : "rgba(255,255,255,0.30)",
+          background: acceptTerms && acceptPrivacy && acceptCookies ? "#00FF66" : "rgba(255,255,255,0.06)",
+          color: acceptTerms && acceptPrivacy && acceptCookies ? "#09090B" : "rgba(255,255,255,0.30)",
           border: "none",
           borderRadius: 14,
           fontFamily: "Syne",
