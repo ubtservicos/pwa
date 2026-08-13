@@ -5,7 +5,25 @@ import { useCurrentUser } from "../../hooks/useCurrentUser";
 export const AssociacaoRoute = ({ children }: { children: React.ReactNode }) => {
   const user = useCurrentUser();
 
-  if (!user.uid) {
+  if (user.isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100svh",
+          background: "#09090B",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "DM Sans",
+          color: "rgba(255,255,255,0.70)",
+        }}
+      >
+        <span>Verificando credenciais...</span>
+      </div>
+    );
+  }
+
+  if (!user.isLoading && !user.uid) {
     return <Navigate to="/login" replace />;
   }
 

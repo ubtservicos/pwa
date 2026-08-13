@@ -7,13 +7,19 @@ export const useCurrentUser = (): RealUser => {
     uid: "",
     name: "Visitante",
     role: "tomador",
+    isLoading: true, // Inicia como true para sinalizar carregamento assíncrono
   });
 
   useEffect(() => {
     let active = true;
 
     const loadProfile = async (authUser: any) => {
-      if (!authUser) return;
+      if (!authUser) {
+        if (active) {
+          setUser((prev) => ({ ...prev, isLoading: false }));
+        }
+        return;
+      }
       try {
         const { data: dbUser } = await supabase
           .from("usuarios")
@@ -49,9 +55,13 @@ export const useCurrentUser = (): RealUser => {
           sexo: authUser.user_metadata?.sexo,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
+          isLoading: false, // Carregamento concluído com sucesso
         });
       } catch (err) {
         console.error("Erro ao carregar perfil do db:", err);
+        if (active) {
+          setUser((prev) => ({ ...prev, isLoading: false }));
+        }
       }
     };
 
@@ -60,9 +70,16 @@ export const useCurrentUser = (): RealUser => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && active) {
           await loadProfile(session.user);
+        } else {
+          if (active) {
+            setUser((prev) => ({ ...prev, isLoading: false }));
+          }
         }
       } catch (err) {
         console.error("Erro em fetchSession:", err);
+        if (active) {
+          setUser((prev) => ({ ...prev, isLoading: false }));
+        }
       }
     };
     
@@ -81,6 +98,7 @@ export const useCurrentUser = (): RealUser => {
           uid: "",
           name: "Visitante",
           role: "tomador",
+          isLoading: false, // Deslogado, carregamento finalizado
         });
       }
     });

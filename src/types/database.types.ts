@@ -101,6 +101,7 @@ export interface RealUser {
   kycStatus?: string;
   status?: string;
   mototaxiActive?: boolean;
+  isLoading?: boolean;
 }
 
 export interface CartItem {
