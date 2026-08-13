@@ -88,12 +88,21 @@ import LgpdGuard from "./components/app/LgpdGuard.tsx";
 import LgpdConsentPage from "./pages/LgpdConsentPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import * as Sentry from "@sentry/react";
+import { AssociacaoRoute } from "./components/associacao/AssociacaoRoute.tsx";
+import AssociacaoDashboard from "./pages/associacao/AssociacaoDashboard.tsx";
+import AssociacaoMembros from "./pages/associacao/AssociacaoMembros.tsx";
+import AssociacaoMensageria from "./pages/associacao/AssociacaoMensageria.tsx";
+import AssociacaoConfig from "./pages/associacao/AssociacaoConfig.tsx";
 
 
 const adminGuard = (el: React.ReactNode, allowedRoles?: string[], permission?: string) => (
   <AdminRoute allowedRoles={allowedRoles} permission={permission}>
     <AdminLayout>{el}</AdminLayout>
   </AdminRoute>
+);
+
+const associacaoGuard = (el: React.ReactNode) => (
+  <AssociacaoRoute>{el}</AssociacaoRoute>
 );
 
 const queryClient = new QueryClient();
@@ -150,6 +159,10 @@ const App = () => (
                 <Route path="/app/prestador/coco/online" element={<CocoOnlinePage />} />
                 <Route path="/app/gerenciar" element={<GerenciarPage />} />
                 <Route path="/app/gerenciar/transacao/:id" element={<TransacaoDetailPage />} />
+                <Route path="/app/associacao/dashboard" element={associacaoGuard(<AssociacaoDashboard />)} />
+                <Route path="/app/associacao/membros" element={associacaoGuard(<AssociacaoMembros />)} />
+                <Route path="/app/associacao/mensageria" element={associacaoGuard(<AssociacaoMensageria />)} />
+                <Route path="/app/associacao/config" element={associacaoGuard(<AssociacaoConfig />)} />
               </Route>
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin" element={adminGuard(<AdminDashboardPage />)} />

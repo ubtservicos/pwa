@@ -72,7 +72,7 @@ export interface Database {
   };
 }
 
-export type RealUserRole = "tomador" | "prestador" | "admin" | "cocoecia" | "cocoecia-colaborador" | "cocoecia-dirigentes";
+export type RealUserRole = "tomador" | "prestador" | "admin" | "cocoecia" | "cocoecia-colaborador" | "cocoecia-dirigentes" | "associacao";
 
 export interface RealUser {
   uid: string;
