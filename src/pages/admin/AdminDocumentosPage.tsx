@@ -172,8 +172,18 @@ export default function AdminDocumentosPage() {
       ) : documents.length === 0 ? (
         <Card className="p-8 text-center bg-[#18181B] border-[#27272A] text-[#A1A1AA]">
           <FileText size={48} className="mx-auto mb-4 text-[#00FF66]" />
-          <p className="font-semibold text-lg text-white">Nenhum documento pendente</p>
-          <p className="text-sm mt-1">Todas as associações estão regulares.</p>
+          <p className="font-semibold text-lg text-white">Nenhum documento retornado do banco</p>
+          <p className="text-xs mt-1 text-white/40 max-w-md mx-auto">
+            A consulta ao Supabase retornou vazia. Certifique-se de que a tabela associacao_documentos possui registros e que as políticas RLS permitem a leitura para o seu usuário.
+          </p>
+          
+          <button
+            onClick={() => setDocuments(getDemoDocuments())}
+            className="mt-6 mx-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00FF66] text-[#09090B] hover:shadow-lg hover:shadow-[#00FF66]/20 transition-all flex items-center gap-1.5"
+          >
+            <AlertCircle size={14} />
+            Carregar Dados Demonstrativos (Mock)
+          </button>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
