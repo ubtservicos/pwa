@@ -79,18 +79,18 @@
     --gradient-resp: linear-gradient(to top, hsl(var(--navy) / 0.92) 0%, hsl(var(--navy) / 0.15) 70%);
 
     /* Admin panel (own theme — raw hex via var()) */
-    --admin-sidebar:  #0F172A;
-    --admin-bg:       #F1F5F9;
-    --admin-surface:  #FFFFFF;
-    --admin-border:   #E2E8F0;
-    --admin-text:     #0F172A;
-    --admin-subtle:   #475569;
-    --admin-muted:    #94A3B8;
-    --admin-green:    #0DB87E;
-    --admin-red:      #E84040;
+    --admin-sidebar:  #18181B;
+    --admin-bg:       #09090B;
+    --admin-surface:  #18181B;
+    --admin-border:   #27272A;
+    --admin-text:     #F4F4F5;
+    --admin-subtle:   #A1A1AA;
+    --admin-muted:    #71717A;
+    --admin-green:    #00FF66;
+    --admin-red:      #EF4444;
     --admin-amber:    #F5A623;
-    --admin-blue:     #2B6EE8;
-    --admin-purple:   #9B59B6;
+    --admin-blue:     #3B82F6;
+    --admin-purple:   #A855F7;
   }
 
   @keyframes admin-pulse {

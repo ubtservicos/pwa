@@ -21,8 +21,8 @@ export const Card: React.FC<
 
 export const PageTitle: React.FC<{ children: React.ReactNode; sub?: string }> = ({ children, sub }) => (
   <div style={{ marginBottom: 20 }}>
-    <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>{children}</h1>
-    {sub && <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", marginTop: 4 }}>{sub}</div>}
+    <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>{children}</h1>
+    {sub && <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginTop: 4 }}>{sub}</div>}
   </div>
 );
 
@@ -33,8 +33,8 @@ export const PrimaryButton: React.FC<
     {...rest}
     disabled={disabled}
     style={{
-      background: disabled ? "#94A3B8" : "#0DB87E",
-      color: "#fff",
+      background: disabled ? "var(--admin-muted)" : "var(--admin-green)",
+      color: "var(--admin-bg)",
       border: "none",
       borderRadius: 10,
       padding: "10px 18px",
@@ -57,8 +57,8 @@ export const GhostButton: React.FC<
     {...rest}
     style={{
       background: "transparent",
-      color: "#475569",
-      border: "1px solid #E2E8F0",
+      color: "var(--admin-subtle)",
+      border: "1px solid var(--admin-border)",
       borderRadius: 8,
       padding: "8px 14px",
       fontFamily: "DM Sans",
