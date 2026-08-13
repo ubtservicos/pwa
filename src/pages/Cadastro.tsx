@@ -17,7 +17,7 @@ import FormField from "@/components/auth/FormField";
 import PrimaryButton from "@/components/auth/PrimaryButton";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
-import { isValidEmail, maskCPF, maskPhone } from "@/utils/masks";
+import { isValidEmail, maskCPF, maskPhone, maskCNPJ } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
@@ -30,6 +30,12 @@ type FormState = {
   pix: string;
   senha: string;
   confirmarSenha: string;
+  role: "tomador" | "mototaxista" | "ambulante" | "associacao";
+  cnpj: string;
+  bairroMoradia: string;
+  bairroTrabalho: string;
+  praiasFrequenta: string[];
+  praiasAtende: string[];
 };
 
 type Strength = "fraca" | "razoavel" | "forte";
@@ -42,6 +48,16 @@ const getStrength = (senha: string): Strength | null => {
   if (hasDigit && hasLetter) return "forte";
   return "razoavel";
 };
+
+const BAIRROS_LIST = [
+  "Centro", "Itaguá", "Perequê-Açu", "Toninhas", "Praia Grande",
+  "Estufa I", "Estufa II", "Ipiranguinha", "Mato Dentro", "Marafunda"
+];
+
+const PRAIAS_LIST = [
+  "Praia Grande", "Tenório", "Toninhas", "Enseada", "Lázaro",
+  "Perequê-Açu", "Vermelha do Norte", "Itamambuca", "Ubatumirim", "Felix"
+];
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -68,6 +84,12 @@ const Cadastro = () => {
     pix: "",
     senha: "",
     confirmarSenha: "",
+    role: "tomador",
+    cnpj: "",
+    bairroMoradia: "",
+    bairroTrabalho: "",
+    praiasFrequenta: [],
+    praiasAtende: [],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPwd, setShowPwd] = useState(false);
@@ -80,20 +102,33 @@ const Cadastro = () => {
   const validate = (): boolean => {
     const next: Record<string, string> = {};
     if (!form.nome || form.nome.trim().length < 3) next.nome = "Mínimo 3 caracteres";
-    if (form.cpf.length !== 14) next.cpf = "CPF incompleto";
     if (form.telefone.replace(/\D/g, "").length < 10) next.telefone = "Telefone incompleto";
     if (!form.email) next.email = "Informe seu e-mail";
     else if (!isValidEmail(form.email)) next.email = "E-mail inválido";
-    if (!form.pix.trim()) next.pix = "Informe sua chave Pix";
     if (!form.senha) next.senha = "Informe uma senha";
     else if (form.senha.length < 8) next.senha = "Mínimo 8 caracteres";
     if (!form.confirmarSenha) next.confirmarSenha = "Confirme a senha";
     else if (form.senha !== form.confirmarSenha)
       next.confirmarSenha = "As senhas não coincidem";
+
+    // Conditional role validations
+    if (form.role === "associacao") {
+      if (form.cnpj.replace(/\D/g, "").length !== 14) {
+        next.cnpj = "CNPJ inválido";
+      }
+    } else {
+      if (form.cpf.length !== 14) next.cpf = "CPF incompleto";
+      if (!form.pix.trim()) next.pix = "Informe sua chave Pix";
+      if (!form.bairroMoradia) next.bairroMoradia = "Selecione o seu bairro de moradia";
+      
+      if (form.role === "tomador") {
+        if (!form.bairroTrabalho) next.bairroTrabalho = "Selecione o seu bairro de trabalho";
+      }
+    }
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
-
 
   const [searchParams] = useSearchParams();
 
@@ -113,9 +148,9 @@ const Cadastro = () => {
         options: {
           data: {
             full_name: form.nome,
-            cpf: form.cpf,
+            cpf: form.role === "associacao" ? null : form.cpf,
             telefone: form.telefone,
-            pix: form.pix,
+            pix: form.role === "associacao" ? null : form.pix,
             padrinho_id: referral || null,
           }
         }
@@ -128,21 +163,28 @@ const Cadastro = () => {
 
       if (data?.user) {
         trackEvent("signup_completed", { method: "email" }, data.user.id);
-      }
-
-      if (data?.user && referral) {
         const userId = data.user.id;
-        try {
-          await supabase
-            .from("profiles")
-            .update({ padrinho_id: referral })
-            .eq("id", userId);
-          await supabase
-            .from("usuarios")
-            .update({ padrinho_id: referral })
-            .eq("id", userId);
-        } catch (dbErr) {
-          console.error("Error setting padrinho in DB tables:", dbErr);
+        const mappedRole = form.role === "mototaxista" || form.role === "ambulante" ? "prestador" : form.role;
+
+        // Persist profile data explicitly with 'pending' status
+        const { error: dbError } = await supabase.from("usuarios").upsert({
+          id: userId,
+          nome: form.nome,
+          role: mappedRole,
+          cpf: form.role === "associacao" ? null : form.cpf,
+          telefone: form.telefone,
+          chave_pix: form.role === "associacao" ? null : form.pix,
+          status: "pending", // Created as pending for administrative review
+          padrinho_id: referral || null,
+          bairro_moradia: form.role === "associacao" ? null : form.bairroMoradia,
+          bairro_trabalho: form.role === "tomador" ? form.bairroTrabalho : null,
+          praias_frequenta: form.role === "tomador" ? form.praiasFrequenta : null,
+          praias_atende: form.role === "ambulante" ? form.praiasAtende : null,
+          cnpj: form.role === "associacao" ? form.cnpj : null
+        }, { onConflict: "id" });
+
+        if (dbError) {
+          console.error("Erro ao salvar perfil do usuario logado:", dbError);
         }
       }
 
@@ -196,26 +238,70 @@ const Cadastro = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4" noValidate>
+        {/* Dynamic Profile Selector */}
+        <div className="mb-2">
+          <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
+            Tipo de Perfil
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { key: "tomador", label: "Morador / Turista" },
+              { key: "mototaxista", label: "Mototaxista" },
+              { key: "ambulante", label: "Ambulante" },
+              { key: "associacao", label: "Associação B2B" }
+            ] as const).map(({ key, label }) => {
+              const sel = form.role === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => update("role", key)}
+                  className="rounded-xl p-3 text-left border transition-all"
+                  style={{
+                    background: sel ? "rgba(0, 255, 102, 0.08)" : "rgba(255, 255, 255, 0.04)",
+                    borderColor: sel ? "#00FF66" : "rgba(255, 255, 255, 0.1)",
+                  }}
+                >
+                  <span className="font-sans text-[13px] font-semibold text-white">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <FormField
-          label="Nome completo"
+          label={form.role === "associacao" ? "Razão Social da Entidade" : "Nome completo"}
           icon={User}
-          placeholder="Como você se chama?"
+          placeholder={form.role === "associacao" ? "Nome da entidade B2B" : "Como você se chama?"}
           autoComplete="name"
           value={form.nome}
           onChange={(e) => update("nome", e.target.value)}
           error={errors.nome}
         />
 
-        <FormField
-          label="CPF"
-          icon={CreditCard}
-          type="tel"
-          inputMode="numeric"
-          placeholder="000.000.000-00"
-          value={form.cpf}
-          onChange={(e) => update("cpf", maskCPF(e.target.value))}
-          error={errors.cpf}
-        />
+        {form.role === "associacao" ? (
+          <FormField
+            label="CNPJ"
+            icon={CreditCard}
+            type="tel"
+            inputMode="numeric"
+            placeholder="00.000.000/0000-00"
+            value={form.cnpj}
+            onChange={(e) => update("cnpj", maskCNPJ(e.target.value))}
+            error={errors.cnpj}
+          />
+        ) : (
+          <FormField
+            label="CPF"
+            icon={CreditCard}
+            type="tel"
+            inputMode="numeric"
+            placeholder="000.000.000-00"
+            value={form.cpf}
+            onChange={(e) => update("cpf", maskCPF(e.target.value))}
+            error={errors.cpf}
+          />
+        )}
 
         <FormField
           label="Telefone"
@@ -241,19 +327,122 @@ const Cadastro = () => {
           error={errors.email}
         />
 
-        <div>
-          <FormField
-            label="Chave Pix"
-            icon={Key}
-            placeholder="CPF, e-mail ou telefone"
-            value={form.pix}
-            onChange={(e) => update("pix", e.target.value)}
-            error={errors.pix}
-          />
-          <p className="mt-1.5 font-sans text-[11px] text-white/40">
-            Usada para receber seus pagamentos na plataforma
-          </p>
-        </div>
+        {form.role !== "associacao" && (
+          <div>
+            <FormField
+              label="Chave Pix"
+              icon={Key}
+              placeholder="CPF, e-mail ou telefone"
+              value={form.pix}
+              onChange={(e) => update("pix", e.target.value)}
+              error={errors.pix}
+            />
+            <p className="mt-1.5 font-sans text-[11px] text-white/40">
+              Usada para receber seus pagamentos na plataforma
+            </p>
+          </div>
+        )}
+
+        {/* Dynamic fields based on roles */}
+        {form.role !== "associacao" && (
+          <div>
+            <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
+              Bairro de Moradia
+            </label>
+            <select
+              value={form.bairroMoradia}
+              onChange={(e) => update("bairroMoradia", e.target.value)}
+              className="w-full h-[54px] rounded-xl px-4 bg-[#18181B] border border-[#27272A] text-white outline-none font-sans text-[14px]"
+            >
+              <option value="">Selecione o bairro...</option>
+              {BAIRROS_LIST.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            {errors.bairroMoradia && (
+              <p className="mt-1 text-red-500 text-[11px]">{errors.bairroMoradia}</p>
+            )}
+          </div>
+        )}
+
+        {form.role === "tomador" && (
+          <div>
+            <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
+              Bairro de Trabalho
+            </label>
+            <select
+              value={form.bairroTrabalho}
+              onChange={(e) => update("bairroTrabalho", e.target.value)}
+              className="w-full h-[54px] rounded-xl px-4 bg-[#18181B] border border-[#27272A] text-white outline-none font-sans text-[14px]"
+            >
+              <option value="">Selecione o bairro...</option>
+              {BAIRROS_LIST.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            {errors.bairroTrabalho && (
+              <p className="mt-1 text-red-500 text-[11px]">{errors.bairroTrabalho}</p>
+            )}
+          </div>
+        )}
+
+        {form.role === "tomador" && (
+          <div>
+            <label className="block font-sans text-[12px] font-semibold mb-2 text-white/70">
+              Praias que frequenta em Ubatuba
+            </label>
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-3 bg-[#18181B] border border-[#27272A] rounded-xl">
+              {PRAIAS_LIST.map((p) => {
+                const checked = form.praiasFrequenta.includes(p);
+                return (
+                  <label key={p} className="flex items-center gap-2 text-[13px] text-white/80 cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? form.praiasFrequenta.filter((x) => x !== p)
+                          : [...form.praiasFrequenta, p];
+                        update("praiasFrequenta", next);
+                      }}
+                      className="rounded border-[#27272A] text-[#00FF66] focus:ring-0 bg-[#09090B]"
+                    />
+                    <span>{p}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {form.role === "ambulante" && (
+          <div>
+            <label className="block font-sans text-[12px] font-semibold mb-2 text-white/70">
+              Praias que costuma atender
+            </label>
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-3 bg-[#18181B] border border-[#27272A] rounded-xl">
+              {PRAIAS_LIST.map((p) => {
+                const checked = form.praiasAtende.includes(p);
+                return (
+                  <label key={p} className="flex items-center gap-2 text-[13px] text-white/80 cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? form.praiasAtende.filter((x) => x !== p)
+                          : [...form.praiasAtende, p];
+                        update("praiasAtende", next);
+                      }}
+                      className="rounded border-[#27272A] text-[#00FF66] focus:ring-0 bg-[#09090B]"
+                    />
+                    <span>{p}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div>
           <FormField

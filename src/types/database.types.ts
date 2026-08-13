@@ -12,6 +12,11 @@ export interface Database {
           padrinho_id: string | null;
           status: string | null;
           created_at: string | null;
+          bairro_moradia: string | null;
+          bairro_trabalho: string | null;
+          praias_frequenta: string[] | null;
+          praias_atende: string[] | null;
+          cnpj: string | null;
         };
         Insert: {
           id: string;
@@ -23,6 +28,11 @@ export interface Database {
           padrinho_id?: string | null;
           status?: string | null;
           created_at?: string | null;
+          bairro_moradia?: string | null;
+          bairro_trabalho?: string | null;
+          praias_frequenta?: string[] | null;
+          praias_atende?: string[] | null;
+          cnpj?: string | null;
         };
         Update: {
           id?: string;
@@ -34,6 +44,11 @@ export interface Database {
           padrinho_id?: string | null;
           status?: string | null;
           created_at?: string | null;
+          bairro_moradia?: string | null;
+          bairro_trabalho?: string | null;
+          praias_frequenta?: string[] | null;
+          praias_atende?: string[] | null;
+          cnpj?: string | null;
         };
       };
       user_consents: {

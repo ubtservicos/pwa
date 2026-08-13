@@ -36,14 +36,29 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
           return;
         }
 
-        // Check user role from database to isolate association routes
+        // Check user role and status from database to isolate association routes and pending state
         const { data: dbUser } = await supabase
           .from("usuarios")
-          .select("role")
+          .select("role, status")
           .eq("id", authUser.id)
           .maybeSingle();
 
         const userRole = authUser.email === "ubt.servicos@gmail.com" ? "admin" : (dbUser?.role || "tomador");
+        const userStatus = dbUser?.status || "active";
+
+        if (userStatus === "pending") {
+          if (location.pathname !== "/app/pendente") {
+            if (active) {
+              setChecking(false);
+              navigate("/app/pendente", { replace: true });
+            }
+          } else {
+            if (active) {
+              setChecking(false);
+            }
+          }
+          return;
+        }
 
         if (userRole === "associacao") {
           if (!location.pathname.startsWith("/app/associacao/")) {

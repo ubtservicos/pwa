@@ -93,6 +93,7 @@ import AssociacaoDashboard from "./pages/associacao/AssociacaoDashboard.tsx";
 import AssociacaoMembros from "./pages/associacao/AssociacaoMembros.tsx";
 import AssociacaoMensageria from "./pages/associacao/AssociacaoMensageria.tsx";
 import AssociacaoConfig from "./pages/associacao/AssociacaoConfig.tsx";
+import PendingApprovalPage from "./pages/PendingApprovalPage.tsx";
 
 
 const adminGuard = (el: React.ReactNode, allowedRoles?: string[], permission?: string) => (
@@ -124,6 +125,7 @@ const App = () => (
               <Route path="/app/consentimento" element={<LgpdConsentPage />} />
 
               <Route element={<LgpdGuard />}>
+                <Route path="/app/pendente" element={<PendingApprovalPage />} />
                 <Route path="/app/home" element={<AppHome />} />
                 <Route path="/app/mototaxi" element={<MototaxiTomador />} />
                 <Route path="/app/prestador/home" element={<PrestadorHome />} />
