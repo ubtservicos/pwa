@@ -13,7 +13,7 @@ import {
   Eye,
   Settings
 } from "lucide-react";
-import { Card, PageTitle, Pill, PrimaryButton } from "@/components/admin/ui";
+import { Card, PageTitle, Pill, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -61,7 +61,7 @@ function parseMarkdown(text: string) {
   });
 }
 
-export default function WikiIndexPage() {
+export default function AdminWikiPage() {
   const toast = useAdminToast();
   const { userRole, hasPermission } = usePermissions();
   
@@ -229,7 +229,7 @@ export default function WikiIndexPage() {
 
   return (
     <div style={{ padding: 24, minHeight: "calc(100vh - 64px)", background: "#F8FAFC" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyBetween: "space-between", alignItems: "center", marginBottom: 20 }}>
         <PageTitle sub="Wiki oficial e base de conhecimento integrada sob restrição granular ACL">
           UBT Wiki / Conhecimento
         </PageTitle>

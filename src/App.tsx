@@ -80,7 +80,8 @@ import AdminConfiguracoesPage from "./pages/admin/AdminConfiguracoesPage.tsx";
 import AdminQualityCenterPage from "./pages/admin/AdminQualityCenterPage.tsx";
 import AdminSecurityCenterPage from "./pages/admin/AdminSecurityCenterPage.tsx";
 import AdminWaitlistPage from "./pages/admin/AdminWaitlistPage.tsx";
-import WikiIndexPage from "./pages/admin/WikiIndexPage.tsx";
+import AdminWikiPage from "./pages/admin/AdminWikiPage.tsx";
+import AdminAprovacoesPage from "./pages/admin/AdminAprovacoesPage.tsx";
 import CocoPage from "./pages/CocoPage.tsx";
 import CocoOnboardingPage from "./pages/CocoOnboardingPage.tsx";
 import CocoOnlinePage from "./pages/CocoOnlinePage.tsx";
@@ -198,7 +199,8 @@ const App = () => (
               <Route path="/admin/conteudo" element={adminGuard(<AdminConteudoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/coco" element={adminGuard(<AdminCocoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/wiki" element={adminGuard(<WikiIndexPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
+              <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
+              <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

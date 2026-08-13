@@ -58,6 +58,8 @@ export const NAV_ITEMS = [
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
   { icon: Recycle, label: "Côco & Cia", path: "/admin/coco", roles: ["operator", "admin", "super_admin"] },
   { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
+  { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
+  { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
 ];
 
 const sectionTitle = (path: string) => {
