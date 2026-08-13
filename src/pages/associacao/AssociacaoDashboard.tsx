@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { AssociacaoLayout } from "../../layouts/AssociacaoLayout";
-import { Users, TrendingUp, DollarSign, Wallet, Award, ArrowUpRight } from "lucide-react";
+import { Users, DollarSign, Award, ArrowUpRight, Calendar, BarChart2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { formatBRL } from "../../utils/ride";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+
+type TimeFilter = "hoje" | "semana" | "mes" | "personalizado";
 
 export default function AssociacaoDashboard() {
   const [stats, setStats] = useState({
@@ -11,11 +14,12 @@ export default function AssociacaoDashboard() {
     pendingMembersCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("mes");
 
+  // Load from database with mock fallback
   useEffect(() => {
     async function loadStats() {
       try {
-        // Query members status counters
         const { data: members, error: mError } = await supabase
           .from("associacao_membros")
           .select("status");
@@ -25,8 +29,6 @@ export default function AssociacaoDashboard() {
         const active = members?.filter((m) => m.status === "active").length || 0;
         const pending = members?.filter((m) => m.status === "pending").length || 0;
 
-        // Query or compute repasses from a config or mock
-        // Since we are mocking dynamic values, let's load what is in DB or insert defaults
         const activeCount = active || 24; // fallback mockup
         const pendingCount = pending || 3;
         const revenue = activeCount * 45.50; // B2B repasse simulation
@@ -38,7 +40,6 @@ export default function AssociacaoDashboard() {
         });
       } catch (e) {
         console.error(e);
-        // Fallback mock stats for presentation safety
         setStats({
           activeMembersCount: 48,
           totalRepasseAmount: 1254.80,
@@ -52,6 +53,45 @@ export default function AssociacaoDashboard() {
     loadStats();
   }, []);
 
+  // Dynamic Chart mock data based on TimeFilter
+  const getChartData = () => {
+    switch (timeFilter) {
+      case "hoje":
+        return [
+          { name: "08:00", repasses: 12, valor: 24.50 },
+          { name: "12:00", repasses: 28, valor: 56.80 },
+          { name: "16:00", repasses: 18, valor: 36.20 },
+          { name: "20:00", repasses: 32, valor: 64.90 },
+        ];
+      case "semana":
+        return [
+          { name: "Seg", repasses: 35, valor: 78.40 },
+          { name: "Ter", repasses: 48, valor: 104.20 },
+          { name: "Qua", repasses: 40, valor: 90.10 },
+          { name: "Qui", repasses: 55, valor: 121.50 },
+          { name: "Sex", repasses: 70, valor: 165.80 },
+          { name: "Sáb", repasses: 85, valor: 198.30 },
+          { name: "Dom", repasses: 60, valor: 134.70 },
+        ];
+      case "mes":
+        return [
+          { name: "Semana 1", repasses: 180, valor: 412.50 },
+          { name: "Semana 2", repasses: 210, valor: 485.20 },
+          { name: "Semana 3", repasses: 245, valor: 560.80 },
+          { name: "Semana 4", repasses: 290, valor: 685.40 },
+        ];
+      case "personalizado":
+        return [
+          { name: "Março", repasses: 850, valor: 1890.00 },
+          { name: "Abril", repasses: 920, valor: 2104.50 },
+          { name: "Maio", repasses: 1100, valor: 2540.80 },
+          { name: "Junho", repasses: 1050, valor: 2410.20 },
+          { name: "Julho", repasses: 1200, valor: 2854.60 },
+          { name: "Agosto", repasses: 1450, valor: 3412.80 },
+        ];
+    }
+  };
+
   const cardData = [
     {
       title: "Filiados Ativos",
@@ -62,7 +102,7 @@ export default function AssociacaoDashboard() {
       bg: "bg-[#18181B]",
     },
     {
-      title: "Repasses Recebidos (Mês)",
+      title: "Repasses Recebidos",
       value: formatBRL(stats.totalRepasseAmount),
       change: "+8.4% vs anterior",
       icon: DollarSign,
@@ -72,7 +112,7 @@ export default function AssociacaoDashboard() {
     {
       title: "Solicitações Pendentes",
       value: stats.pendingMembersCount,
-      change: "Necessita ação",
+      change: "Análise na central",
       icon: Award,
       iconColor: stats.pendingMembersCount > 0 ? "text-yellow-400" : "text-white/40",
       bg: "bg-[#18181B]",
@@ -92,9 +132,30 @@ export default function AssociacaoDashboard() {
               Painel institucional de monitoria e transparência de repasses.
             </p>
           </div>
-          <div className="bg-[#18181B] border border-[#27272A] px-4 py-2.5 rounded-xl flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66] animate-pulse" />
-            <span className="text-xs font-semibold text-white/80">Sincronizado com Supabase</span>
+
+          {/* Time Filter Tabs */}
+          <div className="flex items-center gap-1.5 bg-[#18181B] border border-[#27272A] p-1 rounded-xl">
+            {([
+              { key: "hoje", label: "Hoje" },
+              { key: "semana", label: "Semana" },
+              { key: "mes", label: "Mês" },
+              { key: "personalizado", label: "Histórico" }
+            ] as const).map(({ key, label }) => {
+              const active = timeFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTimeFilter(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    active
+                      ? "bg-[#00FF66] text-[#09090B]"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -112,7 +173,7 @@ export default function AssociacaoDashboard() {
                     <span className="text-xs font-semibold text-white/40 uppercase tracking-wide">
                       {card.title}
                     </span>
-                    <h3 className="text-3xl font-bold mt-2 font-display">
+                    <h3 className="text-3xl font-bold mt-2 font-display text-white">
                       {card.value}
                     </h3>
                   </div>
@@ -129,12 +190,55 @@ export default function AssociacaoDashboard() {
           })}
         </div>
 
-        {/* Chart mock / Middle container */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+        {/* Recharts Chart Container */}
+        <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <BarChart2 size={18} className="text-[#00FF66]" />
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700 }} className="margin-0 text-white">
+              Crescimento de Repasses (B2B Split)
+            </h3>
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={getChartData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis
+                  dataKey="name"
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => `R$${val}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "#18181B",
+                    borderColor: "#27272A",
+                    borderRadius: "12px",
+                    color: "#fff",
+                    fontFamily: "DM Sans",
+                    fontSize: "12px",
+                  }}
+                  cursor={{ fill: "rgba(255, 255, 255, 0.03)" }}
+                  formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, "Valor Recebido"]}
+                />
+                <Bar dataKey="valor" fill="#00FF66" radius={[6, 6, 0, 0]} barSize={timeFilter === "hoje" ? 40 : 30} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Middle container: History & Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Recent Repasses */}
           <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-6">
             <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700 }} className="margin-0 mb-4 text-white">
-              Histórico de Cashback B2B
+              Histórico de Payouts (Últimas Transações)
             </h3>
             <div className="flex flex-col gap-4">
               {[
@@ -166,11 +270,9 @@ export default function AssociacaoDashboard() {
               </p>
             </div>
             <div className="p-4 bg-[#09090B] border border-[#27272A] rounded-xl mt-4 flex items-center gap-3">
-              <Wallet size={20} className="text-[#00FF66]" />
-              <div>
-                <p className="text-xs text-white/40 margin-0 font-medium">Repasse Médio por Corrida</p>
-                <p className="text-sm font-bold text-white margin-0 mt-0.5">2% do valor total bruto</p>
-              </div>
+              <span className="text-xs text-white/40 font-medium block">
+                Fórmula de Repasse: 1% do valor das transações operacionais de prestadores vinculados.
+              </span>
             </div>
           </div>
         </div>

@@ -83,6 +83,32 @@ export interface Database {
           created_at?: string;
         };
       };
+      associacao_documentos: {
+        Row: {
+          id: string;
+          associacao_id: string;
+          tipo_documento: string;
+          status: 'pendente' | 'aprovado' | 'vencido';
+          data_validade: string | null;
+          url_arquivo: string | null;
+        };
+        Insert: {
+          id?: string;
+          associacao_id: string;
+          tipo_documento: string;
+          status?: 'pendente' | 'aprovado' | 'vencido';
+          data_validade?: string | null;
+          url_arquivo?: string | null;
+        };
+        Update: {
+          id?: string;
+          associacao_id?: string;
+          tipo_documento?: string;
+          status?: 'pendente' | 'aprovado' | 'vencido';
+          data_validade?: string | null;
+          url_arquivo?: string | null;
+        };
+      };
     };
   };
 }
