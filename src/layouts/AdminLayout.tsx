@@ -26,7 +26,8 @@ import {
   CheckCircle2,
   Shield,
   Settings,
-  BookOpen
+  BookOpen,
+  FileCheck
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -61,6 +62,7 @@ export const NAV_ITEMS = [
   { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
   { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
+  { icon: FileCheck, label: "Auditoria de Docs", path: "/app/admin/documentos", roles: ["admin", "super_admin"] },
 ];
 
 const sectionTitle = (path: string) => {

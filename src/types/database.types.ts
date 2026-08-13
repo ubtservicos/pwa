@@ -88,25 +88,28 @@ export interface Database {
           id: string;
           associacao_id: string;
           tipo_documento: string;
-          status: 'pendente' | 'aprovado' | 'vencido';
+          status: 'pendente' | 'aprovado' | 'vencido' | 'rejeitado';
           data_validade: string | null;
           url_arquivo: string | null;
+          justificativa_rejeicao: string | null;
         };
         Insert: {
           id?: string;
           associacao_id: string;
           tipo_documento: string;
-          status?: 'pendente' | 'aprovado' | 'vencido';
+          status?: 'pendente' | 'aprovado' | 'vencido' | 'rejeitado';
           data_validade?: string | null;
           url_arquivo?: string | null;
+          justificativa_rejeicao?: string | null;
         };
         Update: {
           id?: string;
           associacao_id?: string;
           tipo_documento?: string;
-          status?: 'pendente' | 'aprovado' | 'vencido';
+          status?: 'pendente' | 'aprovado' | 'vencido' | 'rejeitado';
           data_validade?: string | null;
           url_arquivo?: string | null;
+          justificativa_rejeicao?: string | null;
         };
       };
     };
