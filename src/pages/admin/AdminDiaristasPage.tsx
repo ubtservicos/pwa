@@ -71,15 +71,15 @@ export default function AdminDiaristasPage() {
 
   return (
     <div style={{ padding: 32 }}>
-      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: "0 0 20px" }}>
+      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 20px" }}>
         Diaristas - Materiais
       </h1>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 380px) 1fr", gap: 24 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
           <Card style={{ padding: 24 }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Adicionar Material Padrão</div>
-            <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569", marginTop: 4 }}>
+            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Adicionar Material Padrão</div>
+            <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4 }}>
               Este item aparecerá para as diaristas no onboarding.
             </div>
             
@@ -94,7 +94,7 @@ export default function AdminDiaristasPage() {
                 </select>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A" }}>R$</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)" }}>R$</span>
                 <input type="number" step="0.01" value={novoPreco} onChange={e => setNovoPreco(e.target.value)} placeholder="Preço médio" style={{...inputStyle, flex: 1}} />
               </div>
               <PrimaryButton onClick={addMaterial}>Adicionar</PrimaryButton>
@@ -104,7 +104,7 @@ export default function AdminDiaristasPage() {
 
         <Card style={{ padding: 24, minHeight: 480 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)", display: "flex", alignItems: "center", gap: 8 }}>
               <Sparkles size={18} color="#0DB87E" />
               Materiais Cadastrados
             </div>
@@ -115,13 +115,13 @@ export default function AdminDiaristasPage() {
           
           <div style={{ marginTop: 16 }}>
             {loading ? (
-              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#94A3B8", textAlign: "center", padding: "40px 0" }}>Carregando...</div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-muted)", textAlign: "center", padding: "40px 0" }}>Carregando...</div>
             ) : materiais.length === 0 ? (
-              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#94A3B8", textAlign: "center", padding: "40px 0" }}>Nenhum material encontrado ou tabela não criada.</div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-muted)", textAlign: "center", padding: "40px 0" }}>Nenhum material encontrado ou tabela não criada.</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
+                  <tr style={{ borderBottom: "1px solid var(--admin-border)" }}>
                     <th style={thStyle}>Item</th>
                     <th style={thStyle}>Categoria</th>
                     <th style={{...thStyle, textAlign: "right"}}>Preço Médio</th>
@@ -130,23 +130,23 @@ export default function AdminDiaristasPage() {
                 </thead>
                 <tbody>
                   {materiais.map(m => (
-                    <tr key={m.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                    <tr key={m.id} style={{ borderBottom: "1px solid var(--admin-bg)" }}>
                       <td style={tdStyle}>
                         <span style={{ fontSize: 18, marginRight: 8 }}>{m.emoji}</span>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 500 }}>{m.nome}</span>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>{m.nome}</span>
                       </td>
                       <td style={tdStyle}>
-                        <Pill bg="#F1F5F9" color="#475569" size="sm"><span style={{ textTransform: "capitalize" }}>{m.categoria}</span></Pill>
+                        <Pill bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm"><span style={{ textTransform: "capitalize" }}>{m.categoria}</span></Pill>
                       </td>
                       <td style={{...tdStyle, textAlign: "right"}}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>R$</span>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>R$</span>
                           <input 
                             type="number" 
                             step="0.01" 
                             defaultValue={m.preco_medio} 
                             onBlur={(e) => updatePreco(m.id, Number(e.target.value))}
-                            style={{ width: 60, border: "1px solid #E2E8F0", borderRadius: 6, padding: "4px 8px", fontFamily: "DM Sans", fontSize: 13, textAlign: "right" }}
+                            style={{ width: 60, border: "1px solid var(--admin-border)", borderRadius: 6, padding: "4px 8px", fontFamily: "DM Sans", fontSize: 13, textAlign: "right" }}
                           />
                         </div>
                       </td>
@@ -168,14 +168,14 @@ export default function AdminDiaristasPage() {
 }
 
 const inputStyle = {
-  background: "#F1F5F9",
-  border: "1px solid #E2E8F0",
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   height: 40,
   padding: "0 14px",
   fontFamily: "DM Sans",
   fontSize: 14,
-  color: "#0F172A",
+  color: "var(--admin-text)",
   outline: "none",
 };
 
@@ -183,7 +183,7 @@ const thStyle = {
   fontFamily: "DM Sans",
   fontSize: 12,
   fontWeight: 600,
-  color: "#94A3B8",
+  color: "var(--admin-muted)",
   textAlign: "left" as const,
   padding: "12px 8px",
 };

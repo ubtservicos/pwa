@@ -141,19 +141,19 @@ export default function AdminArbitragemPage() {
       const theme = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
       return { label: rule.label, ...theme };
     }
-    return { label: statusKey, bg: "rgba(148,163,184,0.12)", color: "#94A3B8", border: "rgba(148,163,184,0.25)" };
+    return { label: statusKey, bg: "rgba(148,163,184,0.12)", color: "var(--admin-muted)", border: "rgba(148,163,184,0.25)" };
   };
 
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Arbitragem</h1>
+        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Arbitragem</h1>
         <Pill bg="rgba(232,64,64,0.10)" color="#E84040" border="rgba(232,64,64,0.25)">
           {openCount} abertos
         </Pill>
       </div>
 
-      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid #E2E8F0", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid var(--admin-border)", marginBottom: 16 }}>
         {[
           { key: "open" as const, label: `Abertos (${openCount})` },
           { key: "closed" as const, label: `Histórico (${closedCount})` },
@@ -169,7 +169,7 @@ export default function AdminArbitragemPage() {
               fontFamily: "DM Sans",
               fontSize: 14,
               fontWeight: 600,
-              color: tab === t.key ? "#0DB87E" : "#475569",
+              color: tab === t.key ? "#0DB87E" : "var(--admin-subtle)",
               borderBottom: tab === t.key ? "2px solid #0DB87E" : "2px solid transparent",
               cursor: "pointer",
               marginBottom: -1,
@@ -184,7 +184,7 @@ export default function AdminArbitragemPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {/* Rules Grid */}
           <div>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 12 }}>
               Configuração de Status Ativos
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
@@ -199,7 +199,7 @@ export default function AdminArbitragemPage() {
                           {rule.label}
                         </Pill>
                         {isDefault && (
-                          <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: 8, fontFamily: "DM Sans" }}>
+                          <span style={{ fontSize: 10, color: "var(--admin-muted)", marginLeft: 8, fontFamily: "DM Sans" }}>
                             (Padrão)
                           </span>
                         )}
@@ -228,11 +228,11 @@ export default function AdminArbitragemPage() {
 
                     {/* Duration Field */}
                     <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#94A3B8", marginBottom: 6 }}>
+                      <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-muted)", marginBottom: 6 }}>
                         Duração padrão (dias):
                       </label>
                       {rule.key === "disabled" ? (
-                        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                           Ilimitado / Indefinido
                         </span>
                       ) : (
@@ -249,17 +249,17 @@ export default function AdminArbitragemPage() {
                             style={{
                               width: 90,
                               height: 32,
-                              background: "#F8FAFC",
-                              border: "1px solid #E2E8F0",
+                              background: "var(--admin-bg)",
+                              border: "1px solid var(--admin-border)",
                               borderRadius: 8,
                               padding: "0 10px",
                               fontFamily: "DM Sans",
                               fontSize: 13,
-                              color: "#0F172A",
+                              color: "var(--admin-text)",
                               outline: "none",
                             }}
                           />
-                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8" }}>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)" }}>
                             {rule.durationDays === null ? "dias indefinidos (Manual)" : "dias"}
                           </span>
                         </div>
@@ -267,8 +267,8 @@ export default function AdminArbitragemPage() {
                     </div>
 
                     {/* Restrictions Toggles */}
-                    <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 12 }}>
-                      <span style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#94A3B8", marginBottom: 10 }}>
+                    <div style={{ borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
+                      <span style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-muted)", marginBottom: 10 }}>
                         Bloqueios e Restrições Ativas:
                       </span>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -287,7 +287,7 @@ export default function AdminArbitragemPage() {
                               gap: 10,
                               fontFamily: "DM Sans",
                               fontSize: 13,
-                              color: "#475569",
+                              color: "var(--admin-subtle)",
                               cursor: "pointer",
                             }}
                           >
@@ -298,7 +298,7 @@ export default function AdminArbitragemPage() {
                               style={{
                                 width: 15,
                                 height: 15,
-                                border: "1px solid #E2E8F0",
+                                border: "1px solid var(--admin-border)",
                                 borderRadius: 4,
                                 cursor: "pointer",
                               }}
@@ -315,14 +315,14 @@ export default function AdminArbitragemPage() {
           </div>
 
           {/* Creation Form */}
-          <Card style={{ padding: 24, background: "#F8FAFC", border: "1px dashed #CBD5E1" }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+          <Card style={{ padding: 24, background: "var(--admin-bg)", border: "1px dashed var(--admin-border)" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
               Criar Novo Status Customizado
             </h3>
             
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
               <div>
-                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
                   Nome do Status
                 </label>
                 <input
@@ -333,20 +333,20 @@ export default function AdminArbitragemPage() {
                   style={{
                     width: "100%",
                     height: 38,
-                    background: "#FFFFFF",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 8,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 13,
-                    color: "#0F172A",
+                    color: "var(--admin-text)",
                     outline: "none",
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
                   Tema de Cor
                 </label>
                 <select
@@ -355,13 +355,13 @@ export default function AdminArbitragemPage() {
                   style={{
                     width: "100%",
                     height: 38,
-                    background: "#FFFFFF",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 8,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 13,
-                    color: "#0F172A",
+                    color: "var(--admin-text)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -376,7 +376,7 @@ export default function AdminArbitragemPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+                <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
                   Duração padrão (dias)
                 </label>
                 <input
@@ -388,13 +388,13 @@ export default function AdminArbitragemPage() {
                   style={{
                     width: "100%",
                     height: 38,
-                    background: "#FFFFFF",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 8,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 13,
-                    color: "#0F172A",
+                    color: "var(--admin-text)",
                     outline: "none",
                   }}
                 />
@@ -402,7 +402,7 @@ export default function AdminArbitragemPage() {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <span style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 10 }}>
+              <span style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 10 }}>
                 Restrições Aplicadas ao Status
               </span>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
@@ -421,7 +421,7 @@ export default function AdminArbitragemPage() {
                       gap: 8,
                       fontFamily: "DM Sans",
                       fontSize: 13,
-                      color: "#475569",
+                      color: "var(--admin-subtle)",
                       cursor: "pointer",
                     }}
                   >
@@ -453,33 +453,33 @@ export default function AdminArbitragemPage() {
             <div
               key={t.id}
               style={{
-                background: "#fff",
+                background: "var(--admin-bg)",
                 borderRadius: 14,
                 padding: 20,
-                border: "1px solid #E2E8F0",
-                borderLeft: `4px solid ${t.status === "open" ? "#E84040" : "#94A3B8"}`,
+                border: "1px solid var(--admin-border)",
+                borderLeft: `4px solid ${t.status === "open" ? "#E84040" : "var(--admin-muted)"}`,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <Pill bg="#F1F5F9" color="#475569" size="sm">
+                <Pill bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
                   {t.type}
                 </Pill>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)" }}>
                   {new Date(t.date).toLocaleDateString("pt-BR")}
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                 <User size={14} color="#2B6EE8" />
-                <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A" }}>{t.tomador}</span>
-                <span style={{ color: "#94A3B8" }}>↔</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "var(--admin-text)" }}>{t.tomador}</span>
+                <span style={{ color: "var(--admin-muted)" }}>↔</span>
                 <Bike size={14} color="#0DB87E" />
-                <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A" }}>{t.prestador}</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "var(--admin-text)" }}>{t.prestador}</span>
               </div>
               <div
                 style={{
                   fontFamily: "DM Sans",
                   fontSize: 13,
-                  color: "#475569",
+                  color: "var(--admin-subtle)",
                   marginTop: 6,
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -515,8 +515,8 @@ export default function AdminArbitragemPage() {
                     onClick={() => setSel(t)}
                     style={{
                       background: "transparent",
-                      border: "1px solid #E2E8F0",
-                      color: "#475569",
+                      border: "1px solid var(--admin-border)",
+                      color: "var(--admin-subtle)",
                       fontFamily: "DM Sans",
                       fontSize: 12,
                       borderRadius: 6,
@@ -531,7 +531,7 @@ export default function AdminArbitragemPage() {
             </div>
           ))}
           {list.length === 0 && (
-            <Card style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+            <Card style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
               Nenhum ticket {tab === "open" ? "aberto" : "fechado"}.
             </Card>
           )}
@@ -549,7 +549,7 @@ export default function AdminArbitragemPage() {
               height: "100vh",
               width: 440,
               maxWidth: "100vw",
-              background: "#fff",
+              background: "var(--admin-bg)",
               boxShadow: "-8px 0 30px rgba(0,0,0,0.15)",
               zIndex: 70,
               overflowY: "auto",
@@ -561,10 +561,10 @@ export default function AdminArbitragemPage() {
               aria-label="Fechar"
               style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#475569" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
+              <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>
                 Ticket #{sel.id}
               </span>
               <Pill
@@ -577,10 +577,10 @@ export default function AdminArbitragemPage() {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+              <div style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
                 Descrição completa
               </div>
-              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", lineHeight: 1.6 }}>{sel.description}</div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", lineHeight: 1.6 }}>{sel.description}</div>
             </div>
 
             <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -588,7 +588,7 @@ export default function AdminArbitragemPage() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <User size={14} color="#2B6EE8" />
-                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Tomador</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Tomador</span>
                   </div>
                   {tomadorUser && (() => {
                     const info = getStatusLabelAndColors(tomadorStatus);
@@ -604,7 +604,7 @@ export default function AdminArbitragemPage() {
                     );
                   })()}
                 </div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A", marginTop: 4 }}>{sel.tomador}</div>
+                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "var(--admin-text)", marginTop: 4 }}>{sel.tomador}</div>
                 {tomadorUser && (
                   <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
                     {tomadorStatus !== "active" && (
@@ -644,7 +644,7 @@ export default function AdminArbitragemPage() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Bike size={14} color="#0DB87E" />
-                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Prestador</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Prestador</span>
                   </div>
                   {prestadorUser && (() => {
                     const info = getStatusLabelAndColors(prestadorStatus);
@@ -660,7 +660,7 @@ export default function AdminArbitragemPage() {
                     );
                   })()}
                 </div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A", marginTop: 4 }}>{sel.prestador}</div>
+                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "var(--admin-text)", marginTop: 4 }}>{sel.prestador}</div>
                 {prestadorUser && (
                   <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
                     {prestadorStatus !== "active" && (
@@ -698,7 +698,7 @@ export default function AdminArbitragemPage() {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
+              <div style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
                 Valor em disputa
               </div>
               <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#E84040" }}>
@@ -715,13 +715,13 @@ export default function AdminArbitragemPage() {
                   style={{
                     width: "100%",
                     height: 100,
-                    background: "#F1F5F9",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "12px 14px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#0F172A",
+                    color: "var(--admin-text)",
                     resize: "none",
                     outline: "none",
                   }}

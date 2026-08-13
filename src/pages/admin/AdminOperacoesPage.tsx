@@ -283,7 +283,7 @@ export default function AdminOperacoesPage() {
       case "NO_DISPLACEMENT":
         return <span style={{ background: "rgba(43,110,232,0.08)", color: "#2B6EE8", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>Sem Deslocamento</span>;
       default:
-        return <span style={{ background: "#F1F5F9", color: "#64748B", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>{flag}</span>;
+        return <span style={{ background: "var(--admin-bg)", color: "var(--admin-subtle)", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>{flag}</span>;
     }
   };
 
@@ -305,50 +305,50 @@ export default function AdminOperacoesPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
               Pedidos & Corridas Ativos
               <HelpTooltip concept="admin.operacoes.corridas_ativas" />
             </span>
             <ShoppingBag size={20} color="#2B6EE8" />
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#0F172A", marginTop: 12 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "var(--admin-text)", marginTop: 12 }}>
             {loading ? "..." : stats.activePedidos}
           </div>
         </Card>
 
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1, display: "inline-flex", alignItems: "center" }}>
               Alertas de Ghost Ride
               <HelpTooltip concept="admin.operacoes.ghost_ride_alerts" />
             </span>
             <AlertTriangle size={20} color="#E84040" />
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: stats.highRiskRides > 0 ? "#E84040" : "#0F172A", marginTop: 12 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: stats.highRiskRides > 0 ? "#E84040" : "var(--admin-text)", marginTop: 12 }}>
             {loading ? "..." : stats.highRiskRides}
           </div>
         </Card>
 
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
               Carrinhos Ambulantes
             </span>
             <Shield size={20} color="#F5A623" />
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#0F172A", marginTop: 12 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "var(--admin-text)", marginTop: 12 }}>
             {loading ? "..." : stats.activeAmbulantes}
           </div>
         </Card>
 
         <Card style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
               Veículos Reciclagem
             </span>
             <Truck size={20} color="#0DB87E" />
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#0F172A", marginTop: 12 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "var(--admin-text)", marginTop: 12 }}>
             {loading ? "..." : stats.activeCaminhoes}
           </div>
         </Card>
@@ -358,28 +358,28 @@ export default function AdminOperacoesPage() {
         
         {/* Ghost Ride Audit Table */}
         <Card style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+          <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--admin-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Auditoria Antifraude: Corridas Recentes (Mototáxi)
             </h3>
-            <span style={{ fontSize: 12, color: "#64748B" }}>*Pagamentos nunca são bloqueados automaticamente</span>
+            <span style={{ fontSize: 12, color: "var(--admin-subtle)" }}>*Pagamentos nunca são bloqueados automaticamente</span>
           </div>
 
           {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#64748B" }}>
+            <div style={{ padding: 40, textAlign: "center", color: "var(--admin-subtle)" }}>
               Carregando auditoria de telemetria...
             </div>
           ) : recentRides.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#64748B" }}>
+            <div style={{ padding: 40, textAlign: "center", color: "var(--admin-subtle)" }}>
               Nenhuma corrida finalizada encontrada para auditoria locacional.
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                <thead style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)" }}>
                   <tr>
                     {["Corrida / Horário", "Dist. Estimada", "Dist. Real", "Vel. Média", "Flags de Risco", "Nível Risco", "Ações"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 1 }}>
+                      <th key={h} style={{ textAlign: "left", padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 1 }}>
                         {h}
                       </th>
                     ))}
@@ -392,22 +392,22 @@ export default function AdminOperacoesPage() {
                     const speed = r.average_speed_kmh ? Number(r.average_speed_kmh) : 0;
                     
                     return (
-                      <tr key={r.id} style={{ borderBottom: "1px solid #E2E8F0", background: isHigh ? "rgba(232,64,64,0.02)" : "transparent" }}>
+                      <tr key={r.id} style={{ borderBottom: "1px solid var(--admin-border)", background: isHigh ? "rgba(232,64,64,0.02)" : "transparent" }}>
                         <td style={{ padding: "16px 24px" }}>
-                          <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1E293B" }}>
+                          <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
                             #{r.id.slice(0, 8).toUpperCase()}
                           </span>
-                          <span style={{ display: "block", fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+                          <span style={{ display: "block", fontSize: 11, color: "var(--admin-muted)", marginTop: 2 }}>
                             {new Date(r.created_at).toLocaleString("pt-BR")}
                           </span>
                         </td>
-                        <td style={{ padding: "16px 24px", fontSize: 13, color: "#475569" }}>
+                        <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--admin-subtle)" }}>
                           {r.distance_km} km
                         </td>
-                        <td style={{ padding: "16px 24px", fontSize: 13, color: "#475569", fontWeight: 500 }}>
+                        <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--admin-subtle)", fontWeight: 500 }}>
                           {r.real_distance_km !== undefined ? `${r.real_distance_km} km` : "N/A"}
                         </td>
-                        <td style={{ padding: "16px 24px", fontSize: 13, fontWeight: speed > 120 ? 700 : 500, color: speed > 120 ? "#E84040" : "#475569" }}>
+                        <td style={{ padding: "16px 24px", fontSize: 13, fontWeight: speed > 120 ? 700 : 500, color: speed > 120 ? "#E84040" : "var(--admin-subtle)" }}>
                           {speed} km/h
                         </td>
                         <td style={{ padding: "16px 24px" }}>
@@ -418,7 +418,7 @@ export default function AdminOperacoesPage() {
                               ))}
                             </div>
                           ) : (
-                            <span style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic" }}>Nenhum alerta</span>
+                            <span style={{ fontSize: 12, color: "var(--admin-muted)", fontStyle: "italic" }}>Nenhum alerta</span>
                           )}
                         </td>
                         <td style={{ padding: "16px 24px" }}>{getRiskPill(r.risk_level)}</td>
@@ -426,13 +426,13 @@ export default function AdminOperacoesPage() {
                           <button
                             onClick={() => setSelectedRide(r)}
                             style={{
-                              background: "#F8FAFC",
-                              border: "1px solid #E2E8F0",
+                              background: "var(--admin-bg)",
+                              border: "1px solid var(--admin-border)",
                               borderRadius: 8,
                               padding: "6px 12px",
                               fontSize: 12,
                               fontWeight: 600,
-                              color: "#475569",
+                              color: "var(--admin-subtle)",
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center",
@@ -456,13 +456,13 @@ export default function AdminOperacoesPage() {
         
         {/* Realtime Live Logs feed */}
         <div>
-          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", marginBottom: 16 }}>
+          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
             Feed Operacional de Eventos ao Vivo
           </h3>
 
-          <Card style={{ padding: 24, background: "#fff" }}>
+          <Card style={{ padding: 24, background: "var(--admin-bg)" }}>
             {liveLogs.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: "#94A3B8" }}>
+              <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)" }}>
                 Aguardando eventos realtime do Supabase...
               </div>
             ) : (
@@ -477,10 +477,10 @@ export default function AdminOperacoesPage() {
                         alignItems: "flex-start",
                         gap: 16,
                         paddingBottom: 14,
-                        borderBottom: "1px solid #F1F5F9"
+                        borderBottom: "1px solid var(--admin-bg)"
                       }}
                     >
-                      <div style={{ fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap", paddingTop: 3 }}>
+                      <div style={{ fontSize: 11, color: "var(--admin-muted)", whiteSpace: "nowrap", paddingTop: 3 }}>
                         {new Date(log.timestamp).toLocaleTimeString("pt-BR")}
                       </div>
                       <div style={{ flexShrink: 0 }}>
@@ -489,18 +489,18 @@ export default function AdminOperacoesPage() {
                         </Pill>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: log.source === "antifraude" ? "#E84040" : "#1E293B" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: log.source === "antifraude" ? "#E84040" : "var(--admin-text)" }}>
                           {log.event}
                         </div>
                         {log.payload && (
                           <pre
                             style={{
-                              background: "#F8FAFC",
+                              background: "var(--admin-bg)",
                               padding: 10,
                               borderRadius: 8,
                               fontSize: 11,
                               fontFamily: "monospace",
-                              color: "#64748B",
+                              color: "var(--admin-subtle)",
                               marginTop: 6,
                               overflowX: "auto",
                               maxHeight: 100,
@@ -526,7 +526,7 @@ export default function AdminOperacoesPage() {
           onClick={() => setSelectedRide(null)}
         >
           <div 
-            style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, padding: 32 }}
+            style={{ background: "var(--admin-bg)", borderRadius: 16, width: "100%", maxWidth: 520, padding: 32 }}
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
@@ -536,45 +536,45 @@ export default function AdminOperacoesPage() {
             
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14, fontSize: 13 }}>
               <div>
-                <span style={{ color: "#64748B", display: "block", marginBottom: 2 }}>Origem GPS:</span>
-                <span style={{ color: "#1E293B", fontWeight: 500 }}>
+                <span style={{ color: "var(--admin-subtle)", display: "block", marginBottom: 2 }}>Origem GPS:</span>
+                <span style={{ color: "var(--admin-text)", fontWeight: 500 }}>
                   {selectedRide.origin ? `Lat: ${selectedRide.origin.lat}, Lng: ${selectedRide.origin.lng}` : "Não mapeado"}
                 </span>
               </div>
 
               <div>
-                <span style={{ color: "#64748B", display: "block", marginBottom: 2 }}>Destino GPS:</span>
-                <span style={{ color: "#1E293B", fontWeight: 500 }}>
+                <span style={{ color: "var(--admin-subtle)", display: "block", marginBottom: 2 }}>Destino GPS:</span>
+                <span style={{ color: "var(--admin-text)", fontWeight: 500 }}>
                   {selectedRide.destination ? `Lat: ${selectedRide.destination.lat}, Lng: ${selectedRide.destination.lng}` : "Não mapeado"}
                 </span>
               </div>
 
               <div>
-                <span style={{ color: "#64748B", display: "block", marginBottom: 4 }}>Telemetria Detalhada:</span>
-                <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14, border: "1px solid #F1F5F9", display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Telemetria Detalhada:</span>
+                <div style={{ background: "var(--admin-bg)", borderRadius: 12, padding: 14, border: "1px solid var(--admin-bg)", display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Distância Estimada:</span>
-                    <span style={{ fontWeight: 600, color: "#1E293B" }}>{selectedRide.distance_km} km</span>
+                    <span style={{ color: "var(--admin-subtle)" }}>Distância Estimada:</span>
+                    <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{selectedRide.distance_km} km</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Distância Real:</span>
-                    <span style={{ fontWeight: 600, color: "#1E293B" }}>{selectedRide.real_distance_km} km</span>
+                    <span style={{ color: "var(--admin-subtle)" }}>Distância Real:</span>
+                    <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{selectedRide.real_distance_km} km</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Velocidade Média:</span>
-                    <span style={{ fontWeight: 600, color: "#1E293B" }}>{selectedRide.average_speed_kmh} km/h</span>
+                    <span style={{ color: "var(--admin-subtle)" }}>Velocidade Média:</span>
+                    <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{selectedRide.average_speed_kmh} km/h</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#64748B" }}>Duração do Trajeto:</span>
-                    <span style={{ fontWeight: 600, color: "#1E293B" }}>{selectedRide.real_duration_min} min</span>
+                    <span style={{ color: "var(--admin-subtle)" }}>Duração do Trajeto:</span>
+                    <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{selectedRide.real_duration_min} min</span>
                   </div>
                 </div>
               </div>
 
               {selectedRide.trajectory_polyline && (
                 <div>
-                  <span style={{ color: "#64748B", display: "block", marginBottom: 2 }}>Polilinha do Trajeto:</span>
-                  <span style={{ fontFamily: "monospace", fontSize: 10, background: "#F1F5F9", padding: 6, borderRadius: 6, wordBreak: "break-all", display: "block", maxHeight: 60, overflowY: "auto" }}>
+                  <span style={{ color: "var(--admin-subtle)", display: "block", marginBottom: 2 }}>Polilinha do Trajeto:</span>
+                  <span style={{ fontFamily: "monospace", fontSize: 10, background: "var(--admin-bg)", padding: 6, borderRadius: 6, wordBreak: "break-all", display: "block", maxHeight: 60, overflowY: "auto" }}>
                     {selectedRide.trajectory_polyline}
                   </span>
                 </div>

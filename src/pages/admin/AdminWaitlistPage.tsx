@@ -333,38 +333,38 @@ export default function AdminWaitlistPage() {
 
       {/* KPI Cards Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Total Inscritos</span>
-          <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Total Inscritos</span>
+          <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
             {stats.total}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Moradores (Tomadores)</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Moradores (Tomadores)</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#0DB87E", marginTop: 4 }}>
             {stats.moradores}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Trabalhadores (Prestadores)</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Trabalhadores (Prestadores)</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#2B6EE8", marginTop: 4 }}>
             {stats.prestadores}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Turistas / Visitantes</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Turistas / Visitantes</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#F5A623", marginTop: 4 }}>
             {stats.visitantes}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Adesão por Indicação</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Adesão por Indicação</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#EC4899", marginTop: 4 }}>
-            {stats.com_referral} <span style={{ fontSize: 13, fontWeight: 500, color: "#94A3B8" }}>({stats.total > 0 ? Math.round((stats.com_referral / stats.total) * 100) : 0}%)</span>
+            {stats.com_referral} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--admin-muted)" }}>({stats.total > 0 ? Math.round((stats.com_referral / stats.total) * 100) : 0}%)</span>
           </div>
         </Card>
       </div>
@@ -374,11 +374,11 @@ export default function AdminWaitlistPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center" }}>
           {/* Perfil */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Perfil</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Perfil</label>
             <select
               value={selectedPerfil}
               onChange={(e) => { setSelectedPerfil(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             >
               <option value="Todos">Todos</option>
               <option value="morador">Morador / Tomador</option>
@@ -392,11 +392,11 @@ export default function AdminWaitlistPage() {
 
           {/* Status */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Status</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Status</label>
             <select
               value={selectedStatus}
               onChange={(e) => { setSelectedStatus(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             >
               <option value="Todos">Todos</option>
               <option value="novo">Novo</option>
@@ -407,11 +407,11 @@ export default function AdminWaitlistPage() {
 
           {/* Cidade */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Cidade</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Cidade</label>
             <select
               value={selectedCidade}
               onChange={(e) => { setSelectedCidade(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             >
               <option value="Todas">Todas</option>
               <option value="Ubatuba">Ubatuba</option>
@@ -421,14 +421,14 @@ export default function AdminWaitlistPage() {
 
           {/* Text Search */}
           <div style={{ flex: 2, minWidth: 220 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Pesquisar Nome / E-mail / Telefone</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Pesquisar Nome / E-mail / Telefone</label>
             <div style={{ position: "relative" }}>
-              <Search size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: 12 }} />
+              <Search size={14} color="var(--admin-muted)" style={{ position: "absolute", left: 10, top: 12 }} />
               <input
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                 placeholder="Pesquisar..."
-                style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+                style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
               />
             </div>
           </div>
@@ -437,12 +437,12 @@ export default function AdminWaitlistPage() {
 
       {/* Main Table Card */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
               Leads na Fila ({totalCount})
             </span>
-            <Pill bg="rgba(71,85,105,0.08)" color="#475569" size="sm">
+            <Pill bg="rgba(71,85,105,0.08)" color="var(--admin-subtle)" size="sm">
               Página {page + 1} de {totalPages}
             </Pill>
           </div>
@@ -455,7 +455,7 @@ export default function AdminWaitlistPage() {
         </div>
 
         {selectedLeadIds.size > 0 && (
-          <div style={{ padding: "12px 20px", background: "rgba(43,110,232,0.06)", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "12px 20px", background: "rgba(43,110,232,0.06)", borderBottom: "1px solid var(--admin-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#2B6EE8" }}>
               {selectedLeadIds.size} lead(s) selecionado(s)
             </span>
@@ -484,8 +484,8 @@ export default function AdminWaitlistPage() {
                 disabled={updatingStatus}
                 onClick={() => setSelectedLeadIds(new Set())}
                 style={{
-                  background: "#fff",
-                  border: "1px solid #E2E8F0",
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
                   padding: "6px 14px",
                   fontSize: 12,
                   fontWeight: 600,
@@ -500,18 +500,18 @@ export default function AdminWaitlistPage() {
         )}
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Carregando fila de espera...
           </div>
         ) : leads.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Nenhum inscrito na Fila de Espera com os parâmetros informados.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans" }}>
-              <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                <tr style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase" }}>
+              <thead style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)" }}>
+                <tr style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase" }}>
                   <th style={{ padding: "12px 16px", width: 40 }}>
                     <input
                       type="checkbox"
@@ -541,7 +541,7 @@ export default function AdminWaitlistPage() {
               </thead>
               <tbody>
                 {leads.map((lead) => (
-                  <tr key={lead.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                  <tr key={lead.id} style={{ borderBottom: "1px solid var(--admin-bg)" }}>
                     <td style={{ padding: "12px 16px" }}>
                       <input
                         type="checkbox"
@@ -559,10 +559,10 @@ export default function AdminWaitlistPage() {
                       />
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{lead.nome}</div>
-                      <div style={{ fontSize: 11, color: "#64748B" }}>{lead.email} | {lead.telefone}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{lead.nome}</div>
+                      <div style={{ fontSize: 11, color: "var(--admin-subtle)" }}>{lead.email} | {lead.telefone}</div>
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#334155" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {lead.cidade}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
@@ -588,28 +588,28 @@ export default function AdminWaitlistPage() {
                       ) : lead.observacoes?.includes("Mercado Pago: Não") || (lead as any).possui_conta_mercado_pago === false ? (
                         <Pill bg="rgba(239,68,68,0.08)" color="#EF4444" size="sm">Não</Pill>
                       ) : (
-                        <span style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic" }}>—</span>
+                        <span style={{ fontSize: 12, color: "var(--admin-muted)", fontStyle: "italic" }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)" }}>
                       {lead.origem === "direto" ? (
-                        <span style={{ fontStyle: "italic", color: "#94A3B8" }}>Direto</span>
+                        <span style={{ fontStyle: "italic", color: "var(--admin-muted)" }}>Direto</span>
                       ) : (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#EC4899" }}>
                           <Link size={12} /> {lead.origem?.slice(0, 8)}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#475569" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)" }}>
                       {lead.utm_source || "—"}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       {lead.status === "novo" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Novo</Pill>}
                       {lead.status === "contatado" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Contatado</Pill>}
-                      {lead.status === "arquivado" && <Pill bg="rgba(148,163,184,0.08)" color="#64748B" size="sm">Arquivado</Pill>}
+                      {lead.status === "arquivado" && <Pill bg="rgba(148,163,184,0.08)" color="var(--admin-subtle)" size="sm">Arquivado</Pill>}
                       {lead.status === "approved" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Aprovado</Pill>}
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)", whiteSpace: "nowrap" }}>
                       {lead.created_at_local}
                     </td>
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
@@ -619,8 +619,8 @@ export default function AdminWaitlistPage() {
                         style={{
                           padding: "5px 10px",
                           borderRadius: 6,
-                          border: "1px solid #E2E8F0",
-                          background: "#fff",
+                          border: "1px solid var(--admin-border)",
+                          background: "var(--admin-bg)",
                           color: "#2B6EE8",
                           fontSize: 12,
                           fontWeight: 600,
@@ -641,25 +641,25 @@ export default function AdminWaitlistPage() {
         )}
 
         {/* Server-Side Pagination Bar */}
-        <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifySelf: "stretch", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B" }}>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", background: "var(--admin-bg)", display: "flex", justifySelf: "stretch", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
             Mostrando {leads.length} de {totalCount} inscritos
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 12, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}
+              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 12, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}
             >
               Anterior
             </button>
-            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#0F172A", alignSelf: "center", fontWeight: 700 }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-text)", alignSelf: "center", fontWeight: 700 }}>
               {page + 1} / {totalPages}
             </span>
             <button
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 12, fontWeight: 600, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
+              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 12, fontWeight: 600, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
             >
               Próxima
             </button>
@@ -675,38 +675,38 @@ export default function AdminWaitlistPage() {
               onClick={() => setSelectedLeadModal(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
               Detalhes do Lead
             </h3>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: "DM Sans" }}>
               <div>
-                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Nome Completo</span>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>{selectedLeadModal.nome}</div>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Nome Completo</span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{selectedLeadModal.nome}</div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>E-mail</span>
-                  <div style={{ fontSize: 14, color: "#334155" }}>{selectedLeadModal.email}</div>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>E-mail</span>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.email}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Telefone</span>
-                  <div style={{ fontSize: 14, color: "#334155" }}>{selectedLeadModal.telefone}</div>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Telefone</span>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.telefone}</div>
                 </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Cidade</span>
-                  <div style={{ fontSize: 14, color: "#334155" }}>{selectedLeadModal.cidade}</div>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Cidade</span>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cidade}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
-                  <div style={{ fontSize: 14, color: "#334155", display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                     {(() => {
                       const perfilArr = Array.isArray(selectedLeadModal.perfil) ? selectedLeadModal.perfil : [selectedLeadModal.perfil];
                       return (
@@ -727,37 +727,37 @@ export default function AdminWaitlistPage() {
               </div>
 
               <div>
-                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
                 <div style={{ marginTop: 4 }}>
                   {selectedLeadModal.observacoes?.includes("Mercado Pago: Sim") || (selectedLeadModal as any).possui_conta_mercado_pago === true ? (
                     <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Sim</Pill>
                   ) : selectedLeadModal.observacoes?.includes("Mercado Pago: Não") || (selectedLeadModal as any).possui_conta_mercado_pago === false ? (
                     <Pill bg="rgba(239,68,68,0.08)" color="#EF4444">Não</Pill>
                   ) : (
-                    <span style={{ fontSize: 13, color: "#64748B", fontStyle: "italic" }}>Não informado</span>
+                    <span style={{ fontSize: 13, color: "var(--admin-subtle)", fontStyle: "italic" }}>Não informado</span>
                   )}
                 </div>
               </div>
 
               {(selectedLeadModal.cep_moradia || selectedLeadModal.bairro_moradia || selectedLeadModal.bairro_trabalho) && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "#F8FAFC", border: "1px solid #E2E8F0", padding: 12, borderRadius: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8 }}>
                   <div>
-                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>CEP Moradia</span>
-                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.cep_moradia || "—"}</div>
+                    <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>CEP Moradia</span>
+                    <div style={{ fontSize: 13, color: "var(--admin-subtle)", fontWeight: 700 }}>{selectedLeadModal.cep_moradia || "—"}</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Bairro Moradia</span>
-                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.bairro_moradia || "—"}</div>
+                    <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Bairro Moradia</span>
+                    <div style={{ fontSize: 13, color: "var(--admin-subtle)", fontWeight: 700 }}>{selectedLeadModal.bairro_moradia || "—"}</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: 10, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Bairro Trabalho</span>
-                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 700 }}>{selectedLeadModal.bairro_trabalho || "—"}</div>
+                    <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Bairro Trabalho</span>
+                    <div style={{ fontSize: 13, color: "var(--admin-subtle)", fontWeight: 700 }}>{selectedLeadModal.bairro_trabalho || "—"}</div>
                   </div>
                 </div>
               )}
 
               <div>
-                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>LGPD Consentimento</span>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>LGPD Consentimento</span>
                 <div style={{ fontSize: 13, color: "#0DB87E", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                   <ShieldCheck size={16} /> Aceito em {selectedLeadModal.created_at_local}
                 </div>
@@ -765,8 +765,8 @@ export default function AdminWaitlistPage() {
 
               {selectedLeadModal.observacoes && (
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Observações / Preferências</span>
-                  <div style={{ fontSize: 13, color: "#475569", background: "#F8FAFC", border: "1px solid #E2E8F0", padding: 10, borderRadius: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Observações / Preferências</span>
+                  <div style={{ fontSize: 13, color: "var(--admin-subtle)", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 10, borderRadius: 8, marginTop: 4 }}>
                     {selectedLeadModal.observacoes}
                   </div>
                 </div>
@@ -774,21 +774,21 @@ export default function AdminWaitlistPage() {
 
               {/* UTM & Origin Details */}
               <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14 }}>
-                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: 6 }}>Informações de Aquisição (UTMs)</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, background: "#F8FAFC", border: "1px solid #E2E8F0", padding: 12, borderRadius: 8, fontFamily: "monospace" }}>
-                  <div>Source: <span style={{ color: "#0F172A" }}>{selectedLeadModal.utm_source || "—"}</span></div>
-                  <div>Medium: <span style={{ color: "#0F172A" }}>{selectedLeadModal.utm_medium || "—"}</span></div>
-                  <div>Campaign: <span style={{ color: "#0F172A" }}>{selectedLeadModal.utm_campaign || "—"}</span></div>
-                  <div>Content: <span style={{ color: "#0F172A" }}>{selectedLeadModal.utm_content || "—"}</span></div>
-                  <div style={{ gridColumn: "span 2" }}>Referer: <span style={{ color: "#0F172A" }}>{selectedLeadModal.referer || "—"}</span></div>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: 6 }}>Informações de Aquisição (UTMs)</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8, fontFamily: "monospace" }}>
+                  <div>Source: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_source || "—"}</span></div>
+                  <div>Medium: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_medium || "—"}</span></div>
+                  <div>Campaign: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_campaign || "—"}</span></div>
+                  <div>Content: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_content || "—"}</span></div>
+                  <div style={{ gridColumn: "span 2" }}>Referer: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.referer || "—"}</span></div>
                   <div style={{ gridColumn: "span 2" }}>Indicação Padrinho: <span style={{ color: "#EC4899" }}>{selectedLeadModal.origem || "direto"}</span></div>
                 </div>
               </div>
 
               {/* Device Metadados */}
               <div>
-                <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Dados de Conexão (Anônimos)</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Dados de Conexão (Anônimos)</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Smartphone size={13} /> {selectedLeadModal.device_type} ({selectedLeadModal.os})</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Globe size={13} /> Browser: {selectedLeadModal.browser}</div>
                   <div style={{ gridColumn: "span 2", fontSize: 10, fontFamily: "monospace" }}>IP Hash (SHA-256): {selectedLeadModal.ip_hash}</div>
@@ -798,12 +798,12 @@ export default function AdminWaitlistPage() {
               {/* Status Update Options */}
               <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14, display: "flex", alignItems: "center", justifySelf: "stretch", justifyContent: "space-between" }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 4 }}>Alterar Status</span>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 4 }}>Alterar Status</span>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "novo"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "novo")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #E2E8F0", background: selectedLeadModal.status === "novo" ? "#F1F5F9" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "novo" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
                     >
                       Novo
                     </button>
@@ -817,7 +817,7 @@ export default function AdminWaitlistPage() {
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "arquivado"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "arquivado")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #E2E8F0", background: selectedLeadModal.status === "arquivado" ? "#F1F5F9" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "arquivado" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
                     >
                       Arquivar
                     </button>

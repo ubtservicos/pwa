@@ -93,7 +93,7 @@ export default function AdminKycListPage() {
   if (loading) {
     return (
       <div style={{ padding: 32, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ fontFamily: "DM Sans", color: "#94A3B8" }}>Carregando KYCs pendentes...</div>
+        <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando KYCs pendentes...</div>
       </div>
     );
   }
@@ -106,7 +106,7 @@ export default function AdminKycListPage() {
         style={{
           background: "none",
           border: "none",
-          color: "#475569",
+          color: "var(--admin-subtle)",
           fontFamily: "DM Sans",
           fontSize: 14,
           fontWeight: 600,
@@ -117,25 +117,25 @@ export default function AdminKycListPage() {
           marginBottom: 24,
           transition: "color 150ms",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#0F172A")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--admin-text)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--admin-subtle)")}
       >
         <ArrowLeft size={16} /> Voltar para o Dashboard
       </button>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
             Solicitações de KYC Pendentes
           </h1>
-          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#64748B", marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginTop: 4 }}>
             Lista de usuários aguardando validação de documentos para credenciamento.
           </p>
         </div>
 
         {/* Search */}
         <div style={{ position: "relative", width: 260 }}>
-          <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -143,13 +143,13 @@ export default function AdminKycListPage() {
             style={{
               width: "100%",
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 14px 0 38px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#0F172A",
+              color: "var(--admin-text)",
               outline: "none",
             }}
           />
@@ -158,13 +158,13 @@ export default function AdminKycListPage() {
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhuma solicitação de KYC pendente encontrada.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["Nome", "E-mail", "Data de Cadastro", "Categoria Pretendida", "Ações"].map((h) => (
                     <th
@@ -175,7 +175,7 @@ export default function AdminKycListPage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 1,
                       }}
@@ -190,22 +190,22 @@ export default function AdminKycListPage() {
                   <tr
                     key={u.id}
                     onClick={() => navigate(`/admin/kyc/${u.id}`)}
-                    style={{ borderBottom: "1px solid #E2E8F0", transition: "background 100ms", cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                    style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 100ms", cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--admin-bg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <td style={{ padding: "14px 20px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <Avatar name={u.name} />
-                        <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 500 }}>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>
                           {u.name}
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {u.email}
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {new Date(u.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
                     </td>
                     <td style={{ padding: "14px 20px" }}>

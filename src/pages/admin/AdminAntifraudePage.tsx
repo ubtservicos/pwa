@@ -177,8 +177,8 @@ export default function AdminAntifraudePage() {
             <ShieldAlert size={24} color="#2B6EE8" />
           </div>
           <div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#0F172A" }}>{totalAlerts}</div>
-            <div style={{ fontSize: 13, color: "#64748B" }}>Alertas Totais</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--admin-text)" }}>{totalAlerts}</div>
+            <div style={{ fontSize: 13, color: "var(--admin-subtle)" }}>Alertas Totais</div>
           </div>
         </Card>
         
@@ -188,7 +188,7 @@ export default function AdminAntifraudePage() {
           </div>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "#E84040" }}>{criticalAlerts}</div>
-            <div style={{ fontSize: 13, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+            <div style={{ fontSize: 13, color: "var(--admin-subtle)", display: "inline-flex", alignItems: "center" }}>
               Críticos Pendentes (Saques bloqueados)
               <HelpTooltip concept="admin.antifraude.criticos_pendentes" />
             </div>
@@ -201,7 +201,7 @@ export default function AdminAntifraudePage() {
           </div>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "#0DB87E" }}>{resolvedAlerts}</div>
-            <div style={{ fontSize: 13, color: "#64748B" }}>Alertas Resolvidos</div>
+            <div style={{ fontSize: 13, color: "var(--admin-subtle)" }}>Alertas Resolvidos</div>
           </div>
         </Card>
       </div>
@@ -211,13 +211,13 @@ export default function AdminAntifraudePage() {
         
         {/* Type filter */}
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
             Tipo de Alerta
           </label>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            style={{ height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans" }}
+            style={{ height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans" }}
           >
             <option value="all">Todos os tipos</option>
             <option value="driver_client_distance">Passageiro Distante (&gt;100m)</option>
@@ -229,13 +229,13 @@ export default function AdminAntifraudePage() {
 
         {/* Status filter */}
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
             Status
           </label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            style={{ height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans" }}
+            style={{ height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans" }}
           >
             <option value="all">Todos os alertas</option>
             <option value="unresolved">Pendentes (Não Resolvidos)</option>
@@ -247,17 +247,17 @@ export default function AdminAntifraudePage() {
       {/* Table grid */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Carregando registros de telemetria...
           </div>
         ) : flags.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhuma divergência de telemetria encontrada.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["Data/Hora", "Gravidade", "Tipo de Alerta", "Motorista", "Passageiro", "Resolução", "Ações"].map((h) => (
                     <th
@@ -268,7 +268,7 @@ export default function AdminAntifraudePage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 0.5
                       }}
@@ -282,10 +282,10 @@ export default function AdminAntifraudePage() {
                 {flags.map((f) => {
                   const typeMeta = TYPE_LABELS[f.flag_type] || { label: f.flag_type, description: "" };
                   return (
-                    <tr key={f.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
+                    <tr key={f.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
                       
                       {/* Date/Time */}
-                      <td style={{ padding: "14px 18px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                      <td style={{ padding: "14px 18px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                         {new Date(f.created_at).toLocaleDateString("pt-BR")} às {new Date(f.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </td>
                       
@@ -300,20 +300,20 @@ export default function AdminAntifraudePage() {
                       
                       {/* Alert Type */}
                       <td style={{ padding: "14px 18px", fontFamily: "DM Sans" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{typeMeta.label}</div>
-                        <div style={{ fontSize: 11, color: "#94A3B8" }}>{typeMeta.description}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{typeMeta.label}</div>
+                        <div style={{ fontSize: 11, color: "var(--admin-muted)" }}>{typeMeta.description}</div>
                       </td>
 
                       {/* Driver */}
                       <td style={{ padding: "14px 18px", fontFamily: "DM Sans" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{f.driver_name}</div>
-                        <div style={{ fontSize: 11, color: "#94A3B8" }}>{f.driver_email}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{f.driver_name}</div>
+                        <div style={{ fontSize: 11, color: "var(--admin-muted)" }}>{f.driver_email}</div>
                       </td>
 
                       {/* Client */}
                       <td style={{ padding: "14px 18px", fontFamily: "DM Sans" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{f.client_name}</div>
-                        <div style={{ fontSize: 11, color: "#94A3B8" }}>{f.client_email}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{f.client_name}</div>
+                        <div style={{ fontSize: 11, color: "var(--admin-muted)" }}>{f.client_email}</div>
                       </td>
 
                       {/* Resolution State */}
@@ -321,7 +321,7 @@ export default function AdminAntifraudePage() {
                         {f.resolved_at ? (
                           <div>
                             <span style={{ fontSize: 11, fontWeight: 600, color: "#0DB87E", display: "block" }}>Resolvido</span>
-                            <span style={{ fontSize: 10, color: "#94A3B8" }}>por {f.resolved_by_name}</span>
+                            <span style={{ fontSize: 10, color: "var(--admin-muted)" }}>por {f.resolved_by_name}</span>
                           </div>
                         ) : (
                           <span style={{ fontSize: 11, fontWeight: 600, color: "#F5A623" }}>Pendente</span>
@@ -365,31 +365,31 @@ export default function AdminAntifraudePage() {
       {/* Details & Resolution Modal */}
       {selectedFlag && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "var(--admin-bg)", borderRadius: 16, width: "100%", maxWidth: 500, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyBetween: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                 Auditoria de Alerta Antifraude
               </h3>
               <button onClick={() => setSelectedFlag(null)} style={{ background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
-                <X size={20} color="#475569" />
+                <X size={20} color="var(--admin-subtle)" />
               </button>
             </div>
 
             {/* Meta info boxes */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={{ color: "#64748B" }}>ID da Corrida:</span>
-                <span style={{ fontFamily: "monospace", color: "#334155" }}>{selectedFlag.ride_id}</span>
+                <span style={{ color: "var(--admin-subtle)" }}>ID da Corrida:</span>
+                <span style={{ fontFamily: "monospace", color: "var(--admin-subtle)" }}>{selectedFlag.ride_id}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={{ color: "#64748B" }}>Alerta:</span>
-                <span style={{ fontWeight: 600, color: "#0F172A" }}>{TYPE_LABELS[selectedFlag.flag_type]?.label || selectedFlag.flag_type}</span>
+                <span style={{ color: "var(--admin-subtle)" }}>Alerta:</span>
+                <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{TYPE_LABELS[selectedFlag.flag_type]?.label || selectedFlag.flag_type}</span>
               </div>
 
               {/* Dynamic Metadata Details */}
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", marginBottom: 6 }}>Dados de Telemetria</div>
-                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", marginBottom: 6 }}>Dados de Telemetria</div>
+                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "var(--admin-subtle)", whiteSpace: "pre-wrap" }}>
                   {JSON.stringify(selectedFlag.metadata, null, 2)}
                 </pre>
               </div>
@@ -401,16 +401,16 @@ export default function AdminAntifraudePage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#0DB87E", fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
                   <Check size={16} /> Resolvido por Auditoria
                 </div>
-                <p style={{ fontSize: 13, color: "#475569", margin: 0 }}>
+                <p style={{ fontSize: 13, color: "var(--admin-subtle)", margin: 0 }}>
                   <strong>Notas:</strong> {selectedFlag.resolution_notes}
                 </p>
-                <span style={{ display: "block", fontSize: 11, color: "#94A3B8", marginTop: 8 }}>
+                <span style={{ display: "block", fontSize: 11, color: "var(--admin-muted)", marginTop: 8 }}>
                   Resolvido em {new Date(selectedFlag.resolved_at).toLocaleString("pt-BR")} por {selectedFlag.resolved_by_name}
                 </span>
               </div>
             ) : (
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
                   Notas de Resolução / Parecer da Auditoria
                 </label>
                 <textarea
@@ -420,7 +420,7 @@ export default function AdminAntifraudePage() {
                   style={{
                     width: "100%",
                     height: 80,
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 8,
                     padding: 10,
                     fontSize: 13,
@@ -434,7 +434,7 @@ export default function AdminAntifraudePage() {
                 <div style={{ display: "flex", gap: 12 }}>
                   <button
                     onClick={() => setSelectedFlag(null)}
-                    style={{ flex: 1, height: 40, border: "1px solid #E2E8F0", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13, fontFamily: "DM Sans" }}
+                    style={{ flex: 1, height: 40, border: "1px solid var(--admin-border)", borderRadius: 8, background: "var(--admin-bg)", cursor: "pointer", fontSize: 13, fontFamily: "DM Sans" }}
                   >
                     Voltar
                   </button>
@@ -444,7 +444,7 @@ export default function AdminAntifraudePage() {
                     style={{
                       flex: 1,
                       height: 40,
-                      background: !resolutionNotes.trim() || submitting ? "#94A3B8" : "#0DB87E",
+                      background: !resolutionNotes.trim() || submitting ? "var(--admin-muted)" : "#0DB87E",
                       color: "#fff",
                       border: "none",
                       borderRadius: 8,

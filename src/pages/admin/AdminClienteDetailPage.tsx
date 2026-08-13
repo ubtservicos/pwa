@@ -296,7 +296,7 @@ export default function AdminClienteDetailPage() {
   if (loading) {
     return (
       <div style={{ padding: 32, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ fontFamily: "DM Sans", color: "#94A3B8" }}>Carregando informações do usuário...</div>
+        <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando informações do usuário...</div>
       </div>
     );
   }
@@ -309,7 +309,7 @@ export default function AdminClienteDetailPage() {
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "var(--admin-subtle)",
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
@@ -324,7 +324,7 @@ export default function AdminClienteDetailPage() {
         </button>
         <Card style={{ padding: 40, textAlign: "center" }}>
           <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#E84040" }}>Usuário não encontrado</div>
-          <div style={{ fontFamily: "DM Sans", color: "#94A3B8", marginTop: 8 }}>O ID solicitado não existe no sistema.</div>
+          <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)", marginTop: 8 }}>O ID solicitado não existe no sistema.</div>
         </Card>
       </div>
     );
@@ -338,7 +338,7 @@ export default function AdminClienteDetailPage() {
         style={{
           background: "none",
           border: "none",
-          color: "#475569",
+          color: "var(--admin-subtle)",
           fontFamily: "DM Sans",
           fontSize: 14,
           fontWeight: 600,
@@ -349,8 +349,8 @@ export default function AdminClienteDetailPage() {
           marginBottom: 24,
           transition: "color 150ms",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#0F172A")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--admin-text)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--admin-subtle)")}
       >
         <ArrowLeft size={16} /> Voltar para clientes
       </button>
@@ -362,26 +362,26 @@ export default function AdminClienteDetailPage() {
         alignItems: "center",
         gap: 12,
         marginBottom: 24,
-        background: "#fff",
+        background: "var(--admin-bg)",
         padding: "12px 16px",
         borderRadius: 12,
-        border: "1px solid #E2E8F0",
+        border: "1px solid var(--admin-border)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
       }}>
-        <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#475569" }}>Período dos Dados:</span>
+        <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>Período dos Dados:</span>
         <select
           value={filterPeriod}
           onChange={(e) => setFilterPeriod(e.target.value)}
           style={{
             height: 36,
-            background: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            background: "var(--admin-bg)",
+            border: "1px solid var(--admin-border)",
             borderRadius: 8,
             padding: "0 12px",
             fontFamily: "DM Sans",
             fontSize: 13,
             fontWeight: 500,
-            color: "#0F172A",
+            color: "var(--admin-text)",
             outline: "none",
             cursor: "pointer",
           }}
@@ -399,7 +399,7 @@ export default function AdminClienteDetailPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Avatar name={user.name} size={64} />
           <div>
-            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: 12 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0, display: "flex", alignItems: "center", gap: 12 }}>
               {user.name}
               {userStatus !== "active" && (() => {
                 const rule = rules.find((r) => r.key === userStatus);
@@ -431,7 +431,7 @@ export default function AdminClienteDetailPage() {
         {/* Financial Highlights */}
         <div style={{ display: "flex", gap: 16 }}>
           <Card style={{ padding: "14px 20px", background: "rgba(13,184,126,0.04)", border: "1px solid rgba(13,184,126,0.15)" }}>
-            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
               Total Recebido
             </div>
             <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0DB87E", marginTop: 4 }}>
@@ -439,7 +439,7 @@ export default function AdminClienteDetailPage() {
             </div>
           </Card>
           <Card style={{ padding: "14px 20px", background: "rgba(232,64,64,0.03)", border: "1px solid rgba(232,64,64,0.10)" }}>
-            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
               Total Pago
             </div>
             <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#E84040", marginTop: 4 }}>
@@ -453,73 +453,73 @@ export default function AdminClienteDetailPage() {
         {/* Profile Details Card */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <Card style={{ padding: 24 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
               Dados do Usuário
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Mail size={16} color="#94A3B8" />
+                <Mail size={16} color="var(--admin-muted)" />
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>E-mail</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", marginTop: 1 }}>{user.email}</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>E-mail</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.email}</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Phone size={16} color="#94A3B8" />
+                <Phone size={16} color="var(--admin-muted)" />
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Telefone</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", marginTop: 1 }}>{user.phone}</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Telefone</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.phone}</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Calendar size={16} color="#94A3B8" />
+                <Calendar size={16} color="var(--admin-muted)" />
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Cadastro no Sistema</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", marginTop: 1 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Cadastro no Sistema</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>
                     {new Date(user.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
                   </div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Shield size={16} color="#94A3B8" />
+                <Shield size={16} color="var(--admin-muted)" />
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>ID do Usuário</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569", marginTop: 1 }}>{user.id}</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>ID do Usuário</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--admin-subtle)", marginTop: 1 }}>{user.id}</div>
                 </div>
               </div>
             </div>
           </Card>
 
           <Card style={{ padding: 24 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
               Prêmios & Coletivo (Doações)
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Tickets Prêmio 1/5</div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Tickets Prêmio 1/5</div>
+                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
                   {user.ticketsTrabalhador ?? 0}
                 </div>
               </div>
               <div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Tickets Prêmio 1/11</div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Tickets Prêmio 1/11</div>
+                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
                   {user.ticketsConsumidor ?? 0}
                 </div>
               </div>
-              <div style={{ gridColumn: "span 2", borderTop: "1px solid #F1F5F9", paddingTop: 12 }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>Coletivo (Doações por Entidade)</div>
+              <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", marginBottom: 6 }}>Coletivo (Doações por Entidade)</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(user.donations ?? []).map((d, idx) => (
                     <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569" }}>{d.entity}</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)" }}>{d.entity}</span>
                       <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#9B59B6" }}>
                         {formatBR(d.amount)}
                       </span>
                     </div>
                   ))}
                   {(user.donations ?? []).length === 0 && (
-                    <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>—</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>—</span>
                   )}
                 </div>
               </div>
@@ -528,19 +528,19 @@ export default function AdminClienteDetailPage() {
 
           {user.role === "prestador" && (
             <Card style={{ padding: 24 }}>
-              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
                 Dados de Prestador
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Placa</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#0F172A", marginTop: 4 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Placa</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "var(--admin-text)", marginTop: 4 }}>
                     {user.plate || "—"}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Avaliação Média</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Avaliação Média</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
                     {user.rating ? (
                       <>
                         <Star size={14} fill="#F5A623" color="#F5A623" />
@@ -550,16 +550,16 @@ export default function AdminClienteDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Total de Serviços</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", marginTop: 4 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Total de Serviços</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 4 }}>
                     {user.totalRides ?? 0}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Categorias</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Categorias</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                     {(user.categories ?? []).map((c) => (
-                      <Pill key={c} bg="#F1F5F9" color="#475569" size="sm">
+                      <Pill key={c} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
                         {c}
                       </Pill>
                     ))}
@@ -572,10 +572,10 @@ export default function AdminClienteDetailPage() {
           {/* Verification / KYC Actions */}
           {user.role === "tomador" && (
             <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                 Ações de KYC / Credenciamento
               </h2>
-              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", margin: "0 0 4px" }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 4px" }}>
                 Aprove este usuário para habilitar a prestação de serviços no Superapp.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -604,10 +604,10 @@ export default function AdminClienteDetailPage() {
 
           {/* Arbitration / Account Status Actions */}
           <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Arbitragem / Status da Conta
             </h2>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", margin: "0 0 4px" }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 4px" }}>
               Controle o status do usuário no Superapp (Quarentena ou Desativação por tempo indeterminado).
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -649,17 +649,17 @@ export default function AdminClienteDetailPage() {
 
         {/* Transaction History Card */}
         <Card style={{ padding: 24, display: "flex", flexDirection: "column" }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
             Histórico de Transações
           </h2>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
             {orders.length === 0 ? (
-              <div style={{ padding: "40px 0", textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+              <div style={{ padding: "40px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                 Sem transações ou pedidos registrados para este usuário.
               </div>
             ) : (
               orders.map((o) => {
-                const sp = STATUS_PILL[o.status] || { bg: "#F1F5F9", color: "#475569", label: o.status };
+                const sp = STATUS_PILL[o.status] || { bg: "var(--admin-bg)", color: "var(--admin-subtle)", label: o.status };
                 return (
                   <div
                     key={o.id}
@@ -668,16 +668,16 @@ export default function AdminClienteDetailPage() {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "12px 14px",
-                      border: "1px solid #F1F5F9",
+                      border: "1px solid var(--admin-bg)",
                       borderRadius: 12,
-                      background: "#F8FAFC",
+                      background: "var(--admin-bg)",
                     }}
                   >
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0F172A" }}>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
                         {o.description}
                       </span>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>
                         {new Date(o.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                       </span>
                     </div>

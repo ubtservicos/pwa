@@ -29,7 +29,7 @@ const Toggle = ({ on, onChange }: { on: boolean; onChange: () => void }) => (
         width: 20,
         height: 20,
         borderRadius: 999,
-        background: "#fff",
+        background: "var(--admin-bg)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
         transition: "left 200ms",
       }}
@@ -77,17 +77,17 @@ export default function AdminEntidadesPage() {
   return (
     <div style={{ padding: 32 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Entidades de Classe</h1>
+        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Entidades de Classe</h1>
         <PrimaryButton onClick={() => open()}>+ Nova entidade</PrimaryButton>
       </div>
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#F8FAFC" }}>
+            <thead style={{ background: "var(--admin-bg)" }}>
               <tr>
                 {["Sigla", "Nome", "Categoria", "Membros", "Chave Pix", "Status", "Ações"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", padding: "12px 20px", fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+                  <th key={h} style={{ textAlign: "left", padding: "12px 20px", fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
                     {h}
                   </th>
                 ))}
@@ -95,16 +95,16 @@ export default function AdminEntidadesPage() {
             </thead>
             <tbody>
               {entidades.map((e) => (
-                <tr key={e.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
+                <tr key={e.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
                   <td style={{ padding: "14px 20px" }}>
-                    <span style={{ background: "#F1F5F9", fontFamily: "monospace", fontSize: 12, color: "#0F172A", borderRadius: 6, padding: "3px 8px" }}>
+                    <span style={{ background: "var(--admin-bg)", fontFamily: "monospace", fontSize: 12, color: "var(--admin-text)", borderRadius: 6, padding: "3px 8px" }}>
                       {e.sigla}
                     </span>
                   </td>
-                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "#0F172A" }}>{e.name}</td>
-                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569", textTransform: "capitalize" }}>{e.categoria}</td>
-                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "#0F172A" }}>{e.membros}</td>
-                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>{e.pixKey}</td>
+                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)" }}>{e.name}</td>
+                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", textTransform: "capitalize" }}>{e.categoria}</td>
+                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)" }}>{e.membros}</td>
+                  <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>{e.pixKey}</td>
                   <td style={{ padding: "14px 20px" }}>
                     <Toggle
                       on={e.ativa}
@@ -116,7 +116,7 @@ export default function AdminEntidadesPage() {
                       onClick={() => open(e)}
                       style={{
                         background: "transparent",
-                        border: "1px solid #E2E8F0",
+                        border: "1px solid var(--admin-border)",
                         color: "#2B6EE8",
                         fontFamily: "DM Sans",
                         fontSize: 12,
@@ -145,7 +145,7 @@ export default function AdminEntidadesPage() {
               top: "50%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              background: "#fff",
+              background: "var(--admin-bg)",
               borderRadius: 16,
               padding: 32,
               width: 480,
@@ -159,9 +159,9 @@ export default function AdminEntidadesPage() {
               aria-label="Fechar"
               style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={18} color="#475569" />
+              <X size={18} color="var(--admin-subtle)" />
             </button>
-            <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
+            <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>
               {editing ? "Editar Entidade" : "Nova Entidade"}
             </div>
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -172,7 +172,7 @@ export default function AdminEntidadesPage() {
                 { key: "membros", label: "Nº de membros", type: "number" },
               ].map((f: any) => (
                 <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>{f.label}</span>
+                  <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>{f.label}</span>
                   <input
                     type={f.type}
                     maxLength={f.maxLength}
@@ -183,31 +183,31 @@ export default function AdminEntidadesPage() {
                       setForm((s) => ({ ...s, [f.key]: v }));
                     }}
                     style={{
-                      background: "#F1F5F9",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 10,
                       padding: "10px 14px",
                       fontFamily: "DM Sans",
                       fontSize: 14,
-                      color: "#0F172A",
+                      color: "var(--admin-text)",
                       outline: "none",
                     }}
                   />
                 </label>
               ))}
               <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Categoria</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Categoria</span>
                 <select
                   value={form.categoria}
                   onChange={(e) => setForm((s) => ({ ...s, categoria: e.target.value }))}
                   style={{
-                    background: "#F1F5F9",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "10px 14px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#0F172A",
+                    color: "var(--admin-text)",
                     outline: "none",
                   }}
                 >

@@ -183,7 +183,7 @@ export default function AdminSorteioTrabPage() {
   if (loading) {
     return (
       <div style={{ padding: 32, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ fontFamily: "DM Sans", color: "#94A3B8" }}>Carregando dados do sorteio...</div>
+        <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando dados do sorteio...</div>
       </div>
     );
   }
@@ -196,7 +196,7 @@ export default function AdminSorteioTrabPage() {
         style={{
           background: "none",
           border: "none",
-          color: "#475569",
+          color: "var(--admin-subtle)",
           fontFamily: "DM Sans",
           fontSize: 14,
           fontWeight: 600,
@@ -207,18 +207,18 @@ export default function AdminSorteioTrabPage() {
           marginBottom: 24,
           transition: "color 150ms",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#0F172A")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--admin-text)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--admin-subtle)")}
       >
         <ArrowLeft size={16} /> Voltar para o Dashboard
       </button>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 24, marginBottom: 32 }}>
         <div>
-          <h1 style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+          <h1 style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
             Sorteio Prêmio Trabalhador (1/5)
           </h1>
-          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#64748B", marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginTop: 4 }}>
             Sorteio especial realizado no dia 1º de maio (dia do trabalhador) beneficiando prestadores de serviços ativos.
             <br />
             <span style={{ fontSize: 13, color: "#9B59B6", fontWeight: 500, display: "inline-block", marginTop: 6 }}>
@@ -247,11 +247,11 @@ export default function AdminSorteioTrabPage() {
 
       {/* Sorteio Metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 32 }}>
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0", background: "#fff" }}>
-          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
             Data do Sorteio
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", marginTop: 8 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", marginTop: 8 }}>
             {getNextDrawDateAndDays(4).formattedDate}
           </div>
           <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#9B59B6", marginTop: 4, fontWeight: 600 }}>
@@ -259,26 +259,26 @@ export default function AdminSorteioTrabPage() {
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0", background: "#fff" }}>
-          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
             Acumulado Prêmio (1.5%)
           </div>
           <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0DB87E", marginTop: 8 }}>
             {formatBR(prizePool)}
           </div>
-          <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 4 }}>
             Volume plat: {formatBR(totalVolume)}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0", background: "#fff" }}>
-          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1 }}>
             Tickets Habilitados
           </div>
-          <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", marginTop: 8 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", marginTop: 8 }}>
             {totalTickets}
           </div>
-          <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 4 }}>
             {participants.length} trabalhadores cadastrados
           </div>
         </Card>
@@ -293,7 +293,7 @@ export default function AdminSorteioTrabPage() {
           <div style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#9B59B6" }}>
             Sorteando Ganhador...
           </div>
-          <div style={{ fontFamily: "DM Sans", fontSize: 18, fontWeight: 600, color: "#0F172A", marginTop: 8 }}>
+          <div style={{ fontFamily: "DM Sans", fontSize: 18, fontWeight: 600, color: "var(--admin-text)", marginTop: 8 }}>
             {winner.name}
           </div>
         </Card>
@@ -301,13 +301,13 @@ export default function AdminSorteioTrabPage() {
 
       {/* Participants list */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
           Trabalhadores Habilitados
         </h2>
 
         {/* Search */}
         <div style={{ position: "relative", width: 260 }}>
-          <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -315,13 +315,13 @@ export default function AdminSorteioTrabPage() {
             style={{
               width: "100%",
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 14px 0 38px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#0F172A",
+              color: "var(--admin-text)",
               outline: "none",
             }}
           />
@@ -330,13 +330,13 @@ export default function AdminSorteioTrabPage() {
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {filtered.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhum trabalhador habilitado encontrado.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["Trabalhador", "Categorias", "Serviços Prestados", `Tickets Habilitados (8 Base + ${Math.floor(splitTrab / 0.5)} p/ transação)`, "Chances"].map((h) => (
                     <th
@@ -347,7 +347,7 @@ export default function AdminSorteioTrabPage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 1,
                       }}
@@ -361,11 +361,11 @@ export default function AdminSorteioTrabPage() {
                 {filtered.map((p) => {
                   const chance = totalTickets > 0 ? ((p.tickets / totalTickets) * 100).toFixed(2) : "0.00";
                   return (
-                    <tr key={p.id} style={{ borderBottom: "1px solid #E2E8F0", transition: "background 100ms" }}>
+                    <tr key={p.id} style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 100ms" }}>
                       <td style={{ padding: "14px 20px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <Avatar name={p.name} />
-                          <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 500 }}>
+                          <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>
                             {p.name}
                           </div>
                         </div>
@@ -379,10 +379,10 @@ export default function AdminSorteioTrabPage() {
                           ))}
                         </div>
                       </td>
-                      <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "#475569" }}>
+                      <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)" }}>
                         {p.completedRides}
                       </td>
-                      <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 600 }}>
+                      <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 600 }}>
                         {p.tickets}
                       </td>
                       <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, color: "#0DB87E", fontWeight: 600 }}>
@@ -405,7 +405,7 @@ export default function AdminSorteioTrabPage() {
             style={{
               width: "100%",
               maxWidth: 480,
-              background: "#fff",
+              background: "var(--admin-bg)",
               borderRadius: 16,
               padding: 32,
               textAlign: "center",
@@ -421,17 +421,17 @@ export default function AdminSorteioTrabPage() {
               </div>
             </div>
 
-            <h2 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: "0 0 8px" }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px" }}>
               Ganhador do Sorteio!
             </h2>
-            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#64748B", marginBottom: 24 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginBottom: 24 }}>
               O prestador abaixo foi contemplado no sorteio do Prêmio Trabalhador 1/5!
             </p>
 
             <Card style={{ padding: 20, background: "#fcf6ff", border: "1px solid rgba(155, 89, 182, 0.2)", marginBottom: 24 }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                 <Avatar name={winner.name} />
-                <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A" }}>
+                <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>
                   {winner.name}
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
@@ -444,7 +444,7 @@ export default function AdminSorteioTrabPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(155, 89, 182, 0.15)", marginTop: 16, paddingTop: 12 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B" }}>Prêmio Acumulado</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>Prêmio Acumulado</span>
                 <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0DB87E" }}>
                   {formatBR(prizePool)}
                 </span>

@@ -116,7 +116,7 @@ export default function AdminPayoutsPage() {
       {/* Filter panel */}
       <Card style={{ padding: 20, marginBottom: 24, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 240 }}>
-          <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
           <input
             value={search}
             onChange={(e) => {
@@ -127,7 +127,7 @@ export default function AdminPayoutsPage() {
             style={{
               width: "100%",
               height: 40,
-              border: "1px solid #E2E8F0",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px 0 38px",
               fontFamily: "DM Sans",
@@ -143,7 +143,7 @@ export default function AdminPayoutsPage() {
             setStatusFilter(e.target.value);
             setPage(0);
           }}
-          style={{ height: 40, border: "1px solid #E2E8F0", borderRadius: 10, padding: "0 12px", fontFamily: "DM Sans" }}
+          style={{ height: 40, border: "1px solid var(--admin-border)", borderRadius: 10, padding: "0 12px", fontFamily: "DM Sans" }}
         >
           <option value="all">Todos os Status</option>
           <option value="pending">Pendente</option>
@@ -156,17 +156,17 @@ export default function AdminPayoutsPage() {
       {/* Payouts Table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Carregando fila de saques...
           </div>
         ) : paged.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhuma solicitação de saque encontrada.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["ID Saque", "Data Solicitação", "Favorecido (ID)", "Valor", "Status", "Gateway ID", "Ações"].map((h) => (
                     <th
@@ -177,7 +177,7 @@ export default function AdminPayoutsPage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 1,
                       }}
@@ -189,21 +189,21 @@ export default function AdminPayoutsPage() {
               </thead>
               <tbody>
                 {paged.map((p) => (
-                  <tr key={p.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                  <tr key={p.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       #{p.id.slice(0, 8)}...
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {new Date(p.created_at).toLocaleString("pt-BR")}
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       #{p.recipient_id.slice(0, 8)}...
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>
                       {formatBR(Number(p.amount))}
                     </td>
                     <td style={{ padding: "14px 20px" }}>{getStatusPill(p.status)}</td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#64748B" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {p.gateway_payout_id || "—"}
                     </td>
                     <td style={{ padding: "14px 20px" }}>
@@ -255,7 +255,7 @@ export default function AdminPayoutsPage() {
                           </button>
                         </div>
                       ) : (
-                        <span style={{ fontSize: 12, color: "#94A3B8" }}>Concluído</span>
+                        <span style={{ fontSize: 12, color: "var(--admin-muted)" }}>Concluído</span>
                       )}
                     </td>
                   </tr>
@@ -267,14 +267,14 @@ export default function AdminPayoutsPage() {
 
         {/* Pagination */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderTop: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
             Total de {filtered.length} saques
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              style={{ padding: "6px 12px", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", opacity: page === 0 ? 0.5 : 1 }}
+              style={{ padding: "6px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", opacity: page === 0 ? 0.5 : 1 }}
             >
               Anterior
             </button>
@@ -284,7 +284,7 @@ export default function AdminPayoutsPage() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              style={{ padding: "6px 12px", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
+              style={{ padding: "6px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
             >
               Próxima
             </button>
@@ -295,18 +295,18 @@ export default function AdminPayoutsPage() {
       {/* Confirmation Modal */}
       {selectedPayout && actionType && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 460, padding: 32 }}>
+          <div style={{ background: "var(--admin-bg)", borderRadius: 16, width: "100%", maxWidth: 460, padding: 32 }}>
             <h3 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
               {actionType === "approve" ? "Confirmar Repasse Pix" : "Recusar Solicitação de Saque"}
             </h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#64748B", marginBottom: 20 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginBottom: 20 }}>
               Você está prestes a {actionType === "approve" ? "confirmar o pagamento de" : "rejeitar a transferência de"}{" "}
               <strong>{formatBR(Number(selectedPayout.amount))}</strong> para o colaborador de ID #{selectedPayout.recipient_id.slice(0, 8)}...
             </p>
 
             {actionType === "approve" && (
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", fontSize: 12, textTransform: "uppercase", color: "#94A3B8", fontWeight: 600, marginBottom: 8 }}>
+                <label style={{ display: "block", fontSize: 12, textTransform: "uppercase", color: "var(--admin-muted)", fontWeight: 600, marginBottom: 8 }}>
                   ID do Comprovante / Gateway Payout ID
                 </label>
                 <input
@@ -316,7 +316,7 @@ export default function AdminPayoutsPage() {
                   style={{
                     width: "100%",
                     height: 44,
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
@@ -337,8 +337,8 @@ export default function AdminPayoutsPage() {
                 style={{
                   flex: 1,
                   height: 44,
-                  background: "#F1F5F9",
-                  color: "#475569",
+                  background: "var(--admin-bg)",
+                  color: "var(--admin-subtle)",
                   border: "none",
                   borderRadius: 10,
                   fontFamily: "DM Sans",

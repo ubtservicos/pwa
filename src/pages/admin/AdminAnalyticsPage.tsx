@@ -135,7 +135,7 @@ export default function AdminAnalyticsPage() {
       {/* Filter and Period Picker */}
       <Card style={{ padding: 20, marginBottom: 24, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
             Período
           </label>
           <div style={{ display: "flex", gap: 4 }}>
@@ -147,9 +147,9 @@ export default function AdminAnalyticsPage() {
                   height: 34,
                   padding: "0 14px",
                   borderRadius: 6,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid var(--admin-border)",
                   background: period === p ? "#0DB87E" : "#fff",
-                  color: period === p ? "#fff" : "#475569",
+                  color: period === p ? "#fff" : "var(--admin-subtle)",
                   fontFamily: "DM Sans",
                   fontWeight: 600,
                   fontSize: 13,
@@ -163,13 +163,13 @@ export default function AdminAnalyticsPage() {
         </div>
 
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
             Vertical Operacional
           </label>
           <select
             value={verticalFilter}
             onChange={(e) => setVerticalFilter(e.target.value)}
-            style={{ height: 34, border: "1px solid #E2E8F0", borderRadius: 6, padding: "0 12px", fontFamily: "DM Sans" }}
+            style={{ height: 34, border: "1px solid var(--admin-border)", borderRadius: 6, padding: "0 12px", fontFamily: "DM Sans" }}
           >
             <option value="all">Todas as Verticais</option>
             <option value="mototaxi">Mototáxi</option>
@@ -185,9 +185,9 @@ export default function AdminAnalyticsPage() {
             alignSelf: "flex-end",
             height: 34,
             padding: "0 12px",
-            border: "1px solid #E2E8F0",
+            border: "1px solid var(--admin-border)",
             borderRadius: 6,
-            background: "#fff",
+            background: "var(--admin-bg)",
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
@@ -207,8 +207,8 @@ export default function AdminAnalyticsPage() {
             <Activity size={20} color="#2B6EE8" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{filteredEvents.length}</div>
-            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--admin-text)" }}>{filteredEvents.length}</div>
+            <div style={{ fontSize: 12, color: "var(--admin-subtle)", display: "inline-flex", alignItems: "center" }}>
               Eventos Capturados
               <HelpTooltip concept="admin.analytics.eventos_capturados" />
             </div>
@@ -220,8 +220,8 @@ export default function AdminAnalyticsPage() {
             <Users size={20} color="#0DB87E" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.uniqueUsersCount}</div>
-            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--admin-text)" }}>{metrics.uniqueUsersCount}</div>
+            <div style={{ fontSize: 12, color: "var(--admin-subtle)", display: "inline-flex", alignItems: "center" }}>
               Usuários Ativos (Logados)
               <HelpTooltip concept="admin.analytics.usuarios_ativos" />
             </div>
@@ -233,8 +233,8 @@ export default function AdminAnalyticsPage() {
             <ClipboardList size={20} color="#F5A623" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.request_created}</div>
-            <div style={{ fontSize: 12, color: "#64748B", display: "inline-flex", alignItems: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--admin-text)" }}>{metrics.totals.request_created}</div>
+            <div style={{ fontSize: 12, color: "var(--admin-subtle)", display: "inline-flex", alignItems: "center" }}>
               Pedidos Criados
               <HelpTooltip concept="admin.analytics.pedidos_criados" />
             </div>
@@ -246,8 +246,8 @@ export default function AdminAnalyticsPage() {
             <BarChart3 size={20} color="#3B82F6" />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#0F172A" }}>{metrics.totals.payout_completed}</div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>Serviços Concluídos</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--admin-text)" }}>{metrics.totals.payout_completed}</div>
+            <div style={{ fontSize: 12, color: "var(--admin-subtle)" }}>Serviços Concluídos</div>
           </div>
         </Card>
       </div>
@@ -257,16 +257,16 @@ export default function AdminAnalyticsPage() {
         
         {/* Signup Funnel */}
         <Card style={{ padding: 24 }}>
-          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", marginBottom: 16 }}>
+          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
             Funil de Cadastro
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>1. Iniciaram cadastro (signup_started)</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{metrics.totals.signup_started}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>{metrics.totals.signup_started}</span>
               </div>
-              <div style={{ width: "100%", height: 10, background: "#F1F5F9", borderRadius: 999 }}>
+              <div style={{ width: "100%", height: 10, background: "var(--admin-bg)", borderRadius: 999 }}>
                 <div style={{ width: "100%", height: "100%", background: "#2B6EE8", borderRadius: 999 }} />
               </div>
             </div>
@@ -278,7 +278,7 @@ export default function AdminAnalyticsPage() {
                   {metrics.totals.signup_completed} ({metrics.signupConversion.toFixed(1)}%)
                 </span>
               </div>
-              <div style={{ width: "100%", height: 10, background: "#F1F5F9", borderRadius: 999 }}>
+              <div style={{ width: "100%", height: 10, background: "var(--admin-bg)", borderRadius: 999 }}>
                 <div style={{ width: `${metrics.signupConversion}%`, height: "100%", background: "#0DB87E", borderRadius: 999 }} />
               </div>
             </div>
@@ -287,7 +287,7 @@ export default function AdminAnalyticsPage() {
 
         {/* Operational Order Funnel */}
         <Card style={{ padding: 24 }}>
-          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", marginBottom: 16 }}>
+          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
             Funil de Conversão de Pedidos
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -306,7 +306,7 @@ export default function AdminAnalyticsPage() {
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{step.label}</span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: step.color }}>{step.val} ({pct.toFixed(1)}%)</span>
                   </div>
-                  <div style={{ width: "100%", height: 8, background: "#F1F5F9", borderRadius: 999 }}>
+                  <div style={{ width: "100%", height: 8, background: "var(--admin-bg)", borderRadius: 999 }}>
                     <div style={{ width: `${pct}%`, height: "100%", background: step.color, borderRadius: 999 }} />
                   </div>
                 </div>
@@ -318,24 +318,24 @@ export default function AdminAnalyticsPage() {
 
       {/* Events Feed List */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "18px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--admin-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
             Fluxo de Telemetria Recente (Live)
           </h3>
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Carregando eventos...
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhum evento registrado no período.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["Data/Hora", "Tipo de Evento", "ID de Usuário", "Dados Extras", "Ações"].map((h) => (
                     <th
@@ -346,7 +346,7 @@ export default function AdminAnalyticsPage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 0.5
                       }}
@@ -358,12 +358,12 @@ export default function AdminAnalyticsPage() {
               </thead>
               <tbody>
                 {filteredEvents.slice(0, 15).map((e) => {
-                  const badge = EVENT_COLORS[e.event_name] || { bg: "#F1F5F9", text: "#64748B" };
+                  const badge = EVENT_COLORS[e.event_name] || { bg: "var(--admin-bg)", text: "var(--admin-subtle)" };
                   return (
-                    <tr key={e.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
+                    <tr key={e.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
                       
                       {/* Date/Time */}
-                      <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                      <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                         {new Date(e.created_at_utc).toLocaleDateString("pt-BR")} às {new Date(e.created_at_utc).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </td>
                       
@@ -385,12 +385,12 @@ export default function AdminAnalyticsPage() {
                       </td>
 
                       {/* User ID */}
-                      <td style={{ padding: "14px 24px", fontFamily: "monospace", fontSize: 12, color: "#64748B" }}>
+                      <td style={{ padding: "14px 24px", fontFamily: "monospace", fontSize: 12, color: "var(--admin-subtle)" }}>
                         {e.user_id ? `#${e.user_id.slice(0, 8)}...` : "Anônimo"}
                       </td>
 
                       {/* Details preview */}
-                      <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+                      <td style={{ padding: "14px 24px", fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                         {e.vertical ? `Vertical: ${e.vertical}` : "Dispositivo / Sistema"}
                       </td>
 
@@ -428,42 +428,42 @@ export default function AdminAnalyticsPage() {
       {/* Inspector Modal */}
       {selectedEvent && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", zIndex: 1100, display: "flex", alignItems: "center", justifyCenter: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "var(--admin-bg)", borderRadius: 16, width: "100%", maxWidth: 500, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyBetween: "space-between", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                 Inspecionar Evento Operacional
               </h3>
               <button onClick={() => setSelectedEvent(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                <X size={20} color="#475569" />
+                <X size={20} color="var(--admin-subtle)" />
               </button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={{ color: "#64748B" }}>Tipo do Evento:</span>
-                <span style={{ fontWeight: 600, color: "#0F172A" }}>{selectedEvent.event_name}</span>
+                <span style={{ color: "var(--admin-subtle)" }}>Tipo do Evento:</span>
+                <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{selectedEvent.event_name}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={{ color: "#64748B" }}>Timestamp:</span>
-                <span style={{ color: "#334155" }}>{new Date(selectedEvent.created_at_utc).toLocaleString("pt-BR")}</span>
+                <span style={{ color: "var(--admin-subtle)" }}>Timestamp:</span>
+                <span style={{ color: "var(--admin-subtle)" }}>{new Date(selectedEvent.created_at_utc).toLocaleString("pt-BR")}</span>
               </div>
 
               {/* Metadata */}
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", marginBottom: 6 }}>
                   <FileJson size={12} /> Metadados do Evento
                 </div>
-                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
+                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "var(--admin-subtle)", whiteSpace: "pre-wrap" }}>
                   {JSON.stringify(selectedEvent.properties, null, 2)}
                 </pre>
               </div>
 
               {/* Device info */}
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", marginBottom: 6 }}>
                   <Activity size={12} /> Dados do Navegador / Dispositivo
                 </div>
-                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
+                <pre style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "var(--admin-subtle)", whiteSpace: "pre-wrap" }}>
                   {JSON.stringify({
                     platform: selectedEvent.platform,
                     app_version: selectedEvent.app_version,
@@ -483,8 +483,8 @@ export default function AdminAnalyticsPage() {
               style={{
                 width: "100%",
                 height: 40,
-                background: "#F1F5F9",
-                color: "#475569",
+                background: "var(--admin-bg)",
+                color: "var(--admin-subtle)",
                 border: "none",
                 borderRadius: 8,
                 fontFamily: "DM Sans",

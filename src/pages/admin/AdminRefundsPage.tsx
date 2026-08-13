@@ -85,7 +85,7 @@ export default function AdminRefundsPage() {
       {/* Filter panel */}
       <Card style={{ padding: 20, marginBottom: 24, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 240 }}>
-          <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
           <input
             value={search}
             onChange={(e) => {
@@ -96,7 +96,7 @@ export default function AdminRefundsPage() {
             style={{
               width: "100%",
               height: 40,
-              border: "1px solid #E2E8F0",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px 0 38px",
               fontFamily: "DM Sans",
@@ -112,7 +112,7 @@ export default function AdminRefundsPage() {
             setStatusFilter(e.target.value);
             setPage(0);
           }}
-          style={{ height: 40, border: "1px solid #E2E8F0", borderRadius: 10, padding: "0 12px", fontFamily: "DM Sans" }}
+          style={{ height: 40, border: "1px solid var(--admin-border)", borderRadius: 10, padding: "0 12px", fontFamily: "DM Sans" }}
         >
           <option value="all">Todos os Status</option>
           <option value="processed">Processado (processed)</option>
@@ -124,17 +124,17 @@ export default function AdminRefundsPage() {
       {/* Refunds Table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Carregando log de estornos...
           </div>
         ) : paged.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhum registro de reembolso localizado.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["ID Reembolso", "Data", "ID Pagamento", "Motivo do Estorno", "Valor Reembolsado", "Status", "Gateway ID"].map((h) => (
                     <th
@@ -145,7 +145,7 @@ export default function AdminRefundsPage() {
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "#94A3B8",
+                        color: "var(--admin-muted)",
                         textTransform: "uppercase",
                         letterSpacing: 1,
                       }}
@@ -157,24 +157,24 @@ export default function AdminRefundsPage() {
               </thead>
               <tbody>
                 {paged.map((p) => (
-                  <tr key={p.id} style={{ borderBottom: "1px solid #E2E8F0" }}>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                  <tr key={p.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       #{p.id.slice(0, 8)}...
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {new Date(p.created_at).toLocaleString("pt-BR")}
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       #{p.payment_id.slice(0, 8)}...
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {p.reason}
                     </td>
                     <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#2B6EE8" }}>
                       {formatBR(Number(p.amount))}
                     </td>
                     <td style={{ padding: "14px 20px" }}>{getStatusPill(p.status)}</td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#64748B" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {p.gateway_refund_id || "—"}
                     </td>
                   </tr>
@@ -186,14 +186,14 @@ export default function AdminRefundsPage() {
 
         {/* Pagination */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderTop: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
             Total de {filtered.length} reembolsos efetuados
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              style={{ padding: "6px 12px", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", opacity: page === 0 ? 0.5 : 1 }}
+              style={{ padding: "6px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", opacity: page === 0 ? 0.5 : 1 }}
             >
               Anterior
             </button>
@@ -203,7 +203,7 @@ export default function AdminRefundsPage() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              style={{ padding: "6px 12px", border: "1px solid #E2E8F0", borderRadius: 8, cursor: "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
+              style={{ padding: "6px 12px", border: "1px solid var(--admin-border)", borderRadius: 8, cursor: "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
             >
               Próxima
             </button>

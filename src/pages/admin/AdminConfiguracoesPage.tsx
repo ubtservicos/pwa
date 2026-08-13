@@ -193,7 +193,7 @@ export default function AdminConfiguracoesPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+      <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
         Carregando Central de Configurações (SettingsService)...
       </div>
     );
@@ -213,7 +213,7 @@ export default function AdminConfiguracoesPage() {
       {/* Filter and Search Bar */}
       <Card style={{ padding: 20, marginBottom: 24, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ position: "relative" }}>
-          <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -223,7 +223,7 @@ export default function AdminConfiguracoesPage() {
               height: 40,
               paddingLeft: 38,
               borderRadius: 8,
-              border: "1px solid #E2E8F0",
+              border: "1px solid var(--admin-border)",
               fontFamily: "DM Sans",
               fontSize: 14,
               outline: "none",
@@ -244,8 +244,8 @@ export default function AdminConfiguracoesPage() {
                   padding: "5px 12px",
                   borderRadius: 8,
                   border: sel ? "1px solid #0DB87E" : "1px solid #E2E8F0",
-                  background: sel ? "rgba(13,184,126,0.12)" : "#F8FAFC",
-                  color: sel ? "#0DB87E" : "#64748B",
+                  background: sel ? "rgba(13,184,126,0.12)" : "var(--admin-bg)",
+                  color: sel ? "#0DB87E" : "var(--admin-subtle)",
                   fontFamily: "DM Sans",
                   fontSize: 12,
                   fontWeight: sel ? 700 : 500,
@@ -268,16 +268,16 @@ export default function AdminConfiguracoesPage() {
           const isSensitiveRestricted = setting.sensivel && !isSuperAdmin;
 
           return (
-            <Card key={setting.id} style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between", border: "1px solid #E2E8F0" }}>
+            <Card key={setting.id} style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between", border: "1px solid var(--admin-border)" }}>
               <div>
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>{setting.chave}</span>
-                      <Pill bg="rgba(71,85,105,0.08)" color="#475569" size="sm">{setting.tipo}</Pill>
+                      <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{setting.chave}</span>
+                      <Pill bg="rgba(71,85,105,0.08)" color="var(--admin-subtle)" size="sm">{setting.tipo}</Pill>
                     </div>
-                    <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, display: "block", marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: "var(--admin-muted)", fontWeight: 600, display: "block", marginTop: 2 }}>
                       {setting.categoria} · v{setting.versao}
                     </span>
                   </div>
@@ -289,13 +289,13 @@ export default function AdminConfiguracoesPage() {
                   )}
                 </div>
 
-                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4, marginBottom: 16, lineHeight: 1.4 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4, marginBottom: 16, lineHeight: 1.4 }}>
                   {setting.descricao || "Sem descrição disponível."}
                 </p>
 
                 {/* Input Editor according to type */}
                 {isSensitiveRestricted ? (
-                  <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12, fontSize: 12, color: "#94A3B8", textAlign: "center" }}>
+                  <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12, fontSize: 12, color: "var(--admin-muted)", textAlign: "center" }}>
                     🔒 Valor visível e editável apenas para Super Admin.
                   </div>
                 ) : (
@@ -319,9 +319,9 @@ export default function AdminConfiguracoesPage() {
                             justifyContent: currentVal ? "flex-end" : "flex-start",
                           }}
                         >
-                          <div style={{ width: 22, height: 22, borderRadius: 999, background: "#fff" }} />
+                          <div style={{ width: 22, height: 22, borderRadius: 999, background: "var(--admin-bg)" }} />
                         </button>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: currentVal ? "#0DB87E" : "#64748B" }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: currentVal ? "#0DB87E" : "var(--admin-subtle)" }}>
                           {currentVal ? "Ativo (True)" : "Inativo (False)"}
                         </span>
                       </div>
@@ -337,7 +337,7 @@ export default function AdminConfiguracoesPage() {
                           type="text"
                           value={currentVal || ""}
                           onChange={(e) => handleValueChange(setting.chave, e.target.value)}
-                          style={{ flex: 1, height: 40, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "monospace", fontSize: 13 }}
+                          style={{ flex: 1, height: 40, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "monospace", fontSize: 13 }}
                         />
                       </div>
                     ) : setting.tipo === "json" || setting.tipo === "array" ? (
@@ -350,7 +350,7 @@ export default function AdminConfiguracoesPage() {
                             handleValueChange(setting.chave, e.target.value);
                           }
                         }}
-                        style={{ width: "100%", height: 80, border: "1px solid #E2E8F0", borderRadius: 8, padding: 10, fontFamily: "monospace", fontSize: 12, outline: "none" }}
+                        style={{ width: "100%", height: 80, border: "1px solid var(--admin-border)", borderRadius: 8, padding: 10, fontFamily: "monospace", fontSize: 12, outline: "none" }}
                       />
                     ) : (
                       <input
@@ -361,7 +361,7 @@ export default function AdminConfiguracoesPage() {
                           const val = setting.tipo === "integer" ? parseInt(e.target.value) : setting.tipo === "decimal" ? parseFloat(e.target.value) : e.target.value;
                           handleValueChange(setting.chave, val);
                         }}
-                        style={{ width: "100%", height: 40, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                        style={{ width: "100%", height: 40, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                       />
                     )}
                   </div>
@@ -370,12 +370,12 @@ export default function AdminConfiguracoesPage() {
 
               {/* Actions Footer */}
               {!isSensitiveRestricted && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F1F5F9", paddingTop: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--admin-bg)", paddingTop: 14 }}>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button
                       type="button"
                       onClick={() => handleOpenHistory(setting)}
-                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 11, fontWeight: 600, color: "#64748B", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                     >
                       <Clock size={12} /> Histórico
                     </button>
@@ -383,7 +383,7 @@ export default function AdminConfiguracoesPage() {
                       <button
                         type="button"
                         onClick={() => handleResetDefault(setting)}
-                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 11, fontWeight: 600, color: "#64748B", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                       >
                         <RotateCcw size={12} /> Padrão
                       </button>
@@ -397,7 +397,7 @@ export default function AdminConfiguracoesPage() {
                     style={{
                       padding: "6px 14px",
                       borderRadius: 8,
-                      background: isDirty ? "#0DB87E" : "#94A3B8",
+                      background: isDirty ? "#0DB87E" : "var(--admin-muted)",
                       color: "#fff",
                       border: "none",
                       fontFamily: "Syne",
@@ -427,34 +427,34 @@ export default function AdminConfiguracoesPage() {
               onClick={() => setSelectedSettingForHistory(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 4px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 4px" }}>
               Histórico de Versões: {selectedSettingForHistory.chave}
             </h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginBottom: 20 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginBottom: 20 }}>
               Versão atual ativa: <strong>v{selectedSettingForHistory.versao}</strong>
             </p>
 
             {loadingVersions ? (
-              <div style={{ padding: 20, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>Carregando versões anteriores...</div>
+              <div style={{ padding: 20, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando versões anteriores...</div>
             ) : versions.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>Nenhuma alteração anterior registrada.</div>
+              <div style={{ padding: 20, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Nenhuma alteração anterior registrada.</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {versions.map((ver) => (
-                  <div key={ver.id} style={{ border: "1px solid #E2E8F0", borderRadius: 8, padding: 14, background: "#F8FAFC" }}>
+                  <div key={ver.id} style={{ border: "1px solid var(--admin-border)", borderRadius: 8, padding: 14, background: "var(--admin-bg)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Versão v{ver.versao}</span>
-                      <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                      <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>Versão v{ver.versao}</span>
+                      <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>
                         {new Date(ver.updated_at).toLocaleString("pt-BR")}
                       </span>
                     </div>
 
-                    <p style={{ fontSize: 12, color: "#64748B", margin: "0 0 8px" }}>Motivo: {ver.motivo || "Sem motivo informado."}</p>
+                    <p style={{ fontSize: 12, color: "var(--admin-subtle)", margin: "0 0 8px" }}>Motivo: {ver.motivo || "Sem motivo informado."}</p>
 
-                    <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 6, padding: 8, fontSize: 11, fontFamily: "monospace", marginBottom: 10 }}>
+                    <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 6, padding: 8, fontSize: 11, fontFamily: "monospace", marginBottom: 10 }}>
                       {JSON.stringify(ver.valor, null, 2)}
                     </div>
 

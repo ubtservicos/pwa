@@ -161,7 +161,7 @@ export default function AdminDisputesPage() {
 
   const getSLAColor = (createdAt: string, status: string) => {
     if (status === "approved" || status === "rejected" || status === "resolved" || status === "resolved_customer" || status === "resolved_provider") {
-      return "#64748B"; // Cinza se fechada
+      return "var(--admin-subtle)"; // Cinza se fechada
     }
     const hours = getSLARemainingHours(createdAt);
     if (hours < 0) return "#E84040"; // Vermelho se estourado
@@ -437,7 +437,7 @@ export default function AdminDisputesPage() {
         return <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">{getStatusLabel(status)}</Pill>;
       case "rejected":
       case "resolved_provider":
-        return <Pill bg="rgba(100,116,139,0.08)" color="#64748B">{getStatusLabel(status)}</Pill>;
+        return <Pill bg="rgba(100,116,139,0.08)" color="var(--admin-subtle)">{getStatusLabel(status)}</Pill>;
       case "opened":
         return <Pill bg="rgba(232,64,64,0.08)" color="#E84040">{getStatusLabel(status)}</Pill>;
       case "under_review":
@@ -445,7 +445,7 @@ export default function AdminDisputesPage() {
       case "waiting_evidence":
         return <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">{getStatusLabel(status)}</Pill>;
       default:
-        return <Pill bg="rgba(100,116,139,0.08)" color="#64748B">{status}</Pill>;
+        return <Pill bg="rgba(100,116,139,0.08)" color="var(--admin-subtle)">{status}</Pill>;
     }
   };
 
@@ -456,7 +456,7 @@ export default function AdminDisputesPage() {
       case "medium":
         return <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Média</Pill>;
       default:
-        return <Pill bg="rgba(243,244,246,0.15)" color="#94A3B8">Baixa</Pill>;
+        return <Pill bg="rgba(243,244,246,0.15)" color="var(--admin-muted)">Baixa</Pill>;
     }
   };
 
@@ -470,11 +470,11 @@ export default function AdminDisputesPage() {
         <button
           onClick={handleExportCSV}
           style={{
-            background: "#F1F5F9",
-            border: "1px solid #E2E8F0",
+            background: "var(--admin-bg)",
+            border: "1px solid var(--admin-border)",
             borderRadius: 12,
             padding: "10px 18px",
-            color: "#475569",
+            color: "var(--admin-subtle)",
             fontWeight: 600,
             fontSize: 14,
             cursor: "pointer",
@@ -492,7 +492,7 @@ export default function AdminDisputesPage() {
       <Card style={{ padding: 20, marginBottom: 24 }}>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
-            <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 14, top: 13 }} />
+            <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 14, top: 13 }} />
             <input
               value={search}
               onChange={(e) => {
@@ -503,12 +503,12 @@ export default function AdminDisputesPage() {
               style={{
                 width: "100%",
                 height: 42,
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 12,
                 padding: "0 12px 0 42px",
                 fontSize: 14,
                 outline: "none",
-                background: "#F8FAFC"
+                background: "var(--admin-bg)"
               }}
             />
           </div>
@@ -520,7 +520,7 @@ export default function AdminDisputesPage() {
                 setStatusFilter(e.target.value);
                 setPage(0);
               }}
-              style={{ height: 42, border: "1px solid #E2E8F0", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "#fff", cursor: "pointer", minWidth: 150 }}
+              style={{ height: 42, border: "1px solid var(--admin-border)", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "var(--admin-bg)", cursor: "pointer", minWidth: 150 }}
             >
               <option value="all">Todos os Status</option>
               <option value="opened">Aberto</option>
@@ -536,7 +536,7 @@ export default function AdminDisputesPage() {
                 setPriorityFilter(e.target.value);
                 setPage(0);
               }}
-              style={{ height: 42, border: "1px solid #E2E8F0", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "#fff", cursor: "pointer", minWidth: 140 }}
+              style={{ height: 42, border: "1px solid var(--admin-border)", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "var(--admin-bg)", cursor: "pointer", minWidth: 140 }}
             >
               <option value="all">Todas as Prioridades</option>
               <option value="high">Prioridade Alta</option>
@@ -550,7 +550,7 @@ export default function AdminDisputesPage() {
                 setVerticalFilter(e.target.value);
                 setPage(0);
               }}
-              style={{ height: 42, border: "1px solid #E2E8F0", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "#fff", cursor: "pointer", minWidth: 140 }}
+              style={{ height: 42, border: "1px solid var(--admin-border)", borderRadius: 12, padding: "0 14px", fontSize: 13, background: "var(--admin-bg)", cursor: "pointer", minWidth: 140 }}
             >
               <option value="all">Todas as Verticais</option>
               <option value="mototaxi">Mototáxi</option>
@@ -564,17 +564,17 @@ export default function AdminDisputesPage() {
       {/* Main disputes table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 60, textAlign: "center", color: "#64748B" }}>
+          <div style={{ padding: 60, textAlign: "center", color: "var(--admin-subtle)" }}>
             Carregando contestações da plataforma...
           </div>
         ) : paged.length === 0 ? (
-          <div style={{ padding: 60, textAlign: "center", color: "#64748B" }}>
+          <div style={{ padding: 60, textAlign: "center", color: "var(--admin-subtle)" }}>
             Nenhuma disputa operacional localizada com os filtros ativos.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+              <thead style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)" }}>
                 <tr>
                   {["Disputa / SLA", "Vertical", "Motivo", "Valor", "Operador", "Prioridade", "Status", "Gestão"].map((h) => (
                     <th
@@ -584,7 +584,7 @@ export default function AdminDisputesPage() {
                         padding: "16px 24px",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: "#64748B",
+                        color: "var(--admin-subtle)",
                         textTransform: "uppercase",
                         letterSpacing: 1.2
                       }}
@@ -602,25 +602,25 @@ export default function AdminDisputesPage() {
                   const opName = operators.find(o => o.id === d.operator_id)?.nome || "Não atribuído";
                   
                   return (
-                    <tr key={d.id} style={{ borderBottom: "1px solid #E2E8F0", transition: "background 150ms" }}>
+                    <tr key={d.id} style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 150ms" }}>
                       <td style={{ padding: "18px 24px" }}>
-                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#1E293B" }}>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
                           #{d.id.slice(0, 8).toUpperCase()}
                         </span>
                         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: slaColor, marginTop: 4, fontWeight: 500 }}>
                           <Clock size={12} /> {slaText}
                         </span>
                       </td>
-                      <td style={{ padding: "18px 24px", fontSize: 13, fontWeight: 500, textTransform: "capitalize", color: "#475569" }}>
+                      <td style={{ padding: "18px 24px", fontSize: 13, fontWeight: 500, textTransform: "capitalize", color: "var(--admin-subtle)" }}>
                         {d.service_type || "Geral"}
                       </td>
-                      <td style={{ padding: "18px 24px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, color: "#64748B" }}>
+                      <td style={{ padding: "18px 24px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, color: "var(--admin-subtle)" }}>
                         {d.reason}
                       </td>
-                      <td style={{ padding: "18px 24px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>
+                      <td style={{ padding: "18px 24px", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
                         {formatBRL(Number(d.amount))}
                       </td>
-                      <td style={{ padding: "18px 24px", fontSize: 13, color: d.operator_id ? "#1E293B" : "#94A3B8", fontWeight: d.operator_id ? 500 : 400 }}>
+                      <td style={{ padding: "18px 24px", fontSize: 13, color: d.operator_id ? "var(--admin-text)" : "var(--admin-muted)", fontWeight: d.operator_id ? 500 : 400 }}>
                         {opName}
                       </td>
                       <td style={{ padding: "18px 24px" }}>{getPriorityPill(prio)}</td>
@@ -632,13 +632,13 @@ export default function AdminDisputesPage() {
                             setOperatorId(d.operator_id || "");
                           }}
                           style={{
-                            background: "#F8FAFC",
-                            border: "1px solid #E2E8F0",
+                            background: "var(--admin-bg)",
+                            border: "1px solid var(--admin-border)",
                             borderRadius: 8,
                             padding: "8px 14px",
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#475569",
+                            color: "var(--admin-subtle)",
                             cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
@@ -658,7 +658,7 @@ export default function AdminDisputesPage() {
 
         {/* Pagination footer */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 24px", borderTop: "1px solid #E2E8F0" }}>
-          <span style={{ fontSize: 13, color: "#64748B" }}>
+          <span style={{ fontSize: 13, color: "var(--admin-subtle)" }}>
             Exibindo {paged.length} de {filtered.length} disputas operacionais
           </span>
           <div style={{ display: "flex", gap: 8 }}>
@@ -667,9 +667,9 @@ export default function AdminDisputesPage() {
               disabled={page === 0}
               style={{
                 padding: "8px 14px",
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 8,
-                background: "#fff",
+                background: "var(--admin-bg)",
                 cursor: page === 0 ? "not-allowed" : "pointer",
                 opacity: page === 0 ? 0.5 : 1,
                 fontSize: 13,
@@ -678,7 +678,7 @@ export default function AdminDisputesPage() {
             >
               Anterior
             </button>
-            <span style={{ padding: "8px 14px", fontSize: 13, color: "#475569" }}>
+            <span style={{ padding: "8px 14px", fontSize: 13, color: "var(--admin-subtle)" }}>
               Página {page + 1} de {totalPages}
             </span>
             <button
@@ -686,9 +686,9 @@ export default function AdminDisputesPage() {
               disabled={page >= totalPages - 1}
               style={{
                 padding: "8px 14px",
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 8,
-                background: "#fff",
+                background: "var(--admin-bg)",
                 cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                 opacity: page >= totalPages - 1 ? 0.5 : 1,
                 fontSize: 13,
@@ -717,7 +717,7 @@ export default function AdminDisputesPage() {
         >
           <div 
             style={{ 
-              background: "#fff", 
+              background: "var(--admin-bg)", 
               width: "100%", 
               maxWidth: 580, 
               height: "100%", 
@@ -729,18 +729,18 @@ export default function AdminDisputesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Drawer */}
-            <div style={{ padding: "24px 32px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "24px 32px", borderBottom: "1px solid var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1.2 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 1.2 }}>
                   Ficha da Disputa Operacional
                 </span>
-                <h3 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#1E293B", margin: "4px 0 0" }}>
+                <h3 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "var(--admin-text)", margin: "4px 0 0" }}>
                   Disputa #{selectedDispute.id.slice(0, 8).toUpperCase()}
                 </h3>
               </div>
               <button 
                 onClick={() => setSelectedDispute(null)}
-                style={{ background: "#F1F5F9", border: "none", borderRadius: 999, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#475569" }}
+                style={{ background: "var(--admin-bg)", border: "none", borderRadius: 999, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--admin-subtle)" }}
               >
                 ✕
               </button>
@@ -750,9 +750,9 @@ export default function AdminDisputesPage() {
             <div style={{ flex: 1, overflowY: "auto", padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
               
               {/* Resumo do SLA e Valor */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, background: "#F8FAFC", borderRadius: 14, padding: 18, border: "1px solid #F1F5F9" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, background: "var(--admin-bg)", borderRadius: 14, padding: 18, border: "1px solid var(--admin-bg)" }}>
                 <div>
-                  <span style={{ display: "block", fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--admin-subtle)", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
                     Valor Contestado
                   </span>
                   <span style={{ fontSize: 20, fontWeight: 700, color: "#E84040" }}>
@@ -760,7 +760,7 @@ export default function AdminDisputesPage() {
                   </span>
                 </div>
                 <div>
-                  <span style={{ display: "block", fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--admin-subtle)", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
                     SLA de Resolução
                   </span>
                   <span style={{ fontSize: 14, fontWeight: 600, color: getSLAColor(selectedDispute.created_at, selectedDispute.status), display: "flex", alignItems: "center", gap: 4 }}>
@@ -771,21 +771,21 @@ export default function AdminDisputesPage() {
 
               {/* Informações Básicas */}
               <div>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
                   Detalhes do Pedido
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 13 }}>
                   <div>
-                    <span style={{ color: "#64748B", display: "block" }}>ID Pagamento:</span>
-                    <span style={{ color: "#1E293B", fontWeight: 500, fontFamily: "monospace" }}>{selectedDispute.payment_id}</span>
+                    <span style={{ color: "var(--admin-subtle)", display: "block" }}>ID Pagamento:</span>
+                    <span style={{ color: "var(--admin-text)", fontWeight: 500, fontFamily: "monospace" }}>{selectedDispute.payment_id}</span>
                   </div>
                   <div>
-                    <span style={{ color: "#64748B", display: "block" }}>Vertical de Serviço:</span>
-                    <span style={{ color: "#1E293B", fontWeight: 500, textTransform: "capitalize" }}>{selectedDispute.service_type || "Geral"}</span>
+                    <span style={{ color: "var(--admin-subtle)", display: "block" }}>Vertical de Serviço:</span>
+                    <span style={{ color: "var(--admin-text)", fontWeight: 500, textTransform: "capitalize" }}>{selectedDispute.service_type || "Geral"}</span>
                   </div>
                   <div style={{ gridColumn: "1 / -1", marginTop: 8 }}>
-                    <span style={{ color: "#64748B", display: "block", marginBottom: 4 }}>Motivo da Contestação (Relatado pelo Cliente):</span>
-                    <div style={{ background: "#F1F5F9", borderRadius: 10, padding: "12px 16px", color: "#334155", lineHeight: 1.4 }}>
+                    <span style={{ color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Motivo da Contestação (Relatado pelo Cliente):</span>
+                    <div style={{ background: "var(--admin-bg)", borderRadius: 10, padding: "12px 16px", color: "var(--admin-subtle)", lineHeight: 1.4 }}>
                       {selectedDispute.reason}
                     </div>
                   </div>
@@ -794,7 +794,7 @@ export default function AdminDisputesPage() {
 
               {/* Atribuição de Operador */}
               <div>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--admin-text)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
                   Operador Responsável
                 </label>
                 <select
@@ -803,11 +803,11 @@ export default function AdminDisputesPage() {
                   style={{
                     width: "100%",
                     height: 42,
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 12,
                     padding: "0 12px",
                     fontSize: 14,
-                    background: "#fff",
+                    background: "var(--admin-bg)",
                     outline: "none"
                   }}
                 >
@@ -820,7 +820,7 @@ export default function AdminDisputesPage() {
 
               {/* Timeline do Status Atual */}
               <div>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>
                   Status & Timeline
                 </h4>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -832,9 +832,9 @@ export default function AdminDisputesPage() {
                         disabled={processing}
                         onClick={() => handleUpdateStatus(s)}
                         style={{
-                          background: isActive ? "#F1F5F9" : "#fff",
-                          border: `1.5px solid ${isActive ? "#475569" : "#E2E8F0"}`,
-                          color: isActive ? "#1E293B" : "#64748B",
+                          background: isActive ? "var(--admin-bg)" : "#fff",
+                          border: `1.5px solid ${isActive ? "var(--admin-subtle)" : "#E2E8F0"}`,
+                          color: isActive ? "var(--admin-text)" : "var(--admin-subtle)",
                           fontWeight: isActive ? 700 : 500,
                           borderRadius: 10,
                           padding: "6px 12px",
@@ -852,7 +852,7 @@ export default function AdminDisputesPage() {
 
               {/* Evidências & Anexos */}
               <div>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.8, display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", textTransform: "uppercase", letterSpacing: 0.8, display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
                   <FileText size={16} /> Evidências e Anexos
                 </h4>
                 {selectedDispute.evidence?.attachments && selectedDispute.evidence.attachments.length > 0 ? (
@@ -882,7 +882,7 @@ export default function AdminDisputesPage() {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic", margin: 0 }}>
+                  <p style={{ fontSize: 13, color: "var(--admin-muted)", fontStyle: "italic", margin: 0 }}>
                     Nenhum arquivo ou captura de tela anexada pelas partes.
                   </p>
                 )}
@@ -890,7 +890,7 @@ export default function AdminDisputesPage() {
 
               {/* Auditoria Completa e Histórico de Ações */}
               <div>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
                   Histórico de Decisões e Auditoria
                 </h4>
                 {selectedDispute.metadata?.history && selectedDispute.metadata.history.length > 0 ? (
@@ -904,17 +904,17 @@ export default function AdminDisputesPage() {
                           width: 10, 
                           height: 10, 
                           borderRadius: 999, 
-                          background: "#94A3B8",
+                          background: "var(--admin-muted)",
                           border: "2px solid #fff"
                         }} />
-                        <span style={{ display: "block", fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--admin-muted)", fontWeight: 500 }}>
                           {new Date(log.timestamp).toLocaleString("pt-BR")} · Por {log.operator_name || "Sistema"}
                         </span>
-                        <span style={{ display: "block", fontWeight: 600, color: "#475569", margin: "2px 0" }}>
+                        <span style={{ display: "block", fontWeight: 600, color: "var(--admin-subtle)", margin: "2px 0" }}>
                           Status alterado para: {getStatusLabel(log.status)}
                         </span>
                         {log.notes && (
-                          <span style={{ display: "block", color: "#64748B", fontStyle: "italic" }}>
+                          <span style={{ display: "block", color: "var(--admin-subtle)", fontStyle: "italic" }}>
                             "{log.notes}"
                           </span>
                         )}
@@ -922,7 +922,7 @@ export default function AdminDisputesPage() {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic", margin: 0 }}>
+                  <p style={{ fontSize: 13, color: "var(--admin-muted)", fontStyle: "italic", margin: 0 }}>
                     Nenhuma ação de auditoria registrada anteriormente.
                   </p>
                 )}
@@ -932,8 +932,8 @@ export default function AdminDisputesPage() {
 
             {/* Footer Drawer (Moderação Rápida) */}
             {(selectedDispute.status !== "approved" && selectedDispute.status !== "rejected") && (
-              <div style={{ padding: 24, borderTop: "1px solid #F1F5F9", background: "#F8FAFC" }}>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+              <div style={{ padding: 24, borderTop: "1px solid var(--admin-bg)", background: "var(--admin-bg)" }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
                   Nova Nota / Justificativa de Decisão
                 </label>
                 <textarea
@@ -943,11 +943,11 @@ export default function AdminDisputesPage() {
                   style={{
                     width: "100%",
                     height: 72,
-                    border: "1px solid #E2E8F0",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 12,
                     padding: 10,
                     fontSize: 13,
-                    background: "#fff",
+                    background: "var(--admin-bg)",
                     outline: "none",
                     resize: "none",
                     marginBottom: 16
@@ -961,8 +961,8 @@ export default function AdminDisputesPage() {
                     style={{
                       flex: 1,
                       height: 44,
-                      background: "#F1F5F9",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       color: "#E84040",
                       fontWeight: 600,
                       fontSize: 13,

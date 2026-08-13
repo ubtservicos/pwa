@@ -244,11 +244,11 @@ export default function AdminClientesPage() {
     <div style={{ padding: 32 }}>
       {/* Desktop Title & Filters Bar */}
       <div className="hidden md:flex" style={{ flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Clientes</h1>
+        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Clientes</h1>
         
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <div style={{ position: "relative", width: 220 }}>
-            <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+            <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
             <input
               value={q}
               onChange={(e) => { setQ(e.target.value); setPage(0); }}
@@ -256,13 +256,13 @@ export default function AdminClientesPage() {
               style={{
                 width: "100%",
                 height: 40,
-                background: "#fff",
-                border: "1px solid #E2E8F0",
+                background: "var(--admin-bg)",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 10,
                 padding: "0 14px 0 38px",
                 fontFamily: "DM Sans",
                 fontSize: 14,
-                color: "#0F172A",
+                color: "var(--admin-text)",
                 outline: "none",
               }}
             />
@@ -273,13 +273,13 @@ export default function AdminClientesPage() {
             onChange={(e) => { setFilterMonth(e.target.value); setPage(0); }}
             style={{
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               outline: "none",
               cursor: "pointer",
             }}
@@ -295,13 +295,13 @@ export default function AdminClientesPage() {
             onChange={(e) => { setFilterCategory(e.target.value); setPage(0); }}
             style={{
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               outline: "none",
               cursor: "pointer",
             }}
@@ -318,13 +318,13 @@ export default function AdminClientesPage() {
             onChange={(e) => { setFilterPeriod(e.target.value); setPage(0); }}
             style={{
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               outline: "none",
               cursor: "pointer",
             }}
@@ -341,13 +341,13 @@ export default function AdminClientesPage() {
             onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
             style={{
               height: 40,
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 10,
               padding: "0 12px",
               fontFamily: "DM Sans",
               fontSize: 14,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               outline: "none",
               cursor: "pointer",
             }}
@@ -362,7 +362,7 @@ export default function AdminClientesPage() {
 
       {/* Mobile Title & Filters Bar */}
       <div className="flex md:hidden" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Clientes</h1>
+        <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Clientes</h1>
         
         <button
           onClick={() => setShowMobileFilters(true)}
@@ -371,19 +371,19 @@ export default function AdminClientesPage() {
             alignItems: "center",
             gap: 8,
             height: 40,
-            background: "#fff",
-            border: "1px solid #E2E8F0",
+            background: "var(--admin-bg)",
+            border: "1px solid var(--admin-border)",
             borderRadius: 10,
             padding: "0 16px",
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
-            color: "#475569",
+            color: "var(--admin-subtle)",
             cursor: "pointer",
             boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
           }}
         >
-          <Filter size={16} color="#475569" />
+          <Filter size={16} color="var(--admin-subtle)" />
           Filtros
           {activeFiltersCount > 0 && (
             <span style={{
@@ -405,7 +405,7 @@ export default function AdminClientesPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid #E2E8F0", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid var(--admin-border)", marginBottom: 16 }}>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -417,7 +417,7 @@ export default function AdminClientesPage() {
               fontFamily: "DM Sans",
               fontSize: 14,
               fontWeight: 600,
-              color: tab === t.key ? "#0DB87E" : "#475569",
+              color: tab === t.key ? "#0DB87E" : "var(--admin-subtle)",
               borderBottom: tab === t.key ? "2px solid #0DB87E" : "2px solid transparent",
               cursor: "pointer",
               marginBottom: -1,
@@ -433,7 +433,7 @@ export default function AdminClientesPage() {
         <Card style={{ overflow: "hidden", padding: 0 }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#F8FAFC" }}>
+              <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
                   {["Nome", "Papel", "Cadastro", "Serviços", "Prêmio 1/5", "Prêmio 1/11", "Categoria", "Coletivo", "Recebidos", "Pagos"]
                     .map((h) => (
@@ -445,7 +445,7 @@ export default function AdminClientesPage() {
                           fontFamily: "DM Sans",
                           fontSize: 11,
                           fontWeight: 600,
-                          color: "#94A3B8",
+                          color: "var(--admin-muted)",
                           textTransform: "uppercase",
                           letterSpacing: 1,
                         }}
@@ -460,15 +460,15 @@ export default function AdminClientesPage() {
                   <tr
                     key={u.id}
                     onClick={() => navigate(`/admin/clientes/${u.id}`)}
-                    style={{ borderBottom: "1px solid #E2E8F0", transition: "background 100ms", cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#F8FAFC")}
+                    style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 100ms", cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--admin-bg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <Avatar name={u.name} />
                         <div>
-                          <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 500 }}>{u.name}</div>
+                          <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>{u.name}</div>
                           {u.status !== "active" && (() => {
                             const rule = rules.find((r) => r.key === u.status);
                             if (!rule) return null;
@@ -500,36 +500,36 @@ export default function AdminClientesPage() {
                           {KYC_PILL[u.kycStatus].label}
                         </Pill>
                       ) : (
-                        <span style={{ color: "#94A3B8", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                        <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
                       )}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                         {(u.categories ?? []).map((c) => (
-                          <Pill key={c} bg="#F1F5F9" color="#475569" size="sm">
+                          <Pill key={c} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
                             {c}
                           </Pill>
                         ))}
                         {(u.categories ?? []).length === 0 && (
-                          <span style={{ color: "#94A3B8", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                          <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
                         )}
                       </div>
                     </td>
-                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 600 }}>
+                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 600 }}>
                       {u.ticketsTrabalhador ?? 0}
                     </td>
-                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "DM Sans", fontSize: 14, color: "#0F172A", fontWeight: 600 }}>
+                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 600 }}>
                       {u.ticketsConsumidor ?? 0}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         {(u.donations ?? []).map((d, i) => (
-                          <div key={i} style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                          <div key={i} style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                             {d.entity}
                           </div>
                         ))}
                         {(u.donations ?? []).length === 0 && (
-                          <span style={{ color: "#94A3B8", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                          <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
                         )}
                       </div>
                     </td>
@@ -541,7 +541,7 @@ export default function AdminClientesPage() {
                           </div>
                         ))}
                         {(u.donations ?? []).length === 0 && (
-                          <span style={{ color: "#94A3B8", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                          <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
                         )}
                       </div>
                     </td>
@@ -555,7 +555,7 @@ export default function AdminClientesPage() {
                 ))}
                 {paged.length === 0 && (
                   <tr>
-                    <td colSpan={10} style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+                    <td colSpan={10} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                       Nenhum usuário encontrado.
                     </td>
                   </tr>
@@ -575,9 +575,9 @@ export default function AdminClientesPage() {
             style={{
               padding: 16,
               cursor: "pointer",
-              background: "#ffffff",
+              background: "var(--admin-bg)",
               borderRadius: 16,
-              border: "1px solid #F1F5F9",
+              border: "1px solid var(--admin-bg)",
               boxShadow: "0 4px 12px rgba(15, 23, 42, 0.02)",
               display: "flex",
               flexDirection: "column",
@@ -599,7 +599,7 @@ export default function AdminClientesPage() {
                 <Avatar name={u.name} size={42} />
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, color: "#0F172A" }}>
+                    <div style={{ fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, color: "var(--admin-text)" }}>
                       {u.name}
                     </div>
                     {u.status !== "active" && (() => {
@@ -655,7 +655,7 @@ export default function AdminClientesPage() {
                     {u.kycStatus === "approved" ? "Aprovado" : "Pendente"}
                   </span>
                 )}
-                <ChevronRight size={18} color="#94A3B8" />
+                <ChevronRight size={18} color="var(--admin-muted)" />
               </div>
             </div>
 
@@ -667,9 +667,9 @@ export default function AdminClientesPage() {
                     fontFamily: "DM Sans",
                     fontSize: 11,
                     fontWeight: 600,
-                    background: "#F8FAFC",
-                    color: "#64748B",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    color: "var(--admin-subtle)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 6,
                     padding: "2px 8px"
                   }}>
@@ -682,38 +682,38 @@ export default function AdminClientesPage() {
             {/* 2x2 KPIs Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {/* Prêmio 1/5 */}
-              <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid #F1F5F9" }}>
+              <div style={{ background: "var(--admin-bg)", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--admin-bg)" }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(13, 184, 126, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Award size={14} color="#0DB87E" />
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Prêmio 1/5</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "#0F172A", marginTop: 1 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Prêmio 1/5</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginTop: 1 }}>
                     {u.ticketsTrabalhador ?? 0}
                   </div>
                 </div>
               </div>
 
               {/* Prêmio 1/11 */}
-              <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid #F1F5F9" }}>
+              <div style={{ background: "var(--admin-bg)", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--admin-bg)" }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(43, 110, 232, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Gift size={14} color="#2B6EE8" />
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Prêmio 1/11</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "#0F172A", marginTop: 1 }}>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Prêmio 1/11</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "var(--admin-text)", marginTop: 1 }}>
                     {u.ticketsConsumidor ?? 0}
                   </div>
                 </div>
               </div>
 
               {/* Recebidos */}
-              <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid #F1F5F9" }}>
+              <div style={{ background: "var(--admin-bg)", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--admin-bg)" }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(13, 184, 126, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <ArrowUpRight size={14} color="#0DB87E" />
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Recebidos</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Recebidos</div>
                   <div style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: "#0DB87E", marginTop: 1 }}>
                     {formatBR(u.recebidos || 0)}
                   </div>
@@ -721,12 +721,12 @@ export default function AdminClientesPage() {
               </div>
 
               {/* Pagos */}
-              <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid #F1F5F9" }}>
+              <div style={{ background: "var(--admin-bg)", borderRadius: 12, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--admin-bg)" }}>
                 <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(232, 64, 64, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <ArrowDownLeft size={14} color="#E84040" />
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>Pagos</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 9, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Pagos</div>
                   <div style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: "#E84040", marginTop: 1 }}>
                     {formatBR(u.pagos || 0)}
                   </div>
@@ -754,7 +754,7 @@ export default function AdminClientesPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {(u.donations ?? []).map((d, idx) => (
                     <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>{d.entity}</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>{d.entity}</span>
                       <span style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: "#9B59B6" }}>
                         {formatBR(d.amount)}
                       </span>
@@ -766,7 +766,7 @@ export default function AdminClientesPage() {
           </Card>
         ))}
         {paged.length === 0 && (
-          <div style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
             Nenhum usuário encontrado.
           </div>
         )}
@@ -791,7 +791,7 @@ export default function AdminClientesPage() {
               bottom: 0,
               left: 0,
               right: 0,
-              background: "#fff",
+              background: "var(--admin-bg)",
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: "24px 20px 32px",
@@ -805,23 +805,23 @@ export default function AdminClientesPage() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                 Filtros de Clientes
               </h3>
               <button
                 onClick={() => setShowMobileFilters(false)}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
               >
-                <X size={20} color="#64748B" />
+                <X size={20} color="var(--admin-subtle)" />
               </button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {/* Search Input */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Buscar por nome</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Buscar por nome</span>
                 <div style={{ position: "relative" }}>
-                  <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+                  <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
                   <input
                     value={q}
                     onChange={(e) => { setQ(e.target.value); setPage(0); }}
@@ -829,13 +829,13 @@ export default function AdminClientesPage() {
                     style={{
                       width: "100%",
                       height: 40,
-                      background: "#F8FAFC",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 10,
                       padding: "0 14px 0 38px",
                       fontFamily: "DM Sans",
                       fontSize: 14,
-                      color: "#0F172A",
+                      color: "var(--admin-text)",
                       outline: "none",
                     }}
                   />
@@ -844,20 +844,20 @@ export default function AdminClientesPage() {
 
               {/* Category Select */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Serviço / Categoria</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Serviço / Categoria</span>
                 <select
                   value={filterCategory}
                   onChange={(e) => { setFilterCategory(e.target.value); setPage(0); }}
                   style={{
                     width: "100%",
                     height: 42,
-                    background: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#475569",
+                    color: "var(--admin-subtle)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -872,20 +872,20 @@ export default function AdminClientesPage() {
 
               {/* Month Select */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Mês de Aniversário</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Mês de Aniversário</span>
                 <select
                   value={filterMonth}
                   onChange={(e) => { setFilterMonth(e.target.value); setPage(0); }}
                   style={{
                     width: "100%",
                     height: 42,
-                    background: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#475569",
+                    color: "var(--admin-subtle)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -899,20 +899,20 @@ export default function AdminClientesPage() {
 
               {/* Period Select */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Período dos Dados</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Período dos Dados</span>
                 <select
                   value={filterPeriod}
                   onChange={(e) => { setFilterPeriod(e.target.value); setPage(0); }}
                   style={{
                     width: "100%",
                     height: 42,
-                    background: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#475569",
+                    color: "var(--admin-subtle)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -927,20 +927,20 @@ export default function AdminClientesPage() {
 
               {/* Page Size Select */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Clientes por Página</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Clientes por Página</span>
                 <select
                   value={pageSize}
                   onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
                   style={{
                     width: "100%",
                     height: 42,
-                    background: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    background: "var(--admin-bg)",
+                    border: "1px solid var(--admin-border)",
                     borderRadius: 10,
                     padding: "0 12px",
                     fontFamily: "DM Sans",
                     fontSize: 14,
-                    color: "#475569",
+                    color: "var(--admin-subtle)",
                     outline: "none",
                     cursor: "pointer",
                   }}
@@ -966,13 +966,13 @@ export default function AdminClientesPage() {
                 style={{
                   flex: 1,
                   height: 44,
-                  background: "#F1F5F9",
+                  background: "var(--admin-bg)",
                   border: "none",
                   borderRadius: 10,
                   fontFamily: "DM Sans",
                   fontSize: 14,
                   fontWeight: 600,
-                  color: "#475569",
+                  color: "var(--admin-subtle)",
                   cursor: "pointer",
                 }}
               >
@@ -1002,7 +1002,7 @@ export default function AdminClientesPage() {
 
       {/* Pagination Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", flexWrap: "wrap", gap: 12 }}>
-        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>
+        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>
           Mostrando {total === 0 ? 0 : page * pageSize + 1}–{Math.min(total, (page + 1) * pageSize)} de {total} clientes
         </span>
         <div style={{ display: "flex", gap: 6 }}>
@@ -1010,13 +1010,13 @@ export default function AdminClientesPage() {
             disabled={page === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             style={{
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 8,
               padding: "6px 12px",
               fontFamily: "DM Sans",
               fontSize: 13,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               cursor: page === 0 ? "not-allowed" : "pointer",
               opacity: page === 0 ? 0.5 : 1
             }}
@@ -1027,13 +1027,13 @@ export default function AdminClientesPage() {
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             style={{
-              background: "#fff",
-              border: "1px solid #E2E8F0",
+              background: "var(--admin-bg)",
+              border: "1px solid var(--admin-border)",
               borderRadius: 8,
               padding: "6px 12px",
               fontFamily: "DM Sans",
               fontSize: 13,
-              color: "#475569",
+              color: "var(--admin-subtle)",
               cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
               opacity: page >= totalPages - 1 ? 0.5 : 1
             }}

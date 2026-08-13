@@ -222,7 +222,7 @@ export default function AdminPermissoesPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+      <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
         Carregando Matriz de Controle de Acesso (RBAC)...
       </div>
     );
@@ -238,7 +238,7 @@ export default function AdminPermissoesPage() {
         {/* Left Column: Roles list */}
         <Card style={{ padding: 18, height: "fit-content" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
               Perfis de Acesso ({roles.length})
             </span>
             <button
@@ -282,10 +282,10 @@ export default function AdminPermissoesPage() {
                   }}
                 >
                   <div style={{ overflow: "hidden" }}>
-                    <div style={{ fontSize: 13, fontWeight: selected ? 700 : 600, color: selected ? "#0DB87E" : "#0F172A" }}>
+                    <div style={{ fontSize: 13, fontWeight: selected ? 700 : 600, color: selected ? "#0DB87E" : "var(--admin-text)" }}>
                       {role.nome}
                     </div>
-                    <div style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace" }}>{role.codigo}</div>
+                    <div style={{ fontSize: 10, color: "var(--admin-muted)", fontFamily: "monospace" }}>{role.codigo}</div>
                   </div>
 
                   <button
@@ -297,7 +297,7 @@ export default function AdminPermissoesPage() {
                     style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
                     title="Duplicar perfil"
                   >
-                    <Copy size={14} color="#94A3B8" />
+                    <Copy size={14} color="var(--admin-muted)" />
                   </button>
                 </div>
               );
@@ -308,17 +308,17 @@ export default function AdminPermissoesPage() {
         {/* Right Column: Permissions Matrix */}
         {selectedRole && (
           <Card style={{ padding: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E2E8F0", pb: 16, paddingBottom: 16, marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--admin-border)", pb: 16, paddingBottom: 16, marginBottom: 20 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h2 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                  <h2 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                     {selectedRole.nome}
                   </h2>
                   <Pill bg="rgba(43,110,232,0.10)" color="#2B6EE8" size="sm">
                     {selectedRole.codigo}
                   </Pill>
                 </div>
-                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4, margin: "4px 0 0" }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4, margin: "4px 0 0" }}>
                   {selectedRole.descricao || "Sem descrição informada."}
                 </p>
               </div>
@@ -331,7 +331,7 @@ export default function AdminPermissoesPage() {
                   height: 40,
                   padding: "0 18px",
                   borderRadius: 10,
-                  background: selectedRole.codigo === "super_admin" ? "#94A3B8" : "#0DB87E",
+                  background: selectedRole.codigo === "super_admin" ? "var(--admin-muted)" : "#0DB87E",
                   color: "#fff",
                   border: "none",
                   fontFamily: "Syne",
@@ -350,7 +350,7 @@ export default function AdminPermissoesPage() {
 
             {/* Search filter for permissions */}
             <div style={{ position: "relative", marginBottom: 20 }}>
-              <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+              <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
               <input
                 value={permSearch}
                 onChange={(e) => setPermSearch(e.target.value)}
@@ -360,7 +360,7 @@ export default function AdminPermissoesPage() {
                   height: 40,
                   paddingLeft: 38,
                   borderRadius: 8,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid var(--admin-border)",
                   fontFamily: "DM Sans",
                   fontSize: 13,
                   outline: "none",
@@ -373,8 +373,8 @@ export default function AdminPermissoesPage() {
               {Array.from(groupedPermissions.entries()).map(([catName, permList]) => {
                 if (permList.length === 0) return null;
                 return (
-                  <div key={catName} style={{ border: "1px solid #F1F5F9", borderRadius: 10, padding: 16, background: "#F8FAFC" }}>
-                    <div style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#475569", uppercase: "uppercase", marginBottom: 12 }}>
+                  <div key={catName} style={{ border: "1px solid var(--admin-bg)", borderRadius: 10, padding: 16, background: "var(--admin-bg)" }}>
+                    <div style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "var(--admin-subtle)", uppercase: "uppercase", marginBottom: 12 }}>
                       {catName}
                     </div>
 
@@ -388,7 +388,7 @@ export default function AdminPermissoesPage() {
                             style={{
                               padding: "10px 12px",
                               borderRadius: 8,
-                              background: "#fff",
+                              background: "var(--admin-bg)",
                               border: checked ? "1px solid rgba(13,184,126,0.35)" : "1px solid #E2E8F0",
                               cursor: "pointer",
                               display: "flex",
@@ -400,9 +400,9 @@ export default function AdminPermissoesPage() {
                               {checked ? <CheckSquare size={16} color="#0DB87E" /> : <Square size={16} color="#CBD5E1" />}
                             </div>
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{perm.nome}</div>
-                              <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{perm.descricao}</div>
-                              <div style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace", marginTop: 2 }}>{perm.codigo}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{perm.nome}</div>
+                              <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 2 }}>{perm.descricao}</div>
+                              <div style={{ fontSize: 10, color: "var(--admin-muted)", fontFamily: "monospace", marginTop: 2 }}>{perm.codigo}</div>
                             </div>
                           </div>
                         );
@@ -424,16 +424,16 @@ export default function AdminPermissoesPage() {
               onClick={() => setNewRoleModalOpen(false)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
               Criar Novo Perfil de Acesso
             </h3>
 
             <form onSubmit={handleCreateRole} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Nome do Perfil</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Nome do Perfil</label>
                 <input
                   type="text"
                   required
@@ -445,29 +445,29 @@ export default function AdminPermissoesPage() {
                       setNewRoleCodigo(e.target.value.toLowerCase().replace(/\s+/g, "_"));
                     }
                   }}
-                  style={{ width: "100%", height: 40, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14 }}
+                  style={{ width: "100%", height: 40, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14 }}
                 />
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Código do Perfil</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Código do Perfil</label>
                 <input
                   type="text"
                   required
                   placeholder="ex: coord_logistica"
                   value={newRoleCodigo}
                   onChange={(e) => setNewRoleCodigo(e.target.value)}
-                  style={{ width: "100%", height: 40, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14 }}
+                  style={{ width: "100%", height: 40, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", fontFamily: "DM Sans", fontSize: 14 }}
                 />
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Descrição</label>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Descrição</label>
                 <textarea
                   placeholder="Descreva o escopo de atuação do perfil..."
                   value={newRoleDesc}
                   onChange={(e) => setNewRoleDesc(e.target.value)}
-                  style={{ width: "100%", height: 70, border: "1px solid #E2E8F0", borderRadius: 8, padding: 10, fontFamily: "DM Sans", fontSize: 13 }}
+                  style={{ width: "100%", height: 70, border: "1px solid var(--admin-border)", borderRadius: 8, padding: 10, fontFamily: "DM Sans", fontSize: 13 }}
                 />
               </div>
 

@@ -181,7 +181,7 @@ export default function AdminDashboardPage() {
     return (
       <div style={{ padding: 32, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
         <RefreshCw size={32} className="animate-spin text-emerald-500 mb-4" />
-        <p style={{ fontFamily: "DM Sans", color: "#64748B", fontSize: 14 }}>
+        <p style={{ fontFamily: "DM Sans", color: "var(--admin-subtle)", fontSize: 14 }}>
           Carregando Centro de Controle Operacional UBT...
         </p>
       </div>
@@ -196,20 +196,20 @@ export default function AdminDashboardPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Centro de Controle Operacional
             </h1>
             <Pill bg="rgba(13,184,126,0.12)" color="#0DB87E" size="sm">
               Live Realtime
             </Pill>
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4 }}>
             Dashboard Executivo principal do BackOffice · UBT SuperApp v1.0
           </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)" }}>
             Atualizado: {lastRefreshedAt.toLocaleTimeString("pt-BR")}
           </span>
           <GhostButton onClick={() => loadDashboardData(true)} disabled={refreshing}>
@@ -258,7 +258,7 @@ export default function AdminDashboardPage() {
 
       {/* BLOCO 1: SAÚDE DA PLATAFORMA */}
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
           Bloco 1 — Saúde da Plataforma
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14 }}>
@@ -268,9 +268,9 @@ export default function AdminDashboardPage() {
             { label: "Realtime Conectado", ok: saude.realtime, sub: "WebSockets online" },
             { label: "Banco Acessível", ok: saude.banco_acessivel, sub: "PostgreSQL Supabase" },
           ].map((item) => (
-            <Card key={item.label} style={{ padding: 16, border: "1px solid #E2E8F0" }}>
+            <Card key={item.label} style={{ padding: 16, border: "1px solid var(--admin-border)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#334155" }}>{item.label}</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>{item.label}</span>
                 {item.ok ? <CheckCircle2 size={18} color="#0DB87E" /> : <XCircle size={18} color="#E84040" />}
               </div>
               <p style={{ fontFamily: "DM Sans", fontSize: 11, color: item.ok ? "#0DB87E" : "#E84040", marginTop: 4, margin: 0 }}>
@@ -279,18 +279,18 @@ export default function AdminDashboardPage() {
             </Card>
           ))}
 
-          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Fila Notificações</span>
-            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>{saude.fila_notificacoes} pendentes</div>
+          <Card style={{ padding: 16, border: "1px solid var(--admin-border)" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Fila Notificações</span>
+            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "var(--admin-text)", marginTop: 2 }}>{saude.fila_notificacoes} pendentes</div>
           </Card>
 
-          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Fila Pagamentos</span>
-            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0F172A", marginTop: 2 }}>{saude.fila_pagamentos} pendentes</div>
+          <Card style={{ padding: 16, border: "1px solid var(--admin-border)" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Fila Pagamentos</span>
+            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "var(--admin-text)", marginTop: 2 }}>{saude.fila_pagamentos} pendentes</div>
           </Card>
 
-          <Card style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+          <Card style={{ padding: 16, border: "1px solid var(--admin-border)" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
               Tempo Resposta Média
               <HelpTooltip concept="admin.dashboard.tempo_resposta" />
             </span>
@@ -301,22 +301,22 @@ export default function AdminDashboardPage() {
 
       {/* BLOCO 2: KPIS DO DIA */}
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
           Bloco 2 — KPIs do Dia
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
           {[
             { label: "GMV do Dia", val: formatBR(kpis_dia.gmv), color: "#2B6EE8" },
             { label: "Receita UBT (4%)", val: formatBR(kpis_dia.receita_ubt), color: "#0DB87E" },
-            { label: "Pedidos do Dia", val: kpis_dia.pedidos, color: "#0F172A" },
+            { label: "Pedidos do Dia", val: kpis_dia.pedidos, color: "var(--admin-text)" },
             { label: "Aprovados", val: kpis_dia.pagamentos_aprovados, color: "#0DB87E" },
             { label: "Recusados", val: kpis_dia.pagamentos_recusados, color: "#E84040" },
             { label: "Payouts Realizados", val: kpis_dia.payouts_realizados, color: "#9B59B6" },
             { label: "Reembolsos", val: kpis_dia.reembolsos, color: "#F5A623" },
-            { label: "Cancelamentos", val: kpis_dia.cancelamentos, color: "#64748B" },
+            { label: "Cancelamentos", val: kpis_dia.cancelamentos, color: "var(--admin-subtle)" },
           ].map((k) => (
-            <Card key={k.label} style={{ padding: 16, border: "1px solid #E2E8F0" }}>
-              <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+            <Card key={k.label} style={{ padding: 16, border: "1px solid var(--admin-border)" }}>
+              <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
                 {k.label}
                 {k.label === "GMV do Dia" && <HelpTooltip concept="admin.dashboard.gmv" />}
                 {k.label === "Receita UBT (4%)" && <HelpTooltip concept="admin.dashboard.receita_ubt" />}
@@ -330,15 +330,15 @@ export default function AdminDashboardPage() {
 
       {/* BLOCO 3: OPERAÇÃO POR VERTICAL */}
       <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
           Bloco 3 — Operação por Vertical
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
           {/* Mototáxi */}
-          <Card onClick={() => navigate("/admin/operacoes")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+          <Card onClick={() => navigate("/admin/operacoes")} style={{ padding: 20, border: "1px solid var(--admin-border)", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Bike size={18} color="#2B6EE8" />
-              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Mototáxi</span>
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Mototáxi</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
               <div>Solicitadas: <strong>{operacao.mototaxi.requested}</strong></div>
@@ -349,10 +349,10 @@ export default function AdminDashboardPage() {
           </Card>
 
           {/* Diaristas */}
-          <Card onClick={() => navigate("/admin/diaristas")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+          <Card onClick={() => navigate("/admin/diaristas")} style={{ padding: 20, border: "1px solid var(--admin-border)", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Sparkles size={18} color="#9B59B6" />
-              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Diaristas</span>
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Diaristas</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
               <div>Agendamentos: <strong>{operacao.diaristas.agendamentos}</strong></div>
@@ -362,10 +362,10 @@ export default function AdminDashboardPage() {
           </Card>
 
           {/* Ambulantes */}
-          <Card onClick={() => navigate("/admin/clientes")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+          <Card onClick={() => navigate("/admin/clientes")} style={{ padding: 20, border: "1px solid var(--admin-border)", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <ShoppingBag size={18} color="#F5A623" />
-              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Ambulantes</span>
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Ambulantes</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
               <div>Pedidos: <strong>{operacao.ambulantes.pedidos}</strong></div>
@@ -375,10 +375,10 @@ export default function AdminDashboardPage() {
           </Card>
 
           {/* Côco & Cia */}
-          <Card onClick={() => navigate("/admin/coco")} style={{ padding: 20, border: "1px solid #E2E8F0", cursor: "pointer" }}>
+          <Card onClick={() => navigate("/admin/coco")} style={{ padding: 20, border: "1px solid var(--admin-border)", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Building2 size={18} color="#0DB87E" />
-              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Côco & Cia</span>
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Côco & Cia</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
               <div>Solicitações: <strong>{operacao.coco.solicitacoes}</strong></div>
@@ -392,9 +392,9 @@ export default function AdminDashboardPage() {
       {/* BLOCO 4 & 5: USUÁRIOS E FINANCEIRO */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 28 }}>
         {/* BLOCO 4: USUÁRIOS */}
-        <Card style={{ padding: 24, border: "1px solid #E2E8F0" }}>
+        <Card style={{ padding: 24, border: "1px solid var(--admin-border)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
               Bloco 4 — Usuários
             </h2>
             <GhostButton onClick={() => navigate("/admin/clientes")} style={{ padding: "4px 8px", fontSize: 12 }}>
@@ -402,37 +402,37 @@ export default function AdminDashboardPage() {
             </GhostButton>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontFamily: "DM Sans" }}>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Novos (7d)</span>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#0F172A" }}>{usuarios.novos_usuarios}</div>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Novos (7d)</span>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--admin-text)" }}>{usuarios.novos_usuarios}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Prestadores</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Prestadores</span>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>{usuarios.prestadores}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Tomadores</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Tomadores</span>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#2B6EE8" }}>{usuarios.tomadores}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>KYC Pendentes</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>KYC Pendentes</span>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#F5A623" }}>{usuarios.kyc_pendentes}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>KYC Aprovados Hoje</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>KYC Aprovados Hoje</span>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>{usuarios.kyc_aprovados_hoje}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bloqueados</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Bloqueados</span>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#E84040" }}>{usuarios.usuarios_bloqueados}</div>
             </div>
           </div>
         </Card>
 
         {/* BLOCO 5: FINANCEIRO */}
-        <Card style={{ padding: 24, border: "1px solid #E2E8F0" }}>
+        <Card style={{ padding: 24, border: "1px solid var(--admin-border)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>
               Bloco 5 — Financeiro
             </h2>
             <GhostButton onClick={() => navigate("/admin/financeiro")} style={{ padding: "4px 8px", fontSize: 12 }}>
@@ -440,28 +440,28 @@ export default function AdminDashboardPage() {
             </GhostButton>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontFamily: "DM Sans" }}>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>GMV Total</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>GMV Total</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#2B6EE8" }}>{formatBR(financeiro.gmv_total)}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Ticket Médio</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Ticket Médio</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#0DB87E" }}>{formatBR(financeiro.ticket_medio)}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Split Retido (4%)</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Split Retido (4%)</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#F5A623" }}>{formatBR(financeiro.split_total)}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Saldo Aguardando Payout</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Saldo Aguardando Payout</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#9B59B6" }}>{formatBR(financeiro.saldo_aguardando_payout)}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Chargebacks</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Chargebacks</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E84040" }}>{financeiro.chargebacks}</div>
             </div>
-            <div style={{ background: "#F8FAFC", padding: 12, borderRadius: 10 }}>
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Disputas Abertas</span>
+            <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 10 }}>
+              <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Disputas Abertas</span>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#E84040" }}>{financeiro.disputas}</div>
             </div>
           </div>
@@ -470,17 +470,17 @@ export default function AdminDashboardPage() {
 
       {/* BLOCO 7: TENDÊNCIAS (ÚLTIMOS 7 DIAS) */}
       <div>
-        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>
           Bloco 7 — Tendências dos Últimos 7 Dias
         </h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
           {tendencias.map((t, idx) => (
-            <Card key={idx} style={{ padding: 14, border: "1px solid #E2E8F0", textAlign: "center" }}>
+            <Card key={idx} style={{ padding: 14, border: "1px solid var(--admin-border)", textAlign: "center" }}>
               <span style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#0DB87E", display: "block", marginBottom: 6 }}>
                 {t.day}
               </span>
-              <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#64748B", display: "flex", flexDirection: "column", gap: 4 }}>
-                <div>GMV: <strong style={{ color: "#0F172A" }}>{formatBR(t.gmv).split(",")[0]}</strong></div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", display: "flex", flexDirection: "column", gap: 4 }}>
+                <div>GMV: <strong style={{ color: "var(--admin-text)" }}>{formatBR(t.gmv).split(",")[0]}</strong></div>
                 <div>Novos: <strong>{t.cadastros}</strong></div>
                 <div>Pedidos: <strong>{t.pedidos}</strong></div>
                 <div>Installs: <strong>{t.pwa_installs}</strong></div>

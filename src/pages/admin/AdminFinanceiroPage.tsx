@@ -458,8 +458,8 @@ export default function AdminFinanceiroPage() {
       {/* Title & CSV Export */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>Financeiro</h1>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
+          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Financeiro</h1>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", marginTop: 4 }}>
             Demonstrativos de receita, repasse coletivo e projeção de split.
           </p>
         </div>
@@ -488,7 +488,7 @@ export default function AdminFinanceiroPage() {
               }}
               style={{
                 background: active ? "#0DB87E" : "#fff",
-                color: active ? "#fff" : "#475569",
+                color: active ? "#fff" : "var(--admin-subtle)",
                 border: active ? "1px solid #0DB87E" : "1px solid #E2E8F0",
                 borderRadius: 999,
                 padding: "7px 16px",
@@ -507,7 +507,7 @@ export default function AdminFinanceiroPage() {
       </div>
 
       {/* Tabs navigation */}
-      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid #E2E8F0", marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid var(--admin-border)", marginBottom: 24 }}>
         {[
           { key: "geral", label: "Visão Geral", icon: TrendingUp },
           { key: "split", label: "Split & Simulador", icon: Sliders },
@@ -528,7 +528,7 @@ export default function AdminFinanceiroPage() {
                 fontFamily: "Syne",
                 fontSize: 14,
                 fontWeight: 700,
-                color: active ? "#0DB87E" : "#64748B",
+                color: active ? "#0DB87E" : "var(--admin-subtle)",
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
@@ -553,7 +553,7 @@ export default function AdminFinanceiroPage() {
               { label: "Faturamento UBT (4%)", value: formatBR(financialTotals.platformRevenue), sub: "Receita líquida retida", Icon: TrendingUp, color: "#0DB87E" },
               { label: "Fração Prêmios (3%)", value: formatBR(financialTotals.awardsAccumulated), sub: "Trabalhador & Consumidor", Icon: Award, color: "#9B59B6" },
               { label: "Doado Coletivo (2%)", value: formatBR(financialTotals.collectiveDonations), sub: "Fundo social ONGs", Icon: Heart, color: "#F5A623" },
-              { label: "Repassado Prestadores (90%)", value: formatBR(financialTotals.providerVolume), sub: "Volume trabalhadores", Icon: Gift, color: "#64748B" }
+              { label: "Repassado Prestadores (90%)", value: formatBR(financialTotals.providerVolume), sub: "Volume trabalhadores", Icon: Gift, color: "var(--admin-subtle)" }
             ].map((k) => (
               <Card key={k.label} style={{ padding: 20, position: "relative" }}>
                 <div
@@ -572,13 +572,13 @@ export default function AdminFinanceiroPage() {
                 >
                   <k.Icon size={18} color={k.color} />
                 </div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
                   {k.label}
                 </div>
-                <div style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", marginTop: 8 }}>
+                <div style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", marginTop: 8 }}>
                   {k.value}
                 </div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4 }}>
                   {k.sub}
                 </div>
               </Card>
@@ -589,8 +589,8 @@ export default function AdminFinanceiroPage() {
           <Card style={{ padding: 24, marginBottom: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Progressão de Volume (GMV)</h3>
-                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Volume financeiro diário consolidado das entradas confirmadas</p>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Progressão de Volume (GMV)</h3>
+                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 2 }}>Volume financeiro diário consolidado das entradas confirmadas</p>
               </div>
               <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Histórico e Realtime</Pill>
             </div>
@@ -606,9 +606,9 @@ export default function AdminFinanceiroPage() {
                 </defs>
                 
                 {/* Grid Lines */}
-                <line x1="0" y1="40" x2="600" y2="40" stroke="#F1F5F9" strokeWidth="1" />
-                <line x1="0" y1="80" x2="600" y2="80" stroke="#F1F5F9" strokeWidth="1" />
-                <line x1="0" y1="120" x2="600" y2="120" stroke="#F1F5F9" strokeWidth="1" />
+                <line x1="0" y1="40" x2="600" y2="40" stroke="var(--admin-bg)" strokeWidth="1" />
+                <line x1="0" y1="80" x2="600" y2="80" stroke="var(--admin-bg)" strokeWidth="1" />
+                <line x1="0" y1="120" x2="600" y2="120" stroke="var(--admin-bg)" strokeWidth="1" />
                 
                 {/* Render Area path */}
                 {(() => {
@@ -638,7 +638,7 @@ export default function AdminFinanceiroPage() {
                   return (
                     <g key={idx}>
                       <circle cx={cx} cy={cy} r="4.5" fill="#fff" stroke="#0DB87E" strokeWidth="2" />
-                      <text cx={cx} x={cx} y={155} textAnchor="middle" style={{ fontFamily: "DM Sans", fontSize: 8, fill: "#94A3B8" }}>
+                      <text cx={cx} x={cx} y={155} textAnchor="middle" style={{ fontFamily: "DM Sans", fontSize: 8, fill: "var(--admin-muted)" }}>
                         {p.label}
                       </text>
                     </g>
@@ -649,7 +649,7 @@ export default function AdminFinanceiroPage() {
             
             {/* Chart Legend */}
             <div style={{ display: "flex", gap: 16, marginTop: 14, justifyContent: "center" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                 <span style={{ width: 10, height: 10, background: "#0DB87E", borderRadius: 999 }} /> Volume Diário Confirmado (GMV)
               </span>
             </div>
@@ -662,15 +662,15 @@ export default function AdminFinanceiroPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginBottom: 24 }}>
           {/* Slider Controls Card */}
           <Card style={{ padding: 24 }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Simulador de Split de Transação</h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 4, marginBottom: 20 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Simulador de Split de Transação</h3>
+            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 4, marginBottom: 20 }}>
               Simule a distribuição percentual de taxas por transação. A soma total deve ser igual a 100%.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               {/* Sliders */}
               {[
-                { key: "prestador", label: "Prestador", color: "#64748B" },
+                { key: "prestador", label: "Prestador", color: "var(--admin-subtle)" },
                 { key: "ubt", label: "Taxa UBT (Plataforma)", color: "#0DB87E" },
                 { key: "premioTrab", label: "Prêmio Trabalhador (1/5)", color: "#9B59B6" },
                 { key: "premioCons", label: "Prêmio Consumidor (1/11)", color: "#2B6EE8" },
@@ -680,7 +680,7 @@ export default function AdminFinanceiroPage() {
                 return (
                   <div key={slider.key}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#334155" }}>{slider.label}</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>{slider.label}</span>
                       <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: slider.color }}>{val.toFixed(1)}%</span>
                     </div>
                     <input
@@ -713,7 +713,7 @@ export default function AdminFinanceiroPage() {
                 ) : (
                   <AlertCircle size={18} color="#E84040" />
                 )}
-                <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                   Soma Total: <strong>{simulatedTotals.sum.toFixed(1)}%</strong>
                 </span>
               </div>
@@ -737,33 +737,33 @@ export default function AdminFinanceiroPage() {
           {/* Projections Card */}
           <Card style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
             <div>
-              <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Projeção de Repasse do Período</h3>
-              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 4, marginBottom: 20 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Projeção de Repasse do Período</h3>
+              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 4, marginBottom: 20 }}>
                 Baseado no volume de <strong>{formatBR(financialTotals.totalGmv)}</strong> do período selecionado.
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {[
-                  { label: "Prestadores", simVal: simulatedTotals.prestadorVal, defaultVal: financialTotals.providerVolume, color: "#64748B", pct: simSplit.prestador },
+                  { label: "Prestadores", simVal: simulatedTotals.prestadorVal, defaultVal: financialTotals.providerVolume, color: "var(--admin-subtle)", pct: simSplit.prestador },
                   { label: "Plataforma UBT", simVal: simulatedTotals.ubtVal, defaultVal: financialTotals.platformRevenue, color: "#0DB87E", pct: simSplit.ubt },
                   { label: "Prêmio Trabalhador", simVal: simulatedTotals.premioTrabVal, defaultVal: financialTotals.awardsAccumulated * 0.5, color: "#9B59B6", pct: simSplit.premioTrab },
                   { label: "Prêmio Consumidor", simVal: simulatedTotals.premioConsVal, defaultVal: financialTotals.awardsAccumulated * 0.5, color: "#2B6EE8", pct: simSplit.premioCons },
                   { label: "Coletivo (ONGs)", simVal: simulatedTotals.entidadesVal, defaultVal: financialTotals.collectiveDonations, color: "#F5A623", pct: simSplit.entidades }
                 ].map((p, idx) => (
-                  <div key={idx} style={{ background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12, padding: 14 }}>
+                  <div key={idx} style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-bg)", borderRadius: 12, padding: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#475569" }}>{p.label}</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>{p.label}</span>
                       <span style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: p.color }}>({p.pct.toFixed(1)}%)</span>
                     </div>
                     
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                       <div>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Padrão UBT:</span>
-                        <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", fontWeight: 500 }}>{formatBR(p.defaultVal)}</div>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Padrão UBT:</span>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", fontWeight: 500 }}>{formatBR(p.defaultVal)}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Simulado:</span>
-                        <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 800, color: simulatedTotals.isValid ? "#0F172A" : "#94A3B8" }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Simulado:</span>
+                        <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 800, color: simulatedTotals.isValid ? "var(--admin-text)" : "var(--admin-muted)" }}>
                           {simulatedTotals.isValid ? formatBR(p.simVal) : "—"}
                         </div>
                       </div>
@@ -781,14 +781,14 @@ export default function AdminFinanceiroPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginBottom: 24 }}>
           {/* Categories Rosca Chart */}
           <Card style={{ padding: 24, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, alignSelf: "flex-start", marginBottom: 24 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0, alignSelf: "flex-start", marginBottom: 24 }}>
               Distribuição do Volume (GMV)
             </h3>
             
             {/* SVG Donut Chart */}
             <div style={{ position: "relative", width: 150, height: 150, marginBottom: 20 }}>
               <svg width="150" height="150" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#F1F5F9" strokeWidth="12" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke="var(--admin-bg)" strokeWidth="12" />
                 {(() => {
                   let accumulatedOffset = 0;
                   const perimeter = 2 * Math.PI * 40; // 251.2
@@ -818,8 +818,8 @@ export default function AdminFinanceiroPage() {
               </svg>
               {/* Central Text inside donut */}
               <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 10, color: "#94A3B8", textTransform: "uppercase" }}>GMV</span>
-                <div style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{formatBR(financialTotals.totalGmv).split(",")[0]}</div>
+                <span style={{ fontFamily: "DM Sans", fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase" }}>GMV</span>
+                <div style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>{formatBR(financialTotals.totalGmv).split(",")[0]}</div>
               </div>
             </div>
 
@@ -828,7 +828,7 @@ export default function AdminFinanceiroPage() {
               {categoryData.map((c, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }} />
-                  <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+                  <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                     {c.name}: <strong>{c.percentage.toFixed(1)}%</strong>
                   </span>
                 </div>
@@ -838,25 +838,25 @@ export default function AdminFinanceiroPage() {
 
           {/* Categories metrics detail table */}
           <Card style={{ padding: 24 }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, marginBottom: 16 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0, marginBottom: 16 }}>
               Métricas por Categoria de Serviço
             </h3>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {categoryData.map((c) => (
-                <div key={c.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #F1F5F9", paddingBottom: 10 }}>
+                <div key={c.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--admin-bg)", paddingBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 8, height: 28, borderRadius: 2, background: c.color }} />
                     <div>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A" }}>{c.name}</span>
-                      <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>{c.name}</span>
+                      <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>
                         {c.count} transações · Ticket {formatBR(c.ticketMedio)}
                       </div>
                     </div>
                   </div>
                   
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+                    <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
                       {formatBR(c.amount)}
                     </div>
                     <span style={{ fontFamily: "DM Sans", fontSize: 11, color: c.color, fontWeight: 600 }}>
@@ -875,29 +875,29 @@ export default function AdminFinanceiroPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24, marginBottom: 24 }}>
           {/* Fund Details */}
           <Card style={{ padding: 24 }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Fundo Coletivo de Solidariedade
             </h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 4, marginBottom: 20 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 4, marginBottom: 20 }}>
               Corresponde a <strong>2.0%</strong> do volume total transacionado na plataforma, destinado a apoiar entidades e ONGs de Ubatuba.
             </p>
 
             <div style={{ background: "rgba(155, 89, 182, 0.06)", border: "1px dashed rgba(155, 89, 182, 0.25)", borderRadius: 14, padding: 20, textAlign: "center", marginBottom: 20 }}>
               <Building2 size={36} color="#9B59B6" style={{ margin: "0 auto 12px" }} />
-              <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", textTransform: "uppercase" }}>Arrecadado no Período</div>
+              <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", textTransform: "uppercase" }}>Arrecadado no Período</div>
               <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 800, color: "#9B59B6", marginTop: 6 }}>
                 {formatBR(financialTotals.collectiveDonations)}
               </div>
             </div>
 
-            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", margin: 0, lineHeight: 1.5 }}>
               💡 O fundo do Coletivo é recolhido a cada transação confirmada no Superapp e dividido proporcionalmente entre as ONGs habilitadas de acordo com as preferências selecionadas pelos clientes na finalização de seus pedidos.
             </p>
           </Card>
 
           {/* Recipient Entities List */}
           <Card style={{ padding: 24 }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, marginBottom: 16 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0, marginBottom: 16 }}>
               Repasses Proporcionais por Entidade
             </h3>
             
@@ -905,10 +905,10 @@ export default function AdminFinanceiroPage() {
               {ENTITIES.map((ent) => {
                 const allocatedVal = financialTotals.collectiveDonations * ent.weight;
                 return (
-                  <div key={ent.sigla} style={{ background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12, padding: 14 }}>
+                  <div key={ent.sigla} style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-bg)", borderRadius: 12, padding: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>
                           {ent.name}
                         </span>
                         <div style={{ marginTop: 4 }}>
@@ -919,8 +919,8 @@ export default function AdminFinanceiroPage() {
                       </div>
                       
                       <div style={{ textAlign: "right" }}>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>Total Destinado</span>
-                        <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 800, color: "#0F172A", marginTop: 2 }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Total Destinado</span>
+                        <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 800, color: "var(--admin-text)", marginTop: 2 }}>
                           {formatBR(allocatedVal)}
                         </div>
                       </div>
@@ -941,16 +941,16 @@ export default function AdminFinanceiroPage() {
       {/* Advanced Search & Filtering Tabela Card */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
         {/* Table Search & Filters bar */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-bg)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Transações do Período</span>
-            <Pill bg="rgba(71,85,105,0.08)" color="#475569" size="sm">{totalTableCount} Lançamentos</Pill>
+            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Transações do Período</span>
+            <Pill bg="rgba(71,85,105,0.08)" color="var(--admin-subtle)" size="sm">{totalTableCount} Lançamentos</Pill>
           </div>
           
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             {/* Text Search */}
             <div style={{ position: "relative", minWidth: 200 }}>
-              <Search size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: 11 }} />
+              <Search size={14} color="var(--admin-muted)" style={{ position: "absolute", left: 10, top: 11 }} />
               <input
                 type="text"
                 placeholder="Buscar descrição ou ID..."
@@ -962,13 +962,13 @@ export default function AdminFinanceiroPage() {
                 style={{
                   width: "100%",
                   height: 36,
-                  background: "#fff",
-                  border: "1px solid #CBD5E1",
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
                   borderRadius: 8,
                   padding: "0 10px 0 32px",
                   fontFamily: "DM Sans",
                   fontSize: 13,
-                  color: "#0F172A",
+                  color: "var(--admin-text)",
                   outline: "none"
                 }}
               />
@@ -976,7 +976,7 @@ export default function AdminFinanceiroPage() {
 
             {/* Category Select Filter */}
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Filter size={12} color="#64748B" />
+              <Filter size={12} color="var(--admin-subtle)" />
               <select
                 value={filterCategory}
                 onChange={(e) => {
@@ -985,13 +985,13 @@ export default function AdminFinanceiroPage() {
                 }}
                 style={{
                   height: 36,
-                  background: "#fff",
-                  border: "1px solid #CBD5E1",
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
                   borderRadius: 8,
                   padding: "0 10px",
                   fontFamily: "DM Sans",
                   fontSize: 13,
-                  color: "#475569",
+                  color: "var(--admin-subtle)",
                   outline: "none",
                   cursor: "pointer"
                 }}
@@ -1013,13 +1013,13 @@ export default function AdminFinanceiroPage() {
               }}
               style={{
                 height: 36,
-                background: "#fff",
-                border: "1px solid #CBD5E1",
+                background: "var(--admin-bg)",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 8,
                 padding: "0 10px",
                 fontFamily: "DM Sans",
                 fontSize: 13,
-                color: "#475569",
+                color: "var(--admin-subtle)",
                 outline: "none",
                 cursor: "pointer"
               }}
@@ -1035,7 +1035,7 @@ export default function AdminFinanceiroPage() {
         {/* Transactions list table */}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#F8FAFC" }}>
+            <thead style={{ background: "var(--admin-bg)" }}>
               <tr>
                 {[
                   { label: "ID", align: "left" },
@@ -1053,10 +1053,10 @@ export default function AdminFinanceiroPage() {
                       fontFamily: "DM Sans",
                       fontSize: 11,
                       fontWeight: 600,
-                      color: "#94A3B8",
+                      color: "var(--admin-muted)",
                       textTransform: "uppercase",
                       letterSpacing: 0.5,
-                      borderBottom: "1px solid #E2E8F0"
+                      borderBottom: "1px solid var(--admin-border)"
                     }}
                   >
                     {h.label}
@@ -1068,11 +1068,11 @@ export default function AdminFinanceiroPage() {
               {pagedTransactions.map((t) => {
                 const sp = STATUS_PILL[t.status] || STATUS_PILL.confirmed;
                 return (
-                  <tr key={t.id} style={{ borderBottom: "1px solid #E2E8F0", transition: "background 0.15s ease" }}>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>
+                  <tr key={t.id} style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 0.15s ease" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>
                       #{t.id.slice(0, 6)}
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {new Date(t.date).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                     </td>
                     <td style={{ padding: "14px 20px" }}>
@@ -1092,7 +1092,7 @@ export default function AdminFinanceiroPage() {
                         {t.category}
                       </Pill>
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "#0F172A", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {t.description}
                     </td>
                     <td style={{ padding: "14px 20px", textAlign: "right", fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: t.type === "saida" ? "#E84040" : "#0DB87E" }}>
@@ -1107,7 +1107,7 @@ export default function AdminFinanceiroPage() {
               
               {pagedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "#94A3B8", fontFamily: "DM Sans" }}>
+                  <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                     Nenhuma transação encontrada correspondente aos filtros.
                   </td>
                 </tr>
@@ -1118,7 +1118,7 @@ export default function AdminFinanceiroPage() {
         
         {/* Pagination Footer */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderTop: "1px solid #E2E8F0", flexWrap: "wrap", gap: 12 }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>
             Mostrando {totalTableCount === 0 ? 0 : page * PAGE_SIZE + 1}–{Math.min(totalTableCount, (page + 1) * PAGE_SIZE)} de {totalTableCount} transações
           </span>
           <div style={{ display: "flex", gap: 6 }}>
@@ -1126,13 +1126,13 @@ export default function AdminFinanceiroPage() {
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               style={{
-                background: "#fff",
-                border: "1px solid #E2E8F0",
+                background: "var(--admin-bg)",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 8,
                 padding: "6px 12px",
                 fontFamily: "DM Sans",
                 fontSize: 13,
-                color: "#475569",
+                color: "var(--admin-subtle)",
                 cursor: page === 0 ? "not-allowed" : "pointer",
                 opacity: page === 0 ? 0.5 : 1
               }}
@@ -1143,13 +1143,13 @@ export default function AdminFinanceiroPage() {
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               style={{
-                background: "#fff",
-                border: "1px solid #E2E8F0",
+                background: "var(--admin-bg)",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 8,
                 padding: "6px 12px",
                 fontFamily: "DM Sans",
                 fontSize: 13,
-                color: "#475569",
+                color: "var(--admin-subtle)",
                 cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                 opacity: page >= totalPages - 1 ? 0.5 : 1
               }}

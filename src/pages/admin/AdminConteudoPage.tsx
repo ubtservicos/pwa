@@ -65,7 +65,7 @@ const GRADIENTS = {
   "Sunset Orange": "linear-gradient(135deg, #78350F, #F59E0B)",
   "Velvet Purple": "linear-gradient(135deg, #581C87, #8B5CF6)",
   "Coral Red": "linear-gradient(135deg, #7F1D1D, #EF4444)",
-  "Midnight Dark": "linear-gradient(135deg, #0F172A, #334155)"
+  "Midnight Dark": "linear-gradient(135deg, var(--admin-text), var(--admin-subtle))"
 };
 
 // Initial default data if none exists in localStorage
@@ -309,8 +309,8 @@ export default function AdminConteudoPage() {
     <div style={{ padding: 32 }}>
       {/* Title */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>Gerenciamento de Conteúdo</h1>
-        <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", marginTop: 4 }}>
+        <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Gerenciamento de Conteúdo</h1>
+        <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", marginTop: 4 }}>
           Controle a central de boletins de praia, banners hero rotativos do Superapp, avisos climáticos de Ubatuba e notificações em tempo real.
         </p>
       </div>
@@ -321,7 +321,7 @@ export default function AdminConteudoPage() {
         {/* Left Side: CMS Controls */}
         <div>
           {/* Sub Navigation Tabs */}
-          <div style={{ display: "flex", gap: 20, borderBottom: "1px solid #E2E8F0", marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: 20, borderBottom: "1px solid var(--admin-border)", marginBottom: 20 }}>
             {[
               { key: "banners", label: "Banners Rotativos" },
               { key: "alerts", label: "Boletins & Alertas" },
@@ -341,7 +341,7 @@ export default function AdminConteudoPage() {
                     fontFamily: "Syne",
                     fontSize: 14,
                     fontWeight: 700,
-                    color: active ? "#0DB87E" : "#64748B",
+                    color: active ? "#0DB87E" : "var(--admin-subtle)",
                     cursor: "pointer",
                     transition: "all 0.2s"
                   }}
@@ -357,51 +357,51 @@ export default function AdminConteudoPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {/* Creator Card */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>+ Adicionar Novo Banner Promocional</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>+ Adicionar Novo Banner Promocional</h3>
                 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Título do Banner</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Título do Banner</span>
                     <input
                       type="text"
                       placeholder="Ex: Prêmio Trabalhador 1/5"
                       value={newTitle}
                       onChange={e => setNewTitle(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Chamada/Texto de Botão (CTA)</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Chamada/Texto de Botão (CTA)</span>
                     <input
                       type="text"
                       placeholder="Ex: Ver Bilhetes"
                       value={newCta}
                       onChange={e => setNewCta(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Subtítulo / Descrição da Campanha</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Subtítulo / Descrição da Campanha</span>
                     <input
                       type="text"
                       placeholder="Ex: Participe e acumule prêmios com suas transações"
                       value={newSub}
                       onChange={e => setNewSub(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Paleta de Cores (Gradiente)</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Paleta de Cores (Gradiente)</span>
                     <select
                       value={newBg}
                       onChange={e => setNewBg(e.target.value as Banner["bg"])}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
                     >
                       {Object.keys(GRADIENTS).map(g => (
                         <option key={g} value={g}>{g}</option>
@@ -409,13 +409,13 @@ export default function AdminConteudoPage() {
                     </select>
                   </label>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Link de Navegação Interno</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Link de Navegação Interno</span>
                     <input
                       type="text"
                       placeholder="Ex: /app/mototaxi"
                       value={newLink}
                       onChange={e => setNewLink(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                 </div>
@@ -427,21 +427,21 @@ export default function AdminConteudoPage() {
 
               {/* Banners List */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>Banners Habilitados no Slider</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>Banners Habilitados no Slider</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {banners.map((b) => (
-                    <div key={b.id} style={{ display: "flex", justifySelf: "stretch", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, padding: 14, alignItems: "center", justifyContent: "space-between" }}>
+                    <div key={b.id} style={{ display: "flex", justifySelf: "stretch", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
                         {/* Tiny Color Preview */}
                         <div style={{ width: 44, height: 44, borderRadius: 8, background: GRADIENTS[b.bg], flexShrink: 0 }} />
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0F172A", display: "block" }}>{b.title}</span>
-                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{b.subtitle}</span>
+                          <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-text)", display: "block" }}>{b.title}</span>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", display: "block", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{b.subtitle}</span>
                         </div>
                       </div>
                       
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <Pill bg={b.active ? "rgba(13,184,126,0.1)" : "#E2E8F0"} color={b.active ? "#0DB87E" : "#64748B"} size="sm">
+                        <Pill bg={b.active ? "rgba(13,184,126,0.1)" : "#E2E8F0"} color={b.active ? "#0DB87E" : "var(--admin-subtle)"} size="sm">
                           {b.active ? "Ativo" : "Rascunho"}
                         </Pill>
                         
@@ -483,7 +483,7 @@ export default function AdminConteudoPage() {
                     </div>
                   ))}
                   {banners.length === 0 && (
-                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>Nenhum banner cadastrado no momento.</p>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", textAlign: "center", padding: "20px 0" }}>Nenhum banner cadastrado no momento.</p>
                   )}
                 </div>
               </Card>
@@ -495,10 +495,10 @@ export default function AdminConteudoPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {/* Climate Alert Card */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>Alerta Climático / Informativo Emergencial</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>Alerta Climático / Informativo Emergencial</h3>
                 
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "DM Sans", fontSize: 13, color: "#334155", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={alertConfig.active}
@@ -519,8 +519,8 @@ export default function AdminConteudoPage() {
                             key={lvl}
                             onClick={() => saveAlert({ ...alertConfig, level: lvl })}
                             style={{
-                              background: isSel ? bg : "#F1F5F9",
-                              color: isSel ? "white" : "#64748B",
+                              background: isSel ? bg : "var(--admin-bg)",
+                              color: isSel ? "white" : "var(--admin-subtle)",
                               border: "none",
                               borderRadius: 6,
                               padding: "4px 10px",
@@ -541,12 +541,12 @@ export default function AdminConteudoPage() {
 
                 <div style={{ marginBottom: 16 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Mensagem do Alerta</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Mensagem do Alerta</span>
                     <textarea
                       placeholder="Descreva o alerta..."
                       value={alertConfig.message}
                       onChange={e => saveAlert({ ...alertConfig, message: e.target.value })}
-                      style={{ width: "100%", height: 60, marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: 10, fontFamily: "DM Sans", fontSize: 14, outline: "none", resize: "none" }}
+                      style={{ width: "100%", height: 60, marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 10, fontFamily: "DM Sans", fontSize: 14, outline: "none", resize: "none" }}
                     />
                   </label>
                 </div>
@@ -556,8 +556,8 @@ export default function AdminConteudoPage() {
               <Card style={{ padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div>
-                    <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Boletim de Balneabilidade das Praias</h3>
-                    <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Atualize o índice de balneabilidade CETESB de Ubatuba.</p>
+                    <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Boletim de Balneabilidade das Praias</h3>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", marginTop: 2 }}>Atualize o índice de balneabilidade CETESB de Ubatuba.</p>
                   </div>
                   <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Ubatuba Litoral</Pill>
                 </div>
@@ -566,10 +566,10 @@ export default function AdminConteudoPage() {
                   {beaches.map((b) => {
                     const isGood = b.status === "propicia";
                     return (
-                      <div key={b.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 14px" }}>
+                      <div key={b.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "12px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <Waves size={16} color={isGood ? "#0DB87E" : "#E84040"} />
-                          <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#334155" }}>{b.name}</span>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-subtle)" }}>{b.name}</span>
                         </div>
                         
                         <button
@@ -602,25 +602,25 @@ export default function AdminConteudoPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {/* Add News Article */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>+ Criar Novo Cartão de Dicas / Guias</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>+ Criar Novo Cartão de Dicas / Guias</h3>
                 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Título do Guia</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Título do Guia</span>
                     <input
                       type="text"
                       placeholder="Ex: Como configurar sua chave Pix"
                       value={artTitle}
                       onChange={e => setArtTitle(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Categoria</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Categoria</span>
                     <select
                       value={artCategory}
                       onChange={e => setArtCategory(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
                     >
                       <option value="Dicas">Dicas</option>
                       <option value="Coletivo">Coletivo</option>
@@ -632,13 +632,13 @@ export default function AdminConteudoPage() {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Tempo Estimado de Leitura</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Tempo Estimado de Leitura</span>
                     <input
                       type="text"
                       placeholder="Ex: 3 min"
                       value={artReadTime}
                       onChange={e => setArtReadTime(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                 </div>
@@ -650,17 +650,17 @@ export default function AdminConteudoPage() {
 
               {/* Published News List */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>Artigos e Dicas Publicados</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>Artigos e Dicas Publicados</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {news.map((item) => (
-                    <div key={item.id} style={{ display: "flex", justifySelf: "stretch", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, padding: 14, alignItems: "center", justifyContent: "space-between" }}>
+                    <div key={item.id} style={{ display: "flex", justifySelf: "stretch", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 12, padding: 14, alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                           <span style={{ fontSize: 11, fontFamily: "DM Sans", fontWeight: 700, color: "#0DB87E", textTransform: "uppercase" }}>{item.category}</span>
-                          <span style={{ fontSize: 11, color: "#94A3B8" }}>• {item.readTime}</span>
+                          <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>• {item.readTime}</span>
                         </div>
-                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0F172A", display: "block" }}>{item.title}</span>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8", marginTop: 2, display: "block" }}>Postado em {item.date}</span>
+                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-text)", display: "block" }}>{item.title}</span>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", marginTop: 2, display: "block" }}>Postado em {item.date}</span>
                       </div>
                       
                       <button
@@ -683,7 +683,7 @@ export default function AdminConteudoPage() {
                     </div>
                   ))}
                   {news.length === 0 && (
-                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>Nenhuma notícia criada no momento.</p>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", textAlign: "center", padding: "20px 0" }}>Nenhuma notícia criada no momento.</p>
                   )}
                 </div>
               </Card>
@@ -695,25 +695,25 @@ export default function AdminConteudoPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {/* Sender Card */}
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>Disparador de Notificações Push</h3>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px 0" }}>Disparador de Notificações Push</h3>
                 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Título do Push</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Título do Push</span>
                     <input
                       type="text"
                       placeholder="Ex: Prêmio 1/11 Acumulado!"
                       value={pushTitle}
                       onChange={e => setPushTitle(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none" }}
                     />
                   </label>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Grupo Destinatário</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Grupo Destinatário</span>
                     <select
                       value={pushGroup}
                       onChange={e => setPushGroup(e.target.value)}
-                      style={{ width: "100%", marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
+                      style={{ width: "100%", marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: "10px 14px", fontFamily: "DM Sans", fontSize: 14, outline: "none", cursor: "pointer" }}
                     >
                       <option value="Todos">Todos os Clientes</option>
                       <option value="Tomadores">Somente Tomadores (Passageiros/Clientes)</option>
@@ -724,12 +724,12 @@ export default function AdminConteudoPage() {
 
                 <div style={{ marginBottom: 20 }}>
                   <label>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#475569" }}>Mensagem da Notificação</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Mensagem da Notificação</span>
                     <textarea
                       placeholder="Escreva a notificação que será entregue nos smartphones dos usuários..."
                       value={pushMessage}
                       onChange={e => setPushMessage(e.target.value)}
-                      style={{ width: "100%", height: 80, marginTop: 6, background: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: 10, padding: 12, fontFamily: "DM Sans", fontSize: 14, outline: "none", resize: "none" }}
+                      style={{ width: "100%", height: 80, marginTop: 6, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 10, padding: 12, fontFamily: "DM Sans", fontSize: 14, outline: "none", resize: "none" }}
                     />
                   </label>
                 </div>
@@ -742,7 +742,7 @@ export default function AdminConteudoPage() {
               {/* Push Log Card */}
               <Card style={{ padding: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>Histórico de Notificações Enviadas</h3>
+                  <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Histórico de Notificações Enviadas</h3>
                   {pushLog.length > 0 && (
                     <button onClick={clearPushLog} style={{ background: "none", border: "none", color: "#E84040", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                       Limpar Histórico
@@ -752,12 +752,12 @@ export default function AdminConteudoPage() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {pushLog.map((log) => (
-                    <div key={log.id} style={{ borderBottom: "1px solid #F1F5F9", paddingBottom: 12 }}>
+                    <div key={log.id} style={{ borderBottom: "1px solid var(--admin-bg)", paddingBottom: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#334155" }}>{log.title}</span>
-                        <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "DM Sans" }}>{log.date}</span>
+                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-subtle)" }}>{log.title}</span>
+                        <span style={{ fontSize: 11, color: "var(--admin-muted)", fontFamily: "DM Sans" }}>{log.date}</span>
                       </div>
-                      <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", margin: "0 0 6px 0" }}>{log.message}</p>
+                      <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 6px 0" }}>{log.message}</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <Pill bg="rgba(43,110,232,0.06)" color="#2B6EE8" size="sm">Grupo: {log.group}</Pill>
                         <Pill bg="rgba(13,184,126,0.06)" color="#0DB87E" size="sm">Entregue: {log.count} aparelhos</Pill>
@@ -765,7 +765,7 @@ export default function AdminConteudoPage() {
                     </div>
                   ))}
                   {pushLog.length === 0 && (
-                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "10px 0" }}>Nenhuma notificação enviada recentemente.</p>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", textAlign: "center", padding: "10px 0" }}>Nenhuma notificação enviada recentemente.</p>
                   )}
                 </div>
               </Card>
@@ -777,8 +777,8 @@ export default function AdminConteudoPage() {
         <div>
           {/* Section Header */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <Smartphone size={18} color="#0F172A" />
-            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Visualização do Superapp</span>
+            <Smartphone size={18} color="var(--admin-text)" />
+            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Visualização do Superapp</span>
             <span style={{ animation: "ubt-blink 1.5s ease infinite", width: 6, height: 6, borderRadius: 999, background: "#0DB87E", marginLeft: 4 }} />
           </div>
 
@@ -790,7 +790,7 @@ export default function AdminConteudoPage() {
               height: 560,
               background: "#080F25",
               borderRadius: 36,
-              border: "10px solid #1E293B",
+              border: "10px solid var(--admin-text)",
               boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
               position: "relative",
               overflow: "hidden",
@@ -800,7 +800,7 @@ export default function AdminConteudoPage() {
             }}
           >
             {/* Camera notch */}
-            <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 90, height: 16, background: "#1E293B", borderRadius: "0 0 10px 10px", zIndex: 100 }} />
+            <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 90, height: 16, background: "var(--admin-text)", borderRadius: "0 0 10px 10px", zIndex: 100 }} />
             
             {/* Status bar */}
             <div style={{ height: 26, background: "#0A1128", display: "flex", justifyContent: "space-between", padding: "8px 16px 0 16px", fontSize: 9, fontFamily: "DM Sans", color: "rgba(255,255,255,0.4)", zIndex: 90, flexShrink: 0 }}>
@@ -874,7 +874,7 @@ export default function AdminConteudoPage() {
                             alignSelf: "flex-start",
                             marginTop: 10,
                             background: "white",
-                            color: "#0F172A",
+                            color: "var(--admin-text)",
                             border: "none",
                             borderRadius: 6,
                             padding: "4px 10px",
@@ -1014,7 +1014,7 @@ export default function AdminConteudoPage() {
           
           {/* Instructions note */}
           <div style={{ marginTop: 14, textAlign: "center" }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>
               💡 Altere as abas de Banners e Boletins para ver o celular atualizar.
             </span>
           </div>

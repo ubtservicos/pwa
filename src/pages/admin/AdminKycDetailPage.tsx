@@ -235,7 +235,7 @@ export default function AdminKycDetailPage() {
   if (loading) {
     return (
       <div style={{ padding: 32, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ fontFamily: "DM Sans", color: "#94A3B8" }}>Carregando dados do KYC...</div>
+        <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando dados do KYC...</div>
       </div>
     );
   }
@@ -248,7 +248,7 @@ export default function AdminKycDetailPage() {
           style={{
             background: "none",
             border: "none",
-            color: "#475569",
+            color: "var(--admin-subtle)",
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
@@ -263,7 +263,7 @@ export default function AdminKycDetailPage() {
         </button>
         <Card style={{ padding: 40, textAlign: "center" }}>
           <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#E84040" }}>Usuário não encontrado</div>
-          <div style={{ fontFamily: "DM Sans", color: "#94A3B8", marginTop: 8 }}>O ID solicitado não existe.</div>
+          <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)", marginTop: 8 }}>O ID solicitado não existe.</div>
         </Card>
       </div>
     );
@@ -277,7 +277,7 @@ export default function AdminKycDetailPage() {
         style={{
           background: "none",
           border: "none",
-          color: "#475569",
+          color: "var(--admin-subtle)",
           fontFamily: "DM Sans",
           fontSize: 14,
           fontWeight: 600,
@@ -288,8 +288,8 @@ export default function AdminKycDetailPage() {
           marginBottom: 24,
           transition: "color 150ms",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "#0F172A")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "#475569")}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--admin-text)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--admin-subtle)")}
       >
         <ArrowLeft size={16} /> Voltar para o Dashboard
       </button>
@@ -299,11 +299,11 @@ export default function AdminKycDetailPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <Avatar name={dbUser.nome} size={64} />
           <div>
-            <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               KYC de {dbUser.nome}
             </h1>
             <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-              <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B" }}>
+              <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                 Cadastrado em {new Date(dbUser.created_at).toLocaleDateString("pt-BR")}
               </span>
               <Pill bg="rgba(245,166,35,0.10)" color="#F5A623" size="sm">
@@ -327,7 +327,7 @@ export default function AdminKycDetailPage() {
         fontFamily: "DM Sans",
         fontSize: 13,
         lineHeight: 1.5,
-        color: "#475569"
+        color: "var(--admin-subtle)"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#0DB87E", marginBottom: 6 }}>
           <ShieldCheck size={18} /> Inclusão e Oportunidade UBT
@@ -347,7 +347,7 @@ export default function AdminKycDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid #E2E8F0", marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 24, borderBottom: "1px solid var(--admin-border)", marginBottom: 24 }}>
         <button
           onClick={() => setActiveTab("docs")}
           style={{
@@ -357,7 +357,7 @@ export default function AdminKycDetailPage() {
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
-            color: activeTab === "docs" ? "#0DB87E" : "#475569",
+            color: activeTab === "docs" ? "#0DB87E" : "var(--admin-subtle)",
             borderBottom: activeTab === "docs" ? "2px solid #0DB87E" : "2px solid transparent",
             cursor: "pointer",
             marginBottom: -1,
@@ -374,7 +374,7 @@ export default function AdminKycDetailPage() {
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
-            color: activeTab === "checklist" ? "#0DB87E" : "#475569",
+            color: activeTab === "checklist" ? "#0DB87E" : "var(--admin-subtle)",
             borderBottom: activeTab === "checklist" ? "2px solid #0DB87E" : "2px solid transparent",
             cursor: "pointer",
             marginBottom: -1,
@@ -397,40 +397,40 @@ export default function AdminKycDetailPage() {
                   flexDirection: "column",
                   justifyContent: "space-between",
                   minHeight: 180,
-                  border: "1px solid #E2E8F0",
-                  background: "#fff",
+                  border: "1px solid var(--admin-border)",
+                  background: "var(--admin-bg)",
                 }}
               >
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "#F1F5F9", display: "flex", alignItems: "center", justifyCenter: "center", justifyContent: "center" }}>
-                      <FileText size={20} color="#64748B" />
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--admin-bg)", display: "flex", alignItems: "center", justifyCenter: "center", justifyContent: "center" }}>
+                      <FileText size={20} color="var(--admin-subtle)" />
                     </div>
-                    <span style={{ fontSize: 11, fontFamily: "DM Sans", color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>
+                    <span style={{ fontSize: 11, fontFamily: "DM Sans", color: "var(--admin-muted)", fontWeight: 600, textTransform: "uppercase" }}>
                       {doc.type}
                     </span>
                   </div>
-                  <h3 style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A", margin: "0 0 4px" }}>
+                  <h3 style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)", margin: "0 0 4px" }}>
                     {doc.name}
                   </h3>
-                  <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", margin: 0 }}>
+                  <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", margin: 0 }}>
                     {doc.description}
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: 10, marginTop: 16, borderTop: "1px solid #F1F5F9", paddingTop: 12 }}>
+                <div style={{ display: "flex", gap: 10, marginTop: 16, borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
                   <button
                     onClick={() => setPreviewDoc(doc)}
                     style={{
                       flex: 1,
                       height: 32,
-                      background: "#F8FAFC",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 6,
                       fontFamily: "DM Sans",
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#475569",
+                      color: "var(--admin-subtle)",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -446,13 +446,13 @@ export default function AdminKycDetailPage() {
                     style={{
                       width: 32,
                       height: 32,
-                      background: "#F8FAFC",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 6,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: "#64748B",
+                      color: "var(--admin-subtle)",
                       cursor: "pointer",
                     }}
                   >
@@ -467,14 +467,14 @@ export default function AdminKycDetailPage() {
             display: "flex",
             alignItems: "center",
             gap: 12,
-            background: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            background: "var(--admin-bg)",
+            border: "1px solid var(--admin-border)",
             borderRadius: 12,
             padding: 16,
             marginTop: 8
           }}>
-            <AlertCircle size={18} color="#64748B" />
-            <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+            <AlertCircle size={18} color="var(--admin-subtle)" />
+            <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
               Verifique cuidadosamente se os dados das imagens coincidem com as informações digitadas e se não há sinais de falsificação antes de passar para a aba de checklist.
             </span>
           </div>
@@ -484,7 +484,7 @@ export default function AdminKycDetailPage() {
       {/* Content Tab 2: Checklist */}
       {activeTab === "checklist" && (
         <Card style={{ padding: 24 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: "0 0 16px" }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
             Requisitos de Validação - {category}
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -521,7 +521,7 @@ export default function AdminKycDetailPage() {
                     fontFamily: "DM Sans",
                     fontSize: 14,
                     fontWeight: 500,
-                    color: checkedItems[item.id] ? "#0F172A" : "#475569",
+                    color: checkedItems[item.id] ? "var(--admin-text)" : "var(--admin-subtle)",
                   }}>
                     {item.label}
                   </span>
@@ -597,7 +597,7 @@ export default function AdminKycDetailPage() {
               transform: "translate(-50%, -50%)",
               width: "90%",
               maxWidth: 600,
-              background: "#fff",
+              background: "var(--admin-bg)",
               borderRadius: 16,
               boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -10px rgba(0,0,0,0.1)",
               zIndex: 1110,
@@ -605,14 +605,14 @@ export default function AdminKycDetailPage() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                 Visualização: {previewDoc.name}
               </h3>
               <button
                 onClick={() => setPreviewDoc(null)}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
               >
-                <X size={20} color="#64748B" />
+                <X size={20} color="var(--admin-subtle)" />
               </button>
             </div>
             
@@ -620,7 +620,7 @@ export default function AdminKycDetailPage() {
             <div style={{
               width: "100%",
               height: 300,
-              background: "#F8FAFC",
+              background: "var(--admin-bg)",
               border: "2px dashed #E2E8F0",
               borderRadius: 12,
               display: "flex",
@@ -633,10 +633,10 @@ export default function AdminKycDetailPage() {
             }}>
               <FileCheck size={48} color="#0DB87E" />
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A" }}>
+                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>
                   {previewDoc.name}
                 </div>
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--admin-muted)", marginTop: 4 }}>
                   Hash de Segurança: SHA-256 (UBT-{Math.random().toString(36).substr(2, 9).toUpperCase()})
                 </div>
               </div>
@@ -656,7 +656,7 @@ export default function AdminKycDetailPage() {
                 gap: 8
               }}>
                 <ShieldCheck size={16} color="#0DB87E" />
-                <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#475569" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)" }}>
                   Este documento foi processado e criptografado de forma segura pelo Superapp.
                 </span>
               </div>
@@ -686,17 +686,17 @@ export default function AdminKycDetailPage() {
               transform: "translate(-50%, -50%)",
               width: "90%",
               maxWidth: 450,
-              background: "#fff",
+              background: "var(--admin-bg)",
               borderRadius: 16,
               boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -10px rgba(0,0,0,0.1)",
               zIndex: 1110,
               padding: 24,
             }}
           >
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 8px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px" }}>
               Reprovar Credenciamento (KYC)
             </h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", margin: "0 0 16px" }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 16px" }}>
               Por favor, informe ao usuário o motivo da rejeição do credenciamento. Este motivo será enviado por e-mail/notificação.
             </p>
 
@@ -707,7 +707,7 @@ export default function AdminKycDetailPage() {
               style={{
                 width: "100%",
                 height: 100,
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 10,
                 padding: 12,
                 fontFamily: "DM Sans",
@@ -724,13 +724,13 @@ export default function AdminKycDetailPage() {
                 style={{
                   flex: 1,
                   height: 40,
-                  background: "#F1F5F9",
+                  background: "var(--admin-bg)",
                   border: "none",
                   borderRadius: 10,
                   fontFamily: "DM Sans",
                   fontSize: 13,
                   fontWeight: 600,
-                  color: "#475569",
+                  color: "var(--admin-subtle)",
                   cursor: "pointer",
                 }}
               >

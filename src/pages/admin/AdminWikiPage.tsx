@@ -43,21 +43,21 @@ function parseMarkdown(text: string) {
   const lines = text.split("\n");
   return lines.map((line, idx) => {
     if (line.startsWith("# ")) {
-      return <h1 key={idx} style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", marginTop: 16, marginBottom: 12 }}>{line.substring(2)}</h1>;
+      return <h1 key={idx} style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", marginTop: 16, marginBottom: 12 }}>{line.substring(2)}</h1>;
     }
     if (line.startsWith("## ")) {
-      return <h2 key={idx} style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#1E293B", marginTop: 14, marginBottom: 10 }}>{line.substring(3)}</h2>;
+      return <h2 key={idx} style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", marginTop: 14, marginBottom: 10 }}>{line.substring(3)}</h2>;
     }
     if (line.startsWith("### ")) {
-      return <h3 key={idx} style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#334155", marginTop: 12, marginBottom: 8 }}>{line.substring(4)}</h3>;
+      return <h3 key={idx} style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-subtle)", marginTop: 12, marginBottom: 8 }}>{line.substring(4)}</h3>;
     }
     if (line.startsWith("- ") || line.startsWith("* ")) {
-      return <li key={idx} style={{ fontFamily: "DM Sans", fontSize: 14, color: "#334155", marginLeft: 16, marginBottom: 4 }}>{line.substring(2)}</li>;
+      return <li key={idx} style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginLeft: 16, marginBottom: 4 }}>{line.substring(2)}</li>;
     }
     if (line.trim() === "") {
       return <div key={idx} style={{ height: 8 }} />;
     }
-    return <p key={idx} style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", lineHeight: "1.6", margin: "4px 0" }}>{line}</p>;
+    return <p key={idx} style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", lineHeight: "1.6", margin: "4px 0" }}>{line}</p>;
   });
 }
 
@@ -228,7 +228,7 @@ export default function AdminWikiPage() {
   );
 
   return (
-    <div style={{ padding: 24, minHeight: "calc(100vh - 64px)", background: "#F8FAFC" }}>
+    <div style={{ padding: 24, minHeight: "calc(100vh - 64px)", background: "var(--admin-bg)" }}>
       <div style={{ display: "flex", justifyBetween: "space-between", alignItems: "center", marginBottom: 20 }}>
         <PageTitle sub="Wiki oficial e base de conhecimento integrada sob restrição granular ACL">
           UBT Wiki / Conhecimento
@@ -242,7 +242,7 @@ export default function AdminWikiPage() {
       </div>
 
       {loadingAreas ? (
-        <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+        <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
           Carregando base de conhecimento (RBAC)...
         </div>
       ) : (
@@ -251,7 +251,7 @@ export default function AdminWikiPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Search Bar */}
             <div style={{ position: "relative" }}>
-              <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+              <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -261,7 +261,7 @@ export default function AdminWikiPage() {
                   height: 40,
                   paddingLeft: 38,
                   borderRadius: 8,
-                  border: "1px solid #E2E8F0",
+                  border: "1px solid var(--admin-border)",
                   fontFamily: "DM Sans",
                   fontSize: 13,
                   outline: "none",
@@ -271,7 +271,7 @@ export default function AdminWikiPage() {
 
             {/* Folder list */}
             <Card style={{ padding: 12 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", padding: "0 8px 8px 8px", display: "block" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-muted)", textTransform: "uppercase", padding: "0 8px 8px 8px", display: "block" }}>
                 Pastas (/wiki)
               </span>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -284,7 +284,7 @@ export default function AdminWikiPage() {
                       textAlign: "left",
                       border: "none",
                       background: selectedArea?.id === a.id ? "rgba(13,184,126,0.08)" : "transparent",
-                      color: selectedArea?.id === a.id ? "#0DB87E" : "#475569",
+                      color: selectedArea?.id === a.id ? "#0DB87E" : "var(--admin-subtle)",
                       padding: "8px 12px",
                       borderRadius: 8,
                       fontFamily: "DM Sans",
@@ -296,7 +296,7 @@ export default function AdminWikiPage() {
                       gap: 8,
                     }}
                   >
-                    <Folder size={16} color={selectedArea?.id === a.id ? "#0DB87E" : "#94A3B8"} />
+                    <Folder size={16} color={selectedArea?.id === a.id ? "#0DB87E" : "var(--admin-muted)"} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {a.nome}
                     </span>
@@ -308,12 +308,12 @@ export default function AdminWikiPage() {
             {/* Document list inside selected area */}
             {selectedArea && (
               <Card style={{ padding: 12 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", padding: "0 8px 8px 8px", display: "block" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--admin-muted)", textTransform: "uppercase", padding: "0 8px 8px 8px", display: "block" }}>
                   Artigos
                 </span>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {documents.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "#94A3B8", padding: "8px 12px", fontStyle: "italic" }}>
+                    <div style={{ fontSize: 12, color: "var(--admin-muted)", padding: "8px 12px", fontStyle: "italic" }}>
                       Sem artigos publicados
                     </div>
                   ) : (
@@ -325,8 +325,8 @@ export default function AdminWikiPage() {
                           width: "100%",
                           textAlign: "left",
                           border: "none",
-                          background: selectedDoc?.slug === d.slug ? "#F1F5F9" : "transparent",
-                          color: selectedDoc?.slug === d.slug ? "#0F172A" : "#64748B",
+                          background: selectedDoc?.slug === d.slug ? "var(--admin-bg)" : "transparent",
+                          color: selectedDoc?.slug === d.slug ? "var(--admin-text)" : "var(--admin-subtle)",
                           padding: "8px 12px",
                           borderRadius: 8,
                           fontFamily: "DM Sans",
@@ -337,7 +337,7 @@ export default function AdminWikiPage() {
                           gap: 8,
                         }}
                       >
-                        <FileText size={14} color={selectedDoc?.slug === d.slug ? "#475569" : "#CBD5E1"} />
+                        <FileText size={14} color={selectedDoc?.slug === d.slug ? "var(--admin-subtle)" : "#CBD5E1"} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {d.titulo}
                         </span>
@@ -363,39 +363,39 @@ export default function AdminWikiPage() {
               </Card>
             ) : editing || creating ? (
               <Card style={{ padding: 24 }}>
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0F172A", marginBottom: 16 }}>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
                   {creating ? "Criar Novo Artigo" : `Editar Artigo: ${editTitle}`}
                 </h3>
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748B", display: "block", marginBottom: 4 }}>Título do Artigo</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Título do Artigo</label>
                     <input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
                       placeholder="Ex: Guia de Devolução Financeira"
-                      style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 12px", outline: "none", fontSize: 13, fontFamily: "DM Sans" }}
+                      style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 12px", outline: "none", fontSize: 13, fontFamily: "DM Sans" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "#64748B", display: "block", marginBottom: 4 }}>Conteúdo (Markdown)</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Conteúdo (Markdown)</label>
                     <textarea
                       rows={12}
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
                       placeholder="# Título do Artigo..."
-                      style={{ width: "100%", border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px", outline: "none", fontSize: 13, fontFamily: "monospace" }}
+                      style={{ width: "100%", border: "1px solid var(--admin-border)", borderRadius: 8, padding: "10px 12px", outline: "none", fontSize: 13, fontFamily: "monospace" }}
                     />
                   </div>
 
                   <div style={{ display: "flex", gap: 16 }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: "#64748B", display: "block", marginBottom: 4 }}>Classificação de Acesso</label>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Classificação de Acesso</label>
                       <select
                         value={editClassification}
                         onChange={(e) => setEditClassification(e.target.value as any)}
-                        style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 8px", outline: "none", fontSize: 13, fontFamily: "DM Sans" }}
+                        style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 8px", outline: "none", fontSize: 13, fontFamily: "DM Sans" }}
                       >
                         <option value="PUBLIC_INTERNAL">PUBLIC_INTERNAL (Todos os colaboradores)</option>
                         <option value="RESTRICTED">RESTRICTED (Operadores / N2)</option>
@@ -412,7 +412,7 @@ export default function AdminWikiPage() {
                         onChange={(e) => setEditAiAllowed(e.target.checked)}
                         style={{ width: 16, height: 16 }}
                       />
-                      <label htmlFor="ai_allowed_check" style={{ fontSize: 13, fontWeight: 500, color: "#475569", cursor: "pointer" }}>
+                      <label htmlFor="ai_allowed_check" style={{ fontSize: 13, fontWeight: 500, color: "var(--admin-subtle)", cursor: "pointer" }}>
                         Publicar em AI Knowledge (WhatsApp)
                       </label>
                     </div>
@@ -431,9 +431,9 @@ export default function AdminWikiPage() {
             ) : selectedDoc ? (
               <Card style={{ padding: 32 }}>
                 {/* Meta details header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #F1F5F9", paddingBottom: 16, marginBottom: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--admin-bg)", paddingBottom: 16, marginBottom: 20 }}>
                   <div>
-                    <h2 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    <h2 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
                       {selectedDoc.titulo}
                     </h2>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
@@ -452,7 +452,7 @@ export default function AdminWikiPage() {
                           🤖 Publicado para IA
                         </Pill>
                       ) : (
-                        <Pill bg="#F1F5F9" color="#64748B" size="sm">
+                        <Pill bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
                           Interno Apenas
                         </Pill>
                       )}
@@ -473,7 +473,7 @@ export default function AdminWikiPage() {
                   {parseMarkdown(selectedDoc.conteudo)}
                 </div>
 
-                <div style={{ marginTop: 32, borderTop: "1px solid #F1F5F9", paddingTop: 12, display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94A3B8", fontFamily: "DM Sans" }}>
+                <div style={{ marginTop: 32, borderTop: "1px solid var(--admin-bg)", paddingTop: 12, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                   <span>Atualizado em: {new Date(selectedDoc.updated_at).toLocaleString("pt-BR")}</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <Unlock size={12} /> Protegido por RLS (Audit Trail Ativo)
@@ -481,12 +481,12 @@ export default function AdminWikiPage() {
                 </div>
               </Card>
             ) : (
-              <Card style={{ padding: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#94A3B8" }}>
+              <Card style={{ padding: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", color: "var(--admin-muted)" }}>
                 <BookOpen size={48} color="#CBD5E1" style={{ marginBottom: 16 }} />
-                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#475569", margin: 0 }}>
+                <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-subtle)", margin: 0 }}>
                   Selecione um Artigo
                 </h3>
-                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", marginTop: 8, maxWidth: 360 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", marginTop: 8, maxWidth: 360 }}>
                   Navegue pelas pastas e selecione um documento na barra lateral para visualizar seu conteúdo estruturado.
                 </p>
               </Card>

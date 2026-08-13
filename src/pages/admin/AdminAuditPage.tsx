@@ -68,7 +68,7 @@ const SEVERITY_COLORS: Record<string, { bg: string; color: string; border: strin
   ALTA: { bg: "rgba(245,166,35,0.12)", color: "#F5A623", border: "rgba(245,166,35,0.30)" },
   MEDIA: { bg: "rgba(43,110,232,0.12)", color: "#2B6EE8", border: "rgba(43,110,232,0.30)" },
   BAIXA: { bg: "rgba(13,184,126,0.12)", color: "#0DB87E", border: "rgba(13,184,126,0.30)" },
-  INFO: { bg: "rgba(148,163,184,0.12)", color: "#64748B", border: "rgba(148,163,184,0.30)" },
+  INFO: { bg: "rgba(148,163,184,0.12)", color: "var(--admin-subtle)", border: "rgba(148,163,184,0.30)" },
 };
 
 const PAGE_SIZE = 15;
@@ -230,32 +230,32 @@ export default function AdminAuditPage() {
         }}
       >
         <ShieldCheck size={20} color="#0DB87E" />
-        <span style={{ fontSize: 13, color: "#64748B", lineHeight: 1.5 }}>
+        <span style={{ fontSize: 13, color: "var(--admin-subtle)", lineHeight: 1.5 }}>
           <strong>Imutabilidade RLS Ativa:</strong> Esta trilha de auditoria é protegida contra alterações na API Supabase. Operações de modificação (`UPDATE`) ou exclusão (`DELETE`) são permanentemente bloqueadas no PostgreSQL.
         </span>
       </div>
 
       {/* KPI Cards Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
             Total Registrado Hoje
             <HelpTooltip concept="admin.audit.total_hoje" />
           </span>
-          <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#0F172A", marginTop: 4 }}>
+          <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
             {summary.total_hoje}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Última Hora</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Última Hora</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: "#2B6EE8", marginTop: 4 }}>
             {summary.ultima_hora}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
             Ações Críticas
             <HelpTooltip concept="admin.audit.acoes_criticas" />
           </span>
@@ -264,8 +264,8 @@ export default function AdminAuditPage() {
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Falhas de Operação</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Falhas de Operação</span>
           <div style={{ fontFamily: "Syne", fontSize: 26, fontWeight: 700, color: summary.falhas > 0 ? "#F5A623" : "#0DB87E", marginTop: 4 }}>
             {summary.falhas}
           </div>
@@ -277,33 +277,33 @@ export default function AdminAuditPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center" }}>
           {/* Start Date */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Data Inicial</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Data Inicial</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => { setStartDate(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             />
           </div>
 
           {/* End Date */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Data Final</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Data Final</label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => { setEndDate(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             />
           </div>
 
           {/* Severity */}
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Criticidade</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Criticidade</label>
             <select
               value={selectedSeverity}
               onChange={(e) => { setSelectedSeverity(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
             >
               {["Todas", "CRITICA", "ALTA", "MEDIA", "BAIXA", "INFO"].map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -313,22 +313,22 @@ export default function AdminAuditPage() {
 
           {/* Text Search */}
           <div style={{ flex: 2, minWidth: 220 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4 }}>Pesquisar Ação / Operador / Entidade</label>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 4 }}>Pesquisar Ação / Operador / Entidade</label>
             <div style={{ position: "relative" }}>
-              <Search size={14} color="#94A3B8" style={{ position: "absolute", left: 10, top: 12 }} />
+              <Search size={14} color="var(--admin-muted)" style={{ position: "absolute", left: 10, top: 12 }} />
               <input
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                 placeholder="Ação, Nome, Email, ID de registro..."
-                style={{ width: "100%", height: 38, border: "1px solid #E2E8F0", borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+                style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
               />
             </div>
           </div>
         </div>
 
         {/* Category Chips */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid #F1F5F9", paddingTop: 12 }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Categorias:</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Categorias:</span>
           {CATEGORIES.map((cat) => {
             const sel = selectedCategory === cat;
             return (
@@ -340,8 +340,8 @@ export default function AdminAuditPage() {
                   padding: "4px 10px",
                   borderRadius: 6,
                   border: sel ? "1px solid #0DB87E" : "1px solid #E2E8F0",
-                  background: sel ? "rgba(13,184,126,0.12)" : "#F8FAFC",
-                  color: sel ? "#0DB87E" : "#64748B",
+                  background: sel ? "rgba(13,184,126,0.12)" : "var(--admin-bg)",
+                  color: sel ? "#0DB87E" : "var(--admin-subtle)",
                   fontFamily: "DM Sans",
                   fontSize: 12,
                   fontWeight: sel ? 700 : 500,
@@ -357,12 +357,12 @@ export default function AdminAuditPage() {
 
       {/* Main Table Card */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+            <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
               Registros Encontrados ({totalCount})
             </span>
-            <Pill bg="rgba(71,85,105,0.08)" color="#475569" size="sm">
+            <Pill bg="rgba(71,85,105,0.08)" color="var(--admin-subtle)" size="sm">
               Página {page + 1} de {totalPages}
             </Pill>
           </div>
@@ -382,18 +382,18 @@ export default function AdminAuditPage() {
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Carregando trilha de auditoria...
           </div>
         ) : logs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Nenhum evento registrado com os parâmetros informados.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans" }}>
-              <thead style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                <tr style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase" }}>
+              <thead style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)" }}>
+                <tr style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase" }}>
                   <th style={{ padding: "12px 16px" }}>Criticidade</th>
                   <th style={{ padding: "12px 16px" }}>Horário</th>
                   <th style={{ padding: "12px 16px" }}>Operador</th>
@@ -407,7 +407,7 @@ export default function AdminAuditPage() {
                 {logs.map((log) => {
                   const sevStyle = SEVERITY_COLORS[log.criticidade] || SEVERITY_COLORS.INFO;
                   return (
-                    <tr key={log.id} style={{ borderBottom: "1px solid #F1F5F9", transition: "background 100ms" }}>
+                    <tr key={log.id} style={{ borderBottom: "1px solid var(--admin-bg)", transition: "background 100ms" }}>
                       <td style={{ padding: "12px 16px" }}>
                         <span
                           style={{
@@ -423,22 +423,22 @@ export default function AdminAuditPage() {
                           {log.criticidade}
                         </span>
                       </td>
-                      <td style={{ padding: "12px 16px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>
+                      <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)", whiteSpace: "nowrap" }}>
                         {new Date(log.created_at).toLocaleDateString("pt-BR")} às {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </td>
                       <td style={{ padding: "12px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{log.admin_nome || "Sistema"}</div>
-                        <div style={{ fontSize: 11, color: "#94A3B8" }}>{log.admin_email || "system@ubt"}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>{log.admin_nome || "Sistema"}</div>
+                        <div style={{ fontSize: 11, color: "var(--admin-muted)" }}>{log.admin_email || "system@ubt"}</div>
                       </td>
                       <td style={{ padding: "12px 16px" }}>
-                        <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#F1F5F9", color: "#475569" }}>
+                        <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "var(--admin-bg)", color: "var(--admin-subtle)" }}>
                           {log.categoria}
                         </span>
                       </td>
                       <td style={{ padding: "12px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{log.acao}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{log.acao}</div>
                         {log.entidade && (
-                          <div style={{ fontSize: 11, color: "#64748B" }}>
+                          <div style={{ fontSize: 11, color: "var(--admin-subtle)" }}>
                             {log.entidade} {log.registro_id ? `(#${log.registro_id.slice(0, 8)})` : ""}
                           </div>
                         )}
@@ -457,8 +457,8 @@ export default function AdminAuditPage() {
                           style={{
                             padding: "5px 10px",
                             borderRadius: 6,
-                            border: "1px solid #E2E8F0",
-                            background: "#fff",
+                            border: "1px solid var(--admin-border)",
+                            background: "var(--admin-bg)",
                             color: "#2B6EE8",
                             fontSize: 12,
                             fontWeight: 600,
@@ -480,25 +480,25 @@ export default function AdminAuditPage() {
         )}
 
         {/* Server-Side Pagination Bar */}
-        <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B" }}>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #E2E8F0", background: "var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
             Mostrando {logs.length} de {totalCount} eventos
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 12, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}
+              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 12, fontWeight: 600, cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.5 : 1 }}
             >
               Anterior
             </button>
-            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#0F172A", alignSelf: "center", fontWeight: 700 }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-text)", alignSelf: "center", fontWeight: 700 }}>
               {page + 1} / {totalPages}
             </span>
             <button
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", fontSize: 12, fontWeight: 600, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
+              style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--admin-border)", background: "var(--admin-bg)", fontSize: 12, fontWeight: 600, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.5 : 1 }}
             >
               Próxima
             </button>
@@ -514,7 +514,7 @@ export default function AdminAuditPage() {
               onClick={() => setSelectedLogModal(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -530,33 +530,33 @@ export default function AdminAuditPage() {
               >
                 {selectedLogModal.criticidade}
               </span>
-              <span style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>{selectedLogModal.categoria}</span>
+              <span style={{ fontSize: 12, color: "var(--admin-subtle)", fontWeight: 600 }}>{selectedLogModal.categoria}</span>
             </div>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 4px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 4px" }}>
               {selectedLogModal.acao}
             </h3>
 
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", margin: "0 0 16px" }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 16px" }}>
               Executado por <strong>{selectedLogModal.admin_nome}</strong> ({selectedLogModal.admin_email}) em {new Date(selectedLogModal.created_at).toLocaleString("pt-BR")}
             </p>
 
             {/* Diff View: Valor Anterior vs Valor Novo */}
             {(selectedLogModal.valor_anterior || selectedLogModal.valor_novo) && (
               <div style={{ marginBottom: 18 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 700, color: "var(--admin-subtle)", display: "block", marginBottom: 6 }}>
                   Comparativo de Alteração (Diff)
                 </span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div style={{ background: "rgba(232,64,64,0.04)", border: "1px solid rgba(232,64,64,0.15)", borderRadius: 8, padding: 12 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#E84040", display: "block", marginBottom: 4 }}>Valor Anterior</span>
-                    <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
+                    <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "var(--admin-subtle)", whiteSpace: "pre-wrap" }}>
                       {selectedLogModal.valor_anterior ? JSON.stringify(selectedLogModal.valor_anterior, null, 2) : "—"}
                     </pre>
                   </div>
                   <div style={{ background: "rgba(13,184,126,0.04)", border: "1px solid rgba(13,184,126,0.15)", borderRadius: 8, padding: 12 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#0DB87E", display: "block", marginBottom: 4 }}>Valor Novo</span>
-                    <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "#334155", whiteSpace: "pre-wrap" }}>
+                    <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "var(--admin-subtle)", whiteSpace: "pre-wrap" }}>
                       {selectedLogModal.valor_novo ? JSON.stringify(selectedLogModal.valor_novo, null, 2) : "—"}
                     </pre>
                   </div>
@@ -566,14 +566,14 @@ export default function AdminAuditPage() {
 
             {/* Motivo */}
             {selectedLogModal.motivo && (
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block" }}>Motivo Informado:</span>
-                <span style={{ fontSize: 13, color: "#0F172A", fontFamily: "DM Sans" }}>{selectedLogModal.motivo}</span>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", display: "block" }}>Motivo Informado:</span>
+                <span style={{ fontSize: 13, color: "var(--admin-text)", fontFamily: "DM Sans" }}>{selectedLogModal.motivo}</span>
               </div>
             )}
 
             {/* Context Technical info */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12, fontSize: 11, color: "#64748B", fontFamily: "monospace", marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12, fontSize: 11, color: "var(--admin-subtle)", fontFamily: "monospace", marginBottom: 16 }}>
               <div>IP: {selectedLogModal.ip || "127.0.0.1"}</div>
               <div>Session ID: {selectedLogModal.session_id || "sess_live"}</div>
               <div style={{ gridColumn: "span 2" }}>User-Agent: {selectedLogModal.user_agent || "Desconhecido"}</div>
@@ -582,9 +582,9 @@ export default function AdminAuditPage() {
             {/* Metadata */}
             {selectedLogModal.metadata && Object.keys(selectedLogModal.metadata).length > 0 && (
               <div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>Metadados Adicionais:</span>
-                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12, overflowX: "auto" }}>
-                  <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "#334155" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Metadados Adicionais:</span>
+                <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12, overflowX: "auto" }}>
+                  <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "var(--admin-subtle)" }}>
                     {JSON.stringify(selectedLogModal.metadata, null, 2)}
                   </pre>
                 </div>

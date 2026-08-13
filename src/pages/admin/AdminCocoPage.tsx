@@ -164,7 +164,7 @@ export default function AdminCocoPage() {
 
       <div style={{ display: "flex", alignItems: "center", justifyItems: "center", gap: 8, marginBottom: 20 }}>
         <Recycle size={28} color="#0DB87E" />
-        <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+        <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
           Côco & Cia — Painel de Controle
         </h1>
       </div>
@@ -174,8 +174,8 @@ export default function AdminCocoPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
           {/* Card de Configuração Pix Fallback */}
           <Card style={{ padding: 24 }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Chave Pix de Contingência</div>
-            <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569", marginTop: 4 }}>
+            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Chave Pix de Contingência</div>
+            <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4 }}>
               Usada como chave de doação caso nenhum coletor esteja ativo no momento.
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -191,11 +191,11 @@ export default function AdminCocoPage() {
           {/* Card de Solicitações Pendentes (Aprovações) */}
           <Card style={{ padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)", display: "flex", alignItems: "center", gap: 6 }}>
                 <ShieldAlert size={18} color="#F5A623" />
                 Aprovações Pendentes
               </div>
-              <Pill bg={caminhoesPendentes.length > 0 ? "rgba(245,166,35,0.15)" : "#F1F5F9"} color={caminhoesPendentes.length > 0 ? "#F5A623" : "#94A3B8"} size="sm">
+              <Pill bg={caminhoesPendentes.length > 0 ? "rgba(245,166,35,0.15)" : "var(--admin-bg)"} color={caminhoesPendentes.length > 0 ? "#F5A623" : "var(--admin-muted)"} size="sm">
                 {caminhoesPendentes.length}
               </Pill>
             </div>
@@ -206,7 +206,7 @@ export default function AdminCocoPage() {
               <div style={emptyCardStyle}>
                 <span style={{ fontSize: 24, marginBottom: 6 }}>🌱</span>
                 <p style={{ margin: 0, fontWeight: 600 }}>Tudo em dia!</p>
-                <p style={{ margin: 0, fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Nenhuma solicitação pendente no momento.</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--admin-muted)", marginTop: 2 }}>Nenhuma solicitação pendente no momento.</p>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -214,8 +214,8 @@ export default function AdminCocoPage() {
                   <div
                     key={c.id}
                     style={{
-                      background: "#F8FAFC",
-                      border: "1px solid #E2E8F0",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 12,
                       padding: 14,
                       display: "flex",
@@ -225,20 +225,20 @@ export default function AdminCocoPage() {
                   >
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
+                        <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
                           {c.apelido}
                         </span>
-                        <span style={{ background: "#E2E8F0", fontFamily: "monospace", fontSize: 11, fontWeight: 700, color: "#0F172A", borderRadius: 6, padding: "2px 6px" }}>
+                        <span style={{ background: "#E2E8F0", fontFamily: "monospace", fontSize: 11, fontWeight: 700, color: "var(--admin-text)", borderRadius: 6, padding: "2px 6px" }}>
                           {c.plate}
                         </span>
                       </div>
-                      <p style={{ margin: "4px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+                      <p style={{ margin: "4px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                         <strong>Função:</strong> {c.role_solicitada === "cocoecia-dirigentes" ? "💼 Dirigente" : "🚚 Colaborador"}
                       </p>
-                      <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+                      <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                         <strong>Bairros:</strong> {c.areas_atendidas?.join(", ") || "Nenhum"}
                       </p>
-                      <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>
+                      <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
                         <strong>Pix:</strong> {c.pix_key || "Não informada (Colaborador)"}
                       </p>
                     </div>
@@ -295,7 +295,7 @@ export default function AdminCocoPage() {
           {/* Card de Caminhões Aprovados */}
           <Card style={{ padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Veículos da Frota</div>
+              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Veículos da Frota</div>
               <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
                 {caminhoesAprovados.length}
               </Pill>
@@ -304,7 +304,7 @@ export default function AdminCocoPage() {
             {loading ? (
               <div style={loadingStyle}>Carregando...</div>
             ) : caminhoesAprovados.length === 0 ? (
-              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", textAlign: "center", margin: 0, padding: 12 }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", textAlign: "center", margin: 0, padding: 12 }}>
                 Nenhum veículo aprovado ainda.
               </p>
             ) : (
@@ -317,17 +317,17 @@ export default function AdminCocoPage() {
                       alignItems: "center",
                       gap: 12,
                       padding: "10px 0",
-                      borderBottom: "1px solid #F1F5F9",
+                      borderBottom: "1px solid var(--admin-bg)",
                     }}
                   >
-                    <span style={{ background: "#F1F5F9", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "#0F172A", borderRadius: 6, padding: "3px 8px" }}>
+                    <span style={{ background: "var(--admin-bg)", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: "var(--admin-text)", borderRadius: 6, padding: "3px 8px" }}>
                       {t.plate}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <p style={{ margin: 0, fontFamily: "DM Sans", fontSize: 14, fontWeight: 500, color: "var(--admin-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {t.apelido}
                       </p>
-                      <p style={{ margin: 0, fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <p style={{ margin: 0, fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {t.areas_atendidas?.join(", ") || "Sem área"}
                       </p>
                     </div>
@@ -338,15 +338,15 @@ export default function AdminCocoPage() {
                           width: 8,
                           height: 8,
                           borderRadius: 999,
-                          background: t.is_online ? "#0DB87E" : "#94A3B8",
+                          background: t.is_online ? "#0DB87E" : "var(--admin-muted)",
                           display: "inline-block",
                         }}
                       />
-                      <span style={{ fontFamily: "DM Sans", fontSize: 12, color: t.is_online ? "#0DB87E" : "#94A3B8", fontWeight: 500 }}>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 12, color: t.is_online ? "#0DB87E" : "var(--admin-muted)", fontWeight: 500 }}>
                         {t.is_online ? "Online" : "Offline"}
                       </span>
                     </div>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "#94A3B8", minWidth: 68, textAlign: "right" }}>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", minWidth: 68, textAlign: "right" }}>
                       Hoje: {t.collections_today || 0}
                     </span>
                   </div>
@@ -358,7 +358,7 @@ export default function AdminCocoPage() {
           {/* Card de Pontos de Coleta Ativos */}
           <Card style={{ padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Coletas Pendentes Hoje</div>
+              <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Coletas Pendentes Hoje</div>
               <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
                 {pontos.length}
               </Pill>
@@ -367,7 +367,7 @@ export default function AdminCocoPage() {
             {loading ? (
               <div style={loadingStyle}>Carregando...</div>
             ) : pontos.length === 0 ? (
-              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8", textAlign: "center", margin: 0, padding: 12 }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)", textAlign: "center", margin: 0, padding: 12 }}>
                 Nenhum ponto aguardando coleta no momento.
               </p>
             ) : (
@@ -382,11 +382,11 @@ export default function AdminCocoPage() {
                         mapRef.current?.flyTo([Number(p.lat), Number(p.lng)], 16);
                       }}
                       style={pontoBtnStyle}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--admin-bg)")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <MapPin size={14} color={p.status === "confirmado" ? "#0DB87E" : "#F5A623"} />
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#0F172A", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.address}
                       </span>
                       <Pill bg={p.status === "confirmado" ? "rgba(13,184,126,0.1)" : "rgba(245,166,35,0.1)"} color={p.status === "confirmado" ? "#0DB87E" : "#F5A623"} size="sm">
@@ -408,7 +408,7 @@ export default function AdminCocoPage() {
             background: "#E8ECF2",
             display: "flex",
             flexDirection: "column",
-            border: "1px solid #E2E8F0",
+            border: "1px solid var(--admin-border)",
             minHeight: 600
           }}
         >
@@ -433,13 +433,13 @@ export default function AdminCocoPage() {
                   >
                     <Popup>
                       <div style={{ fontFamily: "DM Sans", minWidth: 150 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "#0F172A" }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "var(--admin-text)" }}>
                           🚚 {c.apelido}
                         </p>
-                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#475569" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--admin-subtle)" }}>
                           Placa: {c.plate}
                         </p>
-                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#475569" }}>
+                        <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--admin-subtle)" }}>
                           Bairros: {c.areas_atendidas?.join(", ") || "Nenhum"}
                         </p>
                         <p style={{ margin: "2px 0 0", fontSize: 11, color: "#0DB87E", fontWeight: 600 }}>
@@ -462,10 +462,10 @@ export default function AdminCocoPage() {
                   >
                     <Popup>
                       <div style={{ padding: 4, minWidth: 200, fontFamily: "DM Sans" }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", margin: "0 0 4px" }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)", margin: "0 0 4px" }}>
                           {p.address}
                         </p>
-                        <p style={{ fontSize: 12, color: "#475569", margin: "0 0 6px" }}>
+                        <p style={{ fontSize: 12, color: "var(--admin-subtle)", margin: "0 0 6px" }}>
                           {m.emoji} {m.nome}
                         </p>
                         
@@ -473,11 +473,11 @@ export default function AdminCocoPage() {
                         <div style={{ marginBottom: 8 }}>
                           {p.foto_url ? (
                             p.foto_url.startsWith("preset_") ? (
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#F1F5F9", padding: "4px 8px", borderRadius: 6 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--admin-bg)", padding: "4px 8px", borderRadius: 6 }}>
                                 <span style={{ fontSize: 18 }}>
                                   {p.foto_url === "preset_saco_verde" ? "🟢" : p.foto_url === "preset_caixa_papelao" ? "📦" : "🗑️"}
                                 </span>
-                                <span style={{ fontSize: 11, color: "#0F172A", fontWeight: 600 }}>
+                                <span style={{ fontSize: 11, color: "var(--admin-text)", fontWeight: 600 }}>
                                   {p.foto_url === "preset_saco_verde" ? "Saco Verde" : p.foto_url === "preset_caixa_papelao" ? "Caixa Papelão" : "Caixote Plástico"}
                                 </span>
                               </div>
@@ -485,11 +485,11 @@ export default function AdminCocoPage() {
                               <img
                                 src={p.foto_url}
                                 alt="Foto embalagem"
-                                style={{ width: "100%", maxHeight: 110, borderRadius: 6, objectFit: "cover", border: "1px solid #E2E8F0" }}
+                                style={{ width: "100%", maxHeight: 110, borderRadius: 6, objectFit: "cover", border: "1px solid var(--admin-border)" }}
                               />
                             )
                           ) : (
-                            <p style={{ fontSize: 11, color: "#94A3B8", fontStyle: "italic", margin: 0 }}>Sem foto da embalagem</p>
+                            <p style={{ fontSize: 11, color: "var(--admin-muted)", fontStyle: "italic", margin: 0 }}>Sem foto da embalagem</p>
                           )}
                         </div>
 
@@ -509,7 +509,7 @@ export default function AdminCocoPage() {
                           </span>
 
                           {p.status === "confirmado" && caminhaoAssociado && (
-                            <p style={{ fontSize: 11, color: "#475569", margin: "4px 0 0" }}>
+                            <p style={{ fontSize: 11, color: "var(--admin-subtle)", margin: "4px 0 0" }}>
                               Caminhão: <strong>{caminhaoAssociado.apelido}</strong>
                             </p>
                           )}
@@ -531,19 +531,19 @@ export default function AdminCocoPage() {
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: "#0DB87E" }} />
-                <span style={{ fontSize: 12, fontWeight: 500, color: "#475569" }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--admin-subtle)" }}>
                   {caminhoesOnline.length} Caminhões Online
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: "#F5A623" }} />
-                <span style={{ fontSize: 12, fontWeight: 500, color: "#475569" }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--admin-subtle)" }}>
                   {pontos.filter(p => p.status === "aguardando").length} Aguardando
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: "#0DB87E" }} />
-                <span style={{ fontSize: 12, fontWeight: 500, color: "#475569" }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--admin-subtle)" }}>
                   {pontos.filter(p => p.status === "confirmado").length} Coletando
                 </span>
               </div>
@@ -557,21 +557,21 @@ export default function AdminCocoPage() {
 
 const inputStyle = {
   flex: 1,
-  background: "#F1F5F9",
-  border: "1px solid #E2E8F0",
+  background: "var(--admin-bg)",
+  border: "1px solid var(--admin-border)",
   borderRadius: 10,
   height: 40,
   padding: "0 14px",
   fontFamily: "DM Sans",
   fontSize: 14,
-  color: "#0F172A",
+  color: "var(--admin-text)",
   outline: "none",
 };
 
 const loadingStyle = {
   fontFamily: "DM Sans",
   fontSize: 14,
-  color: "#94A3B8",
+  color: "var(--admin-muted)",
   textAlign: "center" as const,
   padding: "24px 0",
 };
@@ -583,7 +583,7 @@ const emptyCardStyle = {
   textAlign: "center" as const,
   fontFamily: "DM Sans",
   fontSize: 13,
-  color: "#475569",
+  color: "var(--admin-subtle)",
   display: "flex",
   flexDirection: "column" as const,
   alignItems: "center"

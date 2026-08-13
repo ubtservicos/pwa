@@ -242,8 +242,8 @@ export default function AdminSplitPage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Configuração da Taxa de Serviço</h1>
-      <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", marginTop: 8 }}>
+      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Configuração da Taxa de Serviço</h1>
+      <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", marginTop: 8 }}>
         Define como a taxa de serviço de cada transação é dividida entre as contas beneficiárias.
       </p>
 
@@ -261,7 +261,7 @@ export default function AdminSplitPage() {
               }}
             >
               <s.Icon size={16} color={s.color} />
-              <div style={{ flex: 1, fontFamily: "DM Sans", fontSize: 15, fontWeight: 500, color: "#0F172A" }}>{s.label}</div>
+              <div style={{ flex: 1, fontFamily: "DM Sans", fontSize: 15, fontWeight: 500, color: "var(--admin-text)" }}>{s.label}</div>
               <input
                 type="number"
                 min={0}
@@ -275,16 +275,16 @@ export default function AdminSplitPage() {
                   fontFamily: "DM Sans",
                   fontSize: 15,
                   fontWeight: 600,
-                  color: "#0F172A",
-                  background: "#F1F5F9",
-                  border: "1px solid #E2E8F0",
+                  color: "var(--admin-text)",
+                  background: "var(--admin-bg)",
+                  border: "1px solid var(--admin-border)",
                   borderRadius: 8,
                   padding: "7px 10px",
                   outline: "none",
                 }}
               />
-              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#94A3B8" }}>%</span>
-              <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", minWidth: 86, textAlign: "right", marginRight: 16 }}>
+              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-muted)" }}>%</span>
+              <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", minWidth: 86, textAlign: "right", marginRight: 16 }}>
                 ≈ R$ {((40 * split[s.key]) / 100).toFixed(2)}
               </span>
               
@@ -297,9 +297,9 @@ export default function AdminSplitPage() {
                     style={{
                       fontFamily: "DM Sans",
                       fontSize: 13,
-                      color: "#0F172A",
-                      background: "#F1F5F9",
-                      border: "1px solid #E2E8F0",
+                      color: "var(--admin-text)",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 6,
                       padding: "6px 8px",
                       outline: "none",
@@ -321,9 +321,9 @@ export default function AdminSplitPage() {
                       width: 180,
                       fontFamily: "DM Sans",
                       fontSize: 13,
-                      color: "#0F172A",
-                      background: "#fff",
-                      border: "1px solid #E2E8F0",
+                      color: "var(--admin-text)",
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
                       borderRadius: 6,
                       padding: "6px 10px",
                       outline: "none",
@@ -336,7 +336,7 @@ export default function AdminSplitPage() {
         </div>
 
         {/* Progress bar */}
-        <div style={{ marginTop: 20, height: 12, borderRadius: 999, overflow: "hidden", display: "flex", background: "#F1F5F9" }}>
+        <div style={{ marginTop: 20, height: 12, borderRadius: 999, overflow: "hidden", display: "flex", background: "var(--admin-bg)" }}>
           {SPLIT_CONFIG.map((s) => (
             <div
               key={s.key}
@@ -346,7 +346,7 @@ export default function AdminSplitPage() {
         </div>
 
         <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 600, color: ok ? "#0F172A" : "#E84040" }}>
+          <span style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 600, color: ok ? "var(--admin-text)" : "#E84040" }}>
             Total: {total.toFixed(1)}%
           </span>
           {!ok && (
@@ -369,7 +369,7 @@ export default function AdminSplitPage() {
           }}
         >
           <AlertTriangle size={16} color="#F5A623" style={{ flexShrink: 0, marginTop: 2 }} />
-          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#475569" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
             Atenção: estas configurações afetam todas as novas transações imediatamente. Transações já realizadas não são alteradas.
           </span>
         </div>

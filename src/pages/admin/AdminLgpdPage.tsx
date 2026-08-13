@@ -185,7 +185,7 @@ export default function AdminLgpdPage() {
               style={{
                 flex: 1,
                 height: 40,
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 borderRadius: 10,
                 padding: "0 12px",
                 fontFamily: "DM Sans",
@@ -196,7 +196,7 @@ export default function AdminLgpdPage() {
               Buscar
             </PrimaryButton>
           </form>
-          <p style={{ fontSize: 12, color: "#94A3B8", marginTop: 12, lineHeight: "1.5" }}>
+          <p style={{ fontSize: 12, color: "var(--admin-muted)", marginTop: 12, lineHeight: "1.5" }}>
             Busca unificada na tabela `public.usuarios` por e-mail, nome exato ou chave UUID.
           </p>
         </Card>
@@ -204,12 +204,12 @@ export default function AdminLgpdPage() {
         {/* Action Panel */}
         {selectedUser && (
           <Card style={{ padding: 24, border: "2px solid #0DB87E" }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
               <UserCheck color="#0DB87E" />
               Titular Identificado
             </h3>
             
-            <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 12, marginBottom: 20, fontFamily: "DM Sans", fontSize: 14 }}>
+            <div style={{ background: "var(--admin-bg)", padding: 16, borderRadius: 12, marginBottom: 20, fontFamily: "DM Sans", fontSize: 14 }}>
               <div style={{ marginBottom: 6 }}><strong>Nome:</strong> {selectedUser.nome}</div>
               <div style={{ marginBottom: 6 }}><strong>E-mail:</strong> {selectedUser.email}</div>
               <div style={{ marginBottom: 6 }}><strong>Papel:</strong> {selectedUser.role}</div>

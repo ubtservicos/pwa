@@ -51,7 +51,7 @@ const SEVERITY_COLORS: Record<string, { bg: string; color: string; border: strin
   ALTA: { bg: "rgba(245,166,35,0.12)", color: "#F5A623", border: "rgba(245,166,35,0.30)" },
   MEDIA: { bg: "rgba(43,110,232,0.12)", color: "#2B6EE8", border: "rgba(43,110,232,0.30)" },
   BAIXA: { bg: "rgba(13,184,126,0.12)", color: "#0DB87E", border: "rgba(13,184,126,0.30)" },
-  INFO: { bg: "rgba(148,163,184,0.12)", color: "#64748B", border: "rgba(148,163,184,0.30)" },
+  INFO: { bg: "rgba(148,163,184,0.12)", color: "var(--admin-subtle)", border: "rgba(148,163,184,0.30)" },
 };
 
 export default function AdminSecurityCenterPage() {
@@ -191,7 +191,7 @@ export default function AdminSecurityCenterPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Security Center
             </h1>
             {data?.selo && (
@@ -213,7 +213,7 @@ export default function AdminSecurityCenterPage() {
               </span>
             )}
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4 }}>
             Monitoramento contínuo da superfície de ataque, riscos operacionais, financeiros e privacidade LGPD.
           </p>
         </div>
@@ -258,8 +258,8 @@ export default function AdminSecurityCenterPage() {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16, marginBottom: 28 }}>
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
             Security Score
             <HelpTooltip concept="admin.security.score" />
           </span>
@@ -267,37 +267,37 @@ export default function AdminSecurityCenterPage() {
             {data ? `${data.score}%` : "—"}
           </div>
           {data && (
-            <div style={{ width: "100%", height: 6, borderRadius: 999, background: "#F1F5F9", marginTop: 8, overflow: "hidden" }}>
+            <div style={{ width: "100%", height: 6, borderRadius: 999, background: "var(--admin-bg)", marginTop: 8, overflow: "hidden" }}>
               <div style={{ width: `${data.score}%`, height: "100%", background: (data?.score || 0) >= 90 ? "#0DB87E" : "#2B6EE8", transition: "width 500ms" }} />
             </div>
           )}
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", display: "inline-flex", alignItems: "center" }}>
             Riscos Críticos
             <HelpTooltip concept="admin.security.riscos_criticos" />
           </span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: (data?.riscos_criticos || 0) > 0 ? "#E84040" : "#0DB87E", marginTop: 4 }}>
             {data ? data.riscos_criticos : 0}
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", marginTop: 4, margin: 0 }}>Ação imediata requerida</p>
+          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4, margin: 0 }}>Ação imediata requerida</p>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Riscos Médios / Baixos</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Riscos Médios / Baixos</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#F5A623", marginTop: 4 }}>
             {data ? data.riscos_medios + data.riscos_baixos : 0}
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", marginTop: 4, margin: 0 }}>Ocorrências monitoradas</p>
+          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4, margin: 0 }}>Ocorrências monitoradas</p>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Riscos Resolvidos</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Riscos Resolvidos</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#0DB87E", marginTop: 4 }}>
             {data ? data.riscos_resolvidos : 0}
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B", marginTop: 4, margin: 0 }}>Vulnerabilidades mitigadas</p>
+          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4, margin: 0 }}>Vulnerabilidades mitigadas</p>
         </Card>
       </div>
 
@@ -305,7 +305,7 @@ export default function AdminSecurityCenterPage() {
       <Card style={{ padding: 18, marginBottom: 24, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ position: "relative", flex: 1, minWidth: 240 }}>
-            <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+            <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
             <input
               type="text"
               placeholder="Buscar ocorrências de segurança por título, descrição ou categoria..."
@@ -316,7 +316,7 @@ export default function AdminSecurityCenterPage() {
                 height: 40,
                 paddingLeft: 38,
                 borderRadius: 8,
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 fontFamily: "DM Sans",
                 fontSize: 13,
                 outline: "none",
@@ -325,7 +325,7 @@ export default function AdminSecurityCenterPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>Criticidade:</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", fontWeight: 600 }}>Criticidade:</span>
             {["Todas", "CRITICA", "ALTA", "MEDIA", "BAIXA", "INFO"].map((sev) => {
               const sel = selectedSeverity === sev;
               return (
@@ -338,7 +338,7 @@ export default function AdminSecurityCenterPage() {
                     borderRadius: 999,
                     border: sel ? "1px solid #0DB87E" : "1px solid #E2E8F0",
                     background: sel ? "rgba(13,184,126,0.12)" : "#fff",
-                    color: sel ? "#0DB87E" : "#475569",
+                    color: sel ? "#0DB87E" : "var(--admin-subtle)",
                     fontFamily: "DM Sans",
                     fontSize: 12,
                     fontWeight: sel ? 700 : 500,
@@ -353,8 +353,8 @@ export default function AdminSecurityCenterPage() {
         </div>
 
         {/* Category Chips */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Superfície:</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--admin-bg)", paddingTop: 10 }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Superfície:</span>
           {CATEGORIES.map((cat) => {
             const sel = selectedCategory === cat;
             return (
@@ -366,8 +366,8 @@ export default function AdminSecurityCenterPage() {
                   padding: "4px 10px",
                   borderRadius: 6,
                   border: sel ? "1px solid #2B6EE8" : "1px solid #E2E8F0",
-                  background: sel ? "rgba(43,110,232,0.10)" : "#F8FAFC",
-                  color: sel ? "#2B6EE8" : "#64748B",
+                  background: sel ? "rgba(43,110,232,0.10)" : "var(--admin-bg)",
+                  color: sel ? "#2B6EE8" : "var(--admin-subtle)",
                   fontFamily: "DM Sans",
                   fontSize: 12,
                   fontWeight: sel ? 700 : 500,
@@ -383,30 +383,30 @@ export default function AdminSecurityCenterPage() {
 
       {/* Findings Table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
             Ocorrências de Segurança ({filteredFindings.length})
           </span>
-          <Pill bg="rgba(71,85,105,0.08)" color="#475569" size="sm">
+          <Pill bg="rgba(71,85,105,0.08)" color="var(--admin-subtle)" size="sm">
             {selectedCategory} · {selectedSeverity}
           </Pill>
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Auditando superfície de ataque e políticas de segurança...
           </div>
         ) : filteredFindings.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             <ShieldCheck size={40} color="#0DB87E" style={{ margin: "0 auto 12px" }} />
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#334155", margin: 0 }}>Superfície de ataque segura!</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-subtle)", margin: 0 }}>Superfície de ataque segura!</p>
             <p style={{ fontSize: 13, marginTop: 4 }}>Nenhum risco de segurança aberto identificado com os parâmetros selecionados.</p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans" }}>
               <thead>
-                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: 11, color: "#94A3B8", textTransform: "uppercase" }}>
+                <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase" }}>
                   <th style={{ padding: "12px 16px" }}>Criticidade</th>
                   <th style={{ padding: "12px 16px" }}>Superfície</th>
                   <th style={{ padding: "12px 16px" }}>Título & Detalhes</th>
@@ -420,7 +420,7 @@ export default function AdminSecurityCenterPage() {
                   const sevStyle = SEVERITY_COLORS[finding.criticidade] || SEVERITY_COLORS.INFO;
                   const isResolved = finding.status === "resolved";
                   return (
-                    <tr key={finding.id} style={{ borderBottom: "1px solid #F1F5F9", background: isResolved ? "#F8FAFC" : "#fff", opacity: isResolved ? 0.75 : 1 }}>
+                    <tr key={finding.id} style={{ borderBottom: "1px solid var(--admin-bg)", background: isResolved ? "var(--admin-bg)" : "#fff", opacity: isResolved ? 0.75 : 1 }}>
                       <td style={{ padding: "14px 16px" }}>
                         <span
                           style={{
@@ -437,15 +437,15 @@ export default function AdminSecurityCenterPage() {
                         </span>
                       </td>
                       <td style={{ padding: "14px 16px" }}>
-                        <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#F1F5F9", color: "#475569" }}>
+                        <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "var(--admin-bg)", color: "var(--admin-subtle)" }}>
                           {finding.categoria}
                         </span>
                       </td>
                       <td style={{ padding: "14px 16px", maxWidth: 360 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{finding.titulo}</div>
-                        <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{finding.descricao}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>{finding.titulo}</div>
+                        <div style={{ fontSize: 12, color: "var(--admin-subtle)", marginTop: 2 }}>{finding.descricao}</div>
                       </td>
-                      <td style={{ padding: "14px 16px", fontSize: 12, fontWeight: 700, color: finding.risco === "ALTO" || finding.risco === "EXTREMO" ? "#E84040" : "#64748B" }}>
+                      <td style={{ padding: "14px 16px", fontSize: 12, fontWeight: 700, color: finding.risco === "ALTO" || finding.risco === "EXTREMO" ? "#E84040" : "var(--admin-subtle)" }}>
                         {finding.risco || "MEDIO"}
                       </td>
                       <td style={{ padding: "14px 16px" }}>
@@ -463,9 +463,9 @@ export default function AdminSecurityCenterPage() {
                             style={{
                               padding: "6px 12px",
                               borderRadius: 8,
-                              border: "1px solid #E2E8F0",
-                              background: "#fff",
-                              color: "#475569",
+                              border: "1px solid var(--admin-border)",
+                              background: "var(--admin-bg)",
+                              color: "var(--admin-subtle)",
                               fontSize: 12,
                               fontWeight: 600,
                               cursor: "pointer",
@@ -511,7 +511,7 @@ export default function AdminSecurityCenterPage() {
               onClick={() => setSelectedFindingModal(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -527,28 +527,28 @@ export default function AdminSecurityCenterPage() {
               >
                 {selectedFindingModal.criticidade}
               </span>
-              <span style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>{selectedFindingModal.categoria}</span>
+              <span style={{ fontSize: 12, color: "var(--admin-subtle)", fontWeight: 600 }}>{selectedFindingModal.categoria}</span>
             </div>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 8px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px" }}>
               {selectedFindingModal.titulo}
             </h3>
 
-            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#475569", lineHeight: 1.5, marginBottom: 16 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", lineHeight: 1.5, marginBottom: 16 }}>
               {selectedFindingModal.descricao}
             </p>
 
             {selectedFindingModal.impacto && (
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12, marginBottom: 14 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block" }}>Impacto Potencial:</span>
-                <span style={{ fontSize: 13, color: "#0F172A", fontFamily: "DM Sans" }}>{selectedFindingModal.impacto}</span>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 12, marginBottom: 14 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", display: "block" }}>Impacto Potencial:</span>
+                <span style={{ fontSize: 13, color: "var(--admin-text)", fontFamily: "DM Sans" }}>{selectedFindingModal.impacto}</span>
               </div>
             )}
 
             {selectedFindingModal.acao && (
               <div style={{ background: "rgba(13,184,126,0.06)", border: "1px solid rgba(13,184,126,0.20)", borderRadius: 10, padding: 14, marginBottom: 20 }}>
                 <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 700, color: "#0DB87E", textTransform: "uppercase" }}>Plano de Ação Recomendado</span>
-                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#1E293B", margin: "4px 0 0", lineHeight: 1.4 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", margin: "4px 0 0", lineHeight: 1.4 }}>
                   {selectedFindingModal.acao}
                 </p>
               </div>

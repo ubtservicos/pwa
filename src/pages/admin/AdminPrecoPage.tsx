@@ -42,8 +42,8 @@ const RadioCard = ({ opt, selected, onSelect }: { opt: Opt; selected: boolean; o
       {opt.value.toFixed(1)}×
     </div>
     <div style={{ flex: 1 }}>
-      <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0F172A" }}>{opt.label}</div>
-      <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "#475569" }}>{opt.desc}</div>
+      <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>{opt.label}</div>
+      <div style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>{opt.desc}</div>
     </div>
     {selected && <Check size={16} color={opt.color} />}
   </div>
@@ -59,11 +59,11 @@ export default function AdminPrecoPage() {
 
   return (
     <div style={{ padding: 32, maxWidth: 960, margin: "0 auto" }}>
-      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0F172A", margin: 0 }}>Preço Dinâmico</h1>
+      <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Preço Dinâmico</h1>
 
       <div
         style={{
-          background: "#0F172A",
+          background: "var(--admin-text)",
           borderRadius: 16,
           padding: 24,
           marginTop: 16,
@@ -100,7 +100,7 @@ export default function AdminPrecoPage() {
           { title: "Clima", opts: CLIMA_OPTIONS, val: clima, set: setClima },
         ].map((sec) => (
           <Card key={sec.title} style={{ padding: 24 }}>
-            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A", marginBottom: 16 }}>
+            <div style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
               {sec.title}
             </div>
             {sec.opts.map((o) => (
@@ -112,7 +112,7 @@ export default function AdminPrecoPage() {
 
       <div
         style={{
-          background: "#0F172A",
+          background: "var(--admin-text)",
           borderRadius: 16,
           padding: 24,
           marginTop: 24,

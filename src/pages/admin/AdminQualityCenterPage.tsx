@@ -179,7 +179,7 @@ export default function AdminQualityCenterPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#0F172A", margin: 0 }}>
+            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
               Quality Center
             </h1>
             {summary?.selo && (
@@ -201,7 +201,7 @@ export default function AdminQualityCenterPage() {
               </span>
             )}
           </div>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#64748B", marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", marginTop: 4 }}>
             Centro oficial de certificação técnica e validação pré-deploy do UBT SuperApp.
           </p>
         </div>
@@ -271,34 +271,34 @@ export default function AdminQualityCenterPage() {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16, marginBottom: 28 }}>
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Score Geral</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Score Geral</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 800, color: (summary?.score || 0) >= 90 ? "#0DB87E" : (summary?.score || 0) >= 75 ? "#2B6EE8" : "#E84040", marginTop: 4 }}>
             {summary ? `${summary.score}%` : "—"}
           </div>
           {summary && (
-            <div style={{ width: "100%", height: 6, borderRadius: 999, background: "#F1F5F9", marginTop: 8, overflow: "hidden" }}>
+            <div style={{ width: "100%", height: 6, borderRadius: 999, background: "var(--admin-bg)", marginTop: 8, overflow: "hidden" }}>
               <div style={{ width: `${summary.score}%`, height: "100%", background: (summary?.score || 0) >= 90 ? "#0DB87E" : "#2B6EE8", transition: "width 500ms" }} />
             </div>
           )}
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Testes Passaram</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Testes Passaram</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#0DB87E", marginTop: 4 }}>
-            {summary ? summary.passed_tests : 0} <span style={{ fontSize: 14, color: "#94A3B8", fontWeight: 500 }}>/ {summary?.total_tests || 0}</span>
+            {summary ? summary.passed_tests : 0} <span style={{ fontSize: 14, color: "var(--admin-muted)", fontWeight: 500 }}>/ {summary?.total_tests || 0}</span>
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Testes Falharam</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Testes Falharam</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: (summary?.failed_tests || 0) > 0 ? "#E84040" : "#0DB87E", marginTop: 4 }}>
             {summary ? summary.failed_tests : 0}
           </div>
         </Card>
 
-        <Card style={{ padding: 20, border: "1px solid #E2E8F0" }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase" }}>Duração da Suíte</span>
+        <Card style={{ padding: 20, border: "1px solid var(--admin-border)" }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase" }}>Duração da Suíte</span>
           <div style={{ fontFamily: "Syne", fontSize: 32, fontWeight: 700, color: "#2B6EE8", marginTop: 4 }}>
             {summary ? `${summary.duration_ms}ms` : "0ms"}
           </div>
@@ -309,7 +309,7 @@ export default function AdminQualityCenterPage() {
       <Card style={{ padding: 18, marginBottom: 24, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ position: "relative", flex: 1, minWidth: 240 }}>
-            <Search size={16} color="#94A3B8" style={{ position: "absolute", left: 12, top: 12 }} />
+            <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
             <input
               type="text"
               placeholder="Buscar verificação por código, nome ou mensagem..."
@@ -320,7 +320,7 @@ export default function AdminQualityCenterPage() {
                 height: 40,
                 paddingLeft: 38,
                 borderRadius: 8,
-                border: "1px solid #E2E8F0",
+                border: "1px solid var(--admin-border)",
                 fontFamily: "DM Sans",
                 fontSize: 13,
                 outline: "none",
@@ -329,7 +329,7 @@ export default function AdminQualityCenterPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>Status:</span>
+            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", fontWeight: 600 }}>Status:</span>
             {["Todas", "passed", "failed", "warning"].map((st) => {
               const sel = selectedStatus === st;
               return (
@@ -342,7 +342,7 @@ export default function AdminQualityCenterPage() {
                     borderRadius: 999,
                     border: sel ? "1px solid #0DB87E" : "1px solid #E2E8F0",
                     background: sel ? "rgba(13,184,126,0.12)" : "#fff",
-                    color: sel ? "#0DB87E" : "#475569",
+                    color: sel ? "#0DB87E" : "var(--admin-subtle)",
                     fontFamily: "DM Sans",
                     fontSize: 12,
                     fontWeight: sel ? 700 : 500,
@@ -357,8 +357,8 @@ export default function AdminQualityCenterPage() {
         </div>
 
         {/* Category Chips */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
-          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#94A3B8", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Módulos:</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--admin-bg)", paddingTop: 10 }}>
+          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", fontWeight: 600, alignSelf: "center", marginRight: 4 }}>Módulos:</span>
           {CATEGORIES.map((cat) => {
             const sel = selectedCategory === cat;
             return (
@@ -370,8 +370,8 @@ export default function AdminQualityCenterPage() {
                   padding: "4px 10px",
                   borderRadius: 6,
                   border: sel ? "1px solid #2B6EE8" : "1px solid #E2E8F0",
-                  background: sel ? "rgba(43,110,232,0.10)" : "#F8FAFC",
-                  color: sel ? "#2B6EE8" : "#64748B",
+                  background: sel ? "rgba(43,110,232,0.10)" : "var(--admin-bg)",
+                  color: sel ? "#2B6EE8" : "var(--admin-subtle)",
                   fontFamily: "DM Sans",
                   fontSize: 12,
                   fontWeight: sel ? 700 : 500,
@@ -387,32 +387,32 @@ export default function AdminQualityCenterPage() {
 
       {/* Results Table */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", background: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0F172A" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-bg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>
             Resultado das Verificações ({filteredTests.length})
           </span>
           {summary?.created_at && (
-            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#64748B" }}>
+            <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
               Última execução: {new Date(summary.created_at).toLocaleString("pt-BR")}
             </span>
           )}
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             Carregando diagnósticos de certificação técnica...
           </div>
         ) : filteredTests.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "#94A3B8" }}>
+          <div style={{ padding: 40, textAlign: "center", fontFamily: "DM Sans", color: "var(--admin-muted)" }}>
             <CheckCircle2 size={36} color="#0DB87E" style={{ margin: "0 auto 12px" }} />
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#334155", margin: 0 }}>Nenhuma execução encontrada.</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--admin-subtle)", margin: 0 }}>Nenhuma execução encontrada.</p>
             <p style={{ fontSize: 12, marginTop: 4 }}>Clique em "Executar Suíte de Testes" para iniciar o diagnóstico.</p>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans" }}>
               <thead>
-                <tr style={{ background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", fontSize: 11, color: "#94A3B8", textTransform: "uppercase" }}>
+                <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase" }}>
                   <th style={{ padding: "12px 16px" }}>Status</th>
                   <th style={{ padding: "12px 16px" }}>Módulo</th>
                   <th style={{ padding: "12px 16px" }}>Nome do Teste</th>
@@ -423,7 +423,7 @@ export default function AdminQualityCenterPage() {
               </thead>
               <tbody>
                 {filteredTests.map((t) => (
-                  <tr key={t.codigo} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                  <tr key={t.codigo} style={{ borderBottom: "1px solid var(--admin-bg)" }}>
                     <td style={{ padding: "12px 16px" }}>
                       {t.status === "passed" ? (
                         <Pill bg="rgba(13,184,126,0.12)" color="#0DB87E" size="sm">PASSED</Pill>
@@ -434,20 +434,20 @@ export default function AdminQualityCenterPage() {
                       )}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "#F1F5F9", color: "#475569" }}>
+                      <span style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "var(--admin-bg)", color: "var(--admin-subtle)" }}>
                         {t.categoria}
                       </span>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{t.nome}</div>
-                      <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace" }}>{t.codigo}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{t.nome}</div>
+                      <div style={{ fontSize: 11, color: "var(--admin-muted)", fontFamily: "monospace" }}>{t.codigo}</div>
                     </td>
                     <td style={{ padding: "12px 16px", maxWidth: 380 }}>
-                      <div style={{ fontSize: 13, color: t.status === "failed" ? "#E84040" : "#475569" }}>
+                      <div style={{ fontSize: 13, color: t.status === "failed" ? "#E84040" : "var(--admin-subtle)" }}>
                         {t.mensagem}
                       </div>
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#64748B", fontFamily: "monospace" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)", fontFamily: "monospace" }}>
                       {t.duration_ms}ms
                     </td>
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
@@ -457,9 +457,9 @@ export default function AdminQualityCenterPage() {
                         style={{
                           padding: "5px 10px",
                           borderRadius: 6,
-                          border: "1px solid #E2E8F0",
-                          background: "#fff",
-                          color: "#475569",
+                          border: "1px solid var(--admin-border)",
+                          background: "var(--admin-bg)",
+                          color: "var(--admin-subtle)",
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: "pointer",
@@ -484,7 +484,7 @@ export default function AdminQualityCenterPage() {
               onClick={() => setSelectedTestModal(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
             >
-              <X size={20} color="#64748B" />
+              <X size={20} color="var(--admin-subtle)" />
             </button>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -493,27 +493,27 @@ export default function AdminQualityCenterPage() {
               ) : (
                 <Pill bg="rgba(232,64,64,0.12)" color="#E84040" size="sm">FAILED</Pill>
               )}
-              <span style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>{selectedTestModal.categoria}</span>
+              <span style={{ fontSize: 12, color: "var(--admin-subtle)", fontWeight: 600 }}>{selectedTestModal.categoria}</span>
             </div>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 4px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 4px" }}>
               {selectedTestModal.nome}
             </h3>
-            <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace", display: "block", marginBottom: 12 }}>
+            <span style={{ fontSize: 11, color: "var(--admin-muted)", fontFamily: "monospace", display: "block", marginBottom: 12 }}>
               {selectedTestModal.codigo} · Duração: {selectedTestModal.duration_ms}ms
             </span>
 
-            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 14, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>Resultado:</span>
-              <p style={{ fontSize: 13, color: "#0F172A", margin: 0, fontFamily: "DM Sans" }}>
+            <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 14, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Resultado:</span>
+              <p style={{ fontSize: 13, color: "var(--admin-text)", margin: 0, fontFamily: "DM Sans" }}>
                 {selectedTestModal.mensagem}
               </p>
             </div>
 
             {selectedTestModal.detalhes && Object.keys(selectedTestModal.detalhes).length > 0 && (
-              <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: 14 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>Detalhes Técnicos:</span>
-                <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "#334155" }}>
+              <div style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: 14 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", display: "block", marginBottom: 4 }}>Detalhes Técnicos:</span>
+                <pre style={{ margin: 0, fontSize: 11, fontFamily: "monospace", color: "var(--admin-subtle)" }}>
                   {JSON.stringify(selectedTestModal.detalhes, null, 2)}
                 </pre>
               </div>

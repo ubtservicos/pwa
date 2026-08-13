@@ -298,7 +298,7 @@ export default function AdminDocumentosPage() {
                       {/* Document visualizer - Never disabled, falls back to Fake visualizer */}
                       <button
                         onClick={() => handleViewDocument(doc)}
-                        className="px-3.5 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:bg-white/5 transition-all text-xs font-semibold text-white flex items-center gap-1.5"
+                        className="px-3.5 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:bg-[#18181B]/5 transition-all text-xs font-semibold text-white flex items-center gap-1.5"
                         title="Visualizar documento anexo"
                       >
                         <Eye size={14} />
@@ -393,7 +393,7 @@ export default function AdminDocumentosPage() {
             {/* Close Button */}
             <button
               onClick={() => setViewingFakeDoc(null)}
-              className="mt-6 w-full py-2.5 rounded-xl text-xs font-semibold bg-[#18181B] border border-[#27272A] text-white hover:bg-white/5 transition-all"
+              className="mt-6 w-full py-2.5 rounded-xl text-xs font-semibold bg-[#18181B] border border-[#27272A] text-white hover:bg-[#18181B]/5 transition-all"
             >
               Fechar Visualizador
             </button>
@@ -428,7 +428,7 @@ export default function AdminDocumentosPage() {
                   setJustification("");
                 }}
                 disabled={submittingReject}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-transparent border border-[#27272A] hover:bg-white/5 transition-all"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-transparent border border-[#27272A] hover:bg-[#18181B]/5 transition-all"
               >
                 Cancelar
               </button>
