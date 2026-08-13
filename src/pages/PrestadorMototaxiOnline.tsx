@@ -35,8 +35,8 @@ const Sheet = ({ children }: { children: React.ReactNode }) => (
   <div
     className="absolute left-0 right-0 bottom-0 z-10"
     style={{
-      background: "#18181B",
-      borderTop: "1px solid #27272A",
+      background: "var(--prestador-card)",
+      borderTop: "1px solid var(--prestador-border)",
       borderRadius: "24px 24px 0 0",
       padding: "12px 20px 96px",
       boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
@@ -79,8 +79,8 @@ const ChamadoModal = ({
       <div
         className="w-full max-w-md"
         style={{
-          background: "#18181B",
-          borderTop: "2px solid #27272A",
+          background: "var(--prestador-card)",
+          borderTop: "2px solid var(--prestador-border)",
           borderRadius: "24px 24px 0 0",
           padding: 24,
           animation: "ubt-slide-up 300ms ease-out",
@@ -107,7 +107,7 @@ const ChamadoModal = ({
 
         <div
           className="mt-4 rounded-2xl"
-          style={{ background: "#09090B", border: "1px solid #27272A", padding: 20 }}
+          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: 20 }}
         >
           <span
             className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-sans text-[12px] font-semibold"
@@ -331,7 +331,7 @@ const PrestadorMototaxiOnline = () => {
   };
 
   return (
-    <div className="relative min-h-[100svh]" style={{ background: "#09090B" }}>
+    <div className="relative min-h-[100svh]" style={{ background: "var(--prestador-bg)" }}>
       {/* Floating Header */}
       <div
         style={{
@@ -340,12 +340,12 @@ const PrestadorMototaxiOnline = () => {
           left: 16,
           right: 16,
           zIndex: 1000,
-          background: "rgba(24, 24, 27, 0.9)",
+          background: "rgba(39, 39, 42, 0.9)",
           backdropFilter: "blur(10px)",
           borderRadius: 16,
           padding: "12px 16px",
           boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
-          border: "1px solid #27272A",
+          border: "1px solid var(--prestador-border)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
@@ -419,7 +419,7 @@ const PrestadorMototaxiOnline = () => {
 
         <div
           className="mt-3 rounded-xl flex items-center justify-between"
-          style={{ background: "#09090B", border: "1px solid #27272A", padding: "12px 16px" }}
+          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: "12px 16px" }}
         >
           <span className="font-sans text-[14px] text-white">
             Hoje: <strong>R$ 0,00</strong>
@@ -434,7 +434,7 @@ const PrestadorMototaxiOnline = () => {
             type="button"
             onClick={goOffline}
             className="w-full min-h-[48px] rounded-full font-sans font-medium text-sm text-white/70 hover:text-white transition-colors"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--prestador-border)" }}
           >
             Ficar Offline
           </button>

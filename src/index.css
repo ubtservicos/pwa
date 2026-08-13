@@ -66,13 +66,10 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Prestador (light theme) */
-    --prestador-bg: 220 20% 97%;        /* #F7F8FA */
-    --prestador-surface: 0 0% 100%;     /* #FFFFFF */
-    --prestador-border: 225 15% 87%;    /* #D8DBE5 */
-    --prestador-text: 222 71% 14%;      /* #0B1B3E */
-    --prestador-subtle: 226 14% 41%;    /* #5B6178 */
-    --prestador-muted: 226 14% 63%;     /* #9399AD */
+    /* Prestador (Dark Secundário) */
+    --prestador-bg: #18181B;
+    --prestador-card: #27272A;
+    --prestador-border: #3F3F46;
 
     /* Effects */
     --shadow-md: 0 4px 16px hsl(var(--navy) / 0.14);

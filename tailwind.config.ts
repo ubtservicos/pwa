@@ -29,6 +29,11 @@ export default {
           border: "#27272A",
           neon: "#00FF66",
         },
+        prestador: {
+          bg: "var(--prestador-bg)",
+          card: "var(--prestador-card)",
+          border: "var(--prestador-border)",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

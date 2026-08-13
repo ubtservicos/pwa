@@ -212,12 +212,12 @@ const DiaristaOnboardingPage = () => {
   };
 
   return (
-    <div style={{ background: "#F7F8FA", minHeight: "100svh", padding: "24px 24px 180px", overflowY: "auto" }}>
+    <div style={{ background: "var(--prestador-bg)", minHeight: "100svh", padding: "24px 24px 180px", overflowY: "auto", color: "white" }}>
       <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <button onClick={() => navigate("/app/prestador/home")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-          <ArrowLeft size={22} color="#0B1B3E" />
+          <ArrowLeft size={22} color="#FFFFFF" />
         </button>
-        <h1 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>Cadastro Diarista</h1>
+        <h1 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>Cadastro Diarista</h1>
       </header>
 
 
@@ -230,8 +230,8 @@ const DiaristaOnboardingPage = () => {
             style={{
               padding: "10px 20px",
               borderRadius: 999,
-              background: activeTab === t ? "#0B1B3E" : "#EFF0F3",
-              color: activeTab === t ? "white" : "#5B6178",
+              background: activeTab === t ? "#00FF66" : "rgba(255,255,255,0.06)",
+              color: activeTab === t ? "#09090B" : "#A1A1AA",
               fontFamily: "DM Sans",
               fontWeight: 600,
               fontSize: 14,
@@ -250,7 +250,7 @@ const DiaristaOnboardingPage = () => {
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 16 }}>
           <FormFieldLight label="CPF" value={cpf} onChange={(e) => setCpf(maskCPF(e.target.value))} placeholder="000.000.000-00" />
           <div>
-            <p style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#5B6178", marginBottom: 8 }}>Sexo</p>
+            <p style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#A1A1AA", marginBottom: 8 }}>Sexo</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {(["masculino", "feminino"] as const).map((s) => {
                 const sel = sexo === s;
@@ -258,10 +258,10 @@ const DiaristaOnboardingPage = () => {
                   <div
                     key={s}
                     onClick={() => setSexo(s)}
-                    style={{ background: sel ? "#E6FAF4" : "white", border: `2px solid ${sel ? "#0DB87E" : "#D8DBE5"}`, borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}
+                    style={{ background: sel ? "rgba(0,255,102,0.1)" : "var(--prestador-card)", border: `2px solid ${sel ? "#00FF66" : "var(--prestador-border)"}`, borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "center" }}
                   >
                     <span style={{ fontSize: 28 }}>{s === "feminino" ? "👩" : "👨"}</span>
-                    <p style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0B1B3E", marginTop: 6, marginBottom: 0, textTransform: "capitalize" }}>{s}</p>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#FFFFFF", marginTop: 6, marginBottom: 0, textTransform: "capitalize" }}>{s}</p>
                   </div>
                 );
               })}
@@ -269,13 +269,13 @@ const DiaristaOnboardingPage = () => {
           </div>
           
           <div>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#5B6178", marginBottom: 10 }}>Bairros de Atuação</p>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#A1A1AA", marginBottom: 10 }}>Bairros de Atuação</p>
             <div 
               onClick={() => setShowBairrosModal(true)}
-              style={{ width: "100%", background: "white", border: "1px solid #D8DBE5", borderRadius: 12, minHeight: 48, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center" }}
+              style={{ width: "100%", background: "var(--prestador-card)", border: "1px solid var(--prestador-border)", borderRadius: 12, minHeight: 48, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center" }}
             >
-              <MapPin size={18} color="#9399AD" style={{ marginRight: 10 }} />
-              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: bairros.length > 0 ? "#0B1B3E" : "#9399AD", flex: 1 }}>
+              <MapPin size={18} color="#A1A1AA" style={{ marginRight: 10 }} />
+              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: bairros.length > 0 ? "#FFFFFF" : "#A1A1AA", flex: 1 }}>
                 {bairros.length > 0 ? bairros.join(", ") : "Selecione os bairros..."}
               </span>
             </div>
@@ -287,14 +287,14 @@ const DiaristaOnboardingPage = () => {
 
       {activeTab === "Preços" && (
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>Como você cobra?</h2>
+          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>Como você cobra?</h2>
           <FormFieldLight label="R$ por m²" icon={DollarSign} type="number" step="0.01" value={valorPorM2} onChange={(e) => setValorPorM2(e.target.value)} placeholder="3.50" />
-          <p style={{ fontFamily: "DM Sans", fontSize: 11, color: "#9399AD", marginTop: -8 }}>Ex: 3,50 = R$ 350,00 para 100m²</p>
+          <p style={{ fontFamily: "DM Sans", fontSize: 11, color: "#A1A1AA", marginTop: -8 }}>Ex: 3,50 = R$ 350,00 para 100m²</p>
           <FormFieldLight label="Área mínima (m²)" icon={Ruler} type="number" value={minimoM2} onChange={(e) => setMinimoM2(e.target.value)} placeholder="40" />
 
-          <div style={{ background: "#EFF0F3", borderRadius: 12, padding: 18, marginTop: 12 }}>
-            <p style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0B1B3E", margin: "0 0 4px 0" }}>Teste seus preços!</p>
-            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#5B6178", margin: "0 0 12px 0" }}>Use nossa calculadora rápida para ver quanto você receberia por uma faxina. Digite o tamanho de uma casa (ex: 80) e veja o valor.</p>
+          <div style={{ background: "var(--prestador-card)", border: "1px solid var(--prestador-border)", borderRadius: 12, padding: 18, marginTop: 12 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: "0 0 4px 0" }}>Teste seus preços!</p>
+            <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA", margin: "0 0 12px 0" }}>Use nossa calculadora rápida para ver quanto você receberia por uma faxina. Digite o tamanho de uma casa (ex: 80) e veja o valor.</p>
             
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input 
@@ -302,15 +302,15 @@ const DiaristaOnboardingPage = () => {
                 value={calcM2} 
                 onChange={(e) => setCalcM2(e.target.value)} 
                 placeholder="m²" 
-                style={{ width: 80, textAlign: "center", padding: "10px", borderRadius: 8, border: "1px solid #D8DBE5", background: "white", fontFamily: "DM Sans", fontSize: 15, outline: "none" }} 
+                style={{ width: 80, textAlign: "center", padding: "10px", borderRadius: 8, border: "1px solid var(--prestador-border)", background: "var(--prestador-bg)", color: "#FFFFFF", fontFamily: "DM Sans", fontSize: 15, outline: "none" }} 
               />
-              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#5B6178" }}>x R$ {valorPorM2} =</span>
+              <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA" }}>x R$ {valorPorM2} =</span>
               {calcM2 ? (
-                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>
+                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#00FF66" }}>
                   R$ {(+calcM2 * +valorPorM2).toFixed(2)}
                 </span>
               ) : (
-                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#9399AD" }}>
+                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#A1A1AA" }}>
                   R$ 0,00
                 </span>
               )}
@@ -320,64 +320,64 @@ const DiaristaOnboardingPage = () => {
       )}
       {activeTab === "Kit Produtos" && (
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>Kit de Produtos</h2>
-          <div style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.30)", borderRadius: 12, padding: 14 }}>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178", margin: 0, lineHeight: 1.4 }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>Kit de Produtos</h2>
+          <div style={{ background: "rgba(245,166,35,0.10)", border: "1px solid rgba(245,166,35,0.20)", borderRadius: 12, padding: 14 }}>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA", margin: 0, lineHeight: 1.4 }}>
               <strong>Atenção:</strong> Os preços definidos aqui formarão o valor total do seu Kit de Produtos. O cliente (tomador) poderá escolher no momento da contratação se deseja o serviço COM ou SEM produtos. Caso haja diferença nos preços de mercado no momento da sua compra, a prestadora assume o ônus ou bônus.
             </p>
           </div>
-            <div style={{ background: "white", borderRadius: 12, border: "1px solid #D8DBE5", padding: 16, marginTop: 8 }}>
+            <div style={{ background: "var(--prestador-card)", borderRadius: 12, border: "1px solid var(--prestador-border)", padding: 16, marginTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <p style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0B1B3E", margin: 0 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: 0 }}>
                   Detalhes do Kit
                 </p>
                 <div style={{ textAlign: "right" }}>
-                  <p style={{ fontFamily: "DM Sans", fontSize: 10, color: "#9399AD", margin: 0, textTransform: "uppercase", letterSpacing: 0.5 }}>Seu Kit</p>
-                  <p style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0DB87E", margin: 0 }}>
+                  <p style={{ fontFamily: "DM Sans", fontSize: 10, color: "#A1A1AA", margin: 0, textTransform: "uppercase", letterSpacing: 0.5 }}>Seu Kit</p>
+                  <p style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#00FF66", margin: 0 }}>
                     R$ {materiaisDetalhes.filter(m => m.ativo).reduce((a, b) => a + (b.precoEditado || 0), 0).toFixed(2)}
                   </p>
                 </div>
               </div>
-              <p style={{ fontFamily: "DM Sans", fontSize: 11, color: "#5B6178", marginBottom: 16 }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 11, color: "#A1A1AA", marginBottom: 16 }}>
                 Média de mercado do kit completo: <strong>R$ {materiaisDetalhes.filter(m => m.ativo).reduce((a, b) => a + (b.precoMedioMercado || 0), 0).toFixed(2)}</strong>
               </p>
 
               {loadingMateriais ? (
-                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#9399AD", textAlign: "center", padding: "20px 0" }}>Carregando tabela do Supabase...</p>
+                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA", textAlign: "center", padding: "20px 0" }}>Carregando tabela do Supabase...</p>
               ) : materiaisDetalhes.length === 0 ? (
                 <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#F5A623", textAlign: "center", padding: "10px 0" }}>Tabela diarista_materiais_padrao ainda não foi criada no banco de dados.</p>
               ) : (
                 <>
                   {["quimicos", "utensilios"].map((cat) => (
                     <div key={cat} style={{ marginBottom: 16 }}>
-                      <p style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "#9399AD", marginBottom: 8 }}>
+                      <p style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "#A1A1AA", marginBottom: 8 }}>
                         {cat === "quimicos" ? "Produtos Químicos" : "Utensílios"}
                       </p>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {materiaisDetalhes.filter(m => m.categoria === cat).map(m => (
-                          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, background: m.ativo ? "#F7F8FA" : "transparent", padding: 8, borderRadius: 8 }}>
+                          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, background: m.ativo ? "var(--prestador-bg)" : "transparent", border: m.ativo ? "1px solid var(--prestador-border)" : "1px solid transparent", padding: 8, borderRadius: 8 }}>
                             <div
                               onClick={() => setMateriaisDetalhes(p => p.map(x => x.id === m.id ? { ...x, ativo: !x.ativo } : x))}
-                              style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${m.ativo ? "#0DB87E" : "#D8DBE5"}`, background: m.ativo ? "#0DB87E" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                              style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${m.ativo ? "#00FF66" : "var(--prestador-border)"}`, background: m.ativo ? "#00FF66" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
                             >
-                              {m.ativo && <Check size={14} color="#fff" />}
+                              {m.ativo && <Check size={14} color="#09090B" />}
                             </div>
                             <span style={{ fontSize: 18, opacity: m.ativo ? 1 : 0.4 }}>{m.emoji}</span>
                             <div style={{ flex: 1, opacity: m.ativo ? 1 : 0.4 }}>
-                              <p style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: "#0B1B3E", margin: 0, textDecoration: m.ativo ? "none" : "line-through" }}>{m.nome}</p>
+                              <p style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 500, color: "#FFFFFF", margin: 0, textDecoration: m.ativo ? "none" : "line-through" }}>{m.nome}</p>
                               {m.precoMedioMercado > 0 && (
-                                <p style={{ fontFamily: "DM Sans", fontSize: 10, color: "#9399AD", margin: 0 }}>Média: R$ {m.precoMedioMercado.toFixed(2)}</p>
+                                <p style={{ fontFamily: "DM Sans", fontSize: 10, color: "#A1A1AA", margin: 0 }}>Média: R$ {m.precoMedioMercado.toFixed(2)}</p>
                               )}
                             </div>
                             {m.ativo && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "white", border: "1px solid #D8DBE5", borderRadius: 8, padding: "4px 8px" }}>
-                                <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#9399AD" }}>R$</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--prestador-card)", border: "1px solid var(--prestador-border)", borderRadius: 8, padding: "4px 8px" }}>
+                                <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA" }}>R$</span>
                                 <input
                                   type="number"
                                   step="0.01"
                                   value={m.precoEditado}
                                   onChange={(e) => setMateriaisDetalhes(p => p.map(x => x.id === m.id ? { ...x, precoEditado: +e.target.value } : x))}
-                                  style={{ width: 44, border: "none", outline: "none", background: "transparent", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0B1B3E", textAlign: "right" }}
+                                  style={{ width: 44, border: "none", outline: "none", background: "transparent", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#FFFFFF", textAlign: "right" }}
                                 />
                               </div>
                             )}
@@ -393,8 +393,8 @@ const DiaristaOnboardingPage = () => {
       )}
       {activeTab === "Agenda" && (
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>Sua Agenda</h2>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178", marginTop: -8 }}>Quais dias da semana você atende?</p>
+          <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>Sua Agenda</h2>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA", marginTop: -8 }}>Quais dias da semana você atende?</p>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {DIAS.map(d => (
@@ -407,9 +407,9 @@ const DiaristaOnboardingPage = () => {
                 style={{
                   padding: "10px 0",
                   borderRadius: 12,
-                  border: `2px solid ${disponibilidade[d] ? "#0DB87E" : "#E2E8F0"}`,
-                  background: disponibilidade[d] ? "#E6FAF4" : "white",
-                  color: disponibilidade[d] ? "#0DB87E" : "#5B6178",
+                  border: `2px solid ${disponibilidade[d] ? "#00FF66" : "var(--prestador-border)"}`,
+                  background: disponibilidade[d] ? "rgba(0,255,102,0.15)" : "var(--prestador-card)",
+                  color: disponibilidade[d] ? "#00FF66" : "#A1A1AA",
                   fontFamily: "DM Sans",
                   fontSize: 14,
                   fontWeight: 600,
@@ -422,8 +422,8 @@ const DiaristaOnboardingPage = () => {
           </div>
 
           {Object.keys(disponibilidade).some(d => disponibilidade[d]) && (
-            <div style={{ background: "white", borderRadius: 16, border: "1px solid #E2E8F0", padding: 16, marginTop: 8 }}>
-              <p style={{ fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, color: "#0B1B3E", marginBottom: 12 }}>
+            <div style={{ background: "var(--prestador-card)", borderRadius: 16, border: "1px solid var(--prestador-border)", padding: 16, marginTop: 8 }}>
+              <p style={{ fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, color: "#FFFFFF", marginBottom: 12 }}>
                 Ajuste os horários por dia:
               </p>
               
@@ -527,14 +527,14 @@ const DiaristaOnboardingPage = () => {
       )}
 
 
-      <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "white", borderTop: "1px solid #E2E8F0", zIndex: 10, display: "flex", gap: 12 }}>
+      <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "var(--prestador-card)", borderTop: "1px solid var(--prestador-border)", zIndex: 10, display: "flex", gap: 12 }}>
         {activeTab !== "Agenda" && (
           <button 
             onClick={() => {
               const tabs = ["Dados", "Preços", "Kit Produtos", "Agenda"];
               setActiveTab(tabs[tabs.indexOf(activeTab) + 1]);
             }} 
-            style={{ flex: 1, padding: "14px", borderRadius: 12, border: "2px solid #0DB87E", background: "white", color: "#0DB87E", fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, padding: "14px", borderRadius: 12, border: "2px solid #00FF66", background: "transparent", color: "#00FF66", fontFamily: "DM Sans", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
           >
             Continuar
           </button>
@@ -547,21 +547,21 @@ const DiaristaOnboardingPage = () => {
 
       {showBairrosModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", flexDirection: "column" }}>
-          <div onClick={() => setShowBairrosModal(false)} style={{ position: "absolute", inset: 0, background: "rgba(11,27,62,0.5)" }} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "white", borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", maxHeight: "80vh" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>Selecione os Bairros</h3>
-              <button onClick={() => setShowBairrosModal(false)} style={{ background: "none", border: "none", fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#0DB87E", cursor: "pointer" }}>Pronto</button>
+          <div onClick={() => setShowBairrosModal(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "var(--prestador-card)", borderTop: "2px solid var(--prestador-border)", borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", maxHeight: "80vh" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--prestador-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>Selecione os Bairros</h3>
+              <button onClick={() => setShowBairrosModal(false)} style={{ background: "none", border: "none", fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "#00FF66", cursor: "pointer" }}>Pronto</button>
             </div>
             <div style={{ padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
               {BAIRROS_UBATUBA.map(b => {
                 const sel = bairros.includes(b);
                 return (
                   <label key={b} style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${sel ? "#0DB87E" : "#D8DBE5"}`, background: sel ? "#0DB87E" : "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {sel && <Check size={14} color="white" />}
+                    <div style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${sel ? "#00FF66" : "var(--prestador-border)"}`, background: sel ? "#00FF66" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {sel && <Check size={14} color="#09090B" />}
                     </div>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 15, color: "#0B1B3E" }}>{b}</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 15, color: "#FFFFFF" }}>{b}</span>
                     <input type="checkbox" checked={sel} onChange={() => setBairros(p => sel ? p.filter(x => x !== b) : [...p, b])} style={{ display: "none" }} />
                   </label>
                 );

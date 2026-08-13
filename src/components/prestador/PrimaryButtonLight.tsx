@@ -12,7 +12,7 @@ const PrimaryButtonLight = ({ loading, loadingText = "Carregando...", children, 
     type={rest.type ?? "button"}
     disabled={disabled || loading}
     className={`w-full min-h-[52px] rounded-full transition-colors font-display font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${className ?? ""}`}
-    style={{ background: "#0DB87E", color: "#fff" }}
+    style={{ background: "#00FF66", color: "#09090B" }}
     {...rest}
   >
     {loading ? (<><Loader2 size={18} className="animate-spin" />{loadingText}</>) : children}

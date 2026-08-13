@@ -336,7 +336,7 @@ const AmbulantesOnlinePage = () => {
   const offset = dash * (1 - secondsLeft / 120);
 
   return (
-    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#09090B" }}>
+    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "var(--prestador-bg)" }}>
       <div className="absolute inset-0">
         <PrestadorMapLight myLocation={myLocation} providerType="ambulante" />
       </div>
@@ -347,7 +347,7 @@ const AmbulantesOnlinePage = () => {
         className="absolute top-4 left-4 z-10 flex items-center justify-center"
         style={{
           width: 40, height: 40, borderRadius: 999,
-          background: "rgba(24,24,27,0.90)", border: "1px solid #27272A",
+          background: "rgba(39,39,42,0.90)", border: "1px solid var(--prestador-border)",
         }}
         aria-label="Voltar"
       >
@@ -358,8 +358,8 @@ const AmbulantesOnlinePage = () => {
       <div
         className="absolute left-0 right-0 bottom-0 z-40"
         style={{
-          background: "#18181B",
-          borderTop: "1px solid #27272A",
+          background: "var(--prestador-card)",
+          borderTop: "1px solid var(--prestador-border)",
           borderRadius: "24px 24px 0 0",
           padding: "10px 20px 96px",
           maxHeight: "62vh",
@@ -373,7 +373,7 @@ const AmbulantesOnlinePage = () => {
         {/* Online/Offline */}
         <div
           className="rounded-2xl"
-          style={{ background: "#09090B", border: "1px solid #27272A", padding: 20 }}
+          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: 20 }}
         >
           <div className="flex items-center justify-between">
             <div>
@@ -408,7 +408,7 @@ const AmbulantesOnlinePage = () => {
         {(modalidade === "local_fixo" || modalidade === "both") && (
           <div
             className="rounded-2xl"
-            style={{ background: "#09090B", border: "1px solid #27272A", marginTop: 12, display: "flex", alignItems: "center", gap: 10, padding: 14 }}
+            style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", marginTop: 12, display: "flex", alignItems: "center", gap: 10, padding: 14 }}
           >
             <MapPin size={16} color="#00FF66" />
             {editEndereco ? (
@@ -440,7 +440,7 @@ const AmbulantesOnlinePage = () => {
         {/* Fila de pedidos (Next in queue) */}
         <div
           className="rounded-2xl"
-          style={{ background: "#09090B", border: "1px solid #27272A", padding: 16, marginTop: 12, cursor: "pointer" }}
+          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: 16, marginTop: 12, cursor: "pointer" }}
           onClick={() => setShowQueueModal(true)}
         >
             <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
@@ -454,7 +454,7 @@ const AmbulantesOnlinePage = () => {
               if (!next) return <p className="font-sans" style={{ fontSize: 13, color: "#A1A1AA", margin: 0 }}>Nenhum pedido em andamento.</p>;
               return (
                 <div className="flex items-center gap-3">
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0,255,102,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0,255,102,0.15)", display: "flex", alignItems: "center", justifyService: "center" }}>
                     <span style={{ fontSize: 20 }}>🍽️</span>
                   </div>
                   <div className="flex-1">
@@ -469,8 +469,8 @@ const AmbulantesOnlinePage = () => {
         {/* Cardápio */}
         <div
           style={{
-            background: "#09090B",
-            border: "1px solid #27272A",
+            background: "var(--prestador-bg)",
+            border: "1px solid var(--prestador-border)",
             borderRadius: 14, padding: 16, marginTop: 12,
           }}
         >
@@ -527,7 +527,7 @@ const AmbulantesOnlinePage = () => {
         {/* Mini ganhos */}
         <div
           className="flex items-center justify-between"
-          style={{ background: "#09090B", border: "1px solid #27272A", borderRadius: 12, padding: "12px 16px", marginTop: 12 }}
+          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", borderRadius: 12, padding: "12px 16px", marginTop: 12 }}
         >
           <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>Hoje: R$ 0,00</span>
           <span className="font-sans" style={{ fontSize: 12, color: "#A1A1AA" }}>0 pedidos</span>
@@ -540,7 +540,7 @@ const AmbulantesOnlinePage = () => {
             className="w-full font-sans"
             style={{
               marginTop: 12, minHeight: 44, borderRadius: 999,
-              border: "1px solid #27272A", background: "rgba(255,255,255,0.05)",
+              border: "1px solid var(--prestador-border)", background: "rgba(255,255,255,0.05)",
               color: "#A1A1AA", fontSize: 14, cursor: "pointer",
             }}
           >
@@ -560,8 +560,8 @@ const AmbulantesOnlinePage = () => {
         >
           <div
             style={{
-              width: "100%", background: "#18181B",
-              borderTop: "2px solid #27272A",
+              width: "100%", background: "var(--prestador-card)",
+              borderTop: "2px solid var(--prestador-border)",
               borderRadius: "24px 24px 0 0",
               padding: 24, animation: "ubt-slide-up 300ms ease",
               maxHeight: "85vh", overflowY: "auto",
@@ -601,7 +601,7 @@ const AmbulantesOnlinePage = () => {
 
             <div
               style={{
-                background: "#09090B", border: "1px solid #27272A",
+                background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)",
                 padding: 20, marginTop: 16,
               }}
             >
@@ -628,7 +628,7 @@ const AmbulantesOnlinePage = () => {
                   </div>
                 ))}
               </div>
-              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "10px 0" }} />
+              <div style={{ height: 1, background: "var(--prestador-border)", margin: "10px 0" }} />
               <div className="flex items-center justify-between">
                 <span className="font-sans" style={{ fontSize: 13, color: "#A1A1AA" }}>Total do pedido</span>
                 <span className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#00FF66" }}>
@@ -651,7 +651,7 @@ const AmbulantesOnlinePage = () => {
                 onClick={recusarPedido}
                 className="flex-1 font-sans"
                 style={{
-                  border: "1px solid #27272A", borderRadius: 999,
+                  border: "1px solid var(--prestador-border)", borderRadius: 999,
                   background: "rgba(255,255,255,0.05)", padding: 14,
                   color: "#A1A1AA", fontSize: 14, fontWeight: 500, cursor: "pointer",
                 }}
@@ -696,8 +696,8 @@ const AmbulantesOnlinePage = () => {
               }}
               className="flex items-center justify-between"
               style={{
-                padding: 12, borderRadius: 12, border: "1px solid #27272A",
-                background: o.status === "pending" ? "rgba(245,166,35,0.15)" : o.status === "confirmed" || o.status === "preparing" ? "rgba(0,255,102,0.10)" : "#09090B",
+                padding: 12, borderRadius: 12, border: "1px solid var(--prestador-border)",
+                background: o.status === "pending" ? "rgba(245,166,35,0.15)" : o.status === "confirmed" || o.status === "preparing" ? "rgba(0,255,102,0.10)" : "var(--prestador-bg)",
                 opacity: o.status === "finished" || o.status === "cancelled" ? 0.6 : 1,
                 cursor: o.status !== "finished" && o.status !== "cancelled" ? "pointer" : "default"
               }}

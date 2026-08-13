@@ -213,13 +213,13 @@ const DiaristaAgendaPage = () => {
   const isoDate = (dia: number) => `${calAno}-${String(calMes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
 
   return (
-    <div style={{ background: "#F7F8FA", minHeight: "100svh", padding: "24px 24px 80px" }}>
+    <div style={{ background: "var(--prestador-bg)", minHeight: "100svh", padding: "24px 24px 80px", color: "white" }}>
       {/* Top Bar with Back Button and Adjust Values Button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <button
           type="button"
           onClick={() => navigate("/app/prestador/home")}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#0B1B3E", padding: 4, display: "flex", alignItems: "center" }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#FFFFFF", padding: 4, display: "flex", alignItems: "center" }}
           aria-label="Voltar"
         >
           <ArrowLeft size={22} />
@@ -227,8 +227,8 @@ const DiaristaAgendaPage = () => {
         <button
           onClick={() => navigate("/app/prestador/diaristas/onboarding")}
           style={{
-            background: "rgba(13,184,126,0.08)",
-            border: "1px solid rgba(13,184,126,0.18)",
+            background: "rgba(0,255,102,0.1)",
+            border: "1px solid rgba(0,255,102,0.2)",
             borderRadius: 999,
             cursor: "pointer",
             display: "flex",
@@ -238,7 +238,7 @@ const DiaristaAgendaPage = () => {
             fontFamily: "DM Sans",
             fontSize: 13,
             fontWeight: 600,
-            color: "#0DB87E",
+            color: "#00FF66",
             transition: "all 0.2s"
           }}
         >
@@ -249,10 +249,10 @@ const DiaristaAgendaPage = () => {
       {/* Title & Online Toggle Section */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 800, color: "#0B1B3E", margin: 0 }}>
+          <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 800, color: "#FFFFFF", margin: 0 }}>
             Minha Agenda
           </h1>
-          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178", margin: 0, marginTop: 4 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA", margin: 0, marginTop: 4 }}>
             Gerencie seus compromissos e horários
           </p>
         </div>
@@ -266,7 +266,7 @@ const DiaristaAgendaPage = () => {
               width: 46,
               height: 26,
               borderRadius: 999,
-              background: online ? "#0DB87E" : "#D8DBE5",
+              background: online ? "#00FF66" : "rgba(255,255,255,0.15)",
               border: "none",
               cursor: "pointer",
               position: "relative",
@@ -295,8 +295,8 @@ const DiaristaAgendaPage = () => {
       {/* Online Status Card */}
       <div
         style={{
-          background: online ? "#E6FAF4" : "#F1F2F6",
-          border: `1px solid ${online ? "rgba(13,184,126,0.2)" : "rgba(147,153,173,0.2)"}`,
+          background: online ? "rgba(0,255,102,0.1)" : "var(--prestador-card)",
+          border: `1px solid ${online ? "rgba(0,255,102,0.2)" : "var(--prestador-border)"}`,
           borderRadius: 14,
           padding: "10px 14px",
           display: "flex",
@@ -312,19 +312,19 @@ const DiaristaAgendaPage = () => {
                 width: 8,
                 height: 8,
                 borderRadius: 999,
-                background: "#0DB87E",
+                background: "#00FF66",
                 animation: "ubt-pulse-dot 1.4s ease-in-out infinite"
               }}
             />
           ) : (
-            <span style={{ width: 8, height: 8, borderRadius: 999, background: "#9399AD" }} />
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(255,255,255,0.3)" }} />
           )}
           <span
             style={{
               fontFamily: "DM Sans",
               fontSize: 13,
               fontWeight: 500,
-              color: online ? "#0DB87E" : "#5B6178"
+              color: online ? "#00FF66" : "#A1A1AA"
             }}
           >
             {online ? "Online · Visível para novos clientes" : "Offline · Oculto para novas buscas"}
@@ -336,7 +336,7 @@ const DiaristaAgendaPage = () => {
       {/* Pending Bookings Section */}
       {pendentes > 0 && (
         <div style={{ marginTop: 20 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0B1B3E", margin: "0 0 10px" }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "white", margin: "0 0 10px" }}>
             Solicitações Pendentes ({pendentes})
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -347,18 +347,18 @@ const DiaristaAgendaPage = () => {
                   key={a.id}
                   onClick={() => navigate(`/app/prestador/diaristas/servico/${a.id}`)}
                   style={{
-                    background: "white",
+                    background: "var(--prestador-card)",
                     borderRadius: 14,
                     padding: 16,
                     borderLeft: "4px solid #F5A623",
-                    boxShadow: "0 2px 6px rgba(11,27,62,0.05)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
                     cursor: "pointer",
-                    border: "1px solid rgba(245,166,35,0.2)",
+                    border: "1px solid var(--prestador-border)",
                     borderLeftWidth: 4
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0B1B3E" }}>
+                    <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
                       {new Date(a.data + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} às {a.hora}
                     </span>
                     <span
@@ -376,9 +376,9 @@ const DiaristaAgendaPage = () => {
                     </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, alignItems: "center" }}>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0B1B3E", fontWeight: 600 }}>{a.tomador}</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{a.tomador}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178" }}>{a.m2}m²</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA" }}>{a.m2}m²</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -388,8 +388,8 @@ const DiaristaAgendaPage = () => {
                           fontFamily: "DM Sans",
                           fontSize: 10,
                           fontWeight: 600,
-                          color: a.materiaisSolicitados.length > 0 ? "#0DB87E" : "#9399AD",
-                          background: a.materiaisSolicitados.length > 0 ? "rgba(13,184,126,0.1)" : "rgba(147,153,173,0.1)",
+                          color: a.materiaisSolicitados.length > 0 ? "#00FF66" : "#A1A1AA",
+                          background: a.materiaisSolicitados.length > 0 ? "rgba(0,255,102,0.15)" : "rgba(255,255,255,0.05)",
                           border: "none",
                           borderRadius: 6,
                           padding: "2px 6px",
@@ -401,8 +401,8 @@ const DiaristaAgendaPage = () => {
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#9399AD" }}>{a.endereco}</span>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0DB87E" }}>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA" }}>{a.endereco}</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#00FF66" }}>
                       R$ {a.valorTotal.toFixed(2)}
                     </span>
                   </div>
@@ -414,11 +414,11 @@ const DiaristaAgendaPage = () => {
 
       {/* Próximas Faxinas Marcadas */}
       <div style={{ marginTop: 20 }}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0B1B3E", margin: "0 0 10px" }}>
+        <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#FFFFFF", margin: "0 0 10px" }}>
           Próximas Faxinas Marcadas ({proximasConfirmadas.length})
         </h2>
         {proximasConfirmadas.length === 0 ? (
-          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#9399AD", textAlign: "center", background: "white", borderRadius: 14, padding: "20px 16px", border: "1px solid rgba(11,27,62,0.05)" }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA", textAlign: "center", background: "var(--prestador-card)", borderRadius: 14, padding: "20px 16px", border: "1px solid var(--prestador-border)" }}>
             Nenhuma faxina confirmada agendada.
           </p>
         ) : (
@@ -438,18 +438,18 @@ const DiaristaAgendaPage = () => {
                   key={a.id}
                   onClick={() => navigate(`/app/prestador/diaristas/servico/${a.id}`)}
                   style={{
-                    background: "white",
+                    background: "var(--prestador-card)",
                     borderRadius: 14,
                     padding: 16,
                     borderLeft: `4px solid ${meta.color}`,
-                    boxShadow: "0 2px 6px rgba(11,27,62,0.05)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
                     cursor: "pointer",
-                    border: "1px solid rgba(11,27,62,0.05)",
+                    border: "1px solid var(--prestador-border)",
                     borderLeftWidth: 4
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0B1B3E" }}>
+                    <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
                       {capitalizedDate} às {a.hora}
                     </span>
                     <span
@@ -467,9 +467,9 @@ const DiaristaAgendaPage = () => {
                     </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, alignItems: "center" }}>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#0B1B3E", fontWeight: 600 }}>{a.tomador}</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>{a.tomador}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178" }}>{a.m2}m²</span>
+                      <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA" }}>{a.m2}m²</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -479,8 +479,8 @@ const DiaristaAgendaPage = () => {
                           fontFamily: "DM Sans",
                           fontSize: 10,
                           fontWeight: 600,
-                          color: a.materiaisSolicitados.length > 0 ? "#0DB87E" : "#9399AD",
-                          background: a.materiaisSolicitados.length > 0 ? "rgba(13,184,126,0.1)" : "rgba(147,153,173,0.1)",
+                          color: a.materiaisSolicitados.length > 0 ? "#00FF66" : "#A1A1AA",
+                          background: a.materiaisSolicitados.length > 0 ? "rgba(0,255,102,0.15)" : "rgba(255,255,255,0.05)",
                           border: "none",
                           borderRadius: 6,
                           padding: "2px 6px",
@@ -492,8 +492,8 @@ const DiaristaAgendaPage = () => {
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#9399AD" }}>{a.endereco}</span>
-                    <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0DB87E" }}>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA" }}>{a.endereco}</span>
+                    <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#00FF66" }}>
                       R$ {a.valorTotal.toFixed(2)}
                     </span>
                   </div>
@@ -509,14 +509,14 @@ const DiaristaAgendaPage = () => {
         <button
           onClick={() => setShowCalendar(!showCalendar)}
           style={{
-            background: showCalendar ? "rgba(11,27,62,0.05)" : "white",
-            border: "1px solid rgba(11,27,62,0.1)",
+            background: showCalendar ? "rgba(255,255,255,0.05)" : "var(--prestador-card)",
+            border: "1px solid var(--prestador-border)",
             borderRadius: 12,
             padding: "12px 16px",
             fontFamily: "DM Sans",
             fontSize: 14,
             fontWeight: 600,
-            color: "#0B1B3E",
+            color: "#FFFFFF",
             cursor: "pointer",
             width: "100%",
             textAlign: "center",
@@ -536,19 +536,19 @@ const DiaristaAgendaPage = () => {
       {/* Calendário e Compromissos do Dia Selecionado */}
       {showCalendar && (
         <>
-          <div style={{ background: "white", borderRadius: 16, padding: 20, boxShadow: "0 2px 8px rgba(11,27,62,0.06)" }}>
+          <div style={{ background: "var(--prestador-card)", borderRadius: 16, padding: 20, border: "1px solid var(--prestador-border)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <button onClick={() => { if (calMes === 0) { setCalMes(11); setCalAno(calAno - 1); } else setCalMes(calMes - 1); }} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                <ChevronLeft size={20} color="#0B1B3E" />
+                <ChevronLeft size={20} color="#FFFFFF" />
               </button>
-              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0B1B3E" }}>{MESES[calMes]} {calAno}</span>
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>{MESES[calMes]} {calAno}</span>
               <button onClick={() => { if (calMes === 11) { setCalMes(0); setCalAno(calAno + 1); } else setCalMes(calMes + 1); }} style={{ background: "none", border: "none", cursor: "pointer" }}>
-                <ChevronRight size={20} color="#0B1B3E" />
+                <ChevronRight size={20} color="#FFFFFF" />
               </button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
               {DIAS_LBL.map((l, i) => (
-                <span key={`lbl${i}`} style={{ fontFamily: "DM Sans", fontSize: 11, color: "#9399AD", textAlign: "center" }}>{l}</span>
+                <span key={`lbl${i}`} style={{ fontFamily: "DM Sans", fontSize: 11, color: "#A1A1AA", textAlign: "center" }}>{l}</span>
               ))}
               {Array.from({ length: primeiroDia }).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: diasNoMes }).map((_, i) => {
@@ -565,7 +565,7 @@ const DiaristaAgendaPage = () => {
                   (a) => a.data === iso && a.status === "pending_confirm"
                 );
 
-                const dotConfirmadoColor = isHoje && !sel ? "#FFFFFF" : "#0DB87E";
+                const dotConfirmadoColor = isHoje && !sel ? "#09090B" : "#00FF66";
                 const dotPendenteColor = isHoje && !sel ? "#FFE5A3" : "#F5A623";
 
                 return (
@@ -574,8 +574,8 @@ const DiaristaAgendaPage = () => {
                     onClick={() => setSelectedDate(iso)}
                     style={{
                       width: "100%", aspectRatio: "1", borderRadius: 999, border: "none", cursor: "pointer",
-                      background: sel ? "#E6FAF4" : isHoje ? "#0DB87E" : "transparent",
-                      color: isHoje && !sel ? "white" : "#0B1B3E",
+                      background: sel ? "rgba(0,255,102,0.15)" : isHoje ? "#00FF66" : "transparent",
+                      color: isHoje && !sel ? "#09090B" : "white",
                       fontFamily: "DM Sans", fontSize: 13, fontWeight: sel || isHoje ? 700 : 400,
                       position: "relative",
                     }}
@@ -623,16 +623,16 @@ const DiaristaAgendaPage = () => {
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <h3 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#0B1B3E", marginBottom: 12 }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#FFFFFF", marginBottom: 12 }}>
               Compromissos do dia {new Date(selectedDate + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}
             </h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {loading ? (
-                <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#9399AD", textAlign: "center", marginTop: 12 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA", textAlign: "center", marginTop: 12 }}>
                   Carregando agenda...
                 </p>
               ) : agendamentosDoDia.length === 0 ? (
-                <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#9399AD", textAlign: "center", background: "white", borderRadius: 14, padding: "20px 16px", border: "1px solid rgba(11,27,62,0.05)" }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA", textAlign: "center", background: "var(--prestador-card)", borderRadius: 14, padding: "20px 16px", border: "1px solid var(--prestador-border)" }}>
                   Nenhum agendamento para este dia.
                 </p>
               ) : (
@@ -643,18 +643,16 @@ const DiaristaAgendaPage = () => {
                       key={a.id}
                       onClick={() => navigate(`/app/prestador/diaristas/servico/${a.id}`)}
                       style={{
-                        background: "white",
+                        background: "var(--prestador-card)",
                         borderRadius: 14,
                         padding: 16,
                         borderLeft: `4px solid ${meta.color}`,
-                        boxShadow: "0 2px 6px rgba(11,27,62,0.05)",
-                        cursor: "pointer",
-                        border: "1px solid rgba(11,27,62,0.05)",
+                        border: "1px solid var(--prestador-border)",
                         borderLeftWidth: 4
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0B1B3E" }}>{a.hora}</span>
+                        <span style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>{a.hora}</span>
                         <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: meta.color, background: `${meta.color}15`, borderRadius: 999, padding: "3px 10px" }}>
                           {meta.label}
                         </span>
@@ -719,32 +717,34 @@ const DiaristaAgendaPage = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "white",
+              background: "var(--prestador-card)",
               borderRadius: 16,
               width: "100%",
               maxWidth: 380,
               padding: 24,
-              boxShadow: "0 10px 25px rgba(11,27,62,0.15)",
+              border: "1px solid var(--prestador-border)",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
               animation: "ubt-scale-up 0.2s ease-out"
             }}
           >
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: "0 0 4px" }}>
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF", margin: "0 0 4px" }}>
               Materiais de Limpeza
             </h3>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178", margin: "0 0 16px" }}>
-              Cliente: <strong style={{ color: "#0B1B3E" }}>{activeMaterials.tomador}</strong>
+            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA", margin: "0 0 16px" }}>
+              Cliente: <strong style={{ color: "#FFFFFF" }}>{activeMaterials.tomador}</strong>
             </p>
 
             {activeMaterials.materiais.length > 0 ? (
               <div>
-                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#0B1B3E", fontWeight: 600, margin: "0 0 8px" }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#FFFFFF", fontWeight: 600, margin: "0 0 8px" }}>
                   Levar os seguintes materiais:
                 </p>
                 <div style={{
                   display: "flex",
                   flexDirection: "column",
                   gap: 8,
-                  background: "#F4F5F8",
+                  background: "var(--prestador-bg)",
+                  border: "1px solid var(--prestador-border)",
                   borderRadius: 10,
                   padding: 12,
                   marginBottom: 16,
@@ -755,11 +755,11 @@ const DiaristaAgendaPage = () => {
                     const preco = PRECOS_MATERIAIS[m] || 0;
                     return (
                       <div key={m} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#0B1B3E" }}>
+                        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#FFFFFF" }}>
                           {NOMES_MATERIAIS[m] || m}
                         </span>
                         {preco > 0 && (
-                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#5B6178" }}>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "#A1A1AA" }}>
                             R$ {preco.toFixed(2)}
                           </span>
                         )}
@@ -774,17 +774,17 @@ const DiaristaAgendaPage = () => {
                   if (custoTotal > 0) {
                     return (
                       <div style={{
-                        background: "rgba(13,184,126,0.06)",
-                        border: "1px solid rgba(13,184,126,0.15)",
+                        background: "rgba(0,255,102,0.08)",
+                        border: "1px solid rgba(0,255,102,0.2)",
                         borderRadius: 10,
                         padding: 12,
                         marginBottom: 16
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>
                             Gasto Estimado de Compra:
                           </span>
-                          <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 700, color: "#0DB87E" }}>
+                          <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 700, color: "#00FF66" }}>
                             R$ {custoTotal.toFixed(2)}
                           </span>
                         </div>
@@ -794,15 +794,15 @@ const DiaristaAgendaPage = () => {
                   return null;
                 })()}
 
-                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#0DB87E", fontWeight: 500, margin: 0 }}>
+                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#00FF66", fontWeight: 500, margin: 0 }}>
                   ✓ O custo dos materiais já foi adicionado ao valor total do serviço.
                 </p>
               </div>
             ) : (
               <div>
-                <div style={{ display: "flex", gap: 8, background: "rgba(147,153,173,0.1)", borderRadius: 10, padding: 12, marginBottom: 20, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, background: "rgba(255,255,255,0.05)", border: "1px solid var(--prestador-border)", borderRadius: 10, padding: 12, marginBottom: 20, alignItems: "center" }}>
                   <span style={{ fontSize: 20 }}>🏡</span>
-                  <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#5B6178", margin: 0, lineHeight: 1.4 }}>
+                  <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "#A1A1AA", margin: 0, lineHeight: 1.4 }}>
                     <strong>Sem materiais inclusos.</strong> O cliente é responsável por fornecer todos os utensílios e produtos no local do serviço.
                   </p>
                 </div>
@@ -813,8 +813,8 @@ const DiaristaAgendaPage = () => {
               onClick={() => setActiveMaterials(null)}
               style={{
                 width: "100%",
-                background: "#0B1B3E",
-                color: "white",
+                background: "#00FF66",
+                color: "#09090B",
                 border: "none",
                 borderRadius: 12,
                 padding: "12px 16px",
@@ -823,7 +823,7 @@ const DiaristaAgendaPage = () => {
                 fontWeight: 600,
                 cursor: "pointer",
                 marginTop: 16,
-                boxShadow: "0 4px 10px rgba(11,27,62,0.15)"
+                boxShadow: "0 4px 10px rgba(0,255,102,0.15)"
               }}
             >
               Entendido

@@ -23,25 +23,25 @@ const FormFieldLight = forwardRef<HTMLInputElement, Props>(
     const borderColor = error
       ? "#E84040"
       : focused
-        ? "#0DB87E"
-        : "#D8DBE5";
+        ? "#00FF66"
+        : "var(--prestador-border)";
     const bg = error
       ? "rgba(232,64,64,0.04)"
       : focused
-        ? "rgba(13,184,126,0.04)"
-        : "#FFFFFF";
+        ? "rgba(0,255,102,0.05)"
+        : "var(--prestador-card)";
     const iconColor = error
       ? "#E84040"
       : focused
-        ? "#0DB87E"
-        : "#9399AD";
+        ? "#00FF66"
+        : "#A1A1AA";
 
     return (
       <div className="w-full">
         <label
           htmlFor={fieldId}
           className="block font-sans text-[12px] font-semibold mb-1.5"
-          style={{ color: "#5B6178" }}
+          style={{ color: "#A1A1AA" }}
         >
           {label}
         </label>
@@ -55,8 +55,8 @@ const FormFieldLight = forwardRef<HTMLInputElement, Props>(
             id={fieldId}
             onFocus={(e) => { setFocused(true); onFocus?.(e); }}
             onBlur={(e) => { setFocused(false); onBlur?.(e); }}
-            className={`flex-1 min-w-0 bg-transparent outline-none font-sans text-[15px] placeholder:text-[#9399AD] ${className ?? ""}`}
-            style={{ color: "#0B1B3E" }}
+            className={`flex-1 min-w-0 bg-transparent outline-none font-sans text-[15px] placeholder:text-[#A1A1AA]/50 ${className ?? ""}`}
+            style={{ color: "#FFFFFF" }}
             {...rest}
           />
           {rightSlot}
