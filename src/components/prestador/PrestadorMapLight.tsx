@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { motoIcon, tomadorIcon, destinoIcon, ambuIcon, coletaIcon } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
-import { MapRef, LIGHT_TILES, ATTRIBUTION, UBATUBA_CENTER } from '@/components/UBTMap';
+import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from '@/components/UBTMap';
 
 interface Props {
   myLocation: { lat: number; lng: number } | null;
@@ -15,12 +15,12 @@ interface Props {
 }
 
 const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | null }) => (
-  <div className="absolute inset-0" style={{ background: '#E8ECF2' }}>
+  <div className="absolute inset-0" style={{ background: '#09090B' }}>
     <div
-      className="absolute inset-0 opacity-60"
+      className="absolute inset-0 opacity-40"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(180,190,210,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(180,190,210,0.6) 1px, transparent 1px)',
+          'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
         backgroundSize: '48px 48px',
       }}
     />
@@ -31,7 +31,7 @@ const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | n
     {myLocation && (
       <div
         className="absolute top-3 right-3 px-2 py-1 rounded font-sans text-[10px]"
-        style={{ background: 'rgba(255,255,255,0.85)', color: '#5B6178' }}
+        style={{ background: '#18181B', border: '1px solid #27272A', color: '#A1A1AA' }}
       >
         {myLocation.lat.toFixed(3)}, {myLocation.lng.toFixed(3)}
       </div>
@@ -64,7 +64,7 @@ const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo
       zoomControl={false}
       attributionControl={false}
     >
-      <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} />
+      <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
       <MapRef mapRef={mapRef} />
       {myLocation && (
         <Marker 

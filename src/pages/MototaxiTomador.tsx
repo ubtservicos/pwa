@@ -36,10 +36,11 @@ const Sheet = ({ children, className = "" }: { children: React.ReactNode; classN
   <div
     className={`absolute left-0 right-0 bottom-0 z-[1000] ${className}`}
     style={{
-      background: "#132348",
+      background: "#18181B",
+      borderTop: "1px solid #27272A",
       borderRadius: "24px 24px 0 0",
       padding: "12px 20px 96px",
-      boxShadow: "0 -10px 40px rgba(0,0,0,0.4)",
+      boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
     }}
   >
     <div
@@ -199,8 +200,8 @@ const IdleSheet = ({
           <div
             className="mt-2 rounded-xl overflow-hidden"
             style={{
-              background: "#1C3261",
-              border: "1px solid rgba(255,255,255,0.15)",
+              background: "#18181B",
+              border: "1px solid #27272A",
               maxHeight: 180,
               overflowY: "auto",
             }}
@@ -253,10 +254,10 @@ const IdleSheet = ({
         type="button"
         disabled={!canConfirm}
         onClick={onConfirm}
-        className="mt-4 w-full rounded-xl font-display font-semibold text-white transition-opacity"
+        className="mt-4 w-full rounded-xl font-display font-semibold text-navy transition-opacity animate-pulse"
         style={{
           height: 52,
-          background: "#0DB87E",
+          background: "#00FF66",
           opacity: canConfirm ? 1 : 0.4,
         }}
       >
@@ -305,12 +306,12 @@ const SearchingSheet = ({
             <svg width="80" height="80" viewBox="0 0 80 80">
               <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
               <circle
-                cx="40" cy="40" r="34" fill="none" stroke="#0DB87E" strokeWidth="6"
+                cx="40" cy="40" r="34" fill="none" stroke="#00FF66" strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={`${dash} ${C}`}
                 transform="rotate(-90 40 40)"
               />
-              <text x="40" y="48" textAnchor="middle" fill="#fff" className="font-display" fontSize="22" fontWeight="800">
+              <text x="40" y="48" textAnchor="middle" fill="#00FF66" className="font-mono text-bet-neon" fontSize="22" fontWeight="800">
                 {seconds}
               </text>
             </svg>
@@ -323,7 +324,7 @@ const SearchingSheet = ({
             Nenhum mototaxista disponível.
           </p>
           <div className="mt-3 flex flex-col gap-2">
-            <button onClick={() => setSeconds(60)} className="rounded-xl h-11 font-display font-semibold text-white" style={{ background: "#0DB87E" }}>
+            <button onClick={() => setSeconds(60)} className="rounded-xl h-11 font-display font-bold text-navy" style={{ background: "#00FF66" }}>
               Tentar novamente
             </button>
             <button onClick={() => setSeconds(60)} className="rounded-xl h-11 font-sans font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)" }}>
@@ -1171,7 +1172,7 @@ const MototaxiTomadorPage = () => {
           else navigate("/app/home");
         }}
         className="absolute top-4 left-4 z-[1000] w-10 h-10 rounded-full flex items-center justify-center"
-        style={{ background: "rgba(11,27,62,0.85)", border: "1px solid rgba(255,255,255,0.10)" }}
+        style={{ background: "rgba(24,24,27,0.90)", border: "1px solid #27272A" }}
         aria-label="Voltar"
       >
         <ArrowLeft size={18} className="text-white" />

@@ -35,14 +35,15 @@ const Sheet = ({ children }: { children: React.ReactNode }) => (
   <div
     className="absolute left-0 right-0 bottom-0 z-10"
     style={{
-      background: "#FFFFFF",
+      background: "#18181B",
+      borderTop: "1px solid #27272A",
       borderRadius: "24px 24px 0 0",
       padding: "12px 20px 96px",
-      boxShadow: "0 -4px 24px rgba(11,27,62,0.12)",
+      boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
       zIndex: 1000,
     }}
   >
-    <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "#D8DBE5" }} />
+    <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)" }} />
     {children}
   </div>
 );
@@ -73,31 +74,32 @@ const ChamadoModal = ({
   return (
     <div
       className="fixed inset-0 flex items-end justify-center"
-      style={{ background: "rgba(0,0,0,0.50)", backdropFilter: "blur(4px)", zIndex: 1050 }}
+      style={{ background: "rgba(0,0,0,0.70)", backdropFilter: "blur(6px)", zIndex: 1050 }}
     >
       <div
         className="w-full max-w-md"
         style={{
-          background: "#FFFFFF",
+          background: "#18181B",
+          borderTop: "2px solid #27272A",
           borderRadius: "24px 24px 0 0",
           padding: 24,
           animation: "ubt-slide-up 300ms ease-out",
         }}
       >
         <div className="flex items-start justify-between">
-          <h3 className="font-display text-[20px] font-bold" style={{ color: "#0B1B3E" }}>
+          <h3 className="font-display text-[20px] font-bold text-white">
             Novo chamado! 🔔
           </h3>
           <svg width="64" height="64" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="28" fill="none" stroke="#EFF0F3" strokeWidth="4" />
+            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
             <circle
               cx="32" cy="32" r="28"
-              fill="none" stroke="#0DB87E" strokeWidth="4"
+              fill="none" stroke="#00FF66" strokeWidth="4"
               strokeLinecap="round"
               strokeDasharray={`${dash} ${C}`}
               transform="rotate(-90 32 32)"
             />
-            <text x="32" y="38" textAnchor="middle" fill="#0B1B3E" fontSize="18" fontWeight="700" fontFamily="Syne">
+            <text x="32" y="38" textAnchor="middle" fill="#FFFFFF" fontSize="18" fontWeight="700" fontFamily="Syne">
               {seconds}
             </text>
           </svg>
@@ -105,42 +107,42 @@ const ChamadoModal = ({
 
         <div
           className="mt-4 rounded-2xl"
-          style={{ background: "#F7F8FA", padding: 20 }}
+          style={{ background: "#09090B", border: "1px solid #27272A", padding: 20 }}
         >
           <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-sans text-[12px] font-semibold"
-            style={{ background: "#E6FAF4", color: "#0DB87E" }}
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-sans text-[12px] font-semibold"
+            style={{ background: "rgba(0,255,102,0.10)", color: "#00FF66" }}
           >
             {chamado.type === "entrega" ? <Package size={12} /> : <Bike size={12} />}
             {chamado.type === "entrega" ? "Entrega" : "Carona"}
           </span>
 
           <div className="mt-3 flex items-start gap-2">
-            <MapPin size={16} color="#0DB87E" className="mt-0.5 shrink-0" />
-            <span className="font-sans text-[14px]" style={{ color: "#0B1B3E" }}>
+            <MapPin size={16} color="#00FF66" className="mt-0.5 shrink-0" />
+            <span className="font-sans text-[14px] text-white">
               {chamado.origin}
             </span>
           </div>
           <div className="my-1 flex justify-center">
-            <Navigation size={16} color="#9399AD" />
+            <Navigation size={16} color="rgba(255,255,255,0.30)" />
           </div>
           <div className="flex items-start gap-2">
             <MapPin size={16} color="#E84040" className="mt-0.5 shrink-0" />
-            <span className="font-sans text-[14px]" style={{ color: "#0B1B3E" }}>
+            <span className="font-sans text-[14px] text-white">
               {chamado.destination}
             </span>
           </div>
 
-          <div className="my-3 h-px" style={{ background: "#EFF0F3" }} />
+          <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
 
-          <p className="font-sans text-[13px]" style={{ color: "#5B6178" }}>
+          <p className="font-sans text-[13px] text-white/60">
             {chamado.distanceKm} km · ~{chamado.durationMin} min
           </p>
           <div className="mt-2 flex items-end justify-between">
-            <span className="font-sans text-[13px]" style={{ color: "#9399AD" }}>
+            <span className="font-sans text-[13px] text-white/50">
               Você recebe
             </span>
-            <span className="font-display text-[22px] font-bold" style={{ color: "#0DB87E" }}>
+            <span className="font-display text-[22px] font-bold text-[#00FF66]">
               {formatBRL(youReceive)}
             </span>
           </div>
@@ -150,12 +152,19 @@ const ChamadoModal = ({
           <button
             type="button"
             onClick={onAccept}
-            className="w-full min-h-[52px] rounded-full font-display font-semibold text-sm"
-            style={{ background: "#0DB87E", color: "#fff" }}
+            className="w-full min-h-[52px] rounded-full font-display font-bold text-sm text-[#09090B] animate-pulse"
+            style={{ background: "#00FF66" }}
           >
             Aceitar
           </button>
-          <GhostButtonLight onClick={onReject}>Recusar</GhostButtonLight>
+          <button
+            type="button"
+            onClick={onReject}
+            className="w-full min-h-[52px] rounded-full font-sans font-medium text-sm text-white/60 hover:text-white transition-colors"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          >
+            Recusar
+          </button>
         </div>
 
         <style>{`
@@ -322,7 +331,7 @@ const PrestadorMototaxiOnline = () => {
   };
 
   return (
-    <div className="relative min-h-[100svh]" style={{ background: "#F7F8FA" }}>
+    <div className="relative min-h-[100svh]" style={{ background: "#09090B" }}>
       {/* Floating Header */}
       <div
         style={{
@@ -331,12 +340,12 @@ const PrestadorMototaxiOnline = () => {
           left: 16,
           right: 16,
           zIndex: 1000,
-          background: "rgba(255, 255, 255, 0.9)",
+          background: "rgba(24, 24, 27, 0.9)",
           backdropFilter: "blur(10px)",
           borderRadius: 16,
           padding: "12px 16px",
-          boxShadow: "0 4px 18px rgba(11, 27, 62, 0.08)",
-          border: "1px solid rgba(11, 27, 62, 0.06)",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.3)",
+          border: "1px solid #27272A",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
@@ -348,7 +357,7 @@ const PrestadorMototaxiOnline = () => {
             background: "none",
             border: "none",
             cursor: "pointer",
-            color: "#0B1B3E",
+            color: "#FFFFFF",
             padding: 4,
             display: "flex",
             alignItems: "center",
@@ -359,7 +368,7 @@ const PrestadorMototaxiOnline = () => {
           <ArrowLeft size={22} />
         </button>
 
-        <h1 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>
+        <h1 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
           Mototáxi Online
         </h1>
 
@@ -369,7 +378,7 @@ const PrestadorMototaxiOnline = () => {
             background: "none",
             border: "none",
             cursor: "pointer",
-            color: "#0B1B3E",
+            color: "#FFFFFF",
             padding: 4,
             display: "flex",
             alignItems: "center",
@@ -389,20 +398,20 @@ const PrestadorMototaxiOnline = () => {
         <div className="flex items-center gap-2">
           <span
             className="block w-2.5 h-2.5 rounded-full"
-            style={{ background: "#0DB87E", animation: "ubt-pulse-dot 1.4s ease-in-out infinite" }}
+            style={{ background: "#00FF66", animation: "ubt-pulse-dot 1.4s ease-in-out infinite" }}
           />
-          <h2 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>
+          <h2 className="font-display text-[16px] font-bold text-white">
             Online — aguardando chamados
           </h2>
         </div>
-        <p className="mt-1 font-sans text-[13px]" style={{ color: "#5B6178" }}>
+        <p className="mt-1 font-sans text-[13px] text-white/50">
           Raio de atendimento: 5 km
         </p>
 
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span
             className="inline-flex items-center px-2 py-1 rounded-full font-sans text-[12px] font-semibold"
-            style={{ background: "#E6FAF4", border: "1px solid #0DB87E", color: "#0DB87E" }}
+            style={{ background: "rgba(0,255,102,0.1)", border: "1px solid #00FF66", color: "#00FF66" }}
           >
             Carona e Entrega
           </span>
@@ -410,18 +419,25 @@ const PrestadorMototaxiOnline = () => {
 
         <div
           className="mt-3 rounded-xl flex items-center justify-between"
-          style={{ background: "#EFF0F3", padding: "12px 16px" }}
+          style={{ background: "#09090B", border: "1px solid #27272A", padding: "12px 16px" }}
         >
-          <span className="font-sans text-[14px]" style={{ color: "#0B1B3E" }}>
+          <span className="font-sans text-[14px] text-white">
             Hoje: <strong>R$ 0,00</strong>
           </span>
-          <span className="font-sans text-[12px]" style={{ color: "#9399AD" }}>
+          <span className="font-sans text-[12px] text-white/50">
             0 corridas
           </span>
         </div>
 
         <div className="mt-4">
-          <GhostButtonLight onClick={goOffline}>Ficar Offline</GhostButtonLight>
+          <button
+            type="button"
+            onClick={goOffline}
+            className="w-full min-h-[48px] rounded-full font-sans font-medium text-sm text-white/70 hover:text-white transition-colors"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+          >
+            Ficar Offline
+          </button>
         </div>
 
         <style>{`

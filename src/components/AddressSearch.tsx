@@ -43,8 +43,8 @@ export function AddressSearch({ value, onChange, placeholder = 'Digite o endere√
     };
     const dropdownStyle: React.CSSProperties = {
         position: 'absolute', top: 52, left: 0, right: 0, zIndex: 1000,
-        background: dark ? '#1C3261' : '#FFFFFF',
-        border: `1px solid ${dark ? 'rgba(255,255,255,0.10)' : '#D8DBE5'}`,
+        background: dark ? '#18181B' : '#FFFFFF',
+        border: `1px solid ${dark ? '#27272A' : '#D8DBE5'}`,
         borderRadius: 12, overflow: 'hidden',
         boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
     };
