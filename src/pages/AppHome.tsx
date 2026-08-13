@@ -42,6 +42,12 @@ const AppHome = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    if (user.role === "associacao") {
+      navigate("/app/associacao/dashboard", { replace: true });
+    }
+  }, [user.role, navigate]);
+
+  useEffect(() => {
     const onboarded = localStorage.getItem("ubt_onboarded_cliente");
     if (!onboarded) {
       setShowOnboarding(true);

@@ -36,6 +36,29 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
           return;
         }
 
+        // Check user role from database to isolate association routes
+        const { data: dbUser } = await supabase
+          .from("usuarios")
+          .select("role")
+          .eq("id", authUser.id)
+          .maybeSingle();
+
+        const userRole = authUser.email === "ubt.servicos@gmail.com" ? "admin" : (dbUser?.role || "tomador");
+
+        if (userRole === "associacao") {
+          if (!location.pathname.startsWith("/app/associacao/")) {
+            if (active) {
+              setChecking(false);
+              navigate("/app/associacao/dashboard", { replace: true });
+            }
+          } else {
+            if (active) {
+              setChecking(false);
+            }
+          }
+          return;
+        }
+
         // 2. Check fast session cache
         const cached = sessionStorage.getItem(`ubt_lgpd_verified_${authUser.id}`);
         if (cached === "true") {

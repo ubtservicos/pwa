@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, LogOut, ChevronDown, ChevronUp } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -13,6 +13,12 @@ const REQUIRED_VERSIONS = {
 export default function LgpdConsentPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user.role === "associacao") {
+      navigate("/app/associacao/dashboard", { replace: true });
+    }
+  }, [user.role, navigate]);
 
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
