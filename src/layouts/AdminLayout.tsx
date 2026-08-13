@@ -25,7 +25,8 @@ import {
   BarChart3,
   CheckCircle2,
   Shield,
-  Settings
+  Settings,
+  BookOpen
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
