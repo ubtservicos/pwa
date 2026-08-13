@@ -106,10 +106,116 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     .join("")
     .toUpperCase();
 
-  const filteredItems = NAV_ITEMS.filter((item) => {
-    if (!item.roles) return true;
-    return item.roles.includes(role);
+  // Categorize filtered items
+  const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
+  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/coco", "/admin/entidades", "/admin/conteudo"].includes(item.path));
+  const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
+  const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/kyc-pendentes", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
+  const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {
+      painel: false,
+      operacoes: false,
+      financeiro: false,
+      compliance: false,
+      sistema: false
+    };
+    // Auto expand active section
+    if (painelItems.some(item => pathname === item.path)) initial.painel = true;
+    else if (operacoesItems.some(item => pathname === item.path)) initial.operacoes = true;
+    else if (financeiroItems.some(item => pathname === item.path)) initial.financeiro = true;
+    else if (complianceItems.some(item => pathname === item.path)) initial.compliance = true;
+    else if (sistemaItems.some(item => pathname === item.path)) initial.sistema = true;
+    else initial.painel = true; // fallback default
+    return initial;
   });
+
+  const toggleCategory = (id: string) => {
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const renderCategory = (id: string, title: string, Icon: any, items: typeof filteredItems) => {
+    if (items.length === 0) return null;
+    const isExpanded = expanded[id];
+
+    return (
+      <div key={id} style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 8 }}>
+        <button
+          onClick={() => toggleCategory(id)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            cursor: "pointer",
+            padding: "8px 12px",
+            borderRadius: 8,
+            color: "rgba(255,255,255,0.85)",
+            fontFamily: "DM Sans",
+            fontSize: 13,
+            fontWeight: 600,
+            transition: "background 150ms"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Icon size={16} color="rgba(255,255,255,0.50)" />
+            <span style={{ fontSize: 13 }}>{title}</span>
+          </div>
+          <span style={{ fontSize: 8, color: "rgba(255,255,255,0.30)", transition: "transform 200ms", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
+            ▶
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 12, marginTop: 2 }}>
+            {items.map((item) => {
+              const active = pathname === item.path;
+              const ItemIcon = item.icon;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={onItemClick}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    fontFamily: "DM Sans",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    background: active ? "rgba(13,184,126,0.15)" : "transparent",
+                    color: active ? "#0DB87E" : "rgba(255,255,255,0.50)",
+                    transition: "background 150ms",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <ItemIcon size={14} color={active ? "#0DB87E" : "rgba(255,255,255,0.35)"} />
+                  {item.label}
+                </NavLink>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <aside
@@ -142,39 +248,11 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
         </span>
       </div>
       <nav style={{ flex: 1, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {filteredItems.map((item) => {
-          const active = pathname === item.path;
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={onItemClick}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "10px 12px",
-                borderRadius: 10,
-                fontFamily: "DM Sans",
-                fontSize: 14,
-                fontWeight: 500,
-                background: active ? "rgba(13,184,126,0.15)" : "transparent",
-                color: active ? "#0DB87E" : "rgba(255,255,255,0.60)",
-                transition: "background 150ms",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.06)";
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <Icon size={18} color={active ? "#0DB87E" : "rgba(255,255,255,0.45)"} />
-              {item.label}
-            </NavLink>
-          );
-        })}
+        {renderCategory("painel", "Painel de Controle", BarChart3, painelItems)}
+        {renderCategory("operacoes", "Operações & Entidades", Users, operacoesItems)}
+        {renderCategory("financeiro", "Financeiro", CreditCard, financeiroItems)}
+        {renderCategory("compliance", "Compliance & Risco", ShieldAlert, complianceItems)}
+        {renderCategory("sistema", "Sistema & Config", Settings, sistemaItems)}
       </nav>
       <div
         style={{
@@ -229,8 +307,8 @@ const TopBar = ({ onMenu }: { onMenu?: () => void }) => {
     <header
       style={{
         height: 60,
-        background: "var(--admin-surface)",
-        borderBottom: "1px solid var(--admin-border)",
+        background: "#09090B",
+        borderBottom: "1px solid #27272A",
         padding: "0 20px",
         display: "flex",
         alignItems: "center",
@@ -243,16 +321,16 @@ const TopBar = ({ onMenu }: { onMenu?: () => void }) => {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {onMenu && (
           <button onClick={onMenu} aria-label="Menu" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Menu size={20} color="#0F172A" />
+            <Menu size={20} color="#E4E4E7" />
           </button>
         )}
-        <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>
+        <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "#71717A" }}>
           UBT Admin <span style={{ margin: "0 6px" }}>/</span>
-          <span style={{ color: "#0F172A", fontWeight: 500 }}>{sectionTitle(pathname)}</span>
+          <span style={{ color: "#E4E4E7", fontWeight: 500 }}>{sectionTitle(pathname)}</span>
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#94A3B8" }}>
+        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "#71717A" }}>
           {now.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
         </span>
         <span

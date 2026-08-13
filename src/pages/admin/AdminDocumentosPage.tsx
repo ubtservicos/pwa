@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { Card } from "@/components/admin/ui";
-import { FileText, Check, X, ExternalLink, ShieldAlert, AlertCircle, Search, Eye, EyeOff } from "lucide-react";
+import { FileText, Check, X, ShieldAlert, Search, Eye, AlertCircle, Calendar } from "lucide-react";
 
 interface DocumentAudit {
   id: string;
@@ -33,19 +33,18 @@ export default function AdminDocumentosPage() {
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [justification, setJustification] = useState("");
   const [submittingReject, setSubmittingReject] = useState(false);
+  const [viewingFakeDoc, setViewingFakeDoc] = useState<{ docName: string; associacao: string } | null>(null);
   const toast = useAdminToast();
 
   const loadDocuments = async () => {
     setLoading(true);
     try {
-      // Fetch documents
       const { data: docs, error: dError } = await supabase
         .from("associacao_documentos")
         .select("*");
 
       if (dError) throw dError;
 
-      // Fetch profiles to map association names
       const { data: profiles } = await supabase
         .from("associacoes_perfil")
         .select("id, nome_fantasia");
@@ -61,66 +60,10 @@ export default function AdminDocumentosPage() {
     } catch (err: any) {
       console.error("Erro ao carregar documentos:", err);
       toast.show("Erro ao carregar documentos das associações.");
-      
-      // Fallback presentation mock
-      setDocuments(getDemoDocuments());
     } finally {
       setLoading(false);
     }
   };
-
-  const getDemoDocuments = (): DocumentAudit[] => [
-    {
-      id: "1",
-      associacao_id: "a1",
-      associacao_nome: "Associação de Mototaxistas de Ubatuba",
-      tipo_documento: "Ata de Eleição de Diretoria",
-      status: "pendente",
-      data_validade: "12/12/2027",
-      url_arquivo: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      justificativa_rejeicao: null
-    },
-    {
-      id: "2",
-      associacao_id: "a2",
-      associacao_nome: "Associação Comercial B2B Centro",
-      tipo_documento: "Estatuto Social Registrado",
-      status: "aprovado",
-      data_validade: "31/12/2030",
-      url_arquivo: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      justificativa_rejeicao: null
-    },
-    {
-      id: "3",
-      associacao_id: "a3",
-      associacao_nome: "Sindicato de Hotéis e Pousadas",
-      tipo_documento: "Comprovante de CNPJ Ativo",
-      status: "rejeitado",
-      data_validade: null,
-      url_arquivo: null,
-      justificativa_rejeicao: "A imagem enviada está ilegível. Por favor, reenvie o PDF oficial do site da Receita."
-    },
-    {
-      id: "4",
-      associacao_id: "a1",
-      associacao_nome: "Associação de Mototaxistas de Ubatuba",
-      tipo_documento: "Comprovante de Inscrição CNPJ",
-      status: "aprovado",
-      data_validade: null,
-      url_arquivo: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      justificativa_rejeicao: null
-    },
-    {
-      id: "5",
-      associacao_id: "a2",
-      associacao_nome: "Associação Comercial B2B Centro",
-      tipo_documento: "Alvará de Funcionamento",
-      status: "vencido",
-      data_validade: "01/05/2026",
-      url_arquivo: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      justificativa_rejeicao: null
-    }
-  ];
 
   useEffect(() => {
     loadDocuments();
@@ -142,10 +85,6 @@ export default function AdminDocumentosPage() {
     } catch (err: any) {
       console.error(err);
       toast.show("Erro ao aprovar documento.");
-      // Fallback update state locally for presentation
-      setDocuments((prev) =>
-        prev.map((d) => (d.id === docId ? { ...d, status: "aprovado", justificativa_rejeicao: null } : d))
-      );
     }
   };
 
@@ -176,18 +115,19 @@ export default function AdminDocumentosPage() {
     } catch (err: any) {
       console.error(err);
       toast.show("Erro ao rejeitar documento.");
-      // Fallback update state locally for presentation
-      setDocuments((prev) =>
-        prev.map((d) =>
-          d.id === rejectingDocId
-            ? { ...d, status: "rejeitado", justificativa_rejeicao: justification }
-            : d
-        )
-      );
-      setRejectingDocId(null);
-      setJustification("");
     } finally {
       setSubmittingReject(false);
+    }
+  };
+
+  const handleViewDocument = (doc: DocumentAudit) => {
+    if (doc.url_arquivo && doc.url_arquivo.startsWith("http")) {
+      window.open(doc.url_arquivo, "_blank");
+    } else {
+      setViewingFakeDoc({
+        docName: doc.tipo_documento,
+        associacao: doc.associacao_nome
+      });
     }
   };
 
@@ -280,16 +220,8 @@ export default function AdminDocumentosPage() {
           <FileText size={48} className="mb-4 text-[#00FF66]" />
           <p className="font-semibold text-lg text-white margin-0">Nenhum documento retornado do banco</p>
           <p className="text-xs mt-1 text-zinc-500 max-w-sm">
-            Nenhum registro corresponde aos filtros atuais. Você pode carregar dados demonstrativos para homologação.
+            Nenhum registro corresponde aos filtros atuais ou não há arquivos vinculados no Supabase.
           </p>
-          
-          <button
-            onClick={() => setDocuments(getDemoDocuments())}
-            className="mt-6 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00FF66] text-[#09090B] hover:shadow-lg hover:shadow-[#00FF66]/20 transition-all flex items-center gap-1.5"
-          >
-            <AlertCircle size={14} />
-            Carregar Dados Demonstrativos (Mock)
-          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
@@ -347,7 +279,8 @@ export default function AdminDocumentosPage() {
 
                       <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500">
                         {doc.data_validade && (
-                          <p className="margin-0">
+                          <p className="margin-0 flex items-center gap-1">
+                            <Calendar size={12} />
                             Validade: {doc.data_validade}
                           </p>
                         )}
@@ -362,28 +295,15 @@ export default function AdminDocumentosPage() {
 
                     {/* Actions panel (right) */}
                     <div className="flex items-center gap-2 self-start md:self-center">
-                      {/* Document visualizer */}
-                      {doc.url_arquivo ? (
-                        <a
-                          href={doc.url_arquivo}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3.5 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:bg-white/5 transition-all text-xs font-semibold text-white flex items-center gap-1.5"
-                          title="Visualizar documento em nova aba"
-                        >
-                          <Eye size={14} />
-                          Visualizar Documento
-                        </a>
-                      ) : (
-                        <button
-                          disabled
-                          className="px-3.5 py-2 rounded-xl bg-zinc-800/30 border border-zinc-800 text-zinc-500 text-xs font-semibold flex items-center gap-1.5 cursor-not-allowed"
-                          title="Sem documento anexo"
-                        >
-                          <EyeOff size={14} />
-                          Sem anexo
-                        </button>
-                      )}
+                      {/* Document visualizer - Never disabled, falls back to Fake visualizer */}
+                      <button
+                        onClick={() => handleViewDocument(doc)}
+                        className="px-3.5 py-2 rounded-xl bg-[#18181B] border border-[#27272A] hover:bg-white/5 transition-all text-xs font-semibold text-white flex items-center gap-1.5"
+                        title="Visualizar documento anexo"
+                      >
+                        <Eye size={14} />
+                        Visualizar Documento
+                      </button>
 
                       {/* Approval triggers */}
                       {doc.status !== "aprovado" && (
@@ -412,6 +332,72 @@ export default function AdminDocumentosPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Fake Document Mockup Modal for Pitch presentation */}
+      {viewingFakeDoc && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl w-full max-w-lg p-6 relative flex flex-col items-center">
+            {/* Header */}
+            <div className="w-full flex justify-between items-center border-b border-[#27272A] pb-3 mb-4">
+              <div>
+                <h4 className="text-sm font-semibold text-white margin-0">{viewingFakeDoc.docName}</h4>
+                <p className="text-xs text-zinc-400 margin-0 mt-0.5">{viewingFakeDoc.associacao}</p>
+              </div>
+              <button 
+                onClick={() => setViewingFakeDoc(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* A4 Paper mockup */}
+            <div className="w-full bg-[#E4E4E7] border border-zinc-300 rounded-xl p-8 relative overflow-hidden aspect-[1/1.4] flex flex-col justify-between shadow-2xl">
+              
+              {/* Blurred Header text */}
+              <div>
+                <div className="h-6 w-1/3 bg-zinc-300 rounded mb-4" />
+                <div className="h-3 w-full bg-zinc-300 rounded mb-2" />
+                <div className="h-3 w-5/6 bg-zinc-300 rounded mb-2" />
+                <div className="h-3 w-4/6 bg-zinc-300 rounded mb-6" />
+              </div>
+
+              {/* Red Stamp in center */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none rotate-[-15deg]">
+                <div className="border-[4px] border-red-500 rounded-xl px-6 py-3 bg-red-500/10 shadow-lg">
+                  <span className="font-display font-extrabold text-[16px] tracking-widest text-red-500 uppercase">
+                    DOCUMENTO DEMONSTRATIVO B2B
+                  </span>
+                </div>
+              </div>
+
+              {/* Blurred Body text */}
+              <div className="flex flex-col gap-2">
+                <div className="h-3 w-full bg-zinc-300 rounded" />
+                <div className="h-3 w-full bg-zinc-300 rounded" />
+                <div className="h-3 w-11/12 bg-zinc-300 rounded" />
+                <div className="h-3 w-4/5 bg-zinc-300 rounded" />
+                <div className="h-3 w-2/3 bg-zinc-300 rounded mt-4" />
+              </div>
+
+              {/* Blurred Footer text */}
+              <div className="mt-8 border-t border-zinc-300 pt-4 flex justify-between items-center">
+                <div className="h-2 w-1/4 bg-zinc-300 rounded" />
+                <div className="h-4 w-8 rounded-full bg-zinc-300" />
+              </div>
+
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={() => setViewingFakeDoc(null)}
+              className="mt-6 w-full py-2.5 rounded-xl text-xs font-semibold bg-[#18181B] border border-[#27272A] text-white hover:bg-white/5 transition-all"
+            >
+              Fechar Visualizador
+            </button>
+          </div>
         </div>
       )}
 
