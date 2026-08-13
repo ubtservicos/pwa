@@ -336,7 +336,7 @@ const AmbulantesOnlinePage = () => {
   const offset = dash * (1 - secondsLeft / 120);
 
   return (
-    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#F7F8FA" }}>
+    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#09090B" }}>
       <div className="absolute inset-0">
         <PrestadorMapLight myLocation={myLocation} providerType="ambulante" />
       </div>
@@ -347,39 +347,40 @@ const AmbulantesOnlinePage = () => {
         className="absolute top-4 left-4 z-10 flex items-center justify-center"
         style={{
           width: 40, height: 40, borderRadius: 999,
-          background: "#fff", boxShadow: "0 2px 8px rgba(11,27,62,0.15)",
+          background: "rgba(24,24,27,0.90)", border: "1px solid #27272A",
         }}
         aria-label="Voltar"
       >
-        <ChevronLeft size={20} color="#0B1B3E" />
+        <ChevronLeft size={20} color="#FFFFFF" />
       </button>
 
       {/* Bottom sheet white */}
       <div
         className="absolute left-0 right-0 bottom-0 z-40"
         style={{
-          background: "#fff",
+          background: "#18181B",
+          borderTop: "1px solid #27272A",
           borderRadius: "24px 24px 0 0",
           padding: "10px 20px 96px",
           maxHeight: "62vh",
           overflowY: "auto",
-          boxShadow: "0 -10px 30px rgba(11,27,62,0.10)",
+          boxShadow: "0 -10px 40px rgba(0,0,0,0.50)",
           zIndex: 1000
         }}
       >
-        <div style={{ width: 40, height: 4, borderRadius: 999, background: "#D8DBE5", margin: "0 auto 14px" }} />
+        <div style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.15)", margin: "0 auto 14px" }} />
 
         {/* Online/Offline */}
         <div
           className="rounded-2xl"
-          style={{ background: "#fff", padding: 20, boxShadow: "0 2px 8px rgba(11,27,62,0.06)", border: "1px solid #EFF0F3" }}
+          style={{ background: "#09090B", border: "1px solid #27272A", padding: 20 }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-display" style={{ fontSize: 16, fontWeight: 700, color: isOnline ? "#0B1B3E" : "#9399AD", margin: 0 }}>
+              <p className="font-display" style={{ fontSize: 16, fontWeight: 700, color: isOnline ? "#00FF66" : "#A1A1AA", margin: 0 }}>
                 {isOnline ? "Você está ONLINE" : "Você está OFFLINE"}
               </p>
-              <p className="font-sans" style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
+              <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", marginTop: 4 }}>
                 {isOnline ? "Aparecendo no mapa para clientes" : "Invisível para clientes"}
               </p>
             </div>
@@ -388,7 +389,7 @@ const AmbulantesOnlinePage = () => {
               onClick={() => (isOnline ? goOffline() : goOnline())}
               aria-label="toggle online"
               className="rounded-full relative"
-              style={{ width: 60, height: 32, background: isOnline ? "#0DB87E" : "#D8DBE5", border: "none", cursor: "pointer" }}
+              style={{ width: 60, height: 32, background: isOnline ? "#00FF66" : "rgba(255,255,255,0.10)", border: "none", cursor: "pointer" }}
             >
               <span
                 className="block rounded-full bg-white"
@@ -407,9 +408,9 @@ const AmbulantesOnlinePage = () => {
         {(modalidade === "local_fixo" || modalidade === "both") && (
           <div
             className="rounded-2xl"
-            style={{ background: "#fff", padding: 14, boxShadow: "0 2px 8px rgba(11,27,62,0.06)", border: "1px solid #EFF0F3", marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}
+            style={{ background: "#09090B", border: "1px solid #27272A", marginTop: 12, display: "flex", alignItems: "center", gap: 10, padding: 14 }}
           >
-            <MapPin size={16} color="#0DB87E" />
+            <MapPin size={16} color="#00FF66" />
             {editEndereco ? (
               <input
                 value={endereco}
@@ -420,16 +421,16 @@ const AmbulantesOnlinePage = () => {
                 }}
                 autoFocus
                 className="flex-1 outline-none font-sans"
-                style={{ fontSize: 14, color: "#0B1B3E" }}
+                style={{ fontSize: 14, color: "#FFFFFF" }}
               />
             ) : (
-              <span className="font-sans flex-1" style={{ fontSize: 14, color: "#0B1B3E" }}>{endereco}</span>
+              <span className="font-sans flex-1" style={{ fontSize: 14, color: "#FFFFFF" }}>{endereco}</span>
             )}
             <button
               type="button"
               onClick={() => setEditEndereco(true)}
               className="font-sans"
-              style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 12, cursor: "pointer" }}
+              style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer" }}
             >
               Alterar
             </button>
@@ -439,26 +440,26 @@ const AmbulantesOnlinePage = () => {
         {/* Fila de pedidos (Next in queue) */}
         <div
           className="rounded-2xl"
-          style={{ background: "#fff", padding: 16, boxShadow: "0 2px 8px rgba(11,27,62,0.06)", border: "1px solid #EFF0F3", marginTop: 12, cursor: "pointer" }}
+          style={{ background: "#09090B", border: "1px solid #27272A", padding: 16, marginTop: 12, cursor: "pointer" }}
           onClick={() => setShowQueueModal(true)}
         >
             <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
               <p className="font-sans uppercase" style={{ fontSize: 12, fontWeight: 700, color: "#9399AD", letterSpacing: 0.5, margin: 0 }}>
                 Fila de Pedidos ({allOrders.filter(o => o.status !== "finished" && o.status !== "cancelled").length})
               </p>
-              <span style={{ fontSize: 12, color: "#0DB87E", fontWeight: 600 }}>Ver todos</span>
+              <span style={{ fontSize: 12, color: "#00FF66", fontWeight: 600 }}>Ver todos</span>
             </div>
             {(() => {
               const next = allOrders.find(o => o.status === "confirmed" || o.status === "preparing" || o.status === "pending");
-              if (!next) return <p className="font-sans" style={{ fontSize: 13, color: "#5B6178", margin: 0 }}>Nenhum pedido em andamento.</p>;
+              if (!next) return <p className="font-sans" style={{ fontSize: 13, color: "#A1A1AA", margin: 0 }}>Nenhum pedido em andamento.</p>;
               return (
                 <div className="flex items-center gap-3">
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(13,184,126,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0,255,102,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 20 }}>🍽️</span>
                   </div>
                   <div className="flex-1">
-                    <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#0B1B3E", margin: 0 }}>Pedido #{next.id.slice(-4)}</p>
-                    <p className="font-sans" style={{ fontSize: 12, color: "#5B6178", margin: 0 }}>{next.itens.length} {next.itens.length === 1 ? "item" : "itens"} · R$ {next.total.toFixed(2)}</p>
+                    <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: 0 }}>Pedido #{next.id.slice(-4)}</p>
+                    <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", margin: 0 }}>{next.itens.length} {next.itens.length === 1 ? "item" : "itens"} · R$ {next.total.toFixed(2)}</p>
                   </div>
                 </div>
               );
@@ -468,7 +469,8 @@ const AmbulantesOnlinePage = () => {
         {/* Cardápio */}
         <div
           style={{
-            background: "#F7F8FA",
+            background: "#09090B",
+            border: "1px solid #27272A",
             borderRadius: 14, padding: 16, marginTop: 12,
           }}
         >
@@ -480,7 +482,7 @@ const AmbulantesOnlinePage = () => {
               type="button"
               onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
               className="font-sans"
-              style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+              style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
             >
               Editar
             </button>
@@ -496,15 +498,15 @@ const AmbulantesOnlinePage = () => {
                   ) : (
                     <span style={{ fontSize: 16 }}>{p.emoji}</span>
                   )}
-                  <span className="font-sans flex-1" style={{ fontSize: 13, color: "#0B1B3E" }}>{p.nome}</span>
-                  <span className="font-sans" style={{ fontSize: 13, color: "#0DB87E", fontWeight: 600 }}>
+                  <span className="font-sans flex-1" style={{ fontSize: 13, color: "#FFFFFF" }}>{p.nome}</span>
+                  <span className="font-sans" style={{ fontSize: 13, color: "#00FF66", fontWeight: 600 }}>
                     {p.variosValores ? "Diversos valores" : `R$ ${p.preco.toFixed(2)}`}
                   </span>
                   <button
                     type="button"
                     onClick={() => toggleProdDisponivel(id, !p.disponivel)}
                     className="rounded-full relative"
-                    style={{ width: 36, height: 20, background: p.disponivel ? "#0DB87E" : "#D8DBE5", border: "none", cursor: "pointer" }}
+                    style={{ width: 36, height: 20, background: p.disponivel ? "#00FF66" : "rgba(255,255,255,0.10)", border: "none", cursor: "pointer" }}
                     aria-label={p.disponivel ? "Disponível" : "Esgotado"}
                   >
                     <span
@@ -525,10 +527,10 @@ const AmbulantesOnlinePage = () => {
         {/* Mini ganhos */}
         <div
           className="flex items-center justify-between"
-          style={{ background: "#EFF0F3", borderRadius: 12, padding: "12px 16px", marginTop: 12 }}
+          style={{ background: "#09090B", border: "1px solid #27272A", borderRadius: 12, padding: "12px 16px", marginTop: 12 }}
         >
-          <span className="font-sans" style={{ fontSize: 14, color: "#0B1B3E", fontWeight: 600 }}>Hoje: R$ 0,00</span>
-          <span className="font-sans" style={{ fontSize: 12, color: "#9399AD" }}>0 pedidos</span>
+          <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>Hoje: R$ 0,00</span>
+          <span className="font-sans" style={{ fontSize: 12, color: "#A1A1AA" }}>0 pedidos</span>
         </div>
 
         {isOnline && (
@@ -538,8 +540,8 @@ const AmbulantesOnlinePage = () => {
             className="w-full font-sans"
             style={{
               marginTop: 12, minHeight: 44, borderRadius: 999,
-              border: "1px solid #D8DBE5", background: "transparent",
-              color: "#5B6178", fontSize: 14, cursor: "pointer",
+              border: "1px solid #27272A", background: "rgba(255,255,255,0.05)",
+              color: "#A1A1AA", fontSize: 14, cursor: "pointer",
             }}
           >
             Ir offline
@@ -558,22 +560,23 @@ const AmbulantesOnlinePage = () => {
         >
           <div
             style={{
-              width: "100%", background: "#fff",
+              width: "100%", background: "#18181B",
+              borderTop: "2px solid #27272A",
               borderRadius: "24px 24px 0 0",
               padding: 24, animation: "ubt-slide-up 300ms ease",
               maxHeight: "85vh", overflowY: "auto",
             }}
           >
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: "#D8DBE5", margin: "0 auto 14px" }} />
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.15)", margin: "0 auto 14px" }} />
 
             <div className="flex items-start justify-between">
-              <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>
+              <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
                 Novo pedido! 🛍️
               </h2>
               <button
                 type="button"
                 onClick={recusarPedido}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#5B6178" }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#A1A1AA" }}
                 aria-label="Fechar"
               >
                 <X size={18} />
@@ -582,15 +585,15 @@ const AmbulantesOnlinePage = () => {
 
             <div className="flex justify-center mt-3">
               <svg width="64" height="64" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="30" fill="none" stroke="#EFF0F3" strokeWidth="4" />
+                <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
                 <circle
                   cx="32" cy="32" r="30"
-                  fill="none" stroke="#0DB87E" strokeWidth="4"
+                  fill="none" stroke="#00FF66" strokeWidth="4"
                   strokeDasharray={dash} strokeDashoffset={offset}
                   strokeLinecap="round" transform="rotate(-90 32 32)"
                   style={{ transition: "stroke-dashoffset 1s linear" }}
                 />
-                <text x="32" y="38" textAnchor="middle" fontSize="14" fill="#0B1B3E" fontFamily="DM Sans" fontWeight="600">
+                <text x="32" y="38" textAnchor="middle" fontSize="14" fill="#FFFFFF" fontFamily="DM Sans" fontWeight="600">
                   {secondsLeft}s
                 </text>
               </svg>
@@ -598,15 +601,15 @@ const AmbulantesOnlinePage = () => {
 
             <div
               style={{
-                background: "#F7F8FA", borderRadius: 16,
+                background: "#09090B", border: "1px solid #27272A",
                 padding: 20, marginTop: 16,
               }}
             >
               <span
                 className="font-sans"
                 style={{
-                  background: "#E6FAF4", border: "1px solid #0DB87E",
-                  color: "#0DB87E", fontSize: 11, fontWeight: 600,
+                  background: "rgba(0,255,102,0.10)", border: "1px solid #00FF66",
+                  color: "#00FF66", fontSize: 11, fontWeight: 600,
                   padding: "3px 10px", borderRadius: 999,
                 }}
               >
@@ -615,27 +618,27 @@ const AmbulantesOnlinePage = () => {
               <div style={{ marginTop: 12 }}>
                 {activeOrder.itens.map((i) => (
                   <div key={i.prodId} className="flex items-center justify-between" style={{ padding: "4px 0" }}>
-                    <span className="font-sans" style={{ fontSize: 14, color: "#0B1B3E" }}>
+                    <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF" }}>
                       {i.emoji} {i.nome}{" "}
-                      <span style={{ color: "#9399AD", fontSize: 12 }}>×{i.qty}</span>
+                      <span style={{ color: "#A1A1AA", fontSize: 12 }}>×{i.qty}</span>
                     </span>
-                    <span className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#0DB87E" }}>
+                    <span className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#00FF66" }}>
                       R$ {i.subtotal.toFixed(2)}
                     </span>
                   </div>
                 ))}
               </div>
-              <div style={{ height: 1, background: "#D8DBE5", margin: "10px 0" }} />
+              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "10px 0" }} />
               <div className="flex items-center justify-between">
-                <span className="font-sans" style={{ fontSize: 13, color: "#9399AD" }}>Total do pedido</span>
-                <span className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#0DB87E" }}>
+                <span className="font-sans" style={{ fontSize: 13, color: "#A1A1AA" }}>Total do pedido</span>
+                <span className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#00FF66" }}>
                   R$ {activeOrder.total.toFixed(2)}
                 </span>
               </div>
               {activeOrder.modalidade === "delivery" && activeOrder.tomadorLocation && (
                 <div className="flex items-center gap-2 mt-2">
                   <MapPin size={14} color="#E84040" />
-                  <span className="font-sans" style={{ fontSize: 13, color: "#5B6178" }}>
+                  <span className="font-sans" style={{ fontSize: 13, color: "#A1A1AA" }}>
                     {activeOrder.tomadorLocation.address}
                   </span>
                 </div>
@@ -648,9 +651,9 @@ const AmbulantesOnlinePage = () => {
                 onClick={recusarPedido}
                 className="flex-1 font-sans"
                 style={{
-                  border: "1px solid #D8DBE5", borderRadius: 999,
-                  background: "transparent", padding: 14,
-                  color: "#5B6178", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                  border: "1px solid #27272A", borderRadius: 999,
+                  background: "rgba(255,255,255,0.05)", padding: 14,
+                  color: "#A1A1AA", fontSize: 14, fontWeight: 500, cursor: "pointer",
                 }}
               >
                 Recusar
@@ -658,10 +661,10 @@ const AmbulantesOnlinePage = () => {
               <button
                 type="button"
                 onClick={aceitarPedido}
-                className="flex-1 font-display"
+                className="flex-1 font-display text-navy animate-pulse"
                 style={{
-                  background: "#0DB87E", border: "none", borderRadius: 999,
-                  padding: 14, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  background: "#00FF66", border: "none", borderRadius: 999,
+                  padding: 14, fontSize: 14, fontWeight: 700, cursor: "pointer",
                 }}
               >
                 Aceitar
@@ -678,10 +681,10 @@ const AmbulantesOnlinePage = () => {
       
       {/* Modal Fila de Pedidos */}
       <BottomSheet open={showQueueModal} onClose={() => setShowQueueModal(false)}>
-        <h3 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#0B1B3E", marginBottom: 16 }}>Todos os pedidos</h3>
+        <h3 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF", marginBottom: 16 }}>Todos os pedidos</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "60vh", overflowY: "auto", paddingRight: 4 }}>
           {allOrders.length === 0 && (
-            <p className="font-sans text-center" style={{ fontSize: 14, color: "#5B6178", padding: "20px 0" }}>Nenhum pedido recebido ainda.</p>
+            <p className="font-sans text-center" style={{ fontSize: 14, color: "#A1A1AA", padding: "20px 0" }}>Nenhum pedido recebido ainda.</p>
           )}
           {allOrders.map((o) => (
             <div
@@ -693,15 +696,15 @@ const AmbulantesOnlinePage = () => {
               }}
               className="flex items-center justify-between"
               style={{
-                padding: 12, borderRadius: 12, border: "1px solid #E2E8F0",
-                background: o.status === "pending" ? "#FFF8E1" : o.status === "confirmed" || o.status === "preparing" ? "#E6FAF4" : "#F7F8FA",
+                padding: 12, borderRadius: 12, border: "1px solid #27272A",
+                background: o.status === "pending" ? "rgba(245,166,35,0.15)" : o.status === "confirmed" || o.status === "preparing" ? "rgba(0,255,102,0.10)" : "#09090B",
                 opacity: o.status === "finished" || o.status === "cancelled" ? 0.6 : 1,
                 cursor: o.status !== "finished" && o.status !== "cancelled" ? "pointer" : "default"
               }}
             >
               <div>
-                <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#0B1B3E", margin: 0 }}>Pedido #{o.id.slice(-4)}</p>
-                <p className="font-sans" style={{ fontSize: 12, color: "#5B6178", margin: 0 }}>
+                <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: 0 }}>Pedido #{o.id.slice(-4)}</p>
+                <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", margin: 0 }}>
                   {o.status === "pending" && "Pendente"}
                   {(o.status === "confirmed" || o.status === "preparing") && "Em preparo"}
                   {o.status === "finished" && "Concluído"}

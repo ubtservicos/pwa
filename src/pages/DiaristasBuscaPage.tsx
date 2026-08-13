@@ -72,7 +72,7 @@ const DiaristasBuscaPage = () => {
   }, [filtro, busca, diaristas, soMulheres]);
 
   return (
-    <div style={{ background: "#0B1B3E", minHeight: "100svh", paddingBottom: 96 }}>
+    <div style={{ background: "#09090B", minHeight: "100svh", paddingBottom: 96 }}>
       <header style={{ padding: "20px 24px 0", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => navigate("/app/home")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <ArrowLeft size={22} color="white" />
@@ -88,9 +88,9 @@ const DiaristasBuscaPage = () => {
               key={f.key}
               onClick={() => setFiltro(f.key)}
               style={{
-                background: active ? "#0DB87E" : "rgba(255,255,255,0.06)",
+                background: active ? "#00FF66" : "rgba(255,255,255,0.06)",
                 border: active ? "none" : "1px solid rgba(255,255,255,0.08)",
-                color: active ? "white" : "rgba(255,255,255,0.55)",
+                color: active ? "#09090B" : "rgba(255,255,255,0.55)",
                 fontFamily: "DM Sans", fontSize: 13, fontWeight: active ? 600 : 400,
                 borderRadius: 999, padding: "7px 16px", flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap",
               }}
@@ -110,7 +110,7 @@ const DiaristasBuscaPage = () => {
           </div>
           <div 
             onClick={() => setSoMulheres(!soMulheres)}
-            style={{ width: 44, height: 24, borderRadius: 12, background: soMulheres ? "#0DB87E" : "rgba(255,255,255,0.2)", position: "relative", cursor: "pointer", transition: "0.2s" }}
+            style={{ width: 44, height: 24, borderRadius: 12, background: soMulheres ? "#00FF66" : "rgba(255,255,255,0.2)", position: "relative", cursor: "pointer", transition: "0.2s" }}
           >
             <div style={{ width: 20, height: 20, borderRadius: 10, background: "white", position: "absolute", top: 2, left: soMulheres ? 22 : 2, transition: "0.2s" }} />
           </div>
@@ -124,7 +124,7 @@ const DiaristasBuscaPage = () => {
         </button>
       </div>
 
-      <div style={{ margin: "10px 24px 0", display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 12, height: 48, padding: "0 14px" }}>
+      <div style={{ margin: "10px 24px 0", display: "flex", alignItems: "center", gap: 10, background: "#18181B", border: "1px solid #27272A", borderRadius: 12, height: 48, padding: "0 14px" }}>
         <Search size={16} color="rgba(255,255,255,0.40)" />
         <input
           value={busca}
@@ -146,11 +146,11 @@ const DiaristasBuscaPage = () => {
           <div
             key={d.uid}
             onClick={() => navigate(`/app/diaristas/${d.uid}`)}
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 16, cursor: "pointer" }}
+            style={{ background: "#18181B", border: "1px solid #27272A", borderRadius: 16, padding: 16, cursor: "pointer" }}
           >
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 999, background: "rgba(13,184,126,0.15)", border: "2px solid rgba(13,184,126,0.30)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>
+              <div style={{ width: 52, height: 52, borderRadius: 999, background: "rgba(0,255,102,0.15)", border: "2px solid rgba(0,255,102,0.30)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#00FF66" }}>
                   {d.nome.split(" ").map((n) => n[0]).slice(0, 2).join("")}
                 </span>
               </div>

@@ -81,7 +81,9 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
   };
 
   const setupDrag = (handleIndex: number) => (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
+    if (e.cancelable) {
+      e.preventDefault();
+    }
     const isTouch = "touches" in e;
     
     const onMove = (moveEvent: MouseEvent | TouchEvent) => {
@@ -117,10 +119,12 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
 
       <div 
         ref={containerRef}
+        className="touch-none"
         style={{
           position: "relative",
           height: 36,
-          background: "#F1F5F9",
+          background: "#09090B",
+          border: "1px solid #27272A",
           borderRadius: 12,
           display: "flex",
           overflow: "visible",
@@ -143,9 +147,9 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             width: 16,
             height: 44,
             borderRadius: 4,
-            background: "#FFF",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-            border: "1px solid #CBD5E1",
+            background: "#18181B",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
+            border: "1px solid #27272A",
             cursor: "col-resize",
             display: "flex",
             alignItems: "center",
@@ -155,8 +159,8 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             outline: "none"
           }}
         >
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
         </button>
 
         <button
@@ -170,9 +174,9 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             width: 16,
             height: 44,
             borderRadius: 4,
-            background: "#FFF",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-            border: "1px solid #CBD5E1",
+            background: "#18181B",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
+            border: "1px solid #27272A",
             cursor: "col-resize",
             display: "flex",
             alignItems: "center",
@@ -182,8 +186,8 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             outline: "none"
           }}
         >
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
         </button>
 
         <button
@@ -197,9 +201,9 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             width: 16,
             height: 44,
             borderRadius: 4,
-            background: "#FFF",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-            border: "1px solid #CBD5E1",
+            background: "#18181B",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
+            border: "1px solid #27272A",
             cursor: "col-resize",
             display: "flex",
             alignItems: "center",
@@ -209,8 +213,8 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
             outline: "none"
           }}
         >
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
-          <div style={{ width: 1.5, height: 16, background: "#94A3B8" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
+          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
         </button>
       </div>
     </div>

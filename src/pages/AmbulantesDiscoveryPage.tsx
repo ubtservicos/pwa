@@ -168,7 +168,7 @@ const AmbulantesDiscoveryPage = () => {
   };
 
   return (
-    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#0B1B3E" }}>
+    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#09090B" }}>
       {/* Map */}
       <div className="absolute inset-0">
         <AmbulantesMap center={center} sessions={sessionsToUse} onMarkerClick={openPerfil} selectedId={selected?.sessionId} />
@@ -181,7 +181,7 @@ const AmbulantesDiscoveryPage = () => {
         className="absolute top-4 left-4 z-10 flex items-center justify-center"
         style={{
           width: 40, height: 40, borderRadius: 999,
-          background: "rgba(11,27,62,0.75)", border: "1px solid rgba(255,255,255,0.10)",
+          background: "rgba(24,24,27,0.90)", border: "1px solid #27272A",
         }}
         aria-label="Voltar"
       >
@@ -192,12 +192,13 @@ const AmbulantesDiscoveryPage = () => {
       <div
         className="absolute left-0 right-0 bottom-0 z-10"
         style={{
-          background: "#132348",
+          background: "#18181B",
+          borderTop: "1px solid #27272A",
           borderRadius: "24px 24px 0 0",
           padding: "10px 20px 96px",
           maxHeight: sheetMode === "perfil" ? "70vh" : "55vh",
           overflowY: "auto",
-          boxShadow: "0 -10px 30px rgba(0,0,0,0.30)",
+          boxShadow: "0 -10px 40px rgba(0,0,0,0.50)",
           zIndex: 1000,
         }}
       >
@@ -217,8 +218,8 @@ const AmbulantesDiscoveryPage = () => {
               <span
                 className="font-sans"
                 style={{
-                  fontSize: 11, fontWeight: 600, color: "#0DB87E",
-                  background: "rgba(13,184,126,0.15)", border: "1px solid #0DB87E",
+                  fontSize: 11, fontWeight: 600, color: "#00FF66",
+                  background: "rgba(0,255,102,0.15)", border: "1px solid #00FF66",
                   borderRadius: 999, padding: "4px 10px",
                 }}
               >
@@ -230,7 +231,7 @@ const AmbulantesDiscoveryPage = () => {
             <div
               className="mt-3 flex items-center gap-2.5"
               style={{
-                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)",
+                background: "#09090B", border: "1px solid #27272A",
                 borderRadius: 12, height: 48, padding: "0 14px",
               }}
             >
@@ -259,8 +260,8 @@ const AmbulantesDiscoveryPage = () => {
                     onClick={() => setFiltroAtivo(f.cat)}
                     className="font-sans flex-shrink-0"
                     style={{
-                      background: active ? "#0DB87E" : "rgba(255,255,255,0.06)",
-                      color: active ? "#fff" : "rgba(255,255,255,0.55)",
+                      background: active ? "#00FF66" : "rgba(255,255,255,0.06)",
+                      color: active ? "#09090B" : "rgba(255,255,255,0.55)",
                       border: active ? "none" : "1px solid rgba(255,255,255,0.08)",
                       fontSize: 12,
                       fontWeight: active ? 600 : 400,
@@ -295,8 +296,8 @@ const AmbulantesDiscoveryPage = () => {
                     onClick={() => openPerfil(p.sessionObj)}
                     className="flex items-center gap-3 text-left w-full"
                     style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "#09090B",
+                      border: "1px solid #27272A",
                       borderRadius: 14,
                       padding: 14,
                       cursor: "pointer",
@@ -306,7 +307,7 @@ const AmbulantesDiscoveryPage = () => {
                       className="flex items-center justify-center"
                       style={{
                         width: 44, height: 44, borderRadius: 12,
-                        background: "rgba(13,184,126,0.15)", flexShrink: 0,
+                        background: "rgba(0,255,102,0.15)", flexShrink: 0,
                         overflow: "hidden"
                       }}
                     >
@@ -321,7 +322,7 @@ const AmbulantesDiscoveryPage = () => {
                         {p.nome}
                       </p>
                       <div className="mt-1 flex items-center gap-1.5">
-                        <span className="font-sans" style={{ fontSize: 13, color: "#0DB87E", fontWeight: 600 }}>
+                        <span className="font-sans" style={{ fontSize: 13, color: "#00FF66", fontWeight: 600 }}>
                           R$ {p.preco.toFixed(2)}
                         </span>
                         <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>•</span>
@@ -441,9 +442,9 @@ const AmbulantesDiscoveryPage = () => {
               <button
                 type="button"
                 onClick={() => navigate(`/app/ambulantes/${selected.sessionId}`)}
-                className="font-display mt-4 w-full"
+                className="font-display mt-4 w-full text-navy animate-pulse"
                 style={{
-                  background: "#0DB87E", color: "#fff",
+                  background: "#00FF66",
                   borderRadius: 12, padding: "14px 20px",
                   border: "none", cursor: "pointer",
                   fontSize: 15, fontWeight: 700,

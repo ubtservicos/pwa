@@ -33,7 +33,7 @@ const services: ServiceItem[] = [
   { label: "Côco & Cia", Icon: Recycle, to: "/app/coco", available: true },
   { label: "Beleza", Icon: Scissors, available: false },
   { label: "Praia", Icon: Waves, available: false },
-  { label: "Aulas", Icon: GraduationCap, available: false },
+  // { label: "Aulas", Icon: GraduationCap, available: false },
 ];
 
 const AppHome = () => {
