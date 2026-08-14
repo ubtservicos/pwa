@@ -9,7 +9,7 @@ import {
   User,
   UserPlus,
 } from "lucide-react";
-import { FormEvent, useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthTopBar from "@/components/auth/AuthTopBar";
 import BiometriaModal from "@/components/auth/BiometriaModal";
@@ -22,21 +22,9 @@ import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 
-type FormState = {
-  nome: string;
-  cpf: string;
-  telefone: string;
-  email: string;
-  pix: string;
-  senha: string;
-  confirmarSenha: string;
-  role: "tomador" | "mototaxista" | "ambulante" | "associacao";
-  cnpj: string;
-  bairroMoradia: string;
-  bairroTrabalho: string;
-  praiasFrequenta: string[];
-  praiasAtende: string[];
-};
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 type Strength = "fraca" | "razoavel" | "forte";
 
@@ -68,6 +56,79 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const cadastroSchema = z.object({
+  nome: z.string().min(3, "Mínimo 3 caracteres"),
+  email: z.string().email("E-mail inválido"),
+  telefone: z.string().min(10, "Telefone incompleto"),
+  senha: z.string().min(8, "Mínimo 8 caracteres"),
+  confirmarSenha: z.string(),
+  perfil: z.enum(["tomador", "mototaxista", "ambulante", "associacao"]),
+  cpf: z.string().optional(),
+  pix: z.string().optional(),
+  cnpj: z.string().optional(),
+  bairro_moradia: z.string().optional(),
+  bairro_trabalho: z.string().optional(),
+  praias_frequentadas: z.array(z.string()).optional().default([]),
+}).superRefine((data, ctx) => {
+  if (data.senha !== data.confirmarSenha) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "As senhas não coincidem",
+      path: ["confirmarSenha"],
+    });
+  }
+
+  if (data.perfil === "associacao") {
+    const cleanCnpj = (data.cnpj || "").replace(/\D/g, "");
+    if (cleanCnpj.length !== 14) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CNPJ inválido",
+        path: ["cnpj"],
+      });
+    }
+  } else {
+    const cleanCpf = (data.cpf || "").replace(/\D/g, "");
+    if (cleanCpf.length !== 11) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CPF incompleto",
+        path: ["cpf"],
+      });
+    }
+
+    if (!data.pix || !data.pix.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe sua chave Pix",
+        path: ["pix"],
+      });
+    }
+
+    if (data.perfil === "tomador" || data.perfil === "mototaxista") {
+      if (!data.bairro_moradia || !data.bairro_moradia.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione o seu bairro de moradia",
+          path: ["bairro_moradia"],
+        });
+      }
+    }
+
+    if (data.perfil === "tomador") {
+      if (!data.bairro_trabalho || !data.bairro_trabalho.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione o seu bairro de trabalho",
+          path: ["bairro_trabalho"],
+        });
+      }
+    }
+  }
+});
+
+type CadastroFormData = z.infer<typeof cadastroSchema>;
+
 const Cadastro = () => {
   const navigate = useNavigate();
   const { toast, showToast } = useSimpleToast();
@@ -76,81 +137,60 @@ const Cadastro = () => {
     trackEvent("signup_started");
   }, []);
 
-  const [form, setForm] = useState<FormState>({
-    nome: "",
-    cpf: "",
-    telefone: "",
-    email: "",
-    pix: "",
-    senha: "",
-    confirmarSenha: "",
-    role: "tomador",
-    cnpj: "",
-    bairroMoradia: "",
-    bairroTrabalho: "",
-    praiasFrequenta: [],
-    praiasAtende: [],
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [biometriaOpen, setBiometriaOpen] = useState(false);
 
-  const strength = useMemo(() => getStrength(form.senha), [form.senha]);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<CadastroFormData>({
+    resolver: zodResolver(cadastroSchema),
+    defaultValues: {
+      nome: "",
+      cpf: "",
+      telefone: "",
+      email: "",
+      pix: "",
+      senha: "",
+      confirmarSenha: "",
+      perfil: "tomador",
+      cnpj: "",
+      bairro_moradia: "",
+      bairro_trabalho: "",
+      praias_frequentadas: [],
+    },
+  });
 
-  const validate = (): boolean => {
-    const next: Record<string, string> = {};
-    if (!form.nome || form.nome.trim().length < 3) next.nome = "Mínimo 3 caracteres";
-    if (form.telefone.replace(/\D/g, "").length < 10) next.telefone = "Telefone incompleto";
-    if (!form.email) next.email = "Informe seu e-mail";
-    else if (!isValidEmail(form.email)) next.email = "E-mail inválido";
-    if (!form.senha) next.senha = "Informe uma senha";
-    else if (form.senha.length < 8) next.senha = "Mínimo 8 caracteres";
-    if (!form.confirmarSenha) next.confirmarSenha = "Confirme a senha";
-    else if (form.senha !== form.confirmarSenha)
-      next.confirmarSenha = "As senhas não coincidem";
+  const perfil = watch("perfil");
+  const passwordValue = watch("senha");
+  const praiasFrequentadas = watch("praias_frequentadas") || [];
 
-    // Conditional role validations
-    if (form.role === "associacao") {
-      if (form.cnpj.replace(/\D/g, "").length !== 14) {
-        next.cnpj = "CNPJ inválido";
-      }
-    } else {
-      if (form.cpf.length !== 14) next.cpf = "CPF incompleto";
-      if (!form.pix.trim()) next.pix = "Informe sua chave Pix";
-      if (!form.bairroMoradia) next.bairroMoradia = "Selecione o seu bairro de moradia";
-      
-      if (form.role === "tomador") {
-        if (!form.bairroTrabalho) next.bairroTrabalho = "Selecione o seu bairro de trabalho";
-      }
-    }
-
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
+  const strength = useMemo(() => getStrength(passwordValue), [passwordValue]);
 
   const [searchParams] = useSearchParams();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
+  const onSubmit = async (values: CadastroFormData) => {
     setLoading(true);
     const startTime = Date.now();
-    logSystem("INFO", "AUTH", "signup_submit", "started", undefined, undefined, undefined, { email: form.email });
+    logSystem("INFO", "AUTH", "signup_submit", "started", undefined, undefined, undefined, { email: values.email });
     
     try {
       const referral = searchParams.get("ref") || "";
 
       const { data, error } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.senha,
+        email: values.email,
+        password: values.senha,
         options: {
           data: {
-            full_name: form.nome,
-            cpf: form.role === "associacao" ? null : form.cpf,
-            telefone: form.telefone,
-            pix: form.role === "associacao" ? null : form.pix,
+            full_name: values.nome,
+            cpf: values.perfil === "associacao" ? null : values.cpf,
+            telefone: values.telefone,
+            pix: values.perfil === "associacao" ? null : values.pix,
             padrinho_id: referral || null,
           }
         }
@@ -159,28 +199,28 @@ const Cadastro = () => {
       if (error) throw error;
 
       const duration = Date.now() - startTime;
-      logSystem("INFO", "AUTH", "signup_submit", "success", duration, undefined, undefined, { email: form.email, referral });
+      logSystem("INFO", "AUTH", "signup_submit", "success", duration, undefined, undefined, { email: values.email, referral });
 
       if (data?.user) {
         trackEvent("signup_completed", { method: "email" }, data.user.id);
         const userId = data.user.id;
-        const mappedRole = form.role === "mototaxista" || form.role === "ambulante" ? "prestador" : form.role;
+        const mappedRole = values.perfil === "mototaxista" || values.perfil === "ambulante" ? "prestador" : values.perfil;
 
         // Persist profile data explicitly with 'pending' status
         const { error: dbError } = await supabase.from("usuarios").upsert({
           id: userId,
-          nome: form.nome,
+          nome: values.nome,
           role: mappedRole,
-          cpf: form.role === "associacao" ? null : form.cpf,
-          telefone: form.telefone,
-          chave_pix: form.role === "associacao" ? null : form.pix,
+          cpf: values.perfil === "associacao" ? null : values.cpf,
+          telefone: values.telefone,
+          chave_pix: values.perfil === "associacao" ? null : values.pix,
           status: "pending", // Created as pending for administrative review
           padrinho_id: referral || null,
-          bairro_moradia: form.role === "associacao" ? null : form.bairroMoradia,
-          bairro_trabalho: form.role === "tomador" ? form.bairroTrabalho : null,
-          praias_frequenta: form.role === "tomador" ? form.praiasFrequenta : null,
-          praias_atende: form.role === "ambulante" ? form.praiasAtende : null,
-          cnpj: form.role === "associacao" ? form.cnpj : null
+          bairro_moradia: (values.perfil === "tomador" || values.perfil === "mototaxista") ? values.bairro_moradia : null,
+          bairro_trabalho: values.perfil === "tomador" ? values.bairro_trabalho : null,
+          praias_frequenta: values.perfil === "tomador" ? values.praias_frequentadas : null,
+          praias_atende: values.perfil === "ambulante" ? values.praias_frequentadas : null,
+          cnpj: values.perfil === "associacao" ? values.cnpj : null
         }, { onConflict: "id" });
 
         if (dbError) {
@@ -193,7 +233,7 @@ const Cadastro = () => {
     } catch (err: any) {
       setLoading(false);
       const duration = Date.now() - startTime;
-      logSystem("ERROR", "AUTH", "signup_submit", "failed", duration, err.message, err.code || "SIGNUP_ERROR", { email: form.email });
+      logSystem("ERROR", "AUTH", "signup_submit", "failed", duration, err.message, err.code || "SIGNUP_ERROR", { email: values.email });
       showToast(err.message || "Erro ao criar conta.");
     }
   };
@@ -208,9 +248,6 @@ const Cadastro = () => {
       showToast(err.message || "Erro ao conectar com Google");
     }
   };
-
-  const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
 
   const strengthMeta: Record<Strength, { label: string; color: string; segs: number }> = {
     fraca: { label: "Fraca", color: "hsl(var(--red))", segs: 1 },
@@ -237,7 +274,7 @@ const Cadastro = () => {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-4" noValidate>
         {/* Dynamic Profile Selector */}
         <div className="mb-2">
           <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
@@ -250,12 +287,18 @@ const Cadastro = () => {
               { key: "ambulante", label: "Ambulante" },
               { key: "associacao", label: "Associação B2B" }
             ] as const).map(({ key, label }) => {
-              const sel = form.role === key;
+              const sel = perfil === key;
               return (
                 <button
                   key={key}
                   type="button"
-                  onClick={() => update("role", key)}
+                  onClick={() => {
+                    setValue("perfil", key);
+                    setValue("bairro_moradia", "");
+                    setValue("bairro_trabalho", "");
+                    setValue("praias_frequentadas", []);
+                    setValue("cnpj", "");
+                  }}
                   className="rounded-xl p-3 text-left border transition-all"
                   style={{
                     background: sel ? "rgba(0, 255, 102, 0.08)" : "rgba(255, 255, 255, 0.04)",
@@ -270,25 +313,27 @@ const Cadastro = () => {
         </div>
 
         <FormField
-          label={form.role === "associacao" ? "Razão Social da Entidade" : "Nome completo"}
+          label={perfil === "associacao" ? "Razão Social da Entidade" : "Nome completo"}
           icon={User}
-          placeholder={form.role === "associacao" ? "Nome da entidade B2B" : "Como você se chama?"}
+          placeholder={perfil === "associacao" ? "Nome da entidade B2B" : "Como você se chama?"}
           autoComplete="name"
-          value={form.nome}
-          onChange={(e) => update("nome", e.target.value)}
-          error={errors.nome}
+          error={errors.nome?.message}
+          {...register("nome")}
         />
 
-        {form.role === "associacao" ? (
+        {perfil === "associacao" ? (
           <FormField
             label="CNPJ"
             icon={CreditCard}
             type="tel"
             inputMode="numeric"
             placeholder="00.000.000/0000-00"
-            value={form.cnpj}
-            onChange={(e) => update("cnpj", maskCNPJ(e.target.value))}
-            error={errors.cnpj}
+            error={errors.cnpj?.message}
+            {...register("cnpj", {
+              onChange: (e) => {
+                setValue("cnpj", maskCNPJ(e.target.value));
+              }
+            })}
           />
         ) : (
           <FormField
@@ -297,9 +342,12 @@ const Cadastro = () => {
             type="tel"
             inputMode="numeric"
             placeholder="000.000.000-00"
-            value={form.cpf}
-            onChange={(e) => update("cpf", maskCPF(e.target.value))}
-            error={errors.cpf}
+            error={errors.cpf?.message}
+            {...register("cpf", {
+              onChange: (e) => {
+                setValue("cpf", maskCPF(e.target.value));
+              }
+            })}
           />
         )}
 
@@ -310,9 +358,12 @@ const Cadastro = () => {
           inputMode="numeric"
           autoComplete="tel"
           placeholder="(00) 00000-0000"
-          value={form.telefone}
-          onChange={(e) => update("telefone", maskPhone(e.target.value))}
-          error={errors.telefone}
+          error={errors.telefone?.message}
+          {...register("telefone", {
+            onChange: (e) => {
+              setValue("telefone", maskPhone(e.target.value));
+            }
+          })}
         />
 
         <FormField
@@ -322,20 +373,18 @@ const Cadastro = () => {
           inputMode="email"
           autoComplete="email"
           placeholder="seu@email.com"
-          value={form.email}
-          onChange={(e) => update("email", e.target.value)}
-          error={errors.email}
+          error={errors.email?.message}
+          {...register("email")}
         />
 
-        {form.role !== "associacao" && (
+        {perfil !== "associacao" && (
           <div>
             <FormField
               label="Chave Pix"
               icon={Key}
               placeholder="CPF, e-mail ou telefone"
-              value={form.pix}
-              onChange={(e) => update("pix", e.target.value)}
-              error={errors.pix}
+              error={errors.pix?.message}
+              {...register("pix")}
             />
             <p className="mt-1.5 font-sans text-[11px] text-white/40">
               Usada para receber seus pagamentos na plataforma
@@ -343,15 +392,14 @@ const Cadastro = () => {
           </div>
         )}
 
-        {/* Dynamic fields based on roles */}
-        {form.role !== "associacao" && (
+        {/* Dynamic fields based on roles mapping */}
+        {(perfil === "tomador" || perfil === "mototaxista") && (
           <div>
             <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
               Bairro de Moradia
             </label>
             <select
-              value={form.bairroMoradia}
-              onChange={(e) => update("bairroMoradia", e.target.value)}
+              {...register("bairro_moradia")}
               className="w-full h-[54px] rounded-xl px-4 bg-[#18181B] border border-[#27272A] text-white outline-none font-sans text-[14px]"
             >
               <option value="">Selecione o bairro...</option>
@@ -359,20 +407,19 @@ const Cadastro = () => {
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
-            {errors.bairroMoradia && (
-              <p className="mt-1 text-red-500 text-[11px]">{errors.bairroMoradia}</p>
+            {errors.bairro_moradia && (
+              <p className="mt-1 text-red-500 text-[11px]">{errors.bairro_moradia.message}</p>
             )}
           </div>
         )}
 
-        {form.role === "tomador" && (
+        {perfil === "tomador" && (
           <div>
             <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
               Bairro de Trabalho
             </label>
             <select
-              value={form.bairroTrabalho}
-              onChange={(e) => update("bairroTrabalho", e.target.value)}
+              {...register("bairro_trabalho")}
               className="w-full h-[54px] rounded-xl px-4 bg-[#18181B] border border-[#27272A] text-white outline-none font-sans text-[14px]"
             >
               <option value="">Selecione o bairro...</option>
@@ -380,20 +427,20 @@ const Cadastro = () => {
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
-            {errors.bairroTrabalho && (
-              <p className="mt-1 text-red-500 text-[11px]">{errors.bairroTrabalho}</p>
+            {errors.bairro_trabalho && (
+              <p className="mt-1 text-red-500 text-[11px]">{errors.bairro_trabalho.message}</p>
             )}
           </div>
         )}
 
-        {form.role === "tomador" && (
+        {(perfil === "tomador" || perfil === "ambulante") && (
           <div>
             <label className="block font-sans text-[12px] font-semibold mb-2 text-white/70">
-              Praias que frequenta em Ubatuba
+              {perfil === "ambulante" ? "Praias que costuma atender" : "Praias que frequenta em Ubatuba"}
             </label>
             <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-3 bg-[#18181B] border border-[#27272A] rounded-xl">
               {PRAIAS_LIST.map((p) => {
-                const checked = form.praiasFrequenta.includes(p);
+                const checked = praiasFrequentadas.includes(p);
                 return (
                   <label key={p} className="flex items-center gap-2 text-[13px] text-white/80 cursor-pointer py-1">
                     <input
@@ -401,38 +448,9 @@ const Cadastro = () => {
                       checked={checked}
                       onChange={() => {
                         const next = checked
-                          ? form.praiasFrequenta.filter((x) => x !== p)
-                          : [...form.praiasFrequenta, p];
-                        update("praiasFrequenta", next);
-                      }}
-                      className="rounded border-[#27272A] text-[#00FF66] focus:ring-0 bg-[#09090B]"
-                    />
-                    <span>{p}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {form.role === "ambulante" && (
-          <div>
-            <label className="block font-sans text-[12px] font-semibold mb-2 text-white/70">
-              Praias que costuma atender
-            </label>
-            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-3 bg-[#18181B] border border-[#27272A] rounded-xl">
-              {PRAIAS_LIST.map((p) => {
-                const checked = form.praiasAtende.includes(p);
-                return (
-                  <label key={p} className="flex items-center gap-2 text-[13px] text-white/80 cursor-pointer py-1">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {
-                        const next = checked
-                          ? form.praiasAtende.filter((x) => x !== p)
-                          : [...form.praiasAtende, p];
-                        update("praiasAtende", next);
+                          ? praiasFrequentadas.filter((x) => x !== p)
+                          : [...praiasFrequentadas, p];
+                        setValue("praias_frequentadas", next, { shouldValidate: true });
                       }}
                       className="rounded border-[#27272A] text-[#00FF66] focus:ring-0 bg-[#09090B]"
                     />
@@ -451,9 +469,8 @@ const Cadastro = () => {
             type={showPwd ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Mínimo 8 caracteres"
-            value={form.senha}
-            onChange={(e) => update("senha", e.target.value)}
-            error={errors.senha}
+            error={errors.senha?.message}
+            {...register("senha")}
             rightSlot={
               <button
                 type="button"
@@ -497,9 +514,8 @@ const Cadastro = () => {
           type={showConfirmPwd ? "text" : "password"}
           autoComplete="new-password"
           placeholder="Repita a senha"
-          value={form.confirmarSenha}
-          onChange={(e) => update("confirmarSenha", e.target.value)}
-          error={errors.confirmarSenha}
+          error={errors.confirmarSenha?.message}
+          {...register("confirmarSenha")}
           rightSlot={
             <button
               type="button"
