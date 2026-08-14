@@ -199,3 +199,11 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #27272A #09090B;
 }
+
+/* Força Dark Mode em formulários nativos no Admin */
+select, 
+option {
+  background-color: var(--admin-bg, #09090B) !important;
+  color: var(--admin-text, #F4F4F5) !important;
+}
+

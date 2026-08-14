@@ -378,7 +378,8 @@ export default function AdminWaitlistPage() {
             <select
               value={selectedPerfil}
               onChange={(e) => { setSelectedPerfil(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              className="bg-zinc-950 text-zinc-200 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
               <option value="Todos">Todos</option>
               <option value="morador">Morador / Tomador</option>
@@ -396,7 +397,8 @@ export default function AdminWaitlistPage() {
             <select
               value={selectedStatus}
               onChange={(e) => { setSelectedStatus(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              className="bg-zinc-950 text-zinc-200 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
               <option value="Todos">Todos</option>
               <option value="novo">Novo</option>
@@ -411,7 +413,8 @@ export default function AdminWaitlistPage() {
             <select
               value={selectedCidade}
               onChange={(e) => { setSelectedCidade(e.target.value); setPage(0); }}
-              style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+              className="bg-zinc-950 text-zinc-200 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
               <option value="Todas">Todas</option>
               <option value="Ubatuba">Ubatuba</option>
@@ -428,7 +431,8 @@ export default function AdminWaitlistPage() {
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                 placeholder="Pesquisar..."
-                style={{ width: "100%", height: 38, border: "1px solid var(--admin-border)", borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none" }}
+                className="bg-zinc-950 text-zinc-200 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder:text-zinc-600"
+                style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px 0 34px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
               />
             </div>
           </div>
