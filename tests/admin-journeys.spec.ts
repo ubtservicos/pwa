@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
 
-  test.beforeEach(({ page }) => {
+  test.beforeEach(async ({ page }) => {
     // Aumenta o timeout para 60 segundos por teste para evitar falhas de concorrência em máquinas lentas
     test.setTimeout(60000);
 
@@ -11,11 +11,20 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
     page.on("pageerror", err => console.log(`BROWSER_ERROR:`, err.message));
     page.on("request", req => console.log(`E2E REQUEST: ${req.method()} ${req.url()}`));
     page.on("response", res => console.log(`E2E RESPONSE: ${res.status()} from ${res.url()}`));
+
+    // Desativa o registro de Service Workers para garantir que o Playwright intercepte todas as requisições de rede
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "serviceWorker", {
+        get() {
+          return undefined;
+        }
+      });
+    });
   });
 
   test("Cenário 1: Jornada B2C - Fila de Espera/Waitlist (Happy Path)", async ({ page }) => {
     // 1. Intercepta requisições Supabase API para o cadastro na Waitlist e Analytics
-    await page.route("**/auth/v1/user", async (route) => {
+    await page.route(/\/auth\/v1\/user/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -29,7 +38,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
       });
     });
 
-    await page.route("**/rest/v1/waitlist*", async (route) => {
+    await page.route(/\/rest\/v1\/waitlist/, async (route) => {
       if (route.request().method() === "GET") {
         // Retorna null como objeto único para simular e-mail não existente (evita que o array vazio [] seja tratado como truthy)
         await route.fulfill({
@@ -46,7 +55,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
       }
     });
 
-    await page.route("**/rest/v1/ceps_ubatuba*", async (route) => {
+    await page.route(/\/rest\/v1\/ceps_ubatuba/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -54,7 +63,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
       });
     });
 
-    await page.route("**/rest/v1/analytics_events*", async (route) => {
+    await page.route(/\/rest\/v1\/analytics_events/, async (route) => {
       await route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -80,8 +89,8 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
     await emailInput.fill(`happy-path-${Date.now()}@ubt.com.br`);
 
     // 5. Escolhe o perfil (Diarista) usando setChecked direto no input
-    const radioDiarista = page.locator("label:has-text('Diarista') input[type='radio']").first();
-    await radioDiarista.setChecked(true, { force: true });
+    const checkboxDiarista = page.locator("label:has-text('Diarista') input[type='checkbox']").first();
+    await checkboxDiarista.setChecked(true, { force: true });
     await page.waitForTimeout(200);
 
     // 5b. Seleciona a região de atuação para Diarista (Centro)
@@ -117,7 +126,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
 
   test("Cenário 2: Jornada Superadmin - Analytics & Tabela (Happy Path)", async ({ page }) => {
     // 1. Intercepta requisições Supabase API para fornecer dados estáticos consistentes
-    await page.route("**/auth/v1/user", async (route) => {
+    await page.route(/\/auth\/v1\/user/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -131,7 +140,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
       });
     });
 
-    await page.route("**/rest/v1/usuarios*", async (route) => {
+    await page.route(/\/rest\/v1\/usuarios/, async (route) => {
       // Retorna objeto único para atender ao maybeSingle()
       await route.fulfill({
         status: 200,
@@ -140,7 +149,7 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
       });
     });
 
-    await page.route("**/rest/v1/waitlist*", async (route) => {
+    await page.route(/\/rest\/v1\/waitlist/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

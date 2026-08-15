@@ -158,7 +158,7 @@ const waitlistSchema = z.object({
   nome: z.string().min(3, "Mínimo 3 caracteres"),
   email: z.string().email("E-mail inválido"),
   telefone: z.string().min(10, "Telefone incompleto"),
-  perfil: z.enum(["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "morador", "turista"]),
+  perfil: z.array(z.string()).min(1, "Selecione ao menos um perfil"),
   possuiContaMercadoPago: z.boolean({
     required_error: "Por favor, responda esta pergunta."
   }),
@@ -167,7 +167,9 @@ const waitlistSchema = z.object({
   bairros: z.array(z.string()).optional().default([]),
   acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
 }).superRefine((data, ctx) => {
-  if (data.perfil === "associacao" || data.perfil === "mototaxista" || data.perfil === "diarista") {
+  const p = data.perfil || [];
+
+  if (p.includes("associacao") || p.includes("mototaxista") || p.includes("diarista")) {
     if (!data.regiao_atuacao || data.regiao_atuacao.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -177,7 +179,7 @@ const waitlistSchema = z.object({
     }
   }
 
-  if (data.perfil === "ambulante") {
+  if (p.includes("ambulante")) {
     if (!data.praias || data.praias.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -187,7 +189,7 @@ const waitlistSchema = z.object({
     }
   }
 
-  if (data.perfil === "morador") {
+  if (p.includes("morador")) {
     if (!data.bairros || data.bairros.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -204,7 +206,7 @@ const waitlistSchema = z.object({
     }
   }
 
-  if (data.perfil === "turista") {
+  if (p.includes("turista")) {
     if (!data.bairros || data.bairros.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -271,7 +273,7 @@ export default function Index() {
       nome: "",
       telefone: "",
       email: "",
-      perfil: "morador",
+      perfil: [],
       regiao_atuacao: [],
       praias: [],
       bairros: [],
@@ -587,7 +589,7 @@ export default function Index() {
           email: values.email.trim(),
           telefone: values.telefone.trim(),
           cidade: "Ubatuba",
-          perfil: [values.perfil],
+          perfil: values.perfil,
           consentimento_lgpd: true,
           status: "novo",
           created_at_local: createdLocal,
@@ -604,7 +606,7 @@ export default function Index() {
       if (insertError) throw insertError;
 
       setSubmitSuccess(true);
-      trackEvent("landing_waitlist_success", "marketing", { perfil: [values.perfil] });
+      trackEvent("landing_waitlist_success", "marketing", { perfil: values.perfil });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
@@ -1021,105 +1023,104 @@ export default function Index() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Card 1: Padrinho */}
-          <div className="lg:col-span-2 p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-xl hover:border-white/10 transition-all duration-500 flex flex-col justify-between group">
+          <div className="lg:col-span-2 p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-green uppercase bg-green/10 border border-green/20 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
                   Programa Padrinho / Madrinha
                 </span>
               </div>
               <h3 className="font-display font-bold text-2xl text-white mb-4">
                 Indique e participe do crescimento da sua comunidade.
               </h3>
-              <p className="text-xs text-white/70 leading-relaxed font-sans mb-8">
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
                 Cada usuário possui um link exclusivo. Compartilhe pelo WhatsApp, QR Code ou redes sociais. Sempre que um prestador indicado por você realizar vendas pela plataforma, você participa do crescimento dele conforme as regras da UBT.
               </p>
             </div>
-            <p className="text-[10px] text-white/40 leading-relaxed font-sans p-4 rounded-xl bg-white/5 border border-white/5">
+            <p className="text-[10px] text-zinc-400 leading-relaxed font-sans p-4 rounded-xl bg-white/5 border border-[#0d5236]/30">
               O valor das vendas poderá ser destinado ao padrinho/madrinha, conforme a configuração vigente da plataforma e o regulamento aplicável.
             </p>
           </div>
 
           {/* Card 2: Prêmio Trabalhador */}
-          <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-xl hover:border-white/10 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-blue uppercase bg-blue/10 border border-blue/20 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
                   Prêmio Trabalhador
                 </span>
-                <span className="text-2xl font-display font-bold text-blue">1%</span>
+                <span className="text-2xl font-display font-bold text-amber-500">1%</span>
               </div>
-              <h3 className="font-display font-bold text-xl text-white mb-4 group-hover:text-blue transition-colors">
+              <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem trabalha também pode ganhar.
               </h3>
-              <p className="text-xs text-white/70 leading-relaxed font-sans mb-8">
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
                 Parte das vendas realizadas pela plataforma forma um fundo destinado ao Prêmio Trabalhador. O sorteio acontece anualmente em 01 de maio.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-blue border-t border-white/5 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4" /> 1% das vendas compõe este fundo.
+            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Award className="w-4 h-4 text-amber-500" /> 1% das vendas compõe este fundo.
             </div>
           </div>
 
           {/* Card 3: Prêmio Consumidor */}
-          <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-xl hover:border-white/10 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber uppercase bg-amber/10 border border-amber/20 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
                   Prêmio Consumidor
                 </span>
-                <span className="text-2xl font-display font-bold text-amber">1%</span>
+                <span className="text-2xl font-display font-bold text-amber-500">1%</span>
               </div>
-              <h3 className="font-display font-bold text-xl text-white mb-4 group-hover:text-amber transition-colors">
+              <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem compra também participa.
               </h3>
-              <p className="text-xs text-white/70 leading-relaxed font-sans mb-8">
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
                 Parte das vendas realizadas pela plataforma forma um fundo destinado ao Prêmio Consumidor. O sorteio acontece anualmente em 01 de novembro.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-amber border-t border-white/5 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4" /> 1% das vendas compõe este fundo.
+            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Award className="w-4 h-4 text-amber-500" /> 1% das vendas compõe este fundo.
             </div>
           </div>
 
           {/* Card 4: Associações */}
-          <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-xl hover:border-white/10 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-purple uppercase bg-purple/10 border border-purple/20 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
                   Associações
                 </span>
-                {/* 2% span removed per UBT-COMM-003 */}
               </div>
-              <h3 className="font-display font-bold text-xl text-white mb-4 group-hover:text-purple transition-colors">
+              <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Associações mais fortes.
               </h3>
-              <p className="text-xs text-white/70 leading-relaxed font-sans mb-8">
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
                 Parte das vendas fortalece financeiramente as associações participantes, permitindo maior apoio aos trabalhadores locais.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-purple border-t border-white/5 pt-4 flex items-center gap-1">
-              <Users className="w-4 h-4" /> 2% das vendas revertidos.
+            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Users className="w-4 h-4 text-amber-500" /> 2% das vendas revertidos.
             </div>
           </div>
 
           {/* Card 5: Côco & Cia */}
-          <div className="p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-xl hover:border-white/10 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-green uppercase bg-green/10 border border-green/20 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
                   Côco & Cia
                 </span>
-                <span className="text-xs font-semibold text-green flex items-center gap-1">Ecologia</span>
+                <span className="text-xs font-semibold text-amber-500 flex items-center gap-1">Ecologia</span>
               </div>
-              <h3 className="font-display font-bold text-xl text-white mb-4 group-hover:text-green transition-colors">
+              <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Tecnologia para cuidar da cidade.
               </h3>
-              <p className="text-xs text-white/70 leading-relaxed font-sans mb-8">
+              <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
                 O cidadão poderá indicar pelo mapa onde deixou materiais recicláveis. A equipe da Côco & Cia realizará a coleta rápida.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-[9px] font-mono text-white/40 tracking-wider uppercase">
+            <div className="flex flex-wrap gap-2 text-[9px] font-mono text-amber-500/80 tracking-wider uppercase border-t border-[#0d5236]/30 pt-4">
               <span>Reciclagem</span>
               <span>•</span>
               <span>Ecologia</span>
@@ -1276,7 +1277,7 @@ export default function Index() {
                     { id: "morador", label: "Morador" },
                     { id: "turista", label: "Turista / Visitante" }
                   ] as const).map((perf) => {
-                    const checked = perfil === perf.id;
+                    const checked = perfil?.includes(perf.id);
                     return (
                       <label 
                         key={perf.id} 
@@ -1287,15 +1288,14 @@ export default function Index() {
                         }`}
                       >
                         <input 
-                          type="radio" 
-                          name="perfil"
+                          type="checkbox" 
                           value={perf.id}
                           checked={checked}
                           onChange={() => {
-                            setValue("perfil", perf.id);
-                            setValue("regiao_atuacao", []);
-                            setValue("praias", []);
-                            setValue("bairros", []);
+                            const next = checked
+                              ? perfil.filter(p => p !== perf.id)
+                              : [...perfil, perf.id];
+                            setValue("perfil", next, { shouldValidate: true });
                           }}
                           className="h-5 w-5 accent-green shrink-0 cursor-pointer"
                         />
@@ -1310,7 +1310,7 @@ export default function Index() {
               </div>
 
               {/* 5. ÁREA CONDICIONAL DE ENDEREÇO */}
-              {(perfil === "associacao" || perfil === "mototaxista" || perfil === "diarista") && (
+              {(perfil?.includes("associacao") || perfil?.includes("mototaxista") || perfil?.includes("diarista")) && (
                 <div className="w-full">
                   <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Região de atuação</label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
@@ -1348,108 +1348,55 @@ export default function Index() {
                 </div>
               )}
 
-              {perfil === "ambulante" && (
-                <div className="w-full">
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias de atuação</label>
-                  <button
-                    type="button"
-                    onClick={() => setIsPraiaModalOpen(true)}
-                    className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
-                  >
-                    <span>
-                      {selectedPraias.length > 0
-                        ? selectedPraias.join(", ")
-                        : "Selecione a(s) praia(s)..."}
-                    </span>
-                    <ChevronDown className="w-5 h-5 text-white/40" />
-                  </button>
-                  {errors.praias && (
-                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+              {(perfil?.includes("morador") || perfil?.includes("turista") || perfil?.includes("ambulante")) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bairros Column */}
+                  {(perfil?.includes("morador") || perfil?.includes("turista")) && (
+                    <div className="w-full">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        {perfil?.includes("morador") ? "Bairro de residência" : "Bairro que costuma se hospedar"}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsBairroModalOpen(true)}
+                        className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                      >
+                        <span>
+                          {selectedBairros.length > 0
+                            ? selectedBairros.join(", ")
+                            : "Selecione o bairro..."}
+                        </span>
+                        <ChevronDown className="w-5 h-5 text-white/40" />
+                      </button>
+                      {errors.bairros && (
+                        <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
 
-              {perfil === "morador" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="w-full">
-                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro de residência</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsBairroModalOpen(true)}
-                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
-                    >
-                      <span>
-                        {selectedBairros.length > 0
-                          ? selectedBairros.join(", ")
-                          : "Selecione o bairro..."}
-                      </span>
-                      <ChevronDown className="w-5 h-5 text-white/40" />
-                    </button>
-                    {errors.bairros && (
-                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
-                    )}
-                  </div>
-
-                  <div className="w-full">
-                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias que costuma frequentar</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsPraiaModalOpen(true)}
-                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
-                    >
-                      <span>
-                        {selectedPraias.length > 0
-                          ? selectedPraias.join(", ")
-                          : "Selecione a(s) praia(s)..."}
-                      </span>
-                      <ChevronDown className="w-5 h-5 text-white/40" />
-                    </button>
-                    {errors.praias && (
-                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {perfil === "turista" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="w-full">
-                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro que costuma se hospedar</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsBairroModalOpen(true)}
-                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
-                    >
-                      <span>
-                        {selectedBairros.length > 0
-                          ? selectedBairros.join(", ")
-                          : "Selecione o bairro..."}
-                      </span>
-                      <ChevronDown className="w-5 h-5 text-white/40" />
-                    </button>
-                    {errors.bairros && (
-                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
-                    )}
-                  </div>
-
-                  <div className="w-full">
-                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias que costuma frequentar</label>
-                    <button
-                      type="button"
-                      onClick={() => setIsPraiaModalOpen(true)}
-                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
-                    >
-                      <span>
-                        {selectedPraias.length > 0
-                          ? selectedPraias.join(", ")
-                          : "Selecione a(s) praia(s)..."}
-                      </span>
-                      <ChevronDown className="w-5 h-5 text-white/40" />
-                    </button>
-                    {errors.praias && (
-                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
-                    )}
-                  </div>
+                  {/* Praias Column */}
+                  {(perfil?.includes("ambulante") || perfil?.includes("morador") || perfil?.includes("turista")) && (
+                    <div className="w-full">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        {perfil?.includes("ambulante") ? "Praias de atuação" : "Praias que costuma frequentar"}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsPraiaModalOpen(true)}
+                        className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                      >
+                        <span>
+                          {selectedPraias.length > 0
+                            ? selectedPraias.join(", ")
+                            : "Selecione a(s) praia(s)..."}
+                        </span>
+                        <ChevronDown className="w-5 h-5 text-white/40" />
+                      </button>
+                      {errors.praias && (
+                        <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
