@@ -11,7 +11,7 @@ const CORS_HEADERS = {
 };
 
 // ============================================================
-// SUPABASE CLIENT — initialized with service_role for audit logging
+// SUPABASE CLIENT — service_role for audit logging (server-side only)
 // ============================================================
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -24,7 +24,27 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
 });
 
 // ============================================================
-// AUDIT LOGGER — inserts an immutable record in financial_audit_logs
+// TYPES
+// ============================================================
+interface MercadoPagoPixResponse {
+  id?: number;
+  status?: string;
+  status_detail?: string;
+  point_of_interaction?: {
+    transaction_data?: {
+      ticket_url?: string;
+      qr_code?: string;
+      qr_code_base64?: string;
+    };
+  };
+  error?: string;
+  message?: string;
+  cause?: Array<{ code: number; description: string }>;
+}
+
+// ============================================================
+// AUDIT LOGGER — immutable insert in financial_audit_logs
+// Non-throwing: a log failure must NEVER cascade into user-facing errors.
 // ============================================================
 async function logAuditEvent({
   transactionType,
@@ -37,17 +57,66 @@ async function logAuditEvent({
   payload?: Record<string, unknown>;
   errorDetails?: string;
 }): Promise<void> {
-  const { error } = await supabaseAdmin.from("financial_audit_logs").insert({
-    transaction_type: transactionType,
-    status,
-    payload: payload ?? null,
-    error_details: errorDetails ?? null,
+  try {
+    const { error } = await supabaseAdmin.from("financial_audit_logs").insert({
+      transaction_type: transactionType,
+      status,
+      payload: payload ?? null,
+      error_details: errorDetails ?? null,
+    });
+
+    if (error) {
+      console.error("[payment-gateway] Audit log insert failed:", error.message);
+    }
+  } catch (logErr) {
+    // Absolutely non-throwing — log to stdout only
+    console.error("[payment-gateway] Critical: audit logger threw unexpectedly:", logErr);
+  }
+}
+
+// ============================================================
+// PIX PAYMENT GENERATOR — calls Mercado Pago REST API
+// ============================================================
+async function createPixPayment({
+  transactionAmount,
+  description,
+  payerEmail,
+}: {
+  transactionAmount: number;
+  description: string;
+  payerEmail: string;
+}): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
+  const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST");
+
+  if (!mpAccessToken) {
+    throw new Error("MP_ACCESS_TOKEN_TEST is not configured in Edge Function secrets.");
+  }
+
+  // Unique idempotency key per attempt — prevents duplicate charges on retries
+  const idempotencyKey = crypto.randomUUID();
+
+  const mpPayload = {
+    transaction_amount: transactionAmount,
+    description,
+    payment_method_id: "pix",
+    payer: {
+      email: payerEmail,
+    },
+  };
+
+  const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${mpAccessToken}`,
+      "X-Idempotency-Key": idempotencyKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(mpPayload),
   });
 
-  if (error) {
-    // Non-throwing — we must never let a logging failure cascade into user-facing errors
-    console.error("[payment-gateway] Failed to write audit log:", error.message);
-  }
+  const data: MercadoPagoPixResponse = await mpResponse.json();
+
+  return { data, httpStatus: mpResponse.status };
 }
 
 // ============================================================
@@ -72,23 +141,82 @@ serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const { action } = body;
 
-    // --- ROUTE: Payment Intent ---
+    // ----------------------------------------------------------------
+    // ROUTE: PIX Payment Intent
+    // ----------------------------------------------------------------
     if (action === "create_payment_intent") {
-      // TODO (Release 2.0 Sprint 2): Integrate with Mercado Pago Sandbox API
-      // MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN")
-      // const mpResponse = await createMercadoPagoPayment({ ... });
+      const { transaction_amount, description, payer_email } = body;
 
-      // Placeholder: log the request attempt
-      await logAuditEvent({
-        transactionType: "payment_intent",
-        status: "pending",
-        payload: { action, requested_at: new Date().toISOString() },
+      // --- Input validation ---
+      if (typeof transaction_amount !== "number" || transaction_amount <= 0) {
+        return new Response(
+          JSON.stringify({ error: "Invalid transaction_amount. Must be a positive number." }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+      if (!description || typeof description !== "string") {
+        return new Response(
+          JSON.stringify({ error: "Missing or invalid description." }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+      if (!payer_email || typeof payer_email !== "string" || !payer_email.includes("@")) {
+        return new Response(
+          JSON.stringify({ error: "Missing or invalid payer_email." }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      // --- Call Mercado Pago ---
+      const { data: mpData, httpStatus: mpStatus } = await createPixPayment({
+        transactionAmount: transaction_amount,
+        description,
+        payerEmail: payer_email,
       });
 
-      return new Response(
-        JSON.stringify({ success: true, message: "Payment gateway initialized. Integration pending." }),
-        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+      // --- Audit log: persist raw MP response immutably ---
+      const auditStatus = mpData.status ?? (mpStatus >= 400 ? "failed" : "unknown");
+      await logAuditEvent({
+        transactionType: "pix_intent",
+        status: auditStatus,
+        payload: mpData as Record<string, unknown>,
+        errorDetails: mpData.error
+          ? `[${mpData.error}] ${mpData.message ?? ""} ${JSON.stringify(mpData.cause ?? [])}`
+          : undefined,
+      });
+
+      // --- Handle MP API errors ---
+      if (mpStatus >= 400 || mpData.error) {
+        console.error("[payment-gateway] Mercado Pago returned error:", mpStatus, mpData);
+        return new Response(
+          JSON.stringify({
+            error: "Payment provider rejected the request.",
+            detail: mpData.message ?? mpData.error ?? "Unknown MP error",
+            mp_status: mpData.status,
+            mp_status_detail: mpData.status_detail,
+          }),
+          {
+            status: mpStatus >= 400 ? mpStatus : 502,
+            headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // --- Extract PIX display data ---
+      const txData = mpData.point_of_interaction?.transaction_data;
+      const pixData = {
+        payment_id: mpData.id,
+        status: mpData.status,
+        status_detail: mpData.status_detail,
+        ticket_url: txData?.ticket_url ?? null,
+        qr_code: txData?.qr_code ?? null,           // "Copia e Cola"
+        qr_code_base64: txData?.qr_code_base64 ?? null,
+      };
+
+      return new Response(JSON.stringify({ success: true, pix: pixData }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
     }
 
     // --- Unrecognized action ---
@@ -99,7 +227,7 @@ serve(async (req: Request): Promise<Response> => {
 
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorStack = err instanceof Error ? err.stack : undefined;
+    const errorStack   = err instanceof Error ? err.stack    : undefined;
 
     console.error("[payment-gateway] Unhandled error:", errorMessage);
 
