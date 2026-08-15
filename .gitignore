@@ -34,3 +34,14 @@ dist-ssr
 /playwright/.auth/
 
 .env*
+
+# ============================================================
+# Supabase Edge Functions — Secret Environment Files
+# NEVER commit .env or .env.local for functions (Mercado Pago keys, service role, etc.)
+# Use .env.example as a safe template for onboarding.
+# ============================================================
+supabase/functions/.env
+supabase/functions/.env.local
+supabase/.env
+supabase/.env.local
+
