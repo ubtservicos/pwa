@@ -150,8 +150,98 @@ const BAIRROS_LIST = [
 ];
 
 const PRAIAS_LIST = [
-  "Praia Grande", "Tenório", "Toninhas", "Enseada", "Lázaro",
-  "Perequê-Açu", "Vermelha do Norte", "Itamambuca", "Ubatumirim", "Felix"
+  "Almada",
+  "Alto",
+  "Barra",
+  "Barra Seca",
+  "Bicas",
+  "Bonete",
+  "Brava da Almada",
+  "Brava da Fortaleza",
+  "Brava da Itamambuca",
+  "Brava do Camburi",
+  "Brava do Perequê-Mirim (ou Lamberto)",
+  "Brava do Sul",
+  "Camburi",
+  "Canto Itaipu",
+  "Caçandoca",
+  "Caçandoquinha",
+  "Cedrinho ou Cedro",
+  "Cedro ou Cedro do Sul",
+  "Codó",
+  "Costa",
+  "Cruzeiro ou Iperoig",
+  "Deserto",
+  "Dionísia",
+  "Domingas Dias",
+  "Dura",
+  "Engenho",
+  "Enseada",
+  "Estaleiro do Padre",
+  "Fazenda",
+  "Figueira",
+  "Flamenguinho",
+  "Flamengo",
+  "Fora",
+  "Fortaleza",
+  "Félix",
+  "Galhetas",
+  "Gerônimo ou Boa Vista",
+  "Godói",
+  "Grande do Bonete",
+  "Itaguá",
+  "Itamambuca",
+  "Itapecerica",
+  "Justa",
+  "Lagoa",
+  "Lagoinha",
+  "Lamberto (ou Brava do Perequê-Mirim)",
+  "Lanço da Cavala",
+  "Lázaro",
+  "Léo",
+  "Lúcio ou das Conchas",
+  "Mansa",
+  "Maranduba",
+  "Matarazzo ou do Padre",
+  "Meio",
+  "Oeste",
+  "Palmira",
+  "Perequê-Açú",
+  "Perequê-Mirim",
+  "Peres",
+  "Picinguaba",
+  "Ponta Aguda",
+  "Português",
+  "Praia Grande",
+  "Praia do Dóca ou Prainha do Sul",
+  "Prainha",
+  "Prainha da Enseada",
+  "Prainha da Vermelha do Sul",
+  "Prainha do Cais (Caisão de Ubatuba)",
+  "Prainha do Camburi ou do Groza",
+  "Prainha do Deserto",
+  "Prumirim",
+  "Pulso",
+  "Puruba",
+  "Raposa",
+  "Ribeira",
+  "Saco da Mãe Maria",
+  "Saco da Ribeira",
+  "Saco das Bananas",
+  "Santa Rita",
+  "Sapê",
+  "Sete Fontes",
+  "Simão ou Brava do Frade",
+  "Sununga",
+  "Surutuba",
+  "Tapiá ou Xandra",
+  "Taquara",
+  "Tenório",
+  "Toninhas",
+  "Ubatumirim",
+  "Vermelha do Centro",
+  "Vermelha do Norte",
+  "Vermelha do Sul"
 ];
 
 const waitlistSchema = z.object({
@@ -260,6 +350,7 @@ export default function Index() {
   // Modals for selection
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
+  const [searchPraiaQuery, setSearchPraiaQuery] = useState("");
 
   const {
     register,
@@ -284,6 +375,9 @@ export default function Index() {
   const perfil = watch("perfil");
   const selectedBairros = watch("bairros") || [];
   const selectedPraias = watch("praias") || [];
+  const filteredPraias = PRAIAS_LIST.filter((p) =>
+    p.toLowerCase().includes(searchPraiaQuery.toLowerCase())
+  );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1690,52 +1784,78 @@ export default function Index() {
 
       {isPraiaModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-display font-bold text-lg text-white">
                 {perfil === "ambulante" ? "Praias de atuação" : "Praias que costuma frequentar"}
               </h4>
               <button
                 type="button"
-                onClick={() => setIsPraiaModalOpen(false)}
+                onClick={() => {
+                  setIsPraiaModalOpen(false);
+                  setSearchPraiaQuery("");
+                }}
                 className="text-white/40 hover:text-white"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
+
+            {/* Search Input */}
+            <div className="mb-4 relative">
+              <input
+                type="text"
+                placeholder="Buscar praia..."
+                value={searchPraiaQuery}
+                onChange={(e) => setSearchPraiaQuery(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none text-white text-sm focus:border-green transition-all"
+              />
+            </div>
             
-            <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 pr-2 scrollbar-none">
-              {PRAIAS_LIST.map((p) => {
-                const checked = selectedPraias.includes(p);
-                return (
-                  <label
-                    key={p}
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-                      checked
-                        ? "bg-green/10 border-green text-green"
-                        : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {
-                        const next = checked
-                          ? selectedPraias.filter((x) => x !== p)
-                          : [...selectedPraias, p];
-                        setValue("praias", next, { shouldValidate: true });
-                      }}
-                      className="h-5 w-5 accent-green shrink-0 cursor-pointer"
-                    />
-                    <span className="text-sm font-sans font-medium">{p}</span>
-                  </label>
-                );
-              })}
+            <div 
+              className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 scrollbar-none"
+              style={{ maxHeight: "50vh" }}
+            >
+              {filteredPraias.length > 0 ? (
+                filteredPraias.map((p) => {
+                  const checked = selectedPraias.includes(p);
+                  return (
+                    <label
+                      key={p}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
+                        checked
+                          ? "bg-green/10 border-green text-green"
+                          : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked
+                            ? selectedPraias.filter((x) => x !== p)
+                            : [...selectedPraias, p];
+                          setValue("praias", next, { shouldValidate: true });
+                        }}
+                        className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                      />
+                      <span className="text-sm font-sans font-medium">{p}</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-8 text-center text-white/40 text-sm font-sans">
+                  Nenhuma praia encontrada
+                </div>
+              )}
             </div>
             
             <button
               type="button"
-              onClick={() => setIsPraiaModalOpen(false)}
+              onClick={() => {
+                setIsPraiaModalOpen(false);
+                setSearchPraiaQuery("");
+              }}
               className="w-full mt-6 py-4 rounded-xl bg-green text-navy font-display font-bold text-sm hover:bg-green-dark transition-all"
             >
               Confirmar Seleção
