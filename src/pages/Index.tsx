@@ -145,8 +145,101 @@ function parseUserAgent(userAgent: string) {
 }
 
 const BAIRROS_LIST = [
-  "Centro", "Itaguá", "Perequê-Açu", "Toninhas", "Praia Grande",
-  "Estufa I", "Estufa II", "Ipiranguinha", "Mato Dentro", "Marafunda"
+  "Acaraú",
+  "Aguas do Inga",
+  "Aracaú",
+  "Arariba",
+  "Bairro Silop",
+  "Bairro do Tenorio",
+  "Barra Seca",
+  "Barra Seca Praias Vermelha e Alto",
+  "Barra da Lagoa",
+  "Bela Vista",
+  "Camburi",
+  "Casanga",
+  "Caçandoca",
+  "Centro",
+  "Centro (Picinguaba)",
+  "Corcovado",
+  "Estufa I",
+  "Estufa II",
+  "Figueira",
+  "Flamengo Praias Ribeira e Sete Fortes",
+  "Folha Seca",
+  "Galhetas",
+  "Horto",
+  "Horto Florestal",
+  "Ipiranguinha",
+  "Itaguá",
+  "Itamambuca",
+  "Jardim Carolina",
+  "Jardim Enseada",
+  "Jardim Marisol",
+  "Jardim Samambaia",
+  "Jardim Santa Luzia",
+  "Jardim Ubatuba",
+  "Lagoinha",
+  "Marafunda",
+  "Mato Dentro",
+  "Mato Dentro Carolina Trevo Samambá",
+  "Monte Valerio",
+  "Park Hills",
+  "Pedreira",
+  "Perequê-Açu",
+  "Perequê-Mirim",
+  "Picinguaba",
+  "Ponta Aguda",
+  "Ponta Grossa",
+  "Praia Brava",
+  "Praia Brava do Sul",
+  "Praia Domingas Dias",
+  "Praia Dura",
+  "Praia Grande",
+  "Praia Grande do Bonete Praia Deserto",
+  "Praia Santa Rita",
+  "Praia Vermelha do Centro",
+  "Praia Vermelha do Sul",
+  "Praia da Almada",
+  "Praia da Barra",
+  "Praia da Enseada",
+  "Praia da Fazenda",
+  "Praia da Fortaleza",
+  "Praia das Toninhas",
+  "Praia de Itaguá",
+  "Praia de Maranduba",
+  "Praia de Santa Rita",
+  "Praia do Frade",
+  "Praia do Félix",
+  "Praia do Itamambuca",
+  "Praia do Lazaro",
+  "Praia do Perequê Mirim",
+  "Praia do Pulso",
+  "Praia do Puruba",
+  "Praia do Sapê",
+  "Praia do Sununga",
+  "Promirim",
+  "Prumirim",
+  "Ressaca",
+  "Rio Escuro",
+  "Rio da Prata",
+  "Saco da Ribeira",
+  "Sape",
+  "Sertao do Meio",
+  "Sertao do Pereque Mirim",
+  "Sertão da Quina",
+  "Sertão do Ingá",
+  "Sesmaria",
+  "Silop",
+  "Sumare",
+  "Sumidouro",
+  "Taquaral",
+  "Tenório",
+  "Ubatuba",
+  "Ubatuba Country",
+  "Ubatumirim",
+  "Ubatumirin",
+  "Umuarama",
+  "Área Rural de Ubatuba"
 ];
 
 const PRAIAS_LIST = [
@@ -347,10 +440,10 @@ export default function Index() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Modals for selection
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
   const [searchPraiaQuery, setSearchPraiaQuery] = useState("");
+  const [searchBairroQuery, setSearchBairroQuery] = useState("");
 
   const {
     register,
@@ -377,6 +470,9 @@ export default function Index() {
   const selectedPraias = watch("praias") || [];
   const filteredPraias = PRAIAS_LIST.filter((p) =>
     p.toLowerCase().includes(searchPraiaQuery.toLowerCase())
+  );
+  const filteredBairros = BAIRROS_LIST.filter((b) =>
+    b.toLowerCase().includes(searchBairroQuery.toLowerCase())
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1728,52 +1824,78 @@ export default function Index() {
       {/* Modais de Seleção Bairros / Praias */}
       {isBairroModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-display font-bold text-lg text-white">
                 {perfil === "morador" ? "Bairro de residência" : "Bairro que costuma se hospedar"}
               </h4>
               <button
                 type="button"
-                onClick={() => setIsBairroModalOpen(false)}
+                onClick={() => {
+                  setIsBairroModalOpen(false);
+                  setSearchBairroQuery("");
+                }}
                 className="text-white/40 hover:text-white"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
+
+            {/* Search Input */}
+            <div className="mb-4 relative">
+              <input
+                type="text"
+                placeholder="Buscar bairro..."
+                value={searchBairroQuery}
+                onChange={(e) => setSearchBairroQuery(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none text-white text-sm focus:border-green transition-all"
+              />
+            </div>
             
-            <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 pr-2 scrollbar-none">
-              {BAIRROS_LIST.map((b) => {
-                const checked = selectedBairros.includes(b);
-                return (
-                  <label
-                    key={b}
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-                      checked
-                        ? "bg-green/10 border-green text-green"
-                        : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => {
-                        const next = checked
-                          ? selectedBairros.filter((x) => x !== b)
-                          : [...selectedBairros, b];
-                        setValue("bairros", next, { shouldValidate: true });
-                      }}
-                      className="h-5 w-5 accent-green shrink-0 cursor-pointer"
-                    />
-                    <span className="text-sm font-sans font-medium">{b}</span>
-                  </label>
-                );
-              })}
+            <div 
+              className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 scrollbar-none"
+              style={{ maxHeight: "50vh" }}
+            >
+              {filteredBairros.length > 0 ? (
+                filteredBairros.map((b) => {
+                  const checked = selectedBairros.includes(b);
+                  return (
+                    <label
+                      key={b}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
+                        checked
+                          ? "bg-green/10 border-green text-green"
+                          : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked
+                            ? selectedBairros.filter((x) => x !== b)
+                            : [...selectedBairros, b];
+                          setValue("bairros", next, { shouldValidate: true });
+                        }}
+                        className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                      />
+                      <span className="text-sm font-sans font-medium">{b}</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-8 text-center text-white/40 text-sm font-sans">
+                  Nenhum bairro encontrado
+                </div>
+              )}
             </div>
             
             <button
               type="button"
-              onClick={() => setIsBairroModalOpen(false)}
+              onClick={() => {
+                setIsBairroModalOpen(false);
+                setSearchBairroQuery("");
+              }}
               className="w-full mt-6 py-4 rounded-xl bg-green text-navy font-display font-bold text-sm hover:bg-green-dark transition-all"
             >
               Confirmar Seleção
