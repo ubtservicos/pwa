@@ -124,7 +124,7 @@ const AmbulanteCatalogPage = () => {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100svh", background: "#0B1B3E", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ minHeight: "100svh", background: "#09090B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <p className="font-display">Carregando...</p>
       </div>
     );
@@ -132,7 +132,7 @@ const AmbulanteCatalogPage = () => {
 
   if (!session) {
     return (
-      <div style={{ minHeight: "100svh", background: "#0B1B3E", color: "#fff", padding: 24 }}>
+      <div style={{ minHeight: "100svh", background: "#09090B", color: "#fff", padding: 24 }}>
         <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer" }}>
           <ArrowLeft size={20} />
         </button>
@@ -150,7 +150,7 @@ const AmbulanteCatalogPage = () => {
   const totalItens = state.itens.reduce((a, i) => a + i.qty, 0);
 
   return (
-    <div style={{ minHeight: "100svh", background: "#0B1B3E", paddingBottom: 160 }}>
+    <div style={{ minHeight: "100svh", background: "#09090B", paddingBottom: 160 }}>
       {/* Header */}
       <header className="flex items-center gap-4" style={{ height: 56, padding: "0 20px" }}>
         <button

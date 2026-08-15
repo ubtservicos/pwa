@@ -195,7 +195,7 @@ const AmbulantePedidoPage = () => {
   );
 
   return (
-    <div style={{ minHeight: "100svh", background: "#0B1B3E", padding: 24, color: "#fff" }}>
+    <div style={{ minHeight: "100svh", background: "#09090B", padding: 24, color: "#fff" }}>
       <header className="flex items-center gap-4">
         <button
           type="button"

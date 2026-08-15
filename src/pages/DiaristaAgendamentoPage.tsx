@@ -238,7 +238,7 @@ const DiaristaAgendamentoPage = () => {
 
   if (!ag) {
     return (
-      <div style={{ background: "#0B1B3E", minHeight: "100svh", color: "white", padding: 24 }}>
+      <div style={{ background: "#09090B", minHeight: "100svh", color: "white", padding: 24 }}>
         <button onClick={() => navigate("/app/home")} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}>
           <ArrowLeft size={22} />
         </button>
@@ -271,7 +271,7 @@ const DiaristaAgendamentoPage = () => {
   const initials = diarista ? diarista.nome.split(" ").map((n) => n[0]).slice(0, 2).join("") : "??";
 
   return (
-    <div style={{ background: "#0B1B3E", minHeight: "100svh", padding: "24px 24px 80px" }}>
+    <div style={{ background: "#09090B", minHeight: "100svh", padding: "24px 24px 80px" }}>
       <header style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => navigate("/app/home")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <ArrowLeft size={22} color="white" />
@@ -568,7 +568,7 @@ const DiaristaAgendamentoPage = () => {
                       }}
                     >
                       {savedCards.map((c, idx) => (
-                        <option key={c.id} value={idx} style={{ background: "#0B1B3E", color: "white" }}>
+                        <option key={c.id} value={idx} style={{ background: "#09090B", color: "white" }}>
                           {c.bandeira} final {c.final}
                         </option>
                       ))}

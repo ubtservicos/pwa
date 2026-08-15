@@ -111,11 +111,11 @@ const DiaristaAgendarPage = () => {
     }
   }, [rideState, geoAddress]);
 
-  if (loading) return <div style={{ padding: 24, color: "white", background: "#0B1B3E", minHeight: "100svh" }}>Carregando...</div>;
+  if (loading) return <div style={{ padding: 24, color: "white", background: "#09090B", minHeight: "100svh" }}>Carregando...</div>;
 
   if (!diarista) {
     return (
-      <div style={{ background: "#0B1B3E", minHeight: "100svh", color: "white", padding: 24 }}>
+      <div style={{ background: "#09090B", minHeight: "100svh", color: "white", padding: 24 }}>
         <button onClick={() => navigate("/app/diaristas")} style={{ background: "none", border: "none", color: "white" }}>
           <ArrowLeft size={22} />
         </button>
@@ -233,7 +233,7 @@ const DiaristaAgendarPage = () => {
   };
 
   return (
-    <div style={{ background: "#0B1B3E", minHeight: "100svh", padding: "24px 24px 100px", width: "100%" }}>
+    <div style={{ background: "#09090B", minHeight: "100svh", padding: "24px 24px 100px", width: "100%" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", minHeight: 32 }}>
         <button onClick={() => { if (step > 1) setStep(step - 1); else navigate(-1); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, position: "absolute", left: 0 }}>
           <ArrowLeft size={22} color="white" />
@@ -567,7 +567,7 @@ const DiaristaAgendarPage = () => {
         <div style={{
           position: "fixed",
           inset: 0,
-          background: "#0B1B3E",
+          background: "#09090B",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",

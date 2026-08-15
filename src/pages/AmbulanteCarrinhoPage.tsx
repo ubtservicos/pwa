@@ -170,7 +170,7 @@ const AmbulanteCarrinhoPage = () => {
   };
 
   return (
-    <div style={{ minHeight: "100svh", background: "#0B1B3E", paddingBottom: 140 }}>
+    <div style={{ minHeight: "100svh", background: "#09090B", paddingBottom: 140 }}>
       <header className="flex items-center gap-4" style={{ padding: "16px 24px" }}>
         <button
           type="button"

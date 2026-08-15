@@ -54,11 +54,11 @@ const DiaristaPerfilPage = () => {
     return diarista.materiais.includes("produtos") ? 8.00 : 0;
   }, [diarista]);
 
-  if (loading) return <div style={{ padding: 24, color: "white", background: "#0B1B3E", minHeight: "100svh" }}>Carregando...</div>;
+  if (loading) return <div style={{ padding: 24, color: "white", background: "#09090B", minHeight: "100svh" }}>Carregando...</div>;
 
   if (!diarista) {
     return (
-      <div style={{ background: "#0B1B3E", minHeight: "100svh", color: "white", padding: 24 }}>
+      <div style={{ background: "#09090B", minHeight: "100svh", color: "white", padding: 24 }}>
         <button onClick={() => navigate("/app/diaristas")} style={{ background: "none", border: "none", color: "white", cursor: "pointer" }}>
           <ArrowLeft size={22} />
         </button>
@@ -71,7 +71,7 @@ const DiaristaPerfilPage = () => {
   const estimativa = m2Input ? (+m2Input * diarista.valorPorM2).toFixed(2) : null;
 
   return (
-    <div style={{ background: "#0B1B3E", minHeight: "100svh", paddingBottom: 100 }}>
+    <div style={{ background: "#09090B", minHeight: "100svh", paddingBottom: 100 }}>
       <header style={{ padding: "20px 24px 0", display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           <ArrowLeft size={22} color="white" />

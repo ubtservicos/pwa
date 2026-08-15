@@ -216,7 +216,7 @@ const App = () => (
 
 export default Sentry.withErrorBoundary(App, {
   fallback: (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0B1B3E", color: "#fff", padding: 24, textAlign: "center" }}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#09090B", color: "#fff", padding: 24, textAlign: "center" }}>
       <h2 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Ops! Algo deu errado.</h2>
       <p style={{ fontFamily: "DM Sans", fontSize: 15, color: "rgba(255,255,255,0.7)", maxWidth: 400, marginBottom: 24 }}>
         Ocorreu um erro inesperado no aplicativo. Nossa equipe técnica já foi notificada automaticamente.
