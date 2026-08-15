@@ -27,6 +27,10 @@ import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import { supabase } from "@/lib/supabase";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { maskPhone } from "@/utils/masks";
 
 interface FaqItemProps {
   question: string;
@@ -140,6 +144,86 @@ function parseUserAgent(userAgent: string) {
   return { device_type, browser, os };
 }
 
+const BAIRROS_LIST = [
+  "Centro", "Itaguá", "Perequê-Açu", "Toninhas", "Praia Grande",
+  "Estufa I", "Estufa II", "Ipiranguinha", "Mato Dentro", "Marafunda"
+];
+
+const PRAIAS_LIST = [
+  "Praia Grande", "Tenório", "Toninhas", "Enseada", "Lázaro",
+  "Perequê-Açu", "Vermelha do Norte", "Itamambuca", "Ubatumirim", "Felix"
+];
+
+const waitlistSchema = z.object({
+  nome: z.string().min(3, "Mínimo 3 caracteres"),
+  email: z.string().email("E-mail inválido"),
+  telefone: z.string().min(10, "Telefone incompleto"),
+  perfil: z.enum(["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "morador", "turista"]),
+  possuiContaMercadoPago: z.boolean({
+    required_error: "Por favor, responda esta pergunta."
+  }),
+  regiao_atuacao: z.array(z.string()).optional().default([]),
+  praias: z.array(z.string()).optional().default([]),
+  bairros: z.array(z.string()).optional().default([]),
+  acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
+}).superRefine((data, ctx) => {
+  if (data.perfil === "associacao" || data.perfil === "mototaxista" || data.perfil === "diarista") {
+    if (!data.regiao_atuacao || data.regiao_atuacao.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione pelo menos uma região de atuação",
+        path: ["regiao_atuacao"],
+      });
+    }
+  }
+
+  if (data.perfil === "ambulante") {
+    if (!data.praias || data.praias.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione pelo menos uma praia de atuação",
+        path: ["praias"],
+      });
+    }
+  }
+
+  if (data.perfil === "morador") {
+    if (!data.bairros || data.bairros.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o bairro de residência",
+        path: ["bairros"],
+      });
+    }
+    if (!data.praias || data.praias.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione pelo menos uma praia que costuma frequentar",
+        path: ["praias"],
+      });
+    }
+  }
+
+  if (data.perfil === "turista") {
+    if (!data.bairros || data.bairros.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o bairro que costuma se hospedar",
+        path: ["bairros"],
+      });
+    }
+    if (!data.praias || data.praias.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione pelo menos uma praia que costuma frequentar",
+        path: ["praias"],
+      });
+    }
+  }
+});
+
+type WaitlistFormData = z.infer<typeof waitlistSchema>;
+
 export default function Index() {
   const { showInstallBtn, isStandalone, isIOS, hasNativePrompt, install } = usePwaInstall();
   const [showIosGuide, setShowIosGuide] = useState(false);
@@ -167,62 +251,37 @@ export default function Index() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Waitlist Form States
-  const [formName, setFormName] = useState("");
-  const [formPhone, setFormPhone] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formCity, setFormCity] = useState("Ubatuba");
-  const [formProfiles, setFormProfiles] = useState<string[]>(["morador"]);
-  const [acceptTerms, setAcceptTerms] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  
-  const [possuiContaMercadoPago, setPossuiContaMercadoPago] = useState<boolean | null>(null);
-  
-  // Geolocation fields
-  const [formCep, setFormCep] = useState("");
-  const [formBairroMora, setFormBairroMora] = useState("");
-  const [formBairroTrab, setFormBairroTrab] = useState("");
-  const [isCepSearching, setIsCepSearching] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isSubmitDisabled =
-    isSubmitting ||
-    !formName.trim() ||
-    !formPhone.trim() ||
-    !formEmail.trim() ||
-    formProfiles.length === 0 ||
-    !acceptTerms ||
-    (formCity === "Ubatuba" && (!formCep.trim() || !formBairroMora.trim())) ||
-    possuiContaMercadoPago === null;
+  // Modals for selection
+  const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
+  const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
 
-  const handleCepChange = async (val: string) => {
-    const cleaned = val.replace(/[^\d-]/g, "");
-    setFormCep(cleaned);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<WaitlistFormData>({
+    resolver: zodResolver(waitlistSchema),
+    defaultValues: {
+      nome: "",
+      telefone: "",
+      email: "",
+      perfil: "morador",
+      regiao_atuacao: [],
+      praias: [],
+      bairros: [],
+      acceptTerms: false,
+    },
+  });
 
-    const rawDigits = cleaned.replace(/\D/g, "");
-    if (rawDigits.length === 8) {
-      const formatted = `${rawDigits.slice(0, 5)}-${rawDigits.slice(5)}`;
-      setFormCep(formatted);
-
-      setIsCepSearching(true);
-      try {
-        const { data, error } = await supabase
-          .from("ceps_ubatuba")
-          .select("bairro")
-          .eq("cep", formatted)
-          .maybeSingle();
-
-        if (error) throw error;
-        if (data?.bairro) {
-          setFormBairroMora(data.bairro);
-        }
-      } catch (err) {
-        console.warn("Erro ao buscar CEP localmente:", err);
-      } finally {
-        setIsCepSearching(false);
-      }
-    }
-  };
+  const perfil = watch("perfil");
+  const selectedBairros = watch("bairros") || [];
+  const selectedPraias = watch("praias") || [];
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -480,18 +539,7 @@ export default function Index() {
     }
   };
 
-  const handleFounderSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName || !formPhone || !formEmail) {
-      setSubmitError("Por favor, preencha todos os campos obrigatórios.");
-      return;
-    }
-
-    if (formProfiles.length === 0) {
-      setSubmitError("Por favor, selecione pelo menos um perfil.");
-      return;
-    }
-
+  const onSubmit = async (values: WaitlistFormData) => {
     setIsSubmitting(true);
     setSubmitError("");
 
@@ -499,7 +547,7 @@ export default function Index() {
       const { data: existing, error: checkError } = await supabase
         .from("waitlist")
         .select("id")
-        .eq("email", formEmail.trim())
+        .eq("email", values.email.trim())
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -519,14 +567,27 @@ export default function Index() {
       const ipHashVal = await sha256(seed);
       const parsedUA = parseUserAgent(ua);
 
+      const obsParts = [];
+      obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
+      if (values.regiao_atuacao && values.regiao_atuacao.length > 0) {
+        obsParts.push(`Regiao: ${values.regiao_atuacao.join(", ")}`);
+      }
+      if (values.praias && values.praias.length > 0) {
+        obsParts.push(`Praias: ${values.praias.join(", ")}`);
+      }
+      if (values.bairros && values.bairros.length > 0) {
+        obsParts.push(`Bairros: ${values.bairros.join(", ")}`);
+      }
+      const obsText = obsParts.join(" | ");
+
       const { error: insertError } = await supabase
         .from("waitlist")
         .insert({
-          nome: formName.trim(),
-          email: formEmail.trim(),
-          telefone: formPhone.trim(),
-          cidade: formCity,
-          perfil: formProfiles,
+          nome: values.nome.trim(),
+          email: values.email.trim(),
+          telefone: values.telefone.trim(),
+          cidade: "Ubatuba",
+          perfil: [values.perfil],
           consentimento_lgpd: true,
           status: "novo",
           created_at_local: createdLocal,
@@ -535,16 +596,15 @@ export default function Index() {
           device_type: parsedUA.device_type,
           browser: parsedUA.browser,
           os: parsedUA.os,
-          cep_moradia: formCity === "Ubatuba" ? formCep.trim() : null,
-          bairro_moradia: formCity === "Ubatuba" ? formBairroMora.trim() : null,
-          bairro_trabalho: formCity === "Ubatuba" ? formBairroTrab.trim() : null,
-          observacoes: possuiContaMercadoPago !== null ? `Mercado Pago: ${possuiContaMercadoPago ? 'Sim' : 'Não'}` : null
+          bairro_moradia: values.bairros.length > 0 ? values.bairros.join(", ") : null,
+          bairro_trabalho: values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null,
+          observacoes: obsText
         });
 
       if (insertError) throw insertError;
 
       setSubmitSuccess(true);
-      trackEvent("landing_waitlist_success", "marketing", { perfil: formProfiles });
+      trackEvent("landing_waitlist_success", "marketing", { perfil: [values.perfil] });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
@@ -1144,7 +1204,7 @@ export default function Index() {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleFounderSubmit} className="flex flex-col gap-6 p-2 md:p-8">
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 p-2 md:p-8" noValidate>
               <div className="text-center mb-8">
                 <h3 className="font-display font-bold text-2xl text-white mb-2 mt-[16px]">Cadastro de Fundador</h3>
                 <p className="text-xs text-white/50 font-sans">Preencha as informações abaixo para garantir seus benefícios de pioneiro.</p>
@@ -1156,112 +1216,111 @@ export default function Index() {
                 </div>
               )}
 
-              {/* Large Fields */}
+              {/* 1. Nome completo */}
               <div>
                 <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Nome Completo</label>
                 <input 
                   type="text" 
-                  required
                   placeholder="Ex: Carlos da Silva" 
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  {...register("nome")}
                   className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
                 />
+                {errors.nome && (
+                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.nome.message}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* 2. WhatsApp */}
                 <div>
                   <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">WhatsApp</label>
                   <input 
                     type="tel" 
-                    required
                     placeholder="Ex: (12) 99999-9999" 
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
+                    {...register("telefone", {
+                      onChange: (e) => {
+                        setValue("telefone", maskPhone(e.target.value));
+                      }
+                    })}
                     className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
                   />
+                  {errors.telefone && (
+                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.telefone.message}</p>
+                  )}
                 </div>
+                {/* 3. E-mail */}
                 <div>
                   <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">E-mail</label>
                   <input 
                     type="email" 
-                    required
                     placeholder="Ex: carlos@email.com" 
-                    value={formEmail}
-                    onChange={(e) => setFormEmail(e.target.value)}
+                    {...register("email")}
                     className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
                   />
+                  {errors.email && (
+                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.email.message}</p>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-6">
-                <div>
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Cidade</label>
-                  <select 
-                    value={formCity}
-                    onChange={(e) => setFormCity(e.target.value)}
-                    className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all appearance-none"
-                    style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>")`, backgroundPosition: 'right 20px center', backgroundRepeat: 'no-repeat' }}
-                  >
-                    <option value="Ubatuba" className="bg-[#0B1B3E]">Ubatuba</option>
-                    <option value="Outra" className="bg-[#0B1B3E]">Outra</option>
-                  </select>
-                </div>
-
-                {formCity === "Ubatuba" && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        CEP onde moro {isCepSearching && <span className="text-[10px] text-green animate-pulse pl-1">(Buscando...)</span>}
+              {/* 4. Seu perfil */}
+              <div>
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Seu Perfil</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                  {([
+                    { id: "associacao", label: "Associação de Trabalhadores" },
+                    { id: "mototaxista", label: "Mototaxista" },
+                    { id: "diarista", label: "Diarista" },
+                    { id: "ambulante", label: "Ambulante" },
+                    { id: "cocoecia", label: "Côco & Cia (Ecologia)" },
+                    { id: "morador", label: "Morador" },
+                    { id: "turista", label: "Turista / Visitante" }
+                  ] as const).map((perf) => {
+                    const checked = perfil === perf.id;
+                    return (
+                      <label 
+                        key={perf.id} 
+                        className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer select-none transition-all ${
+                          checked 
+                            ? "bg-green/10 border-green text-green" 
+                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                        }`}
+                      >
+                        <input 
+                          type="radio" 
+                          name="perfil"
+                          value={perf.id}
+                          checked={checked}
+                          onChange={() => {
+                            setValue("perfil", perf.id);
+                            setValue("regiao_atuacao", []);
+                            setValue("praias", []);
+                            setValue("bairros", []);
+                          }}
+                          className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                        />
+                        <span className="text-sm font-sans font-medium">{perf.label}</span>
                       </label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="Ex: 11680-000" 
-                        value={formCep}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro onde moro</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="Ex: Centro" 
-                        value={formBairroMora}
-                        onChange={(e) => setFormBairroMora(e.target.value)}
-                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro onde trabalha</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: Itaguá (Opcional)" 
-                        value={formBairroTrab}
-                        onChange={(e) => setFormBairroTrab(e.target.value)}
-                        className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
-                      />
-                    </div>
-                  </div>
+                    );
+                  })}
+                </div>
+                {errors.perfil && (
+                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.perfil.message}</p>
                 )}
-                
-                <div>
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Seu Perfil (Selecione um ou mais)</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
-                    {[
-                      { id: "morador", label: "Sou morador / tomador de serviços" },
-                      { id: "diarista", label: "Sou diarista" },
-                      { id: "mototaxista", label: "Sou mototaxista" },
-                      { id: "ambulante", label: "Sou ambulante" },
-                      { id: "associacao", label: "Sou uma Associação de Trabalhadores" }
-                    ].map((perf) => {
-                      const checked = formProfiles.includes(perf.id);
+              </div>
+
+              {/* 5. ÁREA CONDICIONAL DE ENDEREÇO */}
+              {(perfil === "associacao" || perfil === "mototaxista" || perfil === "diarista") && (
+                <div className="w-full">
+                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Região de atuação</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                    {["Sul", "Norte", "Centro", "Oeste"].map((reg) => {
+                      const selectedRegions = watch("regiao_atuacao") || [];
+                      const checked = selectedRegions.includes(reg);
                       return (
                         <label 
-                          key={perf.id} 
-                          className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer select-none transition-all ${
+                          key={reg} 
+                          className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
                             checked 
                               ? "bg-green/10 border-green text-green" 
                               : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
@@ -1270,23 +1329,131 @@ export default function Index() {
                           <input 
                             type="checkbox" 
                             checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFormProfiles([...formProfiles, perf.id]);
-                              } else {
-                                setFormProfiles(formProfiles.filter(p => p !== perf.id));
-                              }
+                            onChange={() => {
+                              const next = checked
+                                ? selectedRegions.filter(r => r !== reg)
+                                : [...selectedRegions, reg];
+                              setValue("regiao_atuacao", next, { shouldValidate: true });
                             }}
                             className="h-5 w-5 accent-green shrink-0 cursor-pointer"
                           />
-                          <span className="text-sm font-sans font-medium">{perf.label}</span>
+                          <span className="text-sm font-sans font-medium">{reg}</span>
                         </label>
                       );
                     })}
                   </div>
+                  {errors.regiao_atuacao && (
+                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.regiao_atuacao.message}</p>
+                  )}
                 </div>
-              </div>
+              )}
 
+              {perfil === "ambulante" && (
+                <div className="w-full">
+                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias de atuação</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsPraiaModalOpen(true)}
+                    className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                  >
+                    <span>
+                      {selectedPraias.length > 0
+                        ? selectedPraias.join(", ")
+                        : "Selecione a(s) praia(s)..."}
+                    </span>
+                    <ChevronDown className="w-5 h-5 text-white/40" />
+                  </button>
+                  {errors.praias && (
+                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+                  )}
+                </div>
+              )}
+
+              {perfil === "morador" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="w-full">
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro de residência</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsBairroModalOpen(true)}
+                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                    >
+                      <span>
+                        {selectedBairros.length > 0
+                          ? selectedBairros.join(", ")
+                          : "Selecione o bairro..."}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-white/40" />
+                    </button>
+                    {errors.bairros && (
+                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
+                    )}
+                  </div>
+
+                  <div className="w-full">
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias que costuma frequentar</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsPraiaModalOpen(true)}
+                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                    >
+                      <span>
+                        {selectedPraias.length > 0
+                          ? selectedPraias.join(", ")
+                          : "Selecione a(s) praia(s)..."}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-white/40" />
+                    </button>
+                    {errors.praias && (
+                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {perfil === "turista" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="w-full">
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Bairro que costuma se hospedar</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsBairroModalOpen(true)}
+                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                    >
+                      <span>
+                        {selectedBairros.length > 0
+                          ? selectedBairros.join(", ")
+                          : "Selecione o bairro..."}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-white/40" />
+                    </button>
+                    {errors.bairros && (
+                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
+                    )}
+                  </div>
+
+                  <div className="w-full">
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Praias que costuma frequentar</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsPraiaModalOpen(true)}
+                      className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                    >
+                      <span>
+                        {selectedPraias.length > 0
+                          ? selectedPraias.join(", ")
+                          : "Selecione a(s) praia(s)..."}
+                      </span>
+                      <ChevronDown className="w-5 h-5 text-white/40" />
+                    </button>
+                    {errors.praias && (
+                      <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. Tem conta no Mercado Pago? */}
               <div>
                 <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Você já possui uma conta no Mercado Pago?</label>
                 <div className="grid grid-cols-2 gap-4">
@@ -1294,12 +1461,12 @@ export default function Index() {
                     { value: true, label: "Sim" },
                     { value: false, label: "Não" }
                   ].map((opt) => {
-                    const selected = possuiContaMercadoPago === opt.value;
+                    const selected = watch("possuiContaMercadoPago") === opt.value;
                     return (
                       <button
                         key={opt.label}
                         type="button"
-                        onClick={() => setPossuiContaMercadoPago(opt.value)}
+                        onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
                         className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all ${
                           selected
                             ? "bg-green/10 border-green text-green"
@@ -1311,26 +1478,32 @@ export default function Index() {
                     );
                   })}
                 </div>
+                {errors.possuiContaMercadoPago && (
+                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.possuiContaMercadoPago.message}</p>
+                )}
               </div>
 
+              {/* 7. LGPD Accept Terms */}
               <div className="flex gap-3 items-start mt-2">
                 <input 
                   type="checkbox" 
-                  checked={acceptTerms} 
-                  onChange={(e) => setAcceptTerms(e.target.checked)} 
                   id="consent-lgpd" 
+                  {...register("acceptTerms")}
                   className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer" 
                 />
                 <label htmlFor="consent-lgpd" className="text-xs text-white/50 leading-relaxed font-sans cursor-pointer select-none">
                   Aceito os Termos de Uso e autorizo a coleta dos meus dados para fins exclusivos de desenvolvimento da UBT, conforme a LGPD.
                 </label>
               </div>
+              {errors.acceptTerms && (
+                <p className="text-red-500 text-xs pl-1">{errors.acceptTerms.message}</p>
+              )}
 
               <button
                 type="submit"
-                disabled={isSubmitDisabled}
+                disabled={isSubmitting}
                 className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-[0.6rem] tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
-                  isSubmitDisabled 
+                  isSubmitting 
                     ? "bg-white/10 text-white/30 cursor-not-allowed" 
                     : "bg-green hover:bg-green-dark active:scale-95 text-navy shadow-lg shadow-green/20"
                 }`}
@@ -1505,6 +1678,120 @@ export default function Index() {
               className="w-full py-3 rounded-full bg-green text-navy font-display font-bold text-xs uppercase tracking-widest hover:bg-green-dark transition-colors"
             >
               Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+
+      {/* Modais de Seleção Bairros / Praias */}
+      {isBairroModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-display font-bold text-lg text-white">
+                {perfil === "morador" ? "Bairro de residência" : "Bairro que costuma se hospedar"}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsBairroModalOpen(false)}
+                className="text-white/40 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 pr-2 scrollbar-none">
+              {BAIRROS_LIST.map((b) => {
+                const checked = selectedBairros.includes(b);
+                return (
+                  <label
+                    key={b}
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
+                      checked
+                        ? "bg-green/10 border-green text-green"
+                        : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? selectedBairros.filter((x) => x !== b)
+                          : [...selectedBairros, b];
+                        setValue("bairros", next, { shouldValidate: true });
+                      }}
+                      className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                    />
+                    <span className="text-sm font-sans font-medium">{b}</span>
+                  </label>
+                );
+              })}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setIsBairroModalOpen(false)}
+              className="w-full mt-6 py-4 rounded-xl bg-green text-navy font-display font-bold text-sm hover:bg-green-dark transition-all"
+            >
+              Confirmar Seleção
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isPraiaModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-display font-bold text-lg text-white">
+                {perfil === "ambulante" ? "Praias de atuação" : "Praias que costuma frequentar"}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsPraiaModalOpen(false)}
+                className="text-white/40 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 pr-2 scrollbar-none">
+              {PRAIAS_LIST.map((p) => {
+                const checked = selectedPraias.includes(p);
+                return (
+                  <label
+                    key={p}
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
+                      checked
+                        ? "bg-green/10 border-green text-green"
+                        : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? selectedPraias.filter((x) => x !== p)
+                          : [...selectedPraias, p];
+                        setValue("praias", next, { shouldValidate: true });
+                      }}
+                      className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                    />
+                    <span className="text-sm font-sans font-medium">{p}</span>
+                  </label>
+                );
+              })}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setIsPraiaModalOpen(false)}
+              className="w-full mt-6 py-4 rounded-xl bg-green text-navy font-display font-bold text-sm hover:bg-green-dark transition-all"
+            >
+              Confirmar Seleção
             </button>
           </div>
         </div>

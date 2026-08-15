@@ -79,20 +79,14 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
     await phoneInput.fill("(12) 99999-9988");
     await emailInput.fill(`happy-path-${Date.now()}@ubt.com.br`);
 
-    // Seleciona a cidade Ubatuba explicitamente
-    const citySelect = page.locator("select").first();
-    await citySelect.selectOption("Ubatuba");
+    // 5. Escolhe o perfil (Diarista) usando setChecked direto no input
+    const radioDiarista = page.locator("label:has-text('Diarista') input[type='radio']").first();
+    await radioDiarista.setChecked(true, { force: true });
     await page.waitForTimeout(200);
 
-    // Preenche CEP e bairro
-    const cepInput = page.locator("input[placeholder*='Ex: 11680-000' i]").first();
-    const bairroMoraInput = page.locator("input[placeholder*='Ex: Centro' i]").first();
-    await cepInput.fill("11680-000");
-    await bairroMoraInput.fill("Estufa I");
-
-    // 5. Escolhe o perfil (Diarista) usando setChecked direto no input
-    const checkboxDiarista = page.locator("label:has-text('Sou diarista') input[type='checkbox']").first();
-    await checkboxDiarista.setChecked(true, { force: true });
+    // 5b. Seleciona a região de atuação para Diarista (Centro)
+    const regionCentro = page.locator("label:has-text('Centro') input[type='checkbox']").first();
+    await regionCentro.setChecked(true, { force: true });
 
     // 6. Seleciona Mercado Pago - Sim
     const mpButton = page.locator("button:has-text('Sim')").first();
