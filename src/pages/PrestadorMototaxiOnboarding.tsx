@@ -26,9 +26,9 @@ const TopBar = () => {
   return (
     <div className="flex items-center justify-between mb-4">
       <button onClick={() => navigate(-1)} aria-label="Voltar">
-        <ArrowLeft size={22} color="#0B1B3E" />
+        <ArrowLeft size={22} color="#FFFFFF" />
       </button>
-      <span className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+      <span className="font-display text-[18px] font-bold text-white">
         UBT.
       </span>
       <span style={{ width: 22 }} />
@@ -68,8 +68,8 @@ const UploadArea = ({
         onClick={() => inputRef.current?.click()}
         className="w-full rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors"
         style={{
-          border: `2px dashed ${file ? "#0DB87E" : "#D8DBE5"}`,
-          background: file ? "rgba(13,184,126,0.04)" : "#fff",
+          border: `2px dashed ${file ? "#0DB87E" : "var(--prestador-border)"}`,
+          background: file ? "rgba(13,184,126,0.04)" : "var(--prestador-card)",
           padding: "28px 16px",
         }}
       >
@@ -82,14 +82,14 @@ const UploadArea = ({
               style={{ width: 60, height: 60, objectFit: "cover" }}
             />
             <CheckCircle2 size={20} color="#0DB87E" />
-            <span className="font-sans text-[12px]" style={{ color: "#5B6178" }}>
+            <span className="font-sans text-[12px]" style={{ color: "#A1A1AA" }}>
               {file.name.length > 22 ? file.name.slice(0, 22) + "…" : file.name}
             </span>
           </div>
         ) : (
           <>
             <Upload size={28} color="#9399AD" />
-            <span className="font-sans text-[14px]" style={{ color: "#5B6178" }}>
+            <span className="font-sans text-[14px]" style={{ color: "#A1A1AA" }}>
               {label}
             </span>
           </>
@@ -200,8 +200,8 @@ const PrestadorMototaxiOnboarding = () => {
 
   return (
     <div
-      className="min-h-[100svh] overflow-y-auto"
-      style={{ background: "#F7F8FA", padding: "24px", paddingBottom: "180px" }}
+      className="min-h-[100svh] overflow-y-auto text-zinc-100"
+      style={{ background: "var(--prestador-bg)", padding: "24px", paddingBottom: "180px" }}
     >
       <TopBar />
 
@@ -212,14 +212,14 @@ const PrestadorMototaxiOnboarding = () => {
             style={{
               padding: "10px 20px",
               borderRadius: 999,
-              background: activeTab === t ? "#0B1B3E" : "#EFF0F3",
-              color: activeTab === t ? "white" : "#5B6178",
+              background: activeTab === t ? "#0DB87E" : "var(--prestador-card)",
+              color: activeTab === t ? "#09090B" : "#A1A1AA",
               fontFamily: "DM Sans",
               fontWeight: 600,
               fontSize: 14,
               border: "none",
               cursor: "pointer",
-              flexShrink: 0
+              whiteSpace: "nowrap"
             }}
           >
             {t}
@@ -243,7 +243,7 @@ const PrestadorMototaxiOnboarding = () => {
               inputMode="numeric"
             />
             <div>
-              <label className="block font-sans text-[12px] font-semibold mb-1.5" style={{ color: "#5B6178" }}>
+              <label className="block font-sans text-[12px] font-semibold mb-1.5" style={{ color: "#A1A1AA" }}>
                 Sexo
               </label>
               <div className="grid grid-cols-2 gap-2.5">
@@ -256,9 +256,9 @@ const PrestadorMototaxiOnboarding = () => {
                       onClick={() => setSex(s)}
                       className="rounded-xl py-4 transition-colors"
                       style={{
-                        border: `2px solid ${sel ? "#0DB87E" : "#D8DBE5"}`,
-                        background: sel ? "#E6FAF4" : "#fff",
-                        color: "#0B1B3E",
+                        border: `2px solid ${sel ? "#0DB87E" : "var(--prestador-border)"}`,
+                        background: sel ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
+                        color: sel ? "#0DB87E" : "#A1A1AA",
                       }}
                     >
                       <span className="font-sans text-[14px] font-semibold">
@@ -274,7 +274,7 @@ const PrestadorMototaxiOnboarding = () => {
 
         {activeTab === "Docs Condutor" && (
           <div className="space-y-3">
-            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[18px] font-bold text-white">
               Documentos do Condutor
             </h2>
             <UploadArea label="CNH — Frente" file={cnhFront} onFile={setCnhFront} />
@@ -285,7 +285,7 @@ const PrestadorMototaxiOnboarding = () => {
 
         {activeTab === "Dados Veículo" && (
           <div className="space-y-4">
-            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[18px] font-bold text-white">
               Dados do Veículo
             </h2>
             <FormFieldLight
@@ -308,7 +308,7 @@ const PrestadorMototaxiOnboarding = () => {
 
         {activeTab === "Docs Veículo" && (
           <div className="space-y-3">
-            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[18px] font-bold text-white">
               Documentos do Veículo
             </h2>
             <UploadArea label="CRLV (Certificado do Veículo)" file={crlvFile} onFile={setCrlvFile} />
@@ -318,7 +318,7 @@ const PrestadorMototaxiOnboarding = () => {
 
         {activeTab === "Modo" && (
           <div className="space-y-3">
-            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[18px] font-bold text-white">
               Como você quer trabalhar?
             </h2>
             <div className="flex flex-col gap-3">
@@ -335,18 +335,18 @@ const PrestadorMototaxiOnboarding = () => {
                     onClick={() => setModalidade(key)}
                     className="w-full text-left rounded-2xl relative transition-colors"
                     style={{
-                      border: `2px solid ${sel ? "#0DB87E" : "#D8DBE5"}`,
-                      background: sel ? "#E6FAF4" : "#fff",
+                      border: `2px solid ${sel ? "#0DB87E" : "var(--prestador-border)"}`,
+                      background: sel ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
                       padding: 20,
                     }}
                   >
                     <div className="flex items-start gap-3">
                       <Icon size={24} color="#0DB87E" />
                       <div className="flex-1">
-                        <p className="font-sans text-[16px] font-semibold" style={{ color: "#0B1B3E" }}>
+                        <p className="font-sans text-[16px] font-semibold text-white">
                           {title}
                         </p>
-                        <p className="font-sans text-[13px] mt-0.5" style={{ color: "#5B6178" }}>
+                        <p className="font-sans text-[13px] mt-0.5" style={{ color: "#A1A1AA" }}>
                           {desc}
                         </p>
                       </div>
@@ -365,7 +365,7 @@ const PrestadorMototaxiOnboarding = () => {
           </div>
         )}
 
-        <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "white", borderTop: "1px solid #E2E8F0", zIndex: 10 }}>
+        <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "var(--prestador-bg)", borderTop: "1px solid var(--prestador-border)", zIndex: 10 }}>
           {activeTab === "Pessoal" ? (
             <PrimaryButtonLight
               onClick={() => setActiveTab("Docs Condutor")}
@@ -380,10 +380,10 @@ const PrestadorMototaxiOnboarding = () => {
                 onClick={() => setActiveTab("Pessoal")}
                 className="flex-1 font-sans font-bold text-[14px]"
                 style={{
-                  border: "1px solid #D8DBE5",
+                  border: "1px solid var(--prestador-border)",
                   borderRadius: 12,
-                  color: "#5B6178",
-                  background: "white",
+                  color: "#A1A1AA",
+                  background: "var(--prestador-card)",
                   padding: "14px 0",
                 }}
               >
@@ -405,10 +405,10 @@ const PrestadorMototaxiOnboarding = () => {
                 onClick={() => setActiveTab("Docs Condutor")}
                 className="flex-1 font-sans font-bold text-[14px]"
                 style={{
-                  border: "1px solid #D8DBE5",
+                  border: "1px solid var(--prestador-border)",
                   borderRadius: 12,
-                  color: "#5B6178",
-                  background: "white",
+                  color: "#A1A1AA",
+                  background: "var(--prestador-card)",
                   padding: "14px 0",
                 }}
               >
@@ -430,10 +430,10 @@ const PrestadorMototaxiOnboarding = () => {
                 onClick={() => setActiveTab("Dados Veículo")}
                 className="flex-1 font-sans font-bold text-[14px]"
                 style={{
-                  border: "1px solid #D8DBE5",
+                  border: "1px solid var(--prestador-border)",
                   borderRadius: 12,
-                  color: "#5B6178",
-                  background: "white",
+                  color: "#A1A1AA",
+                  background: "var(--prestador-card)",
                   padding: "14px 0",
                 }}
               >
@@ -455,10 +455,10 @@ const PrestadorMototaxiOnboarding = () => {
                 onClick={() => setActiveTab("Docs Veículo")}
                 className="flex-1 font-sans font-bold text-[14px]"
                 style={{
-                  border: "1px solid #D8DBE5",
+                  border: "1px solid var(--prestador-border)",
                   borderRadius: 12,
-                  color: "#5B6178",
-                  background: "white",
+                  color: "#A1A1AA",
+                  background: "var(--prestador-card)",
                   padding: "14px 0",
                 }}
               >

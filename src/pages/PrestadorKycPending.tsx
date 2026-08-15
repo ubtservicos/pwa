@@ -4,8 +4,11 @@ import { Loader2 } from "lucide-react";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 
+import { useTheme } from "@/hooks/useTheme";
+
 const PrestadorKycPending = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
 
   useEffect(() => {
     trackEvent("kyc_submitted", "operational");
@@ -21,14 +24,14 @@ const PrestadorKycPending = () => {
 
   return (
     <div
-      className="min-h-[100svh] flex flex-col items-center justify-center px-6 text-center"
-      style={{ background: "#F7F8FA" }}
+      className="min-h-[100svh] flex flex-col items-center justify-center px-6 text-center text-zinc-100"
+      style={{ background: theme.bg }}
     >
       <Loader2 size={48} color="#0DB87E" className="animate-spin" />
-      <h1 className="mt-5 font-display text-[20px] font-bold" style={{ color: "#0B1B3E" }}>
+      <h1 className="mt-5 font-display text-[20px] font-bold" style={{ color: theme.text }}>
         Verificando seus documentos...
       </h1>
-      <p className="mt-2 font-sans text-[14px] max-w-xs" style={{ color: "#5B6178" }}>
+      <p className="mt-2 font-sans text-[14px] max-w-xs" style={{ color: theme.subtle }}>
         Isso leva até 10 minutos. Você receberá uma notificação.
       </p>
     </div>

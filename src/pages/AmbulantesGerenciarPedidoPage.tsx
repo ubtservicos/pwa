@@ -103,31 +103,30 @@ const AmbulantesGerenciarPedidoPage = () => {
   };
 
   return (
-    <div style={{ minHeight: "100svh", background: "#F7F8FA", padding: "24px 24px 100px" }}>
+    <div style={{ minHeight: "100svh", background: "var(--prestador-bg)", padding: "24px 24px 100px", color: "white" }}>
       <header className="flex items-center gap-3" style={{ marginBottom: 16 }}>
         <button
           type="button"
           onClick={() => navigate("/app/prestador/ambulantes/online")}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#0B1B3E" }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#FFFFFF" }}
           aria-label="Voltar"
         >
           <ArrowLeft size={22} />
         </button>
-        <h1 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#0B1B3E", margin: 0 }}>
+        <h1 className="font-display text-white" style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
           Pedido #{id?.slice(-4).toUpperCase()}
         </h1>
       </header>
 
-      {/* Card itens */}
       <div
         style={{
-          background: "#fff", borderRadius: 16, padding: 20,
-          boxShadow: "0 2px 8px rgba(11,27,62,0.06)",
+          background: "var(--prestador-card)", borderRadius: 16, padding: 20,
+          border: "1px solid var(--prestador-border)"
         }}
       >
         {pedido.itens.map((i) => (
           <div key={i.prodId} className="flex items-center justify-between" style={{ padding: "4px 0" }}>
-            <span className="font-sans" style={{ fontSize: 14, color: "#0B1B3E" }}>
+            <span className="font-sans text-white" style={{ fontSize: 14 }}>
               {i.emoji} {i.nome}{" "}
               <span style={{ color: "#9399AD", fontSize: 12 }}>×{i.qty}</span>
             </span>
@@ -136,7 +135,7 @@ const AmbulantesGerenciarPedidoPage = () => {
             </span>
           </div>
         ))}
-        <div style={{ height: 1, background: "#EFF0F3", margin: "10px 0" }} />
+        <div style={{ height: 1, background: "var(--prestador-border)", margin: "10px 0" }} />
         <div className="flex items-center justify-between">
           <span className="font-sans" style={{ fontSize: 13, color: "#9399AD" }}>Total</span>
           <span className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#0DB87E" }}>
@@ -155,12 +154,12 @@ const AmbulantesGerenciarPedidoPage = () => {
             {pedido.modalidade === "delivery" ? "🛵 Delivery" : "📍 Retirar"}
           </span>
           {pedido.modalidade === "delivery" && pedido.tomadorLocation?.address && (
-            <div className="flex flex-col gap-1 mt-3 w-full" style={{ background: "#F7F8FA", padding: 12, borderRadius: 12, border: "1px solid #EFF0F3" }}>
-              <span className="font-sans flex items-center gap-1" style={{ fontSize: 13, color: "#5B6178" }}>
+            <div className="flex flex-col gap-1 mt-3 w-full" style={{ background: "var(--prestador-bg)", padding: 12, borderRadius: 12, border: "1px solid var(--prestador-border)" }}>
+              <span className="font-sans flex items-center gap-1" style={{ fontSize: 13, color: "#A1A1AA" }}>
                 <MapPin size={14} color="#E84040" /> {pedido.tomadorLocation.address}
               </span>
               {pedido.tomadorLocation.referencia && (
-                <span className="font-sans flex items-start gap-1 mt-1" style={{ fontSize: 13, color: "#0B1B3E", fontWeight: 600 }}>
+                <span className="font-sans flex items-start gap-1 mt-1" style={{ fontSize: 13, color: "#FFFFFF", fontWeight: 600 }}>
                   <span style={{ fontSize: 14 }}>ℹ️</span> Ref: {pedido.tomadorLocation.referencia}
                 </span>
               )}
@@ -232,8 +231,8 @@ const AmbulantesGerenciarPedidoPage = () => {
               onClick={() => enviarChip(m)}
               className="font-sans"
               style={{
-                background: "#EFF0F3", border: "1px solid #D8DBE5",
-                color: "#0B1B3E", borderRadius: 999, padding: "8px 14px",
+                background: "var(--prestador-card)", border: "1px solid var(--prestador-border)",
+                color: "#FFFFFF", borderRadius: 999, padding: "8px 14px",
                 fontSize: 12, whiteSpace: "nowrap", flexShrink: 0, cursor: "pointer",
               }}
             >
@@ -247,14 +246,14 @@ const AmbulantesGerenciarPedidoPage = () => {
         <div style={{ marginTop: 24 }}>
           <div className="flex flex-col items-center text-center">
             <CheckCircle size={48} color="#0DB87E" />
-            <p className="font-display" style={{ fontSize: 22, fontWeight: 700, color: "#0B1B3E", marginTop: 12 }}>
+            <p className="font-display text-white text-[22px] font-bold" style={{ marginTop: 12 }}>
               Pedido concluído!
             </p>
           </div>
           <div
             style={{
-              background: "#fff", borderRadius: 16, padding: 20,
-              boxShadow: "0 2px 8px rgba(11,27,62,0.06)", marginTop: 16, textAlign: "center",
+              background: "var(--prestador-card)", borderRadius: 16, padding: 20,
+              border: "1px solid var(--prestador-border)", marginTop: 16, textAlign: "center",
             }}
           >
             <p className="font-sans" style={{ fontSize: 13, color: "#9399AD", margin: 0 }}>
@@ -270,7 +269,7 @@ const AmbulantesGerenciarPedidoPage = () => {
                 return (
                   <div key={s.key} className="flex items-center gap-2.5">
                     <Icon size={14} color={s.color} />
-                    <span className="font-sans flex-1" style={{ fontSize: 12, color: "#0B1B3E" }}>{s.label}</span>
+                    <span className="font-sans flex-1 text-white" style={{ fontSize: 12 }}>{s.label}</span>
                     <span className="font-sans" style={{ fontSize: 12, color: "#0DB87E", fontWeight: 600 }}>
                       {formatBRL(split[s.key])}
                     </span>
@@ -281,7 +280,7 @@ const AmbulantesGerenciarPedidoPage = () => {
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <p className="font-sans" style={{ fontSize: 13, color: "#5B6178", marginBottom: 8 }}>Avalie o cliente</p>
+            <p className="font-sans" style={{ fontSize: 13, color: "#A1A1AA", marginBottom: 8 }}>Avalie o cliente</p>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button

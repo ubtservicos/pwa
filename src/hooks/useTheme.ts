@@ -18,14 +18,14 @@ export const useTheme = () => {
     })();
   const isDark = !isPrestador;
   return {
-    bg: isDark ? "#09090B" : "#F7F8FA",
-    surface: isDark ? "#18181B" : "#FFFFFF",
-    border: isDark ? "#27272A" : "#D8DBE5",
-    text: isDark ? "#FFFFFF" : "#0B1B3E",
-    subtle: isDark ? "#A1A1AA" : "#5B6178",
-    muted: isDark ? "#71717A" : "#9399AD",
-    inputBg: isDark ? "#18181B" : "#FFFFFF",
-    inputBdr: isDark ? "#27272A" : "#D8DBE5",
+    bg: isDark ? "#09090B" : "#18181B",
+    surface: isDark ? "#18181B" : "#27272A",
+    border: isDark ? "#27272A" : "#3F3F46",
+    text: isDark ? "#FFFFFF" : "#F4F4F5",
+    subtle: isDark ? "#A1A1AA" : "#A1A1AA",
+    muted: isDark ? "#71717A" : "#71717A",
+    inputBg: isDark ? "#18181B" : "#27272A",
+    inputBdr: isDark ? "#27272A" : "#3F3F46",
     isDark,
   };
 };

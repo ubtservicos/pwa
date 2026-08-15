@@ -33,15 +33,15 @@ interface ActiveRide {
 
 const Sheet = ({ children }: { children: React.ReactNode }) => (
   <div
-    className="absolute left-0 right-0 bottom-0 z-10"
+    className="absolute left-0 right-0 bottom-0 z-10 text-zinc-100"
     style={{
-      background: "#FFFFFF",
+      background: "var(--prestador-card)",
       borderRadius: "24px 24px 0 0",
       padding: "12px 20px 96px",
-      boxShadow: "0 -4px 24px rgba(11,27,62,0.12)",
+      boxShadow: "0 -4px 24px rgba(0,0,0,0.2)",
     }}
   >
-    <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "#D8DBE5" }} />
+    <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "var(--prestador-border)" }} />
     {children}
   </div>
 );
@@ -205,26 +205,26 @@ const PrestadorMototaxiActive = () => {
     const split = calcSplit(ride.price);
     return (
       <div
-        className="min-h-[100svh] overflow-y-auto"
-        style={{ background: "#F7F8FA", padding: 24, paddingBottom: 96 }}
+        className="min-h-[100svh] overflow-y-auto text-zinc-100"
+        style={{ background: "var(--prestador-bg)", padding: 24, paddingBottom: 96 }}
       >
         <div className="text-center pt-4">
           <CheckCircle2 size={48} color="#0DB87E" className="mx-auto" />
-          <h1 className="mt-3 font-display text-[22px] font-bold" style={{ color: "#0B1B3E" }}>
+          <h1 className="mt-3 font-display text-[22px] font-bold text-white">
             Serviço concluído!
           </h1>
         </div>
 
         <div
           className="mt-5 rounded-2xl text-center"
-          style={{ background: "#fff", padding: 20, boxShadow: "0 2px 8px rgba(11,27,62,0.06)" }}
+          style={{ background: "var(--prestador-card)", padding: 20, border: "1px solid var(--prestador-border)" }}
         >
           <p className="font-sans text-[13px]" style={{ color: "#9399AD" }}>Você recebeu</p>
           <p className="mt-1 font-display text-[28px] font-bold" style={{ color: "#0DB87E" }}>
             {formatBRL(youReceive)}
           </p>
 
-          <div className="my-3 h-px" style={{ background: "#EFF0F3" }} />
+          <div className="my-3 h-px" style={{ background: "var(--prestador-border)" }} />
 
           <div className="space-y-1.5 text-left">
             {SPLIT_META.map((m) => {
@@ -234,12 +234,12 @@ const PrestadorMototaxiActive = () => {
               return (
                 <div key={m.key} className="flex items-center gap-2">
                   <Icon size={14} style={{ color: m.color }} />
-                  <span className="font-sans text-[12px] flex-1" style={{ color: "#5B6178" }}>
+                  <span className="font-sans text-[12px] flex-1" style={{ color: "#A1A1AA" }}>
                     {m.label}
                   </span>
                   <span
                     className="font-sans text-[12px]"
-                    style={{ color: isPrest ? "#0DB87E" : "#5B6178", fontWeight: isPrest ? 600 : 400 }}
+                    style={{ color: isPrest ? "#0DB87E" : "#A1A1AA", fontWeight: isPrest ? 600 : 400 }}
                   >
                     {formatBRL(value)}
                   </span>
@@ -250,7 +250,7 @@ const PrestadorMototaxiActive = () => {
         </div>
 
         <div className="mt-5">
-          <p className="font-sans text-[14px] font-semibold" style={{ color: "#0B1B3E" }}>
+          <p className="font-sans text-[14px] font-semibold text-white">
             Como foi o cliente?
           </p>
           <div className="mt-2 flex items-center justify-center gap-3">
@@ -272,10 +272,10 @@ const PrestadorMototaxiActive = () => {
             rows={4}
             className="mt-4 w-full rounded-xl outline-none font-sans text-[14px] resize-none"
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #D8DBE5",
+              background: "var(--prestador-card)",
+              border: "1px solid var(--prestador-border)",
               padding: "12px 14px",
-              color: "#0B1B3E",
+              color: "#FFFFFF",
               minHeight: 100,
             }}
           />
@@ -295,7 +295,7 @@ const PrestadorMototaxiActive = () => {
   const routeTo = phase === "arriving" ? (ride.originCoords || ORIGIN) : (ride.destinationCoords || DESTINATION);
 
   return (
-    <div className="relative min-h-[100svh]" style={{ background: "#F7F8FA" }}>
+    <div className="relative min-h-[100svh] text-zinc-100" style={{ background: "var(--prestador-bg)" }}>
       <div className="absolute inset-0">
         <PrestadorMapLight
           myLocation={myLocation}
@@ -311,7 +311,7 @@ const PrestadorMototaxiActive = () => {
           <>
             <span
               className="inline-flex items-center gap-1 px-3 py-1 rounded-full font-sans text-[12px] font-semibold"
-              style={{ background: "#E6FAF4", border: "1px solid #0DB87E", color: "#0DB87E" }}
+              style={{ background: "rgba(13,184,126,0.15)", border: "1px solid #0DB87E", color: "#0DB87E" }}
             >
               A caminho do cliente
             </span>
@@ -319,10 +319,10 @@ const PrestadorMototaxiActive = () => {
             <div className="mt-3 flex items-start gap-2">
               <Navigation size={16} color="#0DB87E" className="mt-0.5 shrink-0" />
               <div className="flex-1">
-                <p className="font-sans text-[14px] font-semibold" style={{ color: "#0B1B3E" }}>
+                <p className="font-sans text-[14px] font-semibold text-white">
                   {ride.origin}
                 </p>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178" }}>
+                <p className="font-sans text-[13px]" style={{ color: "#A1A1AA" }}>
                   ~{ride.durationMin} min
                 </p>
               </div>
@@ -330,15 +330,15 @@ const PrestadorMototaxiActive = () => {
 
             <div
               className="mt-3 rounded-xl flex items-center gap-3"
-              style={{ background: "#F7F8FA", padding: 12 }}
+              style={{ background: "var(--prestador-bg)", padding: 12, border: "1px solid var(--prestador-border)" }}
             >
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ background: "#E6FAF4", color: "#0DB87E" }}
+                className="w-10 h-10 rounded-full flex items-center justify-center animate-pulse"
+                style={{ background: "rgba(13,184,126,0.15)", color: "#0DB87E" }}
               >
                 <span className="font-display font-bold text-[14px]">MS</span>
               </div>
-              <p className="font-sans text-[14px] font-semibold" style={{ color: "#0B1B3E" }}>
+              <p className="font-sans text-[14px] font-semibold text-white">
                 Maria Silva
               </p>
             </div>
@@ -346,7 +346,7 @@ const PrestadorMototaxiActive = () => {
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               <button
                 className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px]"
-                style={{ background: "#EFF0F3", border: "1px solid #D8DBE5", color: "#0B1B3E" }}
+                style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", color: "#FFFFFF" }}
               >
                 Já estou chegando 🏍
               </button>
@@ -362,7 +362,7 @@ const PrestadorMototaxiActive = () => {
           <>
             <span
               className="inline-flex items-center gap-1 px-3 py-1 rounded-full font-sans text-[12px] font-semibold"
-              style={{ background: "#E6FAF4", border: "1px solid #0DB87E", color: "#0DB87E" }}
+              style={{ background: "rgba(13,184,126,0.15)", border: "1px solid #0DB87E", color: "#0DB87E" }}
             >
               Em andamento
             </span>
@@ -370,10 +370,10 @@ const PrestadorMototaxiActive = () => {
             <div className="mt-3 flex items-start gap-2">
               <MapPin size={16} color="#E84040" className="mt-0.5 shrink-0" />
               <div className="flex-1">
-                <p className="font-sans text-[14px] font-semibold" style={{ color: "#0B1B3E" }}>
+                <p className="font-sans text-[14px] font-semibold text-white">
                   {ride.destination}
                 </p>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178" }}>
+                <p className="font-sans text-[13px]" style={{ color: "#A1A1AA" }}>
                   ~{ride.durationMin} min
                 </p>
               </div>
@@ -384,7 +384,7 @@ const PrestadorMototaxiActive = () => {
                 <button
                   key={m}
                   className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px]"
-                  style={{ background: "#EFF0F3", border: "1px solid #D8DBE5", color: "#0B1B3E" }}
+                  style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", color: "#FFFFFF" }}
                 >
                   {m}
                 </button>

@@ -6,9 +6,12 @@ import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 
+import { useTheme } from "@/hooks/useTheme";
+
 const PrestadorHome = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const theme = useTheme();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -236,8 +239,8 @@ const PrestadorHome = () => {
 
   return (
     <div
-      className="min-h-[100svh] overflow-y-auto"
-      style={{ background: "#F7F8FA", padding: "24px", paddingBottom: "100px" }}
+      className="min-h-[100svh] overflow-y-auto text-zinc-100"
+      style={{ background: theme.bg, padding: "24px", paddingBottom: "100px" }}
     >
       {activeRule && (
         <div
@@ -264,10 +267,10 @@ const PrestadorHome = () => {
             As seguintes restrições estão ativas para você:
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-            {activeRule.blockRequests && <span style={{ background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Prestar/Configurar serviços</span>}
-            {activeRule.blockChat && <span style={{ background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Chat e mensagens</span>}
-            {activeRule.blockPayments && <span style={{ background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Pagamentos/Saques</span>}
-            {activeRule.hideProfile && <span style={{ background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Perfil oculto</span>}
+            {activeRule.blockRequests && <span style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Prestar/Configurar serviços</span>}
+            {activeRule.blockChat && <span style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Chat e mensagens</span>}
+            {activeRule.blockPayments && <span style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Pagamentos/Saques</span>}
+            {activeRule.hideProfile && <span style={{ background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "2px 6px", fontSize: 11 }}>Perfil oculto</span>}
           </div>
         </div>
       )}
@@ -275,16 +278,16 @@ const PrestadorHome = () => {
       {/* Header */}
       <header className="flex items-start justify-between">
         <div>
-          <h1 className="font-display text-[22px] font-bold" style={{ color: "#0B1B3E" }}>
+          <h1 className="font-display text-[22px] font-bold" style={{ color: theme.text }}>
             Olá, {user.name.split(" ")[0]} 👋
           </h1>
-          <p className="mt-1 font-sans text-[14px]" style={{ color: "#5B6178" }}>
+          <p className="mt-1 font-sans text-[14px]" style={{ color: theme.subtle }}>
             Pronto para ganhar dinheiro hoje?
           </p>
         </div>
         <div
           className="w-11 h-11 rounded-full flex items-center justify-center"
-          style={{ background: "#E6FAF4", border: "2px solid #0DB87E" }}
+          style={{ background: "rgba(13,184,126,0.15)", border: "2px solid #0DB87E" }}
         >
           <span className="font-display text-[14px] font-bold" style={{ color: "#0DB87E" }}>
             {initials}
@@ -296,13 +299,13 @@ const PrestadorHome = () => {
       <section className="mt-5 flex">
         <div
           className="inline-flex items-center rounded-full p-1 w-full"
-          style={{ background: "#EFF0F3" }}
+          style={{ background: theme.surface }}
         >
           <button
             type="button"
             onClick={() => navigate("/app/home")}
             className="font-sans text-[13px] flex-1"
-            style={{ color: "#9399AD", padding: "8px 0" }}
+            style={{ color: theme.muted, padding: "8px 0" }}
           >
             Tomador
           </button>
@@ -322,17 +325,18 @@ const PrestadorHome = () => {
         onClick={() => navigate("/app/gerenciar")}
         className="mt-6 w-full rounded-[20px] flex items-center justify-between text-left transition-transform active:scale-95"
         style={{
-          background: "#0B1B3E",
+          background: theme.surface,
           padding: "20px",
-          boxShadow: "0 4px 16px rgba(11,27,62,0.15)",
+          border: `1px solid ${theme.border}`,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
         }}
       >
         <div>
-          <p className="font-sans text-[12px] uppercase text-white/60" style={{ letterSpacing: "1px" }}>
+          <p className="font-sans text-[12px] uppercase" style={{ color: theme.muted, letterSpacing: "1px" }}>
             Ganhos da semana
           </p>
           <div className="flex items-center gap-2 mt-1">
-            <span className="font-display text-[24px] font-bold text-white">R$ 0,00</span>
+            <span className="font-display text-[24px] font-bold" style={{ color: theme.text }}>R$ 0,00</span>
           </div>
         </div>
         <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
@@ -342,28 +346,28 @@ const PrestadorHome = () => {
 
       {/* Serviços Configurados */}
       <section className="mt-8">
-        <h2 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E", marginBottom: 12 }}>
+        <h2 className="font-display text-[16px] font-bold" style={{ color: theme.text, marginBottom: 12 }}>
           Meus Serviços Ativos
         </h2>
         <div className="flex flex-col gap-3">
           
           {hasMototaxi && (
             <div
-              className="flex items-center w-full bg-white rounded-[20px] p-4 text-left"
-              style={{ boxShadow: "0 2px 8px rgba(11,27,62,0.04)", border: "1px solid #EFF0F3" }}
+              className="flex items-center w-full rounded-[20px] p-4 text-left"
+              style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "#E6FAF4" }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
                 <Bike size={24} color="#0DB87E" />
               </div>
               <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/online")}>
-                <h3 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>Mototaxi</h3>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178", marginTop: 2 }}>Corridas e Entregas</p>
+                <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Mototaxi</h3>
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Corridas e Entregas</p>
               </div>
               <button
                 type="button"
                 onClick={(e) => toggleService(e, 'mototaxi')}
                 className="w-[52px] h-[28px] rounded-full relative transition-colors"
-                style={{ background: activeServices.mototaxi ? "#0DB87E" : "#D8DBE5" }}
+                style={{ background: activeServices.mototaxi ? "#0DB87E" : theme.border }}
               >
                 <span
                   className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
@@ -375,21 +379,21 @@ const PrestadorHome = () => {
 
           {hasAmbulante && (
             <div
-              className="flex items-center w-full bg-white rounded-[20px] p-4 text-left"
-              style={{ boxShadow: "0 2px 8px rgba(11,27,62,0.04)", border: "1px solid #EFF0F3" }}
+              className="flex items-center w-full rounded-[20px] p-4 text-left"
+              style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "#E6FAF4" }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
                 <ShoppingBag size={24} color="#0DB87E" />
               </div>
               <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/ambulantes/online")}>
-                <h3 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>Ambulante</h3>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178", marginTop: 2 }}>Vendas de produtos</p>
+                <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Ambulante</h3>
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Vendas de produtos</p>
               </div>
               <button
                 type="button"
                 onClick={(e) => toggleService(e, 'ambulante')}
                 className="w-[52px] h-[28px] rounded-full relative transition-colors"
-                style={{ background: activeServices.ambulante ? "#0DB87E" : "#D8DBE5" }}
+                style={{ background: activeServices.ambulante ? "#0DB87E" : theme.border }}
               >
                 <span
                   className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
@@ -401,21 +405,21 @@ const PrestadorHome = () => {
 
           {hasDiarista && (
             <div
-              className="flex items-center w-full bg-white rounded-[20px] p-4 text-left"
-              style={{ boxShadow: "0 2px 8px rgba(11,27,62,0.04)", border: "1px solid #EFF0F3" }}
+              className="flex items-center w-full rounded-[20px] p-4 text-left"
+              style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "#E6FAF4" }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
                 <Sparkles size={24} color="#0DB87E" />
               </div>
               <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/diaristas/agenda")}>
-                <h3 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>Diarista</h3>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178", marginTop: 2 }}>Limpeza e Faxina</p>
+                <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Diarista</h3>
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Limpeza e Faxina</p>
               </div>
               <button
                 type="button"
                 onClick={(e) => toggleService(e, 'diarista')}
                 className="w-[52px] h-[28px] rounded-full relative transition-colors"
-                style={{ background: activeServices.diarista ? "#0DB87E" : "#D8DBE5" }}
+                style={{ background: activeServices.diarista ? "#0DB87E" : theme.border }}
               >
                 <span
                   className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
@@ -427,21 +431,21 @@ const PrestadorHome = () => {
 
           {hasCoco && (
             <div
-              className="flex items-center w-full bg-white rounded-[20px] p-4 text-left"
-              style={{ boxShadow: "0 2px 8px rgba(11,27,62,0.04)", border: "1px solid #EFF0F3" }}
+              className="flex items-center w-full rounded-[20px] p-4 text-left"
+              style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "#E6FAF4" }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
                 <Recycle size={24} color="#0DB87E" />
               </div>
               <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/coco/online")}>
-                <h3 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>Côco & Cia</h3>
-                <p className="font-sans text-[13px]" style={{ color: "#5B6178", marginTop: 2 }}>Coleta e Reciclagem</p>
+                <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Côco & Cia</h3>
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Coleta e Reciclagem</p>
               </div>
               <button
                 type="button"
                 onClick={(e) => toggleService(e, 'coco')}
                 className="w-[52px] h-[28px] rounded-full relative transition-colors"
-                style={{ background: activeServices.coco ? "#0DB87E" : "#D8DBE5" }}
+                style={{ background: activeServices.coco ? "#0DB87E" : theme.border }}
               >
                 <span
                   className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
@@ -453,7 +457,7 @@ const PrestadorHome = () => {
 
           {!hasMototaxi && !hasAmbulante && !hasDiarista && !hasCoco && (
             <div className="text-center py-6">
-              <p className="font-sans text-[14px]" style={{ color: "#9399AD" }}>Você ainda não configurou nenhum serviço.</p>
+              <p className="font-sans text-[14px]" style={{ color: theme.muted }}>Você ainda não configurou nenhum serviço.</p>
             </div>
           )}
         </div>
@@ -467,7 +471,7 @@ const PrestadorHome = () => {
               className="block w-2.5 h-2.5 rounded-full"
               style={{ background: "#0DB87E", animation: "ubt-pulse-dot 1.4s ease-in-out infinite" }}
             />
-            <h2 className="font-display text-[16px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>
               Recebendo Pedidos...
             </h2>
           </div>
@@ -475,17 +479,17 @@ const PrestadorHome = () => {
           <div className="flex flex-col gap-3">
             {/* Ambulante Orders */}
             {activeServices.ambulante && pedidosAmbulante.map(p => (
-              <div key={p.id} className="bg-white rounded-2xl p-4 border border-[#0DB87E] shadow-sm relative overflow-hidden">
+              <div key={p.id} className="rounded-2xl p-4 border border-[#0DB87E] shadow-sm relative overflow-hidden" style={{ background: theme.surface }}>
                 <div className="absolute top-0 right-0 bg-[#0DB87E] text-white font-sans text-[10px] font-bold uppercase px-3 py-1 rounded-bl-xl">
                   Novo Pedido
                 </div>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-[#E6FAF4] flex items-center justify-center text-[18px]">
+                  <div className="w-10 h-10 rounded-full bg-[#E6FAF4]/15 flex items-center justify-center text-[18px]">
                     {p.pedido_itens?.[0]?.emoji || '🛍️'}
                   </div>
                   <div>
-                    <p className="font-display text-[15px] font-bold text-[#0B1B3E]">Venda Ambulante</p>
-                    <p className="font-sans text-[12px] text-[#5B6178]">{p.pedido_itens?.length || 0} itens • {p.modalidade === 'delivery' ? 'Entrega' : 'Retirada'}</p>
+                    <p className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Venda Ambulante</p>
+                    <p className="font-sans text-[12px]" style={{ color: theme.subtle }}>{p.pedido_itens?.length || 0} itens • {p.modalidade === 'delivery' ? 'Entrega' : 'Retirada'}</p>
                   </div>
                   <div className="ml-auto text-right">
                     <p className="font-display text-[16px] font-bold text-[#0DB87E]">R$ {p.total.toFixed(2)}</p>
@@ -493,12 +497,12 @@ const PrestadorHome = () => {
                 </div>
                 
                 {p.modalidade === 'delivery' && (
-                  <div className="bg-[#F7F8FA] rounded-xl p-3 mb-3">
-                    <p className="font-sans text-[12px] text-[#5B6178] flex items-center gap-1">
+                  <div className="rounded-xl p-3 mb-3" style={{ background: theme.bg }}>
+                    <p className="font-sans text-[12px] flex items-center gap-1" style={{ color: theme.subtle }}>
                       <MapPin size={14} color="#E84040"/> {p.delivery_address || "Endereço não informado"}
                     </p>
                     {p.delivery_referencia && (
-                      <p className="font-sans text-[11px] text-[#0B1B3E] font-semibold mt-1">
+                      <p className="font-sans text-[11px] font-semibold mt-1" style={{ color: theme.text }}>
                         Ref: {p.delivery_referencia}
                       </p>
                     )}
@@ -517,33 +521,33 @@ const PrestadorHome = () => {
 
             {/* Ambulante Placeholder */}
             {activeServices.ambulante && pedidosAmbulante.length === 0 && (
-              <div className="bg-white rounded-2xl p-4 border border-[#EFF0F3] shadow-sm text-center">
-                <ShoppingBag size={28} color="#9399AD" className="mx-auto mb-2 opacity-50" />
-                <p className="font-sans text-[13px] text-[#5B6178]">Aguardando novos pedidos de Ambulante...</p>
+              <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
+                <ShoppingBag size={28} className="mx-auto mb-2 opacity-50" style={{ color: theme.muted }} />
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle }}>Aguardando novos pedidos de Ambulante...</p>
               </div>
             )}
 
             {/* Mototaxi Placeholder */}
             {activeServices.mototaxi && (
-              <div className="bg-white rounded-2xl p-4 border border-[#EFF0F3] shadow-sm text-center">
-                <Bike size={28} color="#9399AD" className="mx-auto mb-2 opacity-50" />
-                <p className="font-sans text-[13px] text-[#5B6178]">Aguardando chamados de Mototaxi na sua região...</p>
+              <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
+                <Bike size={28} className="mx-auto mb-2 opacity-50" style={{ color: theme.muted }} />
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle }}>Aguardando chamados de Mototaxi na sua região...</p>
               </div>
             )}
 
             {/* Diarista Placeholder */}
             {activeServices.diarista && (
-              <div className="bg-white rounded-2xl p-4 border border-[#EFF0F3] shadow-sm text-center">
-                <Sparkles size={28} color="#9399AD" className="mx-auto mb-2 opacity-50" />
-                <p className="font-sans text-[13px] text-[#5B6178]">Você será notificado se surgirem serviços de limpeza compatíveis.</p>
+              <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
+                <Sparkles size={28} className="mx-auto mb-2 opacity-50" style={{ color: theme.muted }} />
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle }}>Você será notificado se surgirem serviços de limpeza compatíveis.</p>
               </div>
             )}
             
             {/* Coco Placeholder */}
             {activeServices.coco && (
-              <div className="bg-white rounded-2xl p-4 border border-[#EFF0F3] shadow-sm text-center">
-                <Recycle size={28} color="#9399AD" className="mx-auto mb-2 opacity-50" />
-                <p className="font-sans text-[13px] text-[#5B6178]">Aguardando rotas de coleta na região.</p>
+              <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
+                <Recycle size={28} className="mx-auto mb-2 opacity-50" style={{ color: theme.muted }} />
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle }}>Aguardando rotas de coleta na região.</p>
               </div>
             )}
           </div>
@@ -552,42 +556,40 @@ const PrestadorHome = () => {
 
       {/* Adicionar Novo Serviço */}
       <section className="mt-8">
-        <h2 className="font-display text-[14px] font-bold" style={{ color: "#9399AD", marginBottom: 12, textTransform: "uppercase", letterSpacing: "1px" }}>
+        <h2 className="font-display text-[14px] font-bold" style={{ color: theme.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "1px" }}>
           Mais Oportunidades
         </h2>
         <div className="flex flex-col gap-3">
           {!hasMototaxi && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed border-[#D8DBE5] rounded-[20px] p-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-[#EFF0F3] flex items-center justify-center flex-shrink-0"><Bike size={20} color="#9399AD" /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold text-[#5B6178]">Mototaxi</h3><p className="font-sans text-[12px] text-[#9399AD]">Configurar serviço</p></div>
-              <ChevronRight size={18} color="#D8DBE5" />
+            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Bike size={20} color={theme.muted} /></div>
+              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Mototaxi</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar serviço</p></div>
+              <ChevronRight size={18} color={theme.border} />
             </button>
           )}
           {!hasAmbulante && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/ambulantes/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed border-[#D8DBE5] rounded-[20px] p-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-[#EFF0F3] flex items-center justify-center flex-shrink-0"><ShoppingBag size={20} color="#9399AD" /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold text-[#5B6178]">Ambulante</h3><p className="font-sans text-[12px] text-[#9399AD]">Configurar vendas</p></div>
-              <ChevronRight size={18} color="#D8DBE5" />
+            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/ambulantes/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><ShoppingBag size={20} color={theme.muted} /></div>
+              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Ambulante</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar vendas</p></div>
+              <ChevronRight size={18} color={theme.border} />
             </button>
           )}
           {!hasDiarista && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/diaristas/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed border-[#D8DBE5] rounded-[20px] p-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-[#EFF0F3] flex items-center justify-center flex-shrink-0"><Sparkles size={20} color="#9399AD" /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold text-[#5B6178]">Diarista</h3><p className="font-sans text-[12px] text-[#9399AD]">Configurar agenda</p></div>
-              <ChevronRight size={18} color="#D8DBE5" />
+            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/diaristas/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Sparkles size={20} color={theme.muted} /></div>
+              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Diarista</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar agenda</p></div>
+              <ChevronRight size={18} color={theme.border} />
             </button>
           )}
           {!hasCoco && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/coco/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed border-[#D8DBE5] rounded-[20px] p-4 text-left">
-              <div className="w-10 h-10 rounded-full bg-[#EFF0F3] flex items-center justify-center flex-shrink-0"><Recycle size={20} color="#9399AD" /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold text-[#5B6178]">Côco & Cia</h3><p className="font-sans text-[12px] text-[#9399AD]">Tornar-se coletor</p></div>
-              <ChevronRight size={18} color="#D8DBE5" />
+            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/coco/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Recycle size={20} color={theme.muted} /></div>
+              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Côco & Cia</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Tornar-se coletor</p></div>
+              <ChevronRight size={18} color={theme.border} />
             </button>
           )}
         </div>
       </section>
-
-
 
       <style>{`
         @keyframes ubt-pulse-dot {

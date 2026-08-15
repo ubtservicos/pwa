@@ -8,7 +8,7 @@ import { getMaterial } from "@/mocks/cocoMateriais";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { formatDist, haversineKm } from "@/utils/geo";
 import { useSimpleToast } from "@/hooks/useToast2";
-import { MapRef, LIGHT_TILES, ATTRIBUTION } from "@/components/UBTMap";
+import { MapRef, DARK_TILES, ATTRIBUTION } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -912,8 +912,8 @@ const CocoOnlinePage = () => {
 
   return (
     <div
-      className="relative overflow-hidden"
-      style={{ height: "100svh", background: "#F7F8FA" }}
+      className="relative overflow-hidden text-zinc-100"
+      style={{ height: "100svh", background: "var(--prestador-bg)" }}
     >
       {/* Botões do Topo */}
       <button
@@ -925,13 +925,13 @@ const CocoOnlinePage = () => {
           left: 16,
           width: 40,
           height: 40,
-          background: "white",
-          border: "1px solid #D8DBE5",
-          boxShadow: "0 2px 8px rgba(11,27,62,0.10)",
+          background: "var(--prestador-card)",
+          border: "1px solid var(--prestador-border)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.20)",
           cursor: "pointer"
         }}
       >
-        <ArrowLeft size={20} color="#0B1B3E" />
+        <ArrowLeft size={20} color="#FFFFFF" />
       </button>
 
 
@@ -944,7 +944,7 @@ const CocoOnlinePage = () => {
           zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} />
+          <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
           <MapRef mapRef={mapRef} />
           <Marker position={[myLocation.lat, myLocation.lng]} icon={getTruckIcon(isOnline, true)} />
           {pontos.map((p) => (
@@ -1035,21 +1035,22 @@ const CocoOnlinePage = () => {
 
       {/* Bottom sheet */}
       <div
-        className="absolute left-0 right-0 bottom-0 z-[1010]"
+        className="absolute left-0 right-0 bottom-0 z-[1010] text-zinc-100"
         style={{
-          background: "white",
+          background: "var(--prestador-card)",
           borderRadius: "24px 24px 0 0",
           padding: "12px 20px 96px",
-          boxShadow: "0 -4px 24px rgba(11,27,62,0.12)",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.20)",
           maxHeight: "60svh",
           overflowY: "auto",
+          border: "1px solid var(--prestador-border)"
         }}
       >
         <div
           style={{
             width: 40,
             height: 4,
-            background: "#D8DBE5",
+            background: "var(--prestador-border)",
             borderRadius: 999,
             margin: "0 auto 12px",
           }}
@@ -1058,9 +1059,9 @@ const CocoOnlinePage = () => {
         {/* Toggle Online/Offline */}
         <div
           style={{
-            background: "white",
+            background: "var(--prestador-bg)",
             borderRadius: 16,
-            boxShadow: "0 2px 8px rgba(11,27,62,0.06)",
+            border: "1px solid var(--prestador-border)",
             padding: 20,
             display: "flex",
             alignItems: "center",
@@ -1074,7 +1075,7 @@ const CocoOnlinePage = () => {
             style={{
               width: 60,
               height: 32,
-              background: isOnline ? "#0DB87E" : "#D8DBE5",
+              background: isOnline ? "#0DB87E" : "var(--prestador-border)",
               border: "none",
               cursor: "pointer",
               flexShrink: 0,

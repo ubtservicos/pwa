@@ -162,10 +162,10 @@ const CocoOnboardingPage = () => {
   if (pendingTruck && !ignorarPendente) {
     return (
       <div
-        className="relative"
+        className="relative text-zinc-100"
         style={{
           minHeight: "100svh",
-          background: "#F7F8FA",
+          background: "var(--prestador-bg)",
           padding: 24,
           display: "flex",
           flexDirection: "column",
@@ -175,9 +175,9 @@ const CocoOnboardingPage = () => {
       >
         <div
           style={{
-            background: "white",
+            background: "var(--prestador-card)",
             borderRadius: 20,
-            boxShadow: "0 4px 24px rgba(11,27,62,0.10)",
+            border: "1px solid var(--prestador-border)",
             padding: 32,
             textAlign: "center",
             maxWidth: 400,
@@ -185,10 +185,10 @@ const CocoOnboardingPage = () => {
           }}
         >
           <Clock size={48} color="#F5A623" style={{ margin: "0 auto 16px" }} />
-          <h2 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0B1B3E" }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>
             Aprovação Pendente
           </h2>
-          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#5B6178", marginTop: 8, lineHeight: 1.5 }}>
+          <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA", marginTop: 8, lineHeight: 1.5 }}>
             Sua solicitação de cadastro para o caminhão <strong>{pendingTruck.apelido}</strong> ({pendingTruck.plate}) foi enviada.
           </p>
           <div
@@ -237,7 +237,7 @@ const CocoOnboardingPage = () => {
               borderRadius: 999,
               background: "transparent",
               border: "1px solid #D8DBE5",
-              color: "#5B6178",
+              color: "#A1A1AA",
               fontFamily: "DM Sans",
               fontSize: 14,
               cursor: "pointer"
@@ -252,10 +252,10 @@ const CocoOnboardingPage = () => {
 
   return (
     <div
-      className="relative"
+      className="relative text-zinc-100"
       style={{
         minHeight: "100svh",
-        background: "#F7F8FA",
+        background: "var(--prestador-bg)",
         padding: 24,
         display: "flex",
         flexDirection: "column",
@@ -280,10 +280,10 @@ const CocoOnboardingPage = () => {
           aria-label="voltar"
           style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
         >
-          <ArrowLeft size={20} color="#0B1B3E" />
+          <ArrowLeft size={20} color="#FFFFFF" />
         </button>
         <span
-          style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E" }}
+          style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}
         >
           UBT.
         </span>
@@ -291,9 +291,9 @@ const CocoOnboardingPage = () => {
 
       <div
         style={{
-          background: "white",
+          background: "var(--prestador-card)",
           borderRadius: 20,
-          boxShadow: "0 4px 24px rgba(11,27,62,0.10)",
+          border: "1px solid var(--prestador-border)",
           padding: 32,
           textAlign: "center",
           maxWidth: 420,
@@ -304,10 +304,10 @@ const CocoOnboardingPage = () => {
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
           <Truck size={40} color="#0DB87E" />
         </div>
-        <p style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#0B1B3E" }}>
+        <p style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "#FFFFFF" }}>
           Côco & Cia Onboarding
         </p>
-        <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#5B6178", marginTop: 6 }}>
+        <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "#A1A1AA", marginTop: 6 }}>
           {showApplyForm 
             ? "Preencha a ficha cadastral do caminhão para revisão da UBT." 
             : "Associe-se a um caminhão para começar a registrar suas coletas."
@@ -384,7 +384,7 @@ const CocoOnboardingPage = () => {
               />
 
               <div>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#0B1B3E", marginBottom: 6, display: "block" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#FFFFFF", marginBottom: 6, display: "block" }}>
                   Seu papel na ONG
                 </span>
                 <div style={{ display: "flex", gap: 10 }}>
@@ -399,9 +399,9 @@ const CocoOnboardingPage = () => {
                       fontWeight: 600,
                       cursor: "pointer",
                       border: "1px solid",
-                      borderColor: roleSolicitada === "cocoecia-colaborador" ? "#0DB87E" : "#D8DBE5",
-                      background: roleSolicitada === "cocoecia-colaborador" ? "rgba(13,184,126,0.08)" : "white",
-                      color: roleSolicitada === "cocoecia-colaborador" ? "#0DB87E" : "#5B6178",
+                      borderColor: roleSolicitada === "cocoecia-colaborador" ? "#0DB87E" : "var(--prestador-border)",
+                      background: roleSolicitada === "cocoecia-colaborador" ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
+                      color: roleSolicitada === "cocoecia-colaborador" ? "#0DB87E" : "#A1A1AA",
                       transition: "all 200ms"
                     }}
                   >
@@ -418,9 +418,9 @@ const CocoOnboardingPage = () => {
                       fontWeight: 600,
                       cursor: "pointer",
                       border: "1px solid",
-                      borderColor: roleSolicitada === "cocoecia-dirigentes" ? "#0DB87E" : "#D8DBE5",
-                      background: roleSolicitada === "cocoecia-dirigentes" ? "rgba(13,184,126,0.08)" : "white",
-                      color: roleSolicitada === "cocoecia-dirigentes" ? "#0DB87E" : "#5B6178",
+                      borderColor: roleSolicitada === "cocoecia-dirigentes" ? "#0DB87E" : "var(--prestador-border)",
+                      background: roleSolicitada === "cocoecia-dirigentes" ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
+                      color: roleSolicitada === "cocoecia-dirigentes" ? "#0DB87E" : "#A1A1AA",
                       transition: "all 200ms"
                     }}
                   >
@@ -445,7 +445,7 @@ const CocoOnboardingPage = () => {
               )}
 
               <div>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#0B1B3E", marginBottom: 6, display: "block" }}>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "#FFFFFF", marginBottom: 6, display: "block" }}>
                   Áreas Atendidas Inicialmente
                 </span>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -463,9 +463,9 @@ const CocoOnboardingPage = () => {
                           fontWeight: 600,
                           cursor: "pointer",
                           border: "1px solid",
-                          borderColor: sel ? "#0DB87E" : "#D8DBE5",
-                          background: sel ? "rgba(13,184,126,0.10)" : "white",
-                          color: sel ? "#0DB87E" : "#5B6178",
+                          borderColor: sel ? "#0DB87E" : "var(--prestador-border)",
+                          background: sel ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
+                          color: sel ? "#0DB87E" : "#A1A1AA",
                           transition: "all 200ms"
                         }}
                       >
@@ -505,8 +505,8 @@ const CocoOnboardingPage = () => {
                     minHeight: 44,
                     borderRadius: 999,
                     background: "transparent",
-                    border: "1px solid #D8DBE5",
-                    color: "#5B6178",
+                    border: "1px solid var(--prestador-border)",
+                    color: "#A1A1AA",
                     fontFamily: "DM Sans",
                     fontSize: 13,
                     cursor: "pointer"
@@ -557,23 +557,24 @@ const CocoOnboardingPage = () => {
               left: 0,
               right: 0,
               bottom: 0,
-              background: "white",
+              background: "var(--prestador-card)",
               borderRadius: "20px 20px 0 0",
               padding: 24,
               zIndex: 51,
+              border: "1px solid var(--prestador-border)"
             }}
           >
             <div
               style={{
                 width: 40,
                 height: 4,
-                background: "#D8DBE5",
+                background: "var(--prestador-border)",
                 borderRadius: 999,
                 margin: "0 auto 16px",
               }}
             />
             <p
-              style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#0B1B3E" }}
+              style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}
             >
               Como entrar para a frota
             </p>
@@ -581,7 +582,7 @@ const CocoOnboardingPage = () => {
               style={{
                 fontFamily: "DM Sans",
                 fontSize: 14,
-                color: "#5B6178",
+                color: "#A1A1AA",
                 marginTop: 8,
               }}
             >
@@ -595,8 +596,8 @@ const CocoOnboardingPage = () => {
                 minHeight: 44,
                 borderRadius: 999,
                 background: "transparent",
-                border: "1px solid #D8DBE5",
-                color: "#5B6178",
+                border: "1px solid var(--prestador-border)",
+                color: "#A1A1AA",
                 fontFamily: "DM Sans",
                 fontSize: 14,
                 cursor: "pointer",
