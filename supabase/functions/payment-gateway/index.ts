@@ -81,10 +81,14 @@ async function createPixPayment({
   transactionAmount,
   description,
   payerEmail,
+  externalReference,
+  metadata,
 }: {
   transactionAmount: number;
   description: string;
   payerEmail: string;
+  externalReference?: string;
+  metadata?: Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
   const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST");
 
@@ -95,13 +99,15 @@ async function createPixPayment({
   // Unique idempotency key per attempt — prevents duplicate charges on retries
   const idempotencyKey = crypto.randomUUID();
 
-  const mpPayload = {
+  const mpPayload: Record<string, unknown> = {
     transaction_amount: transactionAmount,
     description,
     payment_method_id: "pix",
-    payer: {
-      email: payerEmail,
-    },
+    payer: { email: payerEmail },
+    // external_reference is the key link between MP and our internal pagamentos_split table.
+    // Format convention: "<entity>_<id>_ts_<timestamp>" (e.g. "pedido_uuid-abc_ts_1234567890")
+    ...(externalReference ? { external_reference: externalReference } : {}),
+    ...(metadata ? { metadata } : {}),
   };
 
   const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -145,7 +151,7 @@ serve(async (req: Request): Promise<Response> => {
     // ROUTE: PIX Payment Intent
     // ----------------------------------------------------------------
     if (action === "create_payment_intent") {
-      const { transaction_amount, description, payer_email } = body;
+      const { transaction_amount, description, payer_email, external_reference, metadata } = body;
 
       // --- Input validation ---
       if (typeof transaction_amount !== "number" || transaction_amount <= 0) {
@@ -172,6 +178,8 @@ serve(async (req: Request): Promise<Response> => {
         transactionAmount: transaction_amount,
         description,
         payerEmail: payer_email,
+        externalReference: external_reference,
+        metadata,
       });
 
       // --- Audit log: persist raw MP response immutably ---
@@ -208,6 +216,8 @@ serve(async (req: Request): Promise<Response> => {
         payment_id: mpData.id,
         status: mpData.status,
         status_detail: mpData.status_detail,
+        // external_reference ties the MP payment_id back to pagamentos_split.transaction_id
+        external_reference: external_reference ?? null,
         ticket_url: txData?.ticket_url ?? null,
         qr_code: txData?.qr_code ?? null,           // "Copia e Cola"
         qr_code_base64: txData?.qr_code_base64 ?? null,
