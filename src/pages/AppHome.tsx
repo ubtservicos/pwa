@@ -180,21 +180,7 @@ const AppHome = () => {
           </div>
         </div>
       )}
-      {/* Dev profile switcher */}
-      <div className="mb-3 flex items-center gap-2">
-        <span className="font-sans text-[10px] uppercase" style={{ color: "rgba(255,255,255,0.35)", letterSpacing: 1 }}>
-          Logado como:
-        </span>
-        <span
-          className="px-2 py-1 rounded-full font-sans text-[10px]"
-          style={{
-            background: "#0DB87E",
-            color: "#fff",
-          }}
-        >
-          {user.role}
-        </span>
-      </div>
+
       {/* Header */}
       <header className="flex items-start justify-between">
         <div>

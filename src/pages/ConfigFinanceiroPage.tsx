@@ -81,9 +81,6 @@ const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSli
   };
 
   const setupDrag = (handleIndex: number) => (e: React.MouseEvent | React.TouchEvent) => {
-    if (e.cancelable) {
-      e.preventDefault();
-    }
     const isTouch = "touches" in e;
     
     const onMove = (moveEvent: MouseEvent | TouchEvent) => {

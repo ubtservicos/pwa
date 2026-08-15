@@ -53,11 +53,8 @@ export default function AdminLoginPage() {
   const inputStyle: React.CSSProperties = {
     width: "100%",
     height: 44,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.10)",
     borderRadius: 10,
     padding: "0 14px 0 40px",
-    color: "#fff",
     fontFamily: "DM Sans",
     fontSize: 14,
     outline: "none",
@@ -65,8 +62,8 @@ export default function AdminLoginPage() {
 
   return (
     <div
+      className="bg-[#09090B] text-zinc-100"
       style={{
-        background: "var(--admin-text)",
         minHeight: "100svh",
         display: "flex",
         alignItems: "center",
@@ -76,42 +73,37 @@ export default function AdminLoginPage() {
     >
       <form
         onSubmit={submit}
-        style={{
-          background: "rgba(255,255,255,0.06)",
-          border: "1px solid rgba(255,255,255,0.10)",
-          borderRadius: 16,
-          padding: 40,
-          width: "100%",
-          maxWidth: 360,
-        }}
+        className="bg-zinc-900 border border-zinc-800 rounded-2xl p-10 w-full max-w-[360px]"
       >
         <div style={{ textAlign: "center" }}>
           <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#fff" }}>UBT.</div>
-          <div style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.50)", marginTop: 4 }}>
+          <div className="text-zinc-400" style={{ fontFamily: "DM Sans", fontSize: 13, marginTop: 4 }}>
             Painel Administrativo
           </div>
         </div>
 
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ position: "relative" }}>
-            <Mail size={16} color="rgba(255,255,255,0.40)" style={{ position: "absolute", left: 14, top: 14 }} />
+            <Mail size={16} className="text-zinc-500" style={{ position: "absolute", left: 14, top: 14 }} />
             <input
               type="email"
               placeholder="admin@ubt.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={inputStyle}
+              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E]"
               autoComplete="email"
             />
           </div>
           <div style={{ position: "relative" }}>
-            <Lock size={16} color="rgba(255,255,255,0.40)" style={{ position: "absolute", left: 14, top: 14 }} />
+            <Lock size={16} className="text-zinc-500" style={{ position: "absolute", left: 14, top: 14 }} />
             <input
               type={show ? "text" : "password"}
               placeholder="••••••••"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               style={{ ...inputStyle, paddingRight: 40 }}
+              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E]"
               autoComplete="current-password"
             />
             <button
@@ -120,7 +112,7 @@ export default function AdminLoginPage() {
               style={{ position: "absolute", right: 12, top: 12, background: "none", border: "none", cursor: "pointer", padding: 2 }}
               aria-label="Mostrar senha"
             >
-              {show ? <EyeOff size={16} color="rgba(255,255,255,0.50)" /> : <Eye size={16} color="rgba(255,255,255,0.50)" />}
+              {show ? <EyeOff size={16} className="text-zinc-500" /> : <Eye size={16} className="text-zinc-500" />}
             </button>
           </div>
         </div>

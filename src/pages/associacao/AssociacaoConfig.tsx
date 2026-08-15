@@ -121,7 +121,7 @@ export default function AssociacaoConfig() {
 
   return (
     <AssociacaoLayout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 pb-32">
         <div>
           <h1 style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 800 }} className="margin-0">
             Configurações Institucionais
