@@ -16,7 +16,11 @@ test.describe("Happy Path & Business Journey Testing Suite (E2E)", () => {
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "serviceWorker", {
         get() {
-          return undefined;
+          return {
+            register: () => Promise.resolve(null),
+            addEventListener: () => {},
+            removeEventListener: () => {},
+          };
         }
       });
     });

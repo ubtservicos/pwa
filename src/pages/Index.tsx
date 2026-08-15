@@ -1213,10 +1213,10 @@ export default function Index() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Card 1: Padrinho */}
-          <div className="lg:col-span-2 p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
+          <div className="lg:col-span-2 p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-yellow-400/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Programa Padrinho / Madrinha
                 </span>
               </div>
@@ -1227,19 +1227,19 @@ export default function Index() {
                 Cada usuário possui um link exclusivo. Compartilhe pelo WhatsApp, QR Code ou redes sociais. Sempre que um prestador indicado por você realizar vendas pela plataforma, você participa do crescimento dele conforme as regras da UBT.
               </p>
             </div>
-            <p className="text-[10px] text-zinc-400 leading-relaxed font-sans p-4 rounded-xl bg-white/5 border border-[#0d5236]/30">
+            <p className="text-[10px] text-yellow-400/90 leading-relaxed font-sans p-4 rounded-xl bg-white/5 border border-[#0d5236]/30">
               O valor das vendas poderá ser destinado ao padrinho/madrinha, conforme a configuração vigente da plataforma e o regulamento aplicável.
             </p>
           </div>
 
           {/* Card 2: Prêmio Trabalhador */}
-          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-yellow-400/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Prêmio Trabalhador
                 </span>
-                <span className="text-2xl font-display font-bold text-amber-500">1%</span>
+                <span className="text-2xl font-display font-bold text-yellow-400">1%</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem trabalha também pode ganhar.
@@ -1248,19 +1248,19 @@ export default function Index() {
                 Parte das vendas realizadas pela plataforma forma um fundo destinado ao Prêmio Trabalhador. O sorteio acontece anualmente em 01 de maio.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4 text-amber-500" /> 1% das vendas compõe este fundo.
+            <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Award className="w-4 h-4 text-yellow-400" /> 1% das vendas compõe este fundo.
             </div>
           </div>
 
           {/* Card 3: Prêmio Consumidor */}
-          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-yellow-400/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Prêmio Consumidor
                 </span>
-                <span className="text-2xl font-display font-bold text-amber-500">1%</span>
+                <span className="text-2xl font-display font-bold text-yellow-400">1%</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem compra também participa.
@@ -1269,16 +1269,16 @@ export default function Index() {
                 Parte das vendas realizadas pela plataforma forma um fundo destinado ao Prêmio Consumidor. O sorteio acontece anualmente em 01 de novembro.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4 text-amber-500" /> 1% das vendas compõe este fundo.
+            <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Award className="w-4 h-4 text-yellow-400" /> 1% das vendas compõe este fundo.
             </div>
           </div>
 
           {/* Card 4: Associações */}
-          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-yellow-400/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Associações
                 </span>
               </div>
@@ -1289,19 +1289,19 @@ export default function Index() {
                 Parte das vendas fortalece financeiramente as associações participantes, permitindo maior apoio aos trabalhadores locais.
               </p>
             </div>
-            <div className="text-[10px] font-semibold text-amber-500 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Users className="w-4 h-4 text-amber-500" /> 2% das vendas revertidos.
+            <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Users className="w-4 h-4 text-yellow-400" /> 2% das vendas revertidos.
             </div>
           </div>
 
           {/* Card 5: Côco & Cia */}
-          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-amber-500/40 transition-all duration-500 flex flex-col justify-between group">
+          <div className="p-8 rounded-3xl border border-[#0d5236]/30 bg-[#0a2e1f] shadow-xl hover:border-yellow-400/40 transition-all duration-500 flex flex-col justify-between group">
             <div>
               <div className="flex justify-between items-center mb-6">
-                <span className="text-[10px] tracking-widest font-mono text-amber-500 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
+                <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Côco & Cia
                 </span>
-                <span className="text-xs font-semibold text-amber-500 flex items-center gap-1">Ecologia</span>
+                <span className="text-xs font-semibold text-yellow-400 flex items-center gap-1">Ecologia</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Tecnologia para cuidar da cidade.
@@ -1310,7 +1310,7 @@ export default function Index() {
                 O cidadão poderá indicar pelo mapa onde deixou materiais recicláveis. A equipe da Côco & Cia realizará a coleta rápida.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-[9px] font-mono text-amber-500/80 tracking-wider uppercase border-t border-[#0d5236]/30 pt-4">
+            <div className="flex flex-wrap gap-2 text-[9px] font-mono text-yellow-400/80 tracking-wider uppercase border-t border-[#0d5236]/30 pt-4">
               <span>Reciclagem</span>
               <span>•</span>
               <span>Ecologia</span>
