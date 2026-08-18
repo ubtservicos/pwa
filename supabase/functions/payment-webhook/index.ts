@@ -13,12 +13,12 @@ const CORS_HEADERS = {
 // ============================================================
 // SUPABASE CLIENT — service_role for audit writes + orchestration
 // ============================================================
-const supabaseUrl            = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  : ({ from: () => { throw new Error("Supabase client not initialized (missing env vars)"); } } as any);
 
 // ============================================================
 // TYPES
@@ -105,7 +105,13 @@ async function fetchMPPaymentStatus(
     },
   });
 
-  const data: MercadoPagoPaymentDetail = await response.json();
+  const rawText = await response.text();
+  let data: MercadoPagoPaymentDetail;
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseErr) {
+    throw new Error(`Invalid JSON from MP (Status ${response.status}): ${rawText}`);
+  }
   return { data, httpStatus: response.status };
 }
 

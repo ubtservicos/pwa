@@ -13,12 +13,12 @@ const CORS_HEADERS = {
 // ============================================================
 // SUPABASE CLIENT — service_role for audit logging + DB writes
 // ============================================================
-const supabaseUrl            = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  : ({ from: () => { throw new Error("Supabase client not initialized (missing env vars)"); } } as any);
 
 // ============================================================
 // TYPES
@@ -276,7 +276,13 @@ async function createPixPayment({
     body: JSON.stringify(mpPayload),
   });
 
-  const data: MercadoPagoPixResponse = await mpResponse.json();
+  const rawText = await mpResponse.text();
+  let data: MercadoPagoPixResponse;
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseErr) {
+    throw new Error(`Invalid JSON from MP (Status ${mpResponse.status}): ${rawText}`);
+  }
 
   return { data, httpStatus: mpResponse.status };
 }
@@ -300,7 +306,15 @@ serve(async (req: Request): Promise<Response> => {
 
   // ---- Central try/catch — all errors MUST be caught and logged ----
   try {
-    const body = await req.json();
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body in request." }),
+        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
     const { action } = body;
 
     // ----------------------------------------------------------------
