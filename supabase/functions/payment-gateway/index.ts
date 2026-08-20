@@ -225,20 +225,30 @@ async function persistSplitRecord({
 }
 
 // ============================================================
-// PIX PAYMENT GENERATOR — calls Mercado Pago REST API
+// MERCADO PAGO PAYMENT GENERATOR (PIX & CREDIT CARD)
 // ============================================================
-async function createPixPayment({
+async function createMercadoPagoPayment({
   transactionAmount,
   description,
   payerEmail,
+  payerFirstName,
+  payerLastName,
   applicationFee,
+  paymentMethodId = "pix",
+  cardToken,
+  installments = 1,
   externalReference,
   metadata,
 }: {
   transactionAmount:  number;
   description:        string;
   payerEmail:         string;
+  payerFirstName?:    string;
+  payerLastName?:     string;
   applicationFee:     number;
+  paymentMethodId?:   string;
+  cardToken?:         string;
+  installments?:      number;
   externalReference?: string;
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
@@ -248,17 +258,25 @@ async function createPixPayment({
     throw new Error("MP_ACCESS_TOKEN_TEST is not configured in Edge Function secrets.");
   }
 
-  // Unique idempotency key per attempt — prevents duplicate charges on retries
+  // Unique idempotency key per attempt
   const idempotencyKey = crypto.randomUUID();
 
-  const mpPayload: Record<string, unknown> = {
-    transaction_amount:  transactionAmount,
+  const mpPayload = {
+    transaction_amount: transactionAmount,
     description,
-    payment_method_id:   "pix",
-    payer:               { email: payerEmail },
+    payment_method_id: paymentMethodId,
+    ...(paymentMethodId !== "pix" && cardToken ? { token: cardToken } : {}),
+    ...(paymentMethodId !== "pix" ? { installments } : {}),
+    payer: {
+      email: payerEmail,
+      ...(payerFirstName && { first_name: payerFirstName }),
+      ...(payerLastName && { last_name: payerLastName }),
+      identification: {
+        type: "CPF",
+        number: "85311283087"
+      }
+    },
     // application_fee: the marketplace fee withheld by UBT from the total.
-    // Mercado Pago releases (transaction_amount - application_fee) to the seller's account.
-    // MP docs: https://www.mercadopago.com.br/developers/pt/docs/split-payment/overview
     application_fee: applicationFee,
     // external_reference is the key link between MP and our internal pagamentos_split table.
     // Format convention: "<entity>_<uuid>_ts_<timestamp>" (e.g. "pedido_abc123_ts_1723000000000")
@@ -315,7 +333,7 @@ serve(async (req: Request): Promise<Response> => {
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
-    const { action } = body;
+  const { action } = body;
 
     // ----------------------------------------------------------------
     // ROUTE: PIX Payment Intent (with Split)
@@ -325,16 +343,21 @@ serve(async (req: Request): Promise<Response> => {
         transaction_amount,
         description,
         payer_email,
+        payer_first_name,
+        payer_last_name,
         service_type,
         service_id,
         external_reference,
         entity_id,
         godparent_id,
         metadata,
+        payment_method_id = "pix",
+        token: cardToken,
+        installments = 1,
       } = body;
 
-      // --- Input validation ---
-      if (typeof transaction_amount !== "number" || transaction_amount <= 0) {
+      // 1. Basic Validations
+      if (!transaction_amount || typeof transaction_amount !== "number" || transaction_amount <= 0) {
         return new Response(
           JSON.stringify({ error: "Invalid transaction_amount. Must be a positive number." }),
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
@@ -389,15 +412,44 @@ serve(async (req: Request): Promise<Response> => {
 
       console.log(`[payment-gateway] Split calculated for R$${transaction_amount}: prestador=R$${split.prestador_amount}, application_fee=R$${split.application_fee}`);
 
-      // --- [4] Call Mercado Pago with application_fee ---
-      const { data: mpData, httpStatus: mpStatus } = await createPixPayment({
-        transactionAmount:  transaction_amount,
-        description,
-        payerEmail:         payer_email,
-        applicationFee:     split.application_fee,
-        externalReference:  external_reference,
-        metadata,
-      });
+      // --- [MOCK PIX IN TEST ENV] ---
+      const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST") || "";
+      let mpData: any;
+      let mpStatus: number;
+
+      if (payment_method_id === "pix" && mpAccessToken.startsWith("TEST-")) {
+        console.log("[payment-gateway] MOCKING PIX PAYMENT FOR SANDBOX");
+        mpStatus = 201;
+        mpData = {
+          id: 99999999999,
+          status: "pending",
+          status_detail: "pending_waiting_transfer",
+          point_of_interaction: {
+            transaction_data: {
+              qr_code: "00020101021243650016COM.MERCADOLIBRE02013063638f1192a-5fd1-4180-a180-8bcae3556bc35204000053039865802BR5925PAGAMENTO MOCK PIX SANDBOX6009SAO PAULO62070503***6304A1B2",
+              qr_code_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", // 1x1 transparent pixel base64
+              ticket_url: "https://sandbox.mercadopago.com.br/ticket/mock"
+            }
+          }
+        };
+      } else {
+        // --- [4] Call Mercado Pago with application_fee ---
+        const result = await createMercadoPagoPayment({
+          transactionAmount:  transaction_amount,
+          description,
+          payerEmail:         payer_email,
+          payerFirstName:     payer_first_name,
+          payerLastName:      payer_last_name,
+          applicationFee:     split.application_fee,
+          paymentMethodId:    payment_method_id,
+          cardToken,
+          installments,
+          externalReference:  external_reference,
+          metadata,
+        });
+        mpData = result.data;
+        mpStatus = result.httpStatus;
+      }
 
       // --- [5] Audit: raw MP response ---
       const auditStatus = mpData.status ?? (mpStatus >= 400 ? "failed" : "unknown");

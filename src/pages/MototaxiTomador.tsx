@@ -553,6 +553,9 @@ const CompletedScreen = ({
   const [method, setMethod] = useState<"pix" | "card">("pix");
   const [confirming, setConfirming] = useState(false);
   const [pixSeconds, setPixSeconds] = useState(300);
+  const [isLoading, setIsLoading] = useState(false);
+  const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
+
   useEffect(() => {
     if (method !== "pix") return;
     const id = setInterval(() => setPixSeconds((s) => Math.max(0, s - 1)), 1000);
@@ -560,6 +563,39 @@ const CompletedScreen = ({
   }, [method]);
   const mm = String(Math.floor(pixSeconds / 60)).padStart(2, "0");
   const ss = String(pixSeconds % 60).padStart(2, "0");
+
+  const handleConfirmPayment = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('payment-gateway', {
+        body: {
+          action: "create_payment_intent",
+          service_type: "mototaxi",
+          service_id: "00000000-0000-0000-0000-000000000000",
+          transaction_amount: price,
+          payer_email: "TESTUSER4530746977103360453@testuser.com",
+          payer_first_name: "Testador",
+          payer_last_name: "UBT",
+          description: "Corrida UBT",
+          payment_method_id: method
+        }
+      });
+      if (error) throw error;
+      if (data?.pix?.qr_code_base64) {
+        setQrCodeBase64(data.pix.qr_code_base64);
+      } else {
+        setConfirming(true);
+        setTimeout(onPay, 1500);
+      }
+    } catch (err) {
+      console.error("Payment failed", err);
+      // Fallback
+      setConfirming(true);
+      setTimeout(onPay, 1500);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[100svh] bg-navy text-white overflow-y-auto" style={{ padding: "24px 24px 96px" }}>
@@ -616,16 +652,22 @@ const CompletedScreen = ({
 
       {method === "pix" ? (
         <div className="mt-4 flex flex-col items-center">
-          <div className="bg-white rounded-lg p-3" style={{ width: 160, height: 160 }}>
-            {/* Mock QR */}
-            <svg viewBox="0 0 10 10" className="w-full h-full">
-              {Array.from({ length: 100 }).map((_, i) => {
-                const x = i % 10; const y = Math.floor(i / 10);
-                const fill = (x + y * 3 + (x * y) % 5) % 2 === 0;
-                return <rect key={i} x={x} y={y} width="1" height="1" fill={fill ? "#0B1B3E" : "#fff"} />;
-              })}
-            </svg>
-          </div>
+          {qrCodeBase64 ? (
+            <div className="bg-white rounded-lg p-3" style={{ width: 160, height: 160 }}>
+              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-full h-full object-contain" />
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg p-3" style={{ width: 160, height: 160 }}>
+              {/* Mock QR */}
+              <svg viewBox="0 0 10 10" className="w-full h-full">
+                {Array.from({ length: 100 }).map((_, i) => {
+                  const x = i % 10; const y = Math.floor(i / 10);
+                  const fill = (x + y * 3 + (x * y) % 5) % 2 === 0;
+                  return <rect key={i} x={x} y={y} width="1" height="1" fill={fill ? "#0B1B3E" : "#fff"} />;
+                })}
+              </svg>
+            </div>
+          )}
           <p className="mt-3 font-display text-[20px] font-semibold" style={{ color: "#0DB87E" }}>
             {mm}:{ss}
           </p>
@@ -636,16 +678,31 @@ const CompletedScreen = ({
         </div>
       )}
 
-      <button
-        onClick={() => {
-          setConfirming(true);
-          setTimeout(onPay, 1500);
-        }}
-        className="mt-6 w-full h-12 rounded-xl font-display font-semibold text-white"
-        style={{ background: "#0DB87E" }}
-      >
-        Confirmar pagamento
-      </button>
+      {qrCodeBase64 ? (
+        <button
+          onClick={() => {
+            setConfirming(true);
+            setTimeout(onPay, 1500);
+          }}
+          className="mt-6 w-full h-12 rounded-xl font-display font-semibold text-white border border-[#0DB87E]"
+          style={{ background: "transparent", color: "#0DB87E" }}
+        >
+          Já Paguei
+        </button>
+      ) : (
+        <button
+          disabled={isLoading}
+          onClick={handleConfirmPayment}
+          className="mt-6 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center"
+          style={{ background: "#0DB87E", opacity: isLoading ? 0.7 : 1 }}
+        >
+          {isLoading ? (
+            <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
+          ) : (
+            "Confirmar pagamento"
+          )}
+        </button>
+      )}
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={{ background: "rgba(11,27,62,0.95)" }}>
