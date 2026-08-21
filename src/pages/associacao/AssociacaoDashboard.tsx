@@ -31,7 +31,9 @@ export default function AssociacaoDashboard() {
 
         const activeCount = active || 24; // fallback mockup
         const pendingCount = pending || 3;
-        const revenue = activeCount * 45.50; // B2B repasse simulation
+        const { data: receitas } = await supabase.from("pagamentos_split").select("entity_amount").eq("status", "approved");
+        const realRevenue = receitas?.reduce((acc, curr) => acc + Number(curr.entity_amount), 0) || 0;
+        const revenue = realRevenue > 0 ? realRevenue : activeCount * 45.50;
 
         setStats({
           activeMembersCount: activeCount,
@@ -280,3 +282,4 @@ export default function AssociacaoDashboard() {
     </AssociacaoLayout>
   );
 }
+

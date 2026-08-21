@@ -42,12 +42,22 @@ export default function AdminPaymentsPage() {
       try {
         setLoading(true);
         const { data, error } = await supabase
-          .from("payments")
-          .select("*")
+          .from("pagamentos_split").select("id, transaction_id, service_type, service_id, total_amount, ubt_amount, provider_amount, status, created_at")
           .order("created_at", { ascending: false });
 
         if (error) throw error;
-        if (data) setPayments(data);
+        if (data) {
+          const mapped = data.map(d => ({
+            ...d,
+            amount: Number(d.total_amount),
+            gateway_payment_id: d.transaction_id,
+            customer_id: "-",
+            provider_id: "-",
+            payment_method: "pix",
+            currency: "BRL"
+          }));
+          setPayments(mapped as any[]);
+        }
       } catch (err) {
         console.error("Erro ao carregar pagamentos:", err);
         toast.show("Erro ao carregar pagamentos.");
@@ -119,6 +129,17 @@ export default function AdminPaymentsPage() {
   return (
     <div style={{ padding: 32 }}>
       <PageTitle sub="Registro completo de pagamentos capturados no Mercado Pago">Pagamentos</PageTitle>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+        <Card style={{ padding: 24 }}>
+          <div style={{ fontSize: 14, color: "var(--admin-muted)" }}>GMV Total (Transacionado)</div>
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#fff", marginTop: 8 }}>{formatBR(payments.reduce((acc, p) => acc + (p.amount || 0), 0))}</div>
+        </Card>
+        <Card style={{ padding: 24 }}>
+          <div style={{ fontSize: 14, color: "var(--admin-muted)" }}>Receita UBT (Retida)</div>
+          <div style={{ fontSize: 32, fontWeight: "bold", color: "#0DB87E", marginTop: 8 }}>{formatBR(payments.reduce((acc, p) => acc + ((p as any).ubt_amount ? Number((p as any).ubt_amount) : 0), 0))}</div>
+        </Card>
+      </div>
 
       {/* Filter panel */}
       <Card style={{ padding: 20, marginBottom: 24, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -377,3 +398,4 @@ export default function AdminPaymentsPage() {
     </div>
   );
 }
+
