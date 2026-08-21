@@ -252,10 +252,11 @@ async function createMercadoPagoPayment({
   externalReference?: string;
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
-  const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST");
+  const isProd = Deno.env.get("ENVIRONMENT") === "production";
+  const mpAccessToken = (isProd ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) || Deno.env.get("MP_ACCESS_TOKEN_TEST");
 
   if (!mpAccessToken) {
-    throw new Error("MP_ACCESS_TOKEN_TEST is not configured in Edge Function secrets.");
+    throw new Error("MP_ACCESS_TOKEN_TEST or MP_ACCESS_TOKEN is not configured in Edge Function secrets.");
   }
 
   // Unique idempotency key per attempt
@@ -413,7 +414,7 @@ serve(async (req: Request): Promise<Response> => {
       console.log(`[payment-gateway] Split calculated for R$${transaction_amount}: prestador=R$${split.prestador_amount}, application_fee=R$${split.application_fee}`);
 
       // --- [MOCK PIX IN TEST ENV] ---
-      const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST") || "";
+      const mpAccessToken = (Deno.env.get("ENVIRONMENT") === "production" ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) || Deno.env.get("MP_ACCESS_TOKEN_TEST") || "";
       let mpData: any;
       let mpStatus: number;
 
@@ -575,3 +576,4 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 });
+
