@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Navigation, Bike, Package, ArrowLeft, Settings } from "lucide-react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
@@ -8,6 +8,7 @@ import { calcPrice, formatBRL } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { isLocationInUbatuba } from "@/services/GeofenceService";
+import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
 
 const UBATUBA = { lat: -23.4336, lng: -45.0838 };
 
@@ -259,35 +260,35 @@ const PrestadorMototaxiOnline = () => {
     };
 
     fetchActiveChamado();
-
-    const channel = supabase
-      .channel('public:mototaxi_corridas')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'mototaxi_corridas', filter: 'status=eq.searching' },
-        (payload: any) => {
-          if (payload.new) {
-            const c = payload.new;
-            const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-            const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-            setChamado({
-              id: c.id,
-              type: c.type,
-              origin: originObj.address || 'Origem',
-              destination: destObj.address || 'Destino',
-              distanceKm: Number(c.distance_km),
-              durationMin: c.duration_min,
-              price: Number(c.estimated_price)
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user.uid]);
+
+  // Realtime subscription with auto-reconnect (replaces raw .subscribe())
+  const handleNewCorrida = useCallback((payload: any) => {
+    if (payload.new) {
+      const c = payload.new;
+      const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
+      const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
+      setChamado({
+        id: c.id,
+        type: c.type,
+        origin: originObj.address || 'Origem',
+        destination: destObj.address || 'Destino',
+        distanceKm: Number(c.distance_km),
+        durationMin: c.duration_min,
+        price: Number(c.estimated_price)
+      });
+    }
+  }, []);
+
+  useRealtimeChannel(
+    'public:mototaxi_corridas',
+    { event: 'INSERT', table: 'mototaxi_corridas', filter: 'status=eq.searching' },
+    handleNewCorrida,
+    (status) => {
+      if (status === 'reconnecting') toast.info('Reconectando ao servidor...');
+      if (status === 'error') toast.error('Conexão perdida. Atualize a página.');
+    }
+  );
 
   const goOffline = async () => {
     if (watchIdRef.current !== null && navigator.geolocation) {
@@ -309,16 +310,24 @@ const PrestadorMototaxiOnline = () => {
   const accept = async () => {
     if (!chamado) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('mototaxi_corridas')
         .update({
           status: 'accepted',
           prestador_id: user.uid,
           accepted_at: new Date().toISOString()
         })
-        .eq('id', chamado.id);
+        .eq('id', chamado.id)
+        .eq('status', 'searching')
+        .is('prestador_id', null)
+        .select('id')
+        .single();
 
-      if (error) throw error;
+      if (error || !data) {
+        alert('Esta corrida já foi aceita por outro motorista.');
+        setChamado(null);
+        return;
+      }
 
       sessionStorage.setItem("ubt_active_ride", JSON.stringify(chamado));
       setChamado(null);

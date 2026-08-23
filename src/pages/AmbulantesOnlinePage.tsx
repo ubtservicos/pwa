@@ -304,15 +304,22 @@ const AmbulantesOnlinePage = () => {
       });
   };
 
-  const aceitarPedido = () => {
+  const aceitarPedido = async () => {
     if (!activeOrder) return;
     if (!activeOrder.id.startsWith("demo-")) {
-      supabase.from('pedidos')
+      const { data, error } = await supabase.from('pedidos')
         .update({ status: "confirmed" })
         .eq('id', activeOrder.id)
-        .then(({ error }) => {
-          if (error) console.error("Erro ao aceitar pedido no Supabase:", error);
-        });
+        .eq('status', 'pending')
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        alert("Este pedido já foi aceito ou cancelado.");
+        setShowOrderModal(false);
+        setActiveOrder(null);
+        return;
+      }
     }
     setShowOrderModal(false);
     navigate(`/app/prestador/ambulantes/pedido/${activeOrder.id}`);

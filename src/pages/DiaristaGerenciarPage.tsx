@@ -122,15 +122,33 @@ const DiaristaGerenciarPage = () => {
     return () => clearInterval(iv);
   }, [status]);
 
+  // State machine: which status is required before transitioning to the next
+  const EXPECTED_PREV: Record<string, string> = {
+    confirmed: "pending_confirm",
+    in_progress: "confirmed",
+    completed: "in_progress",
+    cancelled_diarista: "pending_confirm",
+  };
+
   const updateStatus = async (nextStatus: AgStatus) => {
     if (!id) return;
     try {
-      const { error } = await supabase
+      const expectedPrev = EXPECTED_PREV[nextStatus];
+      let query = supabase
         .from("diarista_agendamentos")
         .update({ status: nextStatus })
         .eq("id", id);
 
-      if (error) throw error;
+      if (expectedPrev) {
+        query = query.eq("status", expectedPrev);
+      }
+
+      const { data, error } = await query.select("id").single();
+
+      if (error || !data) {
+        alert("Este agendamento já foi alterado. Atualize a página.");
+        return;
+      }
 
       setStatus(nextStatus);
       setAgendamento((prev) => {

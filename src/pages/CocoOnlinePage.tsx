@@ -311,18 +311,28 @@ const CocoOnlinePage = () => {
   const agendarColeta = async (pontoId: string) => {
     const startTime = Date.now();
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("coco_pontos")
         .update({
           status: "confirmado",
           caminhao_id: caminhaoId,
           horario_previsto: horarioSel
         })
-        .eq("id", pontoId);
+        .eq("id", pontoId)
+        .eq("status", "aguardando")
+        .is("caminhao_id", null)
+        .select("id")
+        .single();
 
       const duration = Date.now() - startTime;
 
-      if (error) throw error;
+      if (error || !data) {
+        alert("Este ponto já foi agendado por outro caminhão.");
+        setShowAgendarModal(null);
+        setSelectedPonto(null);
+        fetchPontos();
+        return;
+      }
       trackEvent("pickup_requested", "operational", { vertical: "coco", ponto_id: pontoId, caminhao_id: caminhaoId });
       logSystem("INFO", "COCO", "pickup_requested", "success", duration, undefined, undefined, { ponto_id: pontoId, caminhao_id: caminhaoId });
       showToast("🚚 Rota de coleta confirmada!");

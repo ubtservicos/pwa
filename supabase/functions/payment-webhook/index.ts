@@ -136,8 +136,30 @@ async function claimWebhookEvent(eventId: string, paymentId: string): Promise<bo
   if (error) {
     // PostgreSQL unique violation code = '23505'
     if (error.code === "23505") {
+      // Check if the previous attempt is stuck in 'processing' (timeout > 5 min)
+      const { data: existing } = await supabaseAdmin
+        .from("marketplace_webhook_events")
+        .select("processing_status, attempts, created_at")
+        .eq("event_id", eventId)
+        .single();
+
+      if (
+        existing &&
+        existing.processing_status === "processing" &&
+        (Date.now() - new Date(existing.created_at).getTime()) > 300_000
+      ) {
+        // Stuck event — allow retry by resetting status
+        console.warn(`[payment-webhook] Stuck event ${eventId} detected (>5min in processing). Permitting retry.`);
+        await supabaseAdmin
+          .from("marketplace_webhook_events")
+          .update({ processing_status: "retrying", attempts: (existing.attempts || 1) + 1 })
+          .eq("event_id", eventId);
+        return true; // Allow reprocessing
+      }
+
+      // Genuinely completed duplicate — skip safely
       console.warn(`[payment-webhook] Duplicate event ${eventId} — skipping (idempotent).`);
-      return false; // Already processed
+      return false;
     }
     // Other DB error — re-throw for central handler
     throw new Error(`[payment-webhook] Failed to claim event ${eventId}: ${error.message}`);
@@ -188,13 +210,14 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
   }
 
   if (!splits || splits.length === 0) {
-    console.warn(`[payment-webhook] No pagamentos_split found for transaction_id=${external_reference}. May be a direct PIX without split record.`);
+    console.error(`[payment-webhook] CRITICAL: No pagamentos_split found for transaction_id=${external_reference}. Forcing MP retry.`);
     await logAuditEvent({
-      transactionType: "order_fulfillment_skipped",
-      status: "warning",
+      transactionType: "order_fulfillment_missing_split",
+      status: "error",
       payload: { mp_payment_id: mpId, external_reference, reason: "no_split_record_found" },
     });
-    return;
+    // THROW to force HTTP 500 → Mercado Pago will retry the webhook
+    throw new Error(`No split record found for transaction_id=${external_reference}. Forcing retry.`);
   }
 
   const split = splits[0];
@@ -364,8 +387,8 @@ serve(async (req: Request): Promise<Response> => {
 
     const paymentId = String(data.id);
     // Use MP's notification id as event_id for idempotency.
-    // Fall back to a composite key if not present.
-    const eventId = String(webhookBody.id ?? `${type}_${paymentId}_${Date.now()}`);
+    // Fall back to a DETERMINISTIC composite key (no Date.now!) so retries are deduped.
+    const eventId = String(webhookBody.id ?? `${type}_${paymentId}`);
 
     // --- [5] Idempotency guard: claim the event exclusively ---
     const claimed = await claimWebhookEvent(eventId, paymentId);
