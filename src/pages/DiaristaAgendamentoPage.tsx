@@ -81,7 +81,7 @@ const DiaristaAgendamentoPage = () => {
       let token = "pix_payment";
       if (paymentMethod === "card") {
         const activeCard = savedCards[selectedCardIndex];
-        token = localStorage.getItem(`card_token_${activeCard.final}`) || "mock_token";
+        token = localStorage.getItem(`card_token_${activeCard.final}`) || "";
       }
 
       // 2. Chamar a Edge Function de checkout segura no backend
@@ -92,7 +92,7 @@ const DiaristaAgendamentoPage = () => {
           body: {
             service_type: "diarista",
             service_id: ag.id,
-            customer_id: localStorage.getItem("ubt_current_user_id") || "mock-customer",
+            customer_id: localStorage.getItem("ubt_current_user_id") || "",
             provider_id: ag.diaristId,
             amount: ag.valorTotal,
             payment_method: paymentMethod,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { User, Bike, X, Search, ShieldAlert, Ban, UserCheck, AlertTriangle, Plus, Trash2 } from "lucide-react";
-import { MOCK_TICKETS, AdminTicket } from "@/mocks/adminData";
+import { AdminTicket } from "@/mocks/adminData";
 import { Card, Pill, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -8,7 +8,7 @@ import { getStatusRules, saveStatusRules, STATUS_THEMES, StatusRule } from "@/li
 
 export default function AdminArbitragemPage() {
   const toast = useAdminToast();
-  const [tickets, setTickets] = useState<AdminTicket[]>(MOCK_TICKETS);
+  const [tickets, setTickets] = useState<AdminTicket[]>([]);
   const [tab, setTab] = useState<"open" | "closed" | "rules">("open");
   const [sel, setSel] = useState<AdminTicket | null>(null);
   const [usersList, setUsersList] = useState<any[]>([]);

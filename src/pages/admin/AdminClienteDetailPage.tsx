@@ -187,10 +187,11 @@ export default function AdminClienteDetailPage() {
     const isDiarista = !!diarista;
 
     const categories: string[] = [];
-    if (dbUser.nome === "Zé do Coco" || dbUser.nome === "Maria do Milho") {
-      categories.push("Reciclagem", "Diarista", "Mototaxi");
-    } else if (dbUser.nome === "João Souza") {
-      categories.push("Diarista", "Mototaxi");
+    if (isColab) {
+      categories.push("Reciclagem");
+    }
+    if (isDiarista) {
+      categories.push("Diarista");
     } else {
       if (isColab) categories.push("Reciclagem");
       if (isDiarista) categories.push("Diarista");
@@ -199,12 +200,12 @@ export default function AdminClienteDetailPage() {
     }
 
     const cleanName = dbUser.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".");
-    const ratingVal = diarista ? Number(diarista.rating || 5.0) : (dbUser.role === "prestador" ? 4.8 : null);
-    const totalRidesVal = diarista ? Number(diarista.total_servicos || 0) : (dbUser.role === "prestador" ? 15 : undefined);
+    const ratingVal = diarista ? Number(diarista.rating || 5.0) : null;
+    const totalRidesVal = diarista ? Number(diarista.total_servicos || 0) : undefined;
 
-    const ticketsConsumidor = filtered.filter((p: any) => p.tomador_id === id && validStatuses.includes(p.status)).length + 5;
+    const ticketsConsumidor = filtered.filter((p: any) => p.tomador_id === id && validStatuses.includes(p.status)).length;
     const ticketsTrabalhador = (dbUser.role === "prestador" || isColab || isDiarista)
-      ? filtered.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length + 8
+      ? filtered.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length
       : 0;
     const contribComunidade = (pagos + recebidos) * 0.01;
     const donations = getDonations(id || "", contribComunidade);
@@ -213,12 +214,12 @@ export default function AdminClienteDetailPage() {
       id: dbUser.id,
       name: dbUser.nome,
       role: dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador" ? "prestador" : "tomador",
-      email: `${cleanName}@example.com`,
-      phone: dbUser.phone || "(24) 99999-9999",
+      email: dbUser.email || "Não informado",
+      phone: dbUser.phone || "Não cadastrado",
       createdAt: dbUser.created_at || new Date().toISOString(),
       kycStatus: dbUser.role === "prestador" || isColab ? "approved" : "pending",
       categories: categories.length > 0 ? categories : undefined,
-      plate: caminhao?.plate || (dbUser.role === "prestador" && !isDiarista ? "MOTO-1234" : undefined),
+      plate: caminhao?.plate || undefined,
       rating: ratingVal,
       totalRides: totalRidesVal,
       pagos,

@@ -571,11 +571,11 @@ const CompletedScreen = ({
         body: {
           action: "create_payment_intent",
           service_type: "mototaxi",
-          service_id: "00000000-0000-0000-0000-000000000000",
+          service_id: state.rideId || "",
           transaction_amount: price,
-          payer_email: "TESTUSER4530746977103360453@testuser.com",
-          payer_first_name: "Testador",
-          payer_last_name: "UBT",
+          payer_email: user.email || session?.user?.email || "",
+          payer_first_name: (user.name || "Cliente").split(" ")[0],
+          payer_last_name: (user.name || "UBT").split(" ").slice(1).join(" ") || "UBT",
           description: "Corrida UBT",
           payment_method_id: method
         }
@@ -1200,6 +1200,11 @@ const MototaxiTomadorPage = () => {
   const handleArrive = () => setState({ status: "in_progress" });
   const handleComplete = () => setState({ status: "completed", finalPrice: state.estimatedPrice });
   const handlePay = async () => {
+    if (!user.uid) {
+      toast.error("Sessão expirada. Faça login novamente.");
+      window.location.href = "/login";
+      return;
+    }
     // Tenta chamar a Edge Function segura no backend
     try {
       const securityMetadata = collectPaymentMetadata();
@@ -1207,8 +1212,8 @@ const MototaxiTomadorPage = () => {
         body: {
           service_type: "mototaxi",
           service_id: state.rideId,
-          customer_id: user.uid || "mock-customer",
-          provider_id: "mock-driver-id",
+          customer_id: user.uid,
+          provider_id: state.prestadorId || "",
           amount: state.finalPrice || state.estimatedPrice,
           payment_method: state.paymentMethod || "pix",
           metadata: securityMetadata

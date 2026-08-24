@@ -93,7 +93,7 @@ export default function AdminSorteioTrabPage() {
         const dbVol = confirmedPedidos
           .filter(p => validStatuses.includes(p.status))
           .reduce((acc, p) => acc + Number(p.total || 0), 0);
-        setTotalVolume(54200.00 + dbVol);
+        setTotalVolume(dbVol);
 
         const mapped: WorkerParticipant[] = (dbUsers || [])
           .map((u: any) => {
@@ -116,7 +116,7 @@ export default function AdminSorteioTrabPage() {
 
             // Worker baseline of 8 tickets + completed orders count multiplied by tickets per ride (1 ticket per 0.5% prize split)
             const ticketsPerRide = Math.floor(currentSplit / 0.5);
-            const ticketsCount = 8 + completed * ticketsPerRide;
+            const ticketsCount = completed * ticketsPerRide;
 
             return {
               id: u.id,

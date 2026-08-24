@@ -29,11 +29,10 @@ export default function AssociacaoDashboard() {
         const active = members?.filter((m) => m.status === "active").length || 0;
         const pending = members?.filter((m) => m.status === "pending").length || 0;
 
-        const activeCount = active || 24; // fallback mockup
-        const pendingCount = pending || 3;
+        const activeCount = active;
+        const pendingCount = pending;
         const { data: receitas } = await supabase.from("pagamentos_split").select("entity_amount").eq("status", "approved");
-        const realRevenue = receitas?.reduce((acc, curr) => acc + Number(curr.entity_amount), 0) || 0;
-        const revenue = realRevenue > 0 ? realRevenue : activeCount * 45.50;
+        const revenue = receitas?.reduce((acc, curr) => acc + Number(curr.entity_amount), 0) || 0;
 
         setStats({
           activeMembersCount: activeCount,
@@ -43,9 +42,9 @@ export default function AssociacaoDashboard() {
       } catch (e) {
         console.error(e);
         setStats({
-          activeMembersCount: 48,
-          totalRepasseAmount: 1254.80,
-          pendingMembersCount: 5,
+          activeMembersCount: 0,
+          totalRepasseAmount: 0,
+          pendingMembersCount: 0,
         });
       } finally {
         setLoading(false);
@@ -55,43 +54,10 @@ export default function AssociacaoDashboard() {
     loadStats();
   }, []);
 
-  // Dynamic Chart mock data based on TimeFilter
+  // Chart data — returns empty until real data pipeline is connected
   const getChartData = () => {
-    switch (timeFilter) {
-      case "hoje":
-        return [
-          { name: "08:00", repasses: 12, valor: 24.50 },
-          { name: "12:00", repasses: 28, valor: 56.80 },
-          { name: "16:00", repasses: 18, valor: 36.20 },
-          { name: "20:00", repasses: 32, valor: 64.90 },
-        ];
-      case "semana":
-        return [
-          { name: "Seg", repasses: 35, valor: 78.40 },
-          { name: "Ter", repasses: 48, valor: 104.20 },
-          { name: "Qua", repasses: 40, valor: 90.10 },
-          { name: "Qui", repasses: 55, valor: 121.50 },
-          { name: "Sex", repasses: 70, valor: 165.80 },
-          { name: "Sáb", repasses: 85, valor: 198.30 },
-          { name: "Dom", repasses: 60, valor: 134.70 },
-        ];
-      case "mes":
-        return [
-          { name: "Semana 1", repasses: 180, valor: 412.50 },
-          { name: "Semana 2", repasses: 210, valor: 485.20 },
-          { name: "Semana 3", repasses: 245, valor: 560.80 },
-          { name: "Semana 4", repasses: 290, valor: 685.40 },
-        ];
-      case "personalizado":
-        return [
-          { name: "Março", repasses: 850, valor: 1890.00 },
-          { name: "Abril", repasses: 920, valor: 2104.50 },
-          { name: "Maio", repasses: 1100, valor: 2540.80 },
-          { name: "Junho", repasses: 1050, valor: 2410.20 },
-          { name: "Julho", repasses: 1200, valor: 2854.60 },
-          { name: "Agosto", repasses: 1450, valor: 3412.80 },
-        ];
-    }
+    // TODO: Query pagamentos_split grouped by date range for real chart data
+    return [] as { name: string; repasses: number; valor: number }[];
   };
 
   const cardData = [

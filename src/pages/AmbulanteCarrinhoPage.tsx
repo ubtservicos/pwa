@@ -119,12 +119,15 @@ const AmbulanteCarrinhoPage = () => {
       qty: i.qty, precoUnit: i.precoUnit, subtotal: i.subtotal,
     }));
 
-    const tomadorId = user.uid && user.uid.length === 36 ? user.uid : '60e0a5ba-1941-4c7d-8153-f72be1c70e06';
+    if (!user.uid || user.uid.length !== 36) {
+      alert("Sessão expirada. Faça login novamente.");
+      window.location.href = "/login";
+      return;
+    }
+    const tomadorId = user.uid;
 
     // Garante que o usuário existe na tabela public.usuarios para não falhar a Foreign Key
-    if (tomadorId !== '60e0a5ba-1941-4c7d-8153-f72be1c70e06') {
-      await supabase.from('usuarios').upsert({ id: tomadorId, nome: user.name || 'Usuário', role: 'tomador' });
-    }
+    await supabase.from('usuarios').upsert({ id: tomadorId, nome: user.name || 'Usuário', role: 'tomador' });
 
     const { data: dbData, error } = await supabase.from('pedidos').insert({
       tomador_id: tomadorId,

@@ -103,8 +103,8 @@ const AmbulantePedidoPage = () => {
         body: {
           service_type: "ambulante",
           service_id: id,
-          customer_id: user.uid || "mock-customer",
-          provider_id: state.prestadorInfo?.id || "mock-provider",
+          customer_id: user.uid || "",
+          provider_id: state.prestadorInfo?.id || "",
           amount: total,
           payment_method: paymentMethod,
           metadata: securityMetadata

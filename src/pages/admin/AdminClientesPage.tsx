@@ -155,10 +155,11 @@ export default function AdminClientesPage() {
       const caminhao = caminhoesMap.get(u.id);
       
       const categories: string[] = [];
-      if (u.nome === "Zé do Coco" || u.nome === "Maria do Milho") {
-        categories.push("Reciclagem", "Diarista", "Mototaxi");
-      } else if (u.nome === "João Souza") {
-        categories.push("Diarista", "Mototaxi");
+      if (isColab) {
+        categories.push("Reciclagem");
+      }
+      if (isDiarista) {
+        categories.push("Diarista");
       } else {
         if (isColab) categories.push("Reciclagem");
         if (isDiarista) categories.push("Diarista");
@@ -167,8 +168,8 @@ export default function AdminClientesPage() {
       }
 
       const cleanName = u.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".");
-      const ratingVal = isDiarista ? Number(diaristasMap.get(u.id).rating || 5.0) : (u.role === "prestador" ? 4.8 : null);
-      const totalRidesVal = isDiarista ? Number(diaristasMap.get(u.id).total_servicos || 0) : (u.role === "prestador" ? 15 : undefined);
+      const ratingVal = isDiarista ? Number(diaristasMap.get(u.id).rating || 5.0) : null;
+      const totalRidesVal = isDiarista ? Number(diaristasMap.get(u.id).total_servicos || 0) : undefined;
 
       const userPedidos = filteredPedidos || [];
       const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
@@ -182,9 +183,9 @@ export default function AdminClientesPage() {
         .reduce((acc: number, p: any) => acc + Number(p.total || 0), 0);
 
       const birthMonth = getBirthMonth(u.id);
-      const ticketsConsumidor = userPedidos.filter((p: any) => p.tomador_id === u.id && validStatuses.includes(p.status)).length + 5;
+      const ticketsConsumidor = userPedidos.filter((p: any) => p.tomador_id === u.id && validStatuses.includes(p.status)).length;
       const ticketsTrabalhador = (u.role === "prestador" || isColab || isDiarista)
-        ? userPedidos.filter((p: any) => p.prestador_id === u.id && validStatuses.includes(p.status)).length + 8
+        ? userPedidos.filter((p: any) => p.prestador_id === u.id && validStatuses.includes(p.status)).length
         : 0;
       const contribComunidade = (pagos + recebidos) * 0.01;
       const donations = getDonations(u.id, contribComunidade);
@@ -194,12 +195,12 @@ export default function AdminClientesPage() {
         id: u.id,
         name: u.nome,
         role: u.role.startsWith("cocoecia") || u.role === "prestador" ? "prestador" : "tomador",
-        email: `${cleanName}@example.com`,
-        phone: u.phone || "(24) 99999-9999",
+        email: u.email || "Não informado",
+        phone: u.phone || "Não cadastrado",
         createdAt: u.created_at || new Date().toISOString(),
         kycStatus: u.role === "prestador" || isColab ? "approved" : "pending",
         categories: categories.length > 0 ? categories : undefined,
-        plate: caminhao?.plate || (u.role === "prestador" && !isDiarista ? "MOTO-1234" : undefined),
+        plate: caminhao?.plate || undefined,
         rating: ratingVal,
         totalRides: totalRidesVal,
         status,

@@ -152,16 +152,24 @@ const DiaristaAgendarPage = () => {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
 
-    const tomadorId = user.uid && user.uid.length === 36 ? user.uid : '60e0a5ba-1941-4c7d-8153-f72be1c70e06';
-    const diaristId = prestadorId && prestadorId.length === 36 ? prestadorId : '11111111-1111-1111-1111-111111111111';
+    if (!user.uid || user.uid.length !== 36) {
+      alert("Sessão expirada. Faça login novamente.");
+      window.location.href = "/login";
+      return;
+    }
+    const tomadorId = user.uid;
+    const diaristId = prestadorId && prestadorId.length === 36 ? prestadorId : "";
+
+    if (!diaristId) {
+      alert("Erro: diarista não identificada.");
+      return;
+    }
 
     // Garante que o usuário existe na tabela public.usuarios para não falhar a Foreign Key
-    if (tomadorId !== '60e0a5ba-1941-4c7d-8153-f72be1c70e06') {
-      try {
-        await supabase.from('usuarios').upsert({ id: tomadorId, nome: user.name || 'Usuário', role: 'tomador' });
-      } catch (err) {
-        console.error("Erro ao upsertar usuario no Supabase:", err);
-      }
+    try {
+      await supabase.from('usuarios').upsert({ id: tomadorId, nome: user.name || 'Usuário', role: 'tomador' });
+    } catch (err) {
+      console.error("Erro ao upsertar usuario no Supabase:", err);
     }
 
     const payload = {

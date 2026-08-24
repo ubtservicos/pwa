@@ -85,7 +85,7 @@ export const useCurrentUser = (): RealUser => {
     
     fetchSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user && active) {
         // Executar busca do db de forma assíncrona não-bloqueante na próxima microtask
         setTimeout(() => {
@@ -94,12 +94,21 @@ export const useCurrentUser = (): RealUser => {
           }
         }, 50);
       } else if (!session && active) {
+        // Session expired or user signed out — redirect to login
         setUser({
           uid: "",
           name: "Visitante",
           role: "tomador",
-          isLoading: false, // Deslogado, carregamento finalizado
+          isLoading: false,
         });
+
+        if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+          // Only redirect if we're on a protected page (not already on login/landing)
+          const path = window.location.pathname;
+          if (path !== "/login" && path !== "/" && !path.startsWith("/admin/login")) {
+            window.location.href = "/login";
+          }
+        }
       }
     });
 

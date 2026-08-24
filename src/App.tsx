@@ -9,6 +9,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { RideProvider } from "@/contexts/RideContext";
 import { AmbulantePedidoProvider } from "@/contexts/AmbulantePedidoContext";
 import GlobalBottomNav from "@/components/app/GlobalBottomNav";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+
+const OfflineBanner = () => {
+  const isOnline = useNetworkStatus();
+  if (isOnline) return null;
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 99999,
+      background: "#E84040", color: "white", textAlign: "center",
+      padding: "8px 16px", fontSize: 13, fontWeight: 600,
+    }}>
+      ⚠️ Você está sem conexão com a internet
+    </div>
+  );
+};
 import AmbulantesDiscoveryPage from "./pages/AmbulantesDiscoveryPage.tsx";
 import AmbulanteCatalogPage from "./pages/AmbulanteCatalogPage.tsx";
 import AmbulanteCarrinhoPage from "./pages/AmbulanteCarrinhoPage.tsx";
@@ -115,6 +130,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <OfflineBanner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <RideProvider>
           <AmbulantePedidoProvider>

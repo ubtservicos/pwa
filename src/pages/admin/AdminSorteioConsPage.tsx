@@ -86,7 +86,7 @@ export default function AdminSorteioConsPage() {
         const dbVol = confirmedPedidos
           .filter(p => validStatuses.includes(p.status))
           .reduce((acc, p) => acc + Number(p.total || 0), 0);
-        setTotalVolume(54200.00 + dbVol);
+        setTotalVolume(dbVol);
 
         const mapped: ConsumerParticipant[] = (dbUsers || [])
           .map((u: any) => {
@@ -97,7 +97,7 @@ export default function AdminSorteioConsPage() {
 
             // Consumer baseline of 5 tickets + completed orders count multiplied by tickets per ride (1 ticket per 0.5% prize split)
             const ticketsPerRide = Math.floor(currentSplit / 0.5);
-            const ticketsCount = 5 + completed * ticketsPerRide;
+            const ticketsCount = completed * ticketsPerRide;
 
             return {
               id: u.id,
