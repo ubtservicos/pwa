@@ -384,50 +384,59 @@ const CocoPage = () => {
         >
           <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
           <MapRef mapRef={mapRef} />
-          <Marker position={[center.lat, center.lng]} icon={tomadorIcon} />
-          {pontos.map((p) => (
-            <Marker
-              key={p.id}
-              position={[p.lat, p.lng]}
-              icon={getPinIcon(p.material)}
-              opacity={p.status === "coletado" ? 0.4 : 1}
-              eventHandlers={{ click: () => setSelectedPonto(p) }}
-            >
-              {selectedPonto?.id === p.id && (
-                <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
-                  <div style={{ minWidth: 160, fontFamily: "DM Sans" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
-                      {p.address}
-                    </p>
-                    <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
-                      {getMaterial(p.material).emoji} {getMaterial(p.material).nome}
-                    </p>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: 6,
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        background: p.status === "coletado" ? "rgba(13,184,126,0.15)" : "rgba(245,166,35,0.15)",
-                        color: p.status === "coletado" ? "#0DB87E" : "#F5A623",
-                      }}
-                    >
-                      {p.status === "coletado" ? "✅ Coletado" : "⏳ Aguardando"}
-                    </span>
-                  </div>
-                </Popup>
-              )}
-            </Marker>
-          ))}
-          {caminhoes.map((c) => (
-            <Marker
-              key={c.id}
-              position={[c.location.lat, c.location.lng]}
-              icon={getTruckIcon(c.isOnline)}
-              eventHandlers={{ click: () => setSelectedCaminhao(c) }}
-            >
+          <Marker position={[center?.lat || -23.4332, center?.lng || -45.0711]} icon={tomadorIcon} />
+          {pontos.map((p) => {
+            if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
+            const lat = Number(p.lat);
+            const lng = Number(p.lng);
+            return (
+              <Marker
+                key={p.id}
+                position={[lat, lng]}
+                icon={getPinIcon(p.material)}
+                opacity={p.status === "coletado" ? 0.4 : 1}
+                eventHandlers={{ click: () => setSelectedPonto(p) }}
+              >
+                {selectedPonto?.id === p.id && (
+                  <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
+                    <div style={{ minWidth: 160, fontFamily: "DM Sans" }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
+                        {p.address}
+                      </p>
+                      <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
+                        {getMaterial(p.material).emoji} {getMaterial(p.material).nome}
+                      </p>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          marginTop: 6,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          background: p.status === "coletado" ? "rgba(13,184,126,0.15)" : "rgba(245,166,35,0.15)",
+                          color: p.status === "coletado" ? "#0DB87E" : "#F5A623",
+                        }}
+                      >
+                        {p.status === "coletado" ? "✅ Coletado" : "⏳ Aguardando"}
+                      </span>
+                    </div>
+                  </Popup>
+                )}
+              </Marker>
+            );
+          })}
+          {caminhoes.map((c) => {
+            if (!c.location?.lat || !c.location?.lng || isNaN(Number(c.location.lat)) || isNaN(Number(c.location.lng))) return null;
+            const lat = Number(c.location.lat);
+            const lng = Number(c.location.lng);
+            return (
+              <Marker
+                key={c.id}
+                position={[lat, lng]}
+                icon={getTruckIcon(c.isOnline)}
+                eventHandlers={{ click: () => setSelectedCaminhao(c) }}
+              >
               {selectedCaminhao?.id === c.id && (
                 <Popup eventHandlers={{ remove: () => setSelectedCaminhao(null) }}>
                   <div style={{ minWidth: 160, fontFamily: "DM Sans" }}>

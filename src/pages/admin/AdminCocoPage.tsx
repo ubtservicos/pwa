@@ -689,7 +689,7 @@ export default function AdminCocoPage() {
           <Card style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 600 }}>
             <div style={{ height: "100%", width: "100%", position: "relative" }}>
               <MapContainer
-                center={[UBATUBA_CENTER.lat, UBATUBA_CENTER.lng]}
+                center={[UBATUBA_CENTER?.lat || -23.4332, UBATUBA_CENTER?.lng || -45.0711]}
                 zoom={13}
                 style={{ height: "100%", width: "100%", minHeight: 600 }}
               >
@@ -697,42 +697,52 @@ export default function AdminCocoPage() {
                 <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} />
 
                 {/* Marcadores de Pontos de Coleta */}
-                {pontos.map((p) => (
-                  <Marker
-                    key={p.id}
-                    position={[Number(p.lat), Number(p.lng)]}
-                    icon={getPinIcon(p.material)}
-                  >
-                    <Popup>
-                      <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
-                        <strong>{p.address}</strong>
-                        <p style={{ margin: "4px 0" }}>Material: {getMaterial(p.material).nome}</p>
-                        {p.quantidade_estimada && <p style={{ margin: "2px 0", color: "#555" }}>Qtd: {p.quantidade_estimada}</p>}
-                        {p.local_armazenamento && <p style={{ margin: "2px 0", color: "#555" }}>Local: {p.local_armazenamento}</p>}
-                        <span style={{ fontSize: 11, fontWeight: 700, color: p.status === "coletado" ? "#0DB87E" : "#F5A623" }}>
-                          Status: {p.status}
-                        </span>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
+                {pontos.map((p) => {
+                  if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
+                  const lat = Number(p.lat);
+                  const lng = Number(p.lng);
+                  return (
+                    <Marker
+                      key={p.id}
+                      position={[lat, lng]}
+                      icon={getPinIcon(p.material)}
+                    >
+                      <Popup>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
+                          <strong>{p.address || "Ponto de Coleta"}</strong>
+                          <p style={{ margin: "4px 0" }}>Material: {getMaterial(p.material).nome}</p>
+                          {p.quantidade_estimada && <p style={{ margin: "2px 0", color: "#555" }}>Qtd: {p.quantidade_estimada}</p>}
+                          {p.local_armazenamento && <p style={{ margin: "2px 0", color: "#555" }}>Local: {p.local_armazenamento}</p>}
+                          <span style={{ fontSize: 11, fontWeight: 700, color: p.status === "coletado" ? "#0DB87E" : "#F5A623" }}>
+                            Status: {p.status}
+                          </span>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
 
                 {/* Marcadores de Caminhões */}
-                {caminhoesAprovados.map((c) => (
-                  <Marker
-                    key={c.id}
-                    position={[Number(c.lat || UBATUBA_CENTER.lat), Number(c.lng || UBATUBA_CENTER.lng)]}
-                    icon={getTruckIcon(c.is_online)}
-                  >
-                    <Popup>
-                      <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
-                        <strong>🚚 {c.apelido}</strong>
-                        <p style={{ margin: "4px 0" }}>Placa: {c.plate}</p>
-                        <p style={{ margin: "2px 0" }}>Status: {c.is_online ? "🟢 Ativo no Trânsito" : "⚪ Desconectado"}</p>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
+                {caminhoesAprovados.map((c) => {
+                  if (!c.lat || !c.lng || isNaN(Number(c.lat)) || isNaN(Number(c.lng))) return null;
+                  const lat = Number(c.lat);
+                  const lng = Number(c.lng);
+                  return (
+                    <Marker
+                      key={c.id}
+                      position={[lat, lng]}
+                      icon={getTruckIcon(c.is_online)}
+                    >
+                      <Popup>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
+                          <strong>🚚 {c.apelido}</strong>
+                          <p style={{ margin: "4px 0" }}>Placa: {c.plate}</p>
+                          <p style={{ margin: "2px 0" }}>Status: {c.is_online ? "🟢 Ativo no Trânsito" : "⚪ Desconectado"}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
               </MapContainer>
 
               <div style={mapOverlayStyle}>

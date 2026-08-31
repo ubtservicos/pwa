@@ -93,13 +93,16 @@ const MototaxiMap = ({ origin, destination, prestadorLocation, status, center, o
       {prestadorLocation && (
         <Marker position={[prestadorLocation.lat, prestadorLocation.lng]} icon={motoIcon(true)} />
       )}
-      {onlineDrivers && onlineDrivers.map((d) => (
-        <Marker 
-          key={d.id} 
-          position={[Number(d.lat), Number(d.lng)]} 
-          icon={motoIcon(true)} 
-        />
-      ))}
+      {onlineDrivers && onlineDrivers.map((d) => {
+        if (!d.lat || !d.lng || isNaN(Number(d.lat)) || isNaN(Number(d.lng))) return null;
+        return (
+          <Marker 
+            key={d.id} 
+            position={[Number(d.lat), Number(d.lng)]} 
+            icon={motoIcon(true)} 
+          />
+        );
+      })}
       {polyline.length > 0 && (
         <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
       )}

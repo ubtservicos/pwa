@@ -948,7 +948,7 @@ const CocoOnlinePage = () => {
 
       <div style={{ height: "55svh", position: "relative" }}>
         <MapContainer
-          center={[myLocation.lat, myLocation.lng]}
+          center={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]}
           zoom={15}
           style={{ width: "100%", height: "400px" }}
           zoomControl={false}
@@ -956,14 +956,18 @@ const CocoOnlinePage = () => {
         >
           <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
           <MapRef mapRef={mapRef} />
-          <Marker position={[myLocation.lat, myLocation.lng]} icon={getTruckIcon(isOnline, true)} />
-          {pontos.map((p) => (
-            <Marker
-              key={p.id}
-              position={[p.lat, p.lng]}
-              icon={getPinIcon(p.material)}
-              eventHandlers={{ click: () => setSelectedPonto(p) }}
-            >
+          <Marker position={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]} icon={getTruckIcon(isOnline, true)} />
+          {pontos.map((p) => {
+            if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
+            const lat = Number(p.lat);
+            const lng = Number(p.lng);
+            return (
+              <Marker
+                key={p.id}
+                position={[lat, lng]}
+                icon={getPinIcon(p.material)}
+                eventHandlers={{ click: () => setSelectedPonto(p) }}
+              >
               {selectedPonto?.id === p.id && (
                 <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
                   <div style={{ padding: 4, minWidth: 180, fontFamily: "DM Sans" }}>
