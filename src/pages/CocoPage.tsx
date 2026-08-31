@@ -2,7 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { ArrowLeft, Check, CheckCircle, Crosshair, MapPin } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Check, 
+  CheckCircle, 
+  Crosshair, 
+  MapPin, 
+  Info, 
+  Camera, 
+  Package, 
+  Home, 
+  Sparkles, 
+  HelpCircle, 
+  X,
+  UploadCloud,
+  Layers,
+  Clock
+} from "lucide-react";
 import { MATERIAIS_COCO, getMaterial } from "@/mocks/cocoMateriais";
 import {
   MOCK_COCO_CONFIG,
@@ -73,6 +89,10 @@ const CocoPage = () => {
   const [coordenadas, setCoordenadas] = useState<{ lat: number; lng: number } | null>(null);
   const [materialSel, setMaterialSel] = useState<string | null>(null);
   const [fotoSel, setFotoSel] = useState<string | null>(null);
+  const [quantidadeEstimada, setQuantidadeEstimada] = useState<string>("");
+  const [localArmazenamento, setLocalArmazenamento] = useState<string>("");
+  const [dicasMateriais, setDicasMateriais] = useState<Record<string, { titulo: string; conteudo_html: string }>>({});
+  const [activeMaterialDica, setActiveMaterialDica] = useState<{ id: string; nome: string; emoji: string; cor: string; titulo?: string; html?: string } | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [pontoConfirmadoId, setPontoConfirmadoId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -87,6 +107,28 @@ const CocoPage = () => {
   const mapRef = useRef<L.Map | null>(null);
 
   const { coords: geoCoords, address: geoAddress, refresh: refreshGeo } = useGeolocation();
+
+  // Fetch educational tips for recyclable materials
+  useEffect(() => {
+    const fetchDicas = async () => {
+      try {
+        const { data } = await supabase.from("coco_dicas_materiais").select("*");
+        if (data && data.length > 0) {
+          const mapped: Record<string, { titulo: string; conteudo_html: string }> = {};
+          data.forEach((d: any) => {
+            mapped[d.material_id] = {
+              titulo: d.titulo || `Como descartar ${d.material_id}`,
+              conteudo_html: d.conteudo_html
+            };
+          });
+          setDicasMateriais(mapped);
+        }
+      } catch (e) {
+        console.warn("Dicas materiais offline fallback:", e);
+      }
+    };
+    fetchDicas();
+  }, []);
 
   const fetchCaminhoes = async () => {
     const { data, error } = await supabase
@@ -222,6 +264,8 @@ const CocoPage = () => {
           address: endereco,
           material: materialSel ?? "misto",
           foto_url: fotoSel || null,
+          quantidade_estimada: quantidadeEstimada || null,
+          local_armazenamento: localArmazenamento || null,
           status: "aguardando"
         })
         .select()
@@ -241,6 +285,8 @@ const CocoPage = () => {
     setEndereco("");
     setMaterialSel(null);
     setFotoSel(null);
+    setQuantidadeEstimada("");
+    setLocalArmazenamento("");
     setCoordenadas(null);
   };
 
@@ -481,112 +527,253 @@ const CocoPage = () => {
                   </button>
                 </div>
 
-                <div style={{ marginTop: 14 }}>
-                  <p
-                    style={{
-                      fontFamily: "DM Sans",
-                      fontSize: 12,
-                      color: "rgba(255,255,255,0.45)",
-                      marginBottom: 8,
-                    }}
-                  >
-                    Tipo de material (opcional)
-                  </p>
-                  <div
-                    style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}
-                  >
+                {/* 2. Tipo de material com Tooltip Educativo */}
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.70)", fontWeight: 600 }}>
+                      Tipo de material reciclável (opcional)
+                    </p>
+                    <span style={{ fontSize: 11, color: "#0DB87E", fontFamily: "DM Sans" }}>
+                      Toque no ⓘ para ver o manual
+                    </span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                     {MATERIAIS_COCO.map((m) => {
                       const sel = materialSel === m.id;
+                      const dica = dicasMateriais[m.id];
                       return (
-                        <button
+                        <div
                           key={m.id}
-                          onClick={() => setMaterialSel(sel ? null : m.id)}
                           style={{
-                            borderRadius: 10,
-                            padding: "8px 4px",
-                            cursor: "pointer",
+                            position: "relative",
+                            borderRadius: 12,
                             border: "1.5px solid",
                             borderColor: sel ? m.cor : "rgba(255,255,255,0.10)",
                             background: sel ? `${m.cor}25` : "rgba(255,255,255,0.04)",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 4,
+                            transition: "all 0.2s",
                           }}
                         >
-                          <span style={{ fontSize: 20 }}>{m.emoji}</span>
-                          <span
+                          <button
+                            type="button"
+                            onClick={() => setMaterialSel(sel ? null : m.id)}
                             style={{
-                              fontFamily: "DM Sans",
-                              fontSize: 10,
-                              fontWeight: 600,
-                              color: sel ? m.cor : "rgba(255,255,255,0.55)",
+                              width: "100%",
+                              padding: "10px 4px 8px",
+                              cursor: "pointer",
+                              background: "none",
+                              border: "none",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: 4,
                             }}
                           >
-                            {m.nome.split("/")[0]}
-                          </span>
-                        </button>
+                            <span style={{ fontSize: 22 }}>{m.emoji}</span>
+                            <span
+                              style={{
+                                fontFamily: "DM Sans",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: sel ? m.cor : "rgba(255,255,255,0.75)",
+                                textAlign: "center",
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              {m.nome.split("/")[0]}
+                            </span>
+                          </button>
+                          
+                          {/* Info Button for Educational Modal */}
+                          <button
+                            type="button"
+                            aria-label={`Dicas de descarte para ${m.nome}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMaterialDica({
+                                id: m.id,
+                                nome: m.nome,
+                                emoji: m.emoji,
+                                cor: m.cor,
+                                titulo: dica?.titulo || `Manual de Descarte: ${m.nome}`,
+                                html: dica?.conteudo_html || `<p>Separe o material limpo e seco para os caminhões da Côco & Cia.</p>`
+                              });
+                            }}
+                            style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              width: 18,
+                              height: 18,
+                              borderRadius: 999,
+                              background: "rgba(255,255,255,0.12)",
+                              border: "none",
+                              color: "rgba(255,255,255,0.7)",
+                              fontSize: 10,
+                              fontWeight: "bold",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                            }}
+                          >
+                            ⓘ
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div style={{ marginTop: 14 }}>
-                  <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 8 }}>
-                    Foto da Embalagem / Sacola (opcional)
-                  </p>
-                  <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                {/* 3. Quantidade Estimada de Resíduos (Novo Requisito) */}
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.70)", fontWeight: 600, marginBottom: 8 }}>
+                    Quantidade Aproximada
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6, marginBottom: 8 }}>
                     {[
-                      { id: "preset_saco_verde", label: "Saco Verde", emoji: "🟢" },
-                      { id: "preset_caixa_papelao", label: "Caixa Papelão", emoji: "📦" },
-                      { id: "preset_caixote_plastico", label: "Caixote Plástico", emoji: "🗑️" }
-                    ].map((p) => {
-                      const sel = fotoSel === p.id;
+                      { id: "1 a 2 sacolas (pequeno)", label: "1 a 2 sacolas", desc: "Pequeno" },
+                      { id: "3 a 5 sacolas (médio)", label: "3 a 5 sacolas", desc: "Médio" },
+                      { id: "Volume grande (+5 sacolas)", label: "Grande volume", desc: "+5 sacolas" },
+                      { id: "Caixas / Fardos fechados", label: "Caixas / Fardos", desc: "Comércio" },
+                    ].map((item) => {
+                      const isSelected = quantidadeEstimada === item.id;
                       return (
                         <button
-                          key={p.id}
+                          key={item.id}
                           type="button"
-                          onClick={() => setFotoSel(sel ? null : p.id)}
+                          onClick={() => setQuantidadeEstimada(isSelected ? "" : item.id)}
                           style={{
-                            borderRadius: 12,
-                            padding: "8px 12px",
-                            background: sel ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: isSelected ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
                             border: "1px solid",
-                            borderColor: sel ? "#0DB87E" : "rgba(255,255,255,0.1)",
-                            color: "white",
+                            borderColor: isSelected ? "#0DB87E" : "rgba(255,255,255,0.10)",
+                            color: isSelected ? "#0DB87E" : "white",
                             fontFamily: "DM Sans",
                             fontSize: 12,
+                            textAlign: "left",
+                            cursor: "pointer",
                             display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            whiteSpace: "nowrap"
+                            flexDirection: "column",
+                            gap: 2,
+                            transition: "all 0.2s"
                           }}
                         >
-                          <span>{p.emoji}</span>
-                          <span>{p.label}</span>
+                          <span style={{ fontWeight: 600 }}>{item.label}</span>
+                          <span style={{ fontSize: 10, color: isSelected ? "rgba(13,184,126,0.8)" : "rgba(255,255,255,0.4)" }}>{item.desc}</span>
                         </button>
                       );
                     })}
-                    
+                  </div>
+                  <input
+                    type="text"
+                    value={quantidadeEstimada}
+                    onChange={(e) => setQuantidadeEstimada(e.target.value)}
+                    placeholder="Ou especifique o volume (ex: 2 bombonas de 20L)"
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      outline: "none",
+                      color: "white",
+                      fontSize: 13,
+                      fontFamily: "DM Sans"
+                    }}
+                  />
+                </div>
+
+                {/* 4. Local de Armazenamento (Novo Requisito) */}
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.70)", fontWeight: 600, marginBottom: 8 }}>
+                    Onde o material estará guardado?
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6, marginBottom: 8 }}>
+                    {[
+                      { id: "Na calçada / lixeira externa", label: "Calçada / Lixeira", desc: "Acesso livre" },
+                      { id: "Na portaria / condomínio", label: "Portaria / Prédio", desc: "Identificado" },
+                      { id: "Garagem / Quintal visível", label: "Garagem / Quintal", desc: "Chamar no portão" },
+                      { id: "Quiosque / Ponto de Praia", label: "Quiosque / Praia", desc: "Orla marítima" },
+                    ].map((item) => {
+                      const isSelected = localArmazenamento === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setLocalArmazenamento(isSelected ? "" : item.id)}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: isSelected ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+                            border: "1px solid",
+                            borderColor: isSelected ? "#0DB87E" : "rgba(255,255,255,0.10)",
+                            color: isSelected ? "#0DB87E" : "white",
+                            fontFamily: "DM Sans",
+                            fontSize: 12,
+                            textAlign: "left",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                            transition: "all 0.2s"
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>{item.label}</span>
+                          <span style={{ fontSize: 10, color: isSelected ? "rgba(13,184,126,0.8)" : "rgba(255,255,255,0.4)" }}>{item.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    value={localArmazenamento}
+                    onChange={(e) => setLocalArmazenamento(e.target.value)}
+                    placeholder="Ponto de referência (ex: Ao lado do portão preto)"
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      outline: "none",
+                      color: "white",
+                      fontSize: 13,
+                      fontFamily: "DM Sans"
+                    }}
+                  />
+                </div>
+
+                {/* 5. Foto da Embalagem / Sacola (Exposição Direta sem Drag/Slide) */}
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.70)", fontWeight: 600, marginBottom: 8 }}>
+                    Foto ou Tipo de Embalagem (opcional)
+                  </label>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {/* Botão Direto de Câmera / Upload */}
                     <label
                       style={{
+                        gridColumn: "span 2",
                         borderRadius: 12,
-                        padding: "8px 12px",
-                        background: fotoSel && !fotoSel.startsWith("preset_") ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
-                        border: "1px solid",
-                        borderColor: fotoSel && !fotoSel.startsWith("preset_") ? "#0DB87E" : "rgba(255,255,255,0.1)",
+                        padding: "12px 16px",
+                        background: fotoSel && !fotoSel.startsWith("preset_") ? "rgba(13,184,126,0.20)" : "rgba(255,255,255,0.06)",
+                        border: "1.5px dashed",
+                        borderColor: fotoSel && !fotoSel.startsWith("preset_") ? "#0DB87E" : "rgba(255,255,255,0.20)",
                         color: "white",
                         fontFamily: "DM Sans",
-                        fontSize: 12,
+                        fontSize: 13,
+                        fontWeight: 600,
                         display: "flex",
                         alignItems: "center",
-                        gap: 6,
+                        justifyContent: "center",
+                        gap: 8,
                         cursor: "pointer",
-                        whiteSpace: "nowrap"
+                        transition: "all 0.2s"
                       }}
                     >
-                      <span>📷</span>
-                      <span>{fotoSel && !fotoSel.startsWith("preset_") ? "Foto Carregada" : "Tirar Foto"}</span>
+                      <Camera size={18} color="#0DB87E" />
+                      <span>{fotoSel && !fotoSel.startsWith("preset_") ? "Foto Carregada (Substituir)" : "Tirar Foto com a Câmera"}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -604,20 +791,61 @@ const CocoPage = () => {
                         style={{ display: "none" }}
                       />
                     </label>
+
+                    {/* Presets Rápidos de Embalagem */}
+                    {[
+                      { id: "preset_saco_verde", label: "Saco Verde", emoji: "🟢" },
+                      { id: "preset_caixa_papelao", label: "Caixa Papelão", emoji: "📦" },
+                      { id: "preset_caixote_plastico", label: "Caixote Plástico", emoji: "🗑️" },
+                      { id: "preset_sacola_comum", label: "Sacola Comum", emoji: "🛍️" },
+                    ].map((p) => {
+                      const sel = fotoSel === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setFotoSel(sel ? null : p.id)}
+                          style={{
+                            borderRadius: 10,
+                            padding: "8px 12px",
+                            background: sel ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+                            border: "1px solid",
+                            borderColor: sel ? "#0DB87E" : "rgba(255,255,255,0.10)",
+                            color: "white",
+                            fontFamily: "DM Sans",
+                            fontSize: 12,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            cursor: "pointer",
+                            transition: "all 0.2s"
+                          }}
+                        >
+                          <span>{p.emoji}</span>
+                          <span>{p.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
+
                   {fotoSel && (
-                    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, background: "rgba(13,184,126,0.08)", padding: "8px 12px", borderRadius: 10 }}>
                       {fotoSel.startsWith("preset_") ? (
                         <span style={{ fontSize: 13, color: "#0DB87E", fontFamily: "DM Sans" }}>
-                          Selecionado: <strong>{fotoSel === "preset_saco_verde" ? "Saco Verde" : fotoSel === "preset_caixa_papelao" ? "Caixa Papelão" : "Caixote Plástico"}</strong>
+                          Identificado como: <strong>{
+                            fotoSel === "preset_saco_verde" ? "Saco Verde 🟢" :
+                            fotoSel === "preset_caixa_papelao" ? "Caixa Papelão 📦" :
+                            fotoSel === "preset_caixote_plastico" ? "Caixote Plástico 🗑️" : "Sacola Comum 🛍️"
+                          }</strong>
                         </span>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <img src={fotoSel} alt="Preview" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", border: "1px solid rgba(255,255,255,0.2)" }} />
-                          <span style={{ fontSize: 12, color: "#0DB87E", fontFamily: "DM Sans" }}>Foto anexada com sucesso!</span>
+                          <img src={fotoSel} alt="Preview" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", border: "1px solid rgba(255,255,255,0.2)" }} />
+                          <span style={{ fontSize: 12, color: "#0DB87E", fontFamily: "DM Sans", fontWeight: 600 }}>Foto anexada com sucesso!</span>
                         </div>
                       )}
                       <button
+                        type="button"
                         onClick={() => setFotoSel(null)}
                         style={{
                           background: "none",
@@ -626,10 +854,11 @@ const CocoPage = () => {
                           fontSize: 12,
                           fontFamily: "DM Sans",
                           cursor: "pointer",
-                          marginLeft: "auto"
+                          marginLeft: "auto",
+                          fontWeight: 600
                         }}
                       >
-                        Limpar
+                        Remover
                       </button>
                     </div>
                   )}
@@ -1360,6 +1589,127 @@ const CocoPage = () => {
           </div>
         )}
       </div>
+
+      {/* Educational Material Guide Modal */}
+      {activeMaterialDica && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16
+          }}
+          onClick={() => setActiveMaterialDica(null)}
+        >
+          <div
+            style={{
+              background: "#0E1B38",
+              border: `1.5px solid ${activeMaterialDica.cor || "#0DB87E"}`,
+              borderRadius: 24,
+              padding: "24px 20px",
+              maxWidth: 420,
+              width: "100%",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+              color: "white",
+              fontFamily: "DM Sans",
+              position: "relative"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              aria-label="Fechar"
+              onClick={() => setActiveMaterialDica(null)}
+              style={{
+                position: "absolute",
+                top: 16,
+                right: 16,
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.08)",
+                border: "none",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer"
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  background: `${activeMaterialDica.cor || "#0DB87E"}25`,
+                  border: `1.5px solid ${activeMaterialDica.cor || "#0DB87E"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24
+                }}
+              >
+                {activeMaterialDica.emoji}
+              </div>
+              <div>
+                <span style={{ fontSize: 10, fontFamily: "monospace", textTransform: "uppercase", letterSpacing: 1, color: activeMaterialDica.cor || "#0DB87E", fontWeight: 700 }}>
+                  Manual Educativo de Descarte
+                </span>
+                <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, margin: "2px 0 0" }}>
+                  {activeMaterialDica.titulo || activeMaterialDica.nome}
+                </h3>
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.85)",
+                lineHeight: 1.6,
+                background: "rgba(255,255,255,0.03)",
+                padding: "16px",
+                borderRadius: 16,
+                border: "1px solid rgba(255,255,255,0.06)",
+                marginBottom: 20
+              }}
+              dangerouslySetInnerHTML={{ __html: activeMaterialDica.html || "<p>Separe o material limpo e seco.</p>" }}
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                setMaterialSel(activeMaterialDica.id);
+                setActiveMaterialDica(null);
+              }}
+              style={{
+                width: "100%",
+                padding: "14px",
+                borderRadius: 14,
+                background: "#0DB87E",
+                color: "#0B1B3E",
+                border: "none",
+                fontFamily: "Syne",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer"
+              }}
+            >
+              Selecionar {activeMaterialDica.nome.split("/")[0]} e Continuar
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes ubt-fadeIn {
