@@ -19,13 +19,29 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: dbUser } = await supabase
-            .from("usuarios")
-            .select("role")
-            .eq("id", user.id)
-            .maybeSingle();
+          let role = user.email === "ubt.servicos@gmail.com" ? "super_admin" : null;
 
-          const role = user.email === "ubt.servicos@gmail.com" ? "super_admin" : (dbUser?.role || "tomador");
+          if (!role) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", user.id)
+              .maybeSingle();
+            role = profile?.role;
+          }
+
+          if (!role) {
+            const { data: dbUser } = await supabase
+              .from("usuarios")
+              .select("role")
+              .eq("id", user.id)
+              .maybeSingle();
+            role = dbUser?.role;
+          }
+
+          if (!role) {
+            role = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
+          }
           
           if (role === "super_admin") {
             setIsAuthorized(true);

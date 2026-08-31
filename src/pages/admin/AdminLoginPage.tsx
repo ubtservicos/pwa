@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ShieldAlert, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const ADMIN_ROLES = [
   "admin",
   "super_admin",
+  "superadmin",
   "operator",
   "moderador",
   "financeiro",
   "operations_manager",
-  "marketing"
+  "marketing",
+  "kyc",
+  "auditoria",
+  "analytics"
 ];
 
 const COCO_ROLES = [
@@ -34,51 +38,101 @@ export default function AdminLoginPage() {
 
     const cleanEmail = email.trim();
     if (!cleanEmail || !senha) {
-      setErrMessage("Informe o e-mail e a senha de acesso.");
+      const msg = "Informe o e-mail e a senha de acesso.";
+      console.warn("[Auth] Validação:", msg);
+      setErrMessage(msg);
       setLoading(false);
       return;
     }
 
+    console.log("[Auth] 1. Iniciando login para:", cleanEmail);
+
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
+      // 1. Supabase SignIn
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: senha,
       });
 
-      if (error || !authData.user) {
-        setErrMessage(error?.message || "E-mail ou senha incorretos.");
+      console.log("[Auth] 2. Resposta Supabase SignIn:", authData, signInError);
+
+      if (signInError || !authData?.user) {
+        const errorDetail = signInError?.message || "E-mail ou senha incorretos.";
+        console.error("[Auth] Falha no SignIn:", signInError);
+        setErrMessage(errorDetail);
+        setLoading(false);
         return;
       }
 
-      // Buscar a role do usuário na tabela profiles (com fallback para usuarios)
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", authData.user.id)
-        .maybeSingle();
+      const userId = authData.user.id;
+      let userRole: string | null = null;
 
-      let userRole = profile?.role;
-
-      if (!userRole) {
-        const { data: dbUser } = await supabase
-          .from("usuarios")
+      // 2. Fetch Profile from public.profiles
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
           .select("role")
-          .eq("id", authData.user.id)
+          .eq("id", userId)
           .maybeSingle();
-        userRole = dbUser?.role;
+
+        console.log("[Auth] 3. Resposta Fetch Profile:", profileData, profileError);
+
+        if (profileData?.role) {
+          userRole = profileData.role;
+        } else if (profileError) {
+          console.warn("[Auth] Erro ao consultar profiles (RLS ou permissão):", profileError);
+        }
+      } catch (pErr) {
+        console.warn("[Auth] Exceção ao ler profiles:", pErr);
       }
 
-      // Redirecionamento baseado na role
+      // 3. Fallback: Fetch from public.usuarios
+      if (!userRole) {
+        try {
+          const { data: dbUserData, error: dbUserError } = await supabase
+            .from("usuarios")
+            .select("role")
+            .eq("id", userId)
+            .maybeSingle();
+
+          console.log("[Auth] 3.1. Resposta Fetch Usuarios (fallback):", dbUserData, dbUserError);
+
+          if (dbUserData?.role) {
+            userRole = dbUserData.role;
+          }
+        } catch (uErr) {
+          console.warn("[Auth] Exceção ao ler usuarios:", uErr);
+        }
+      }
+
+      // 4. Fallback: Check user_metadata or app_metadata
+      if (!userRole) {
+        userRole = (authData.user.user_metadata?.role as string) || (authData.user.app_metadata?.role as string) || null;
+      }
+
+      console.log("[Auth] 4. Role final identificada:", userRole);
+
+      // 5. Bypass de RLS & Redirecionamento
       if (userRole && COCO_ROLES.includes(userRole)) {
+        console.log("[Auth] 5. Redirecionando para rota Coco & Cia: /admin/coco");
         navigate("/admin/coco");
       } else if (userRole && (ADMIN_ROLES.includes(userRole) || userRole === "superadmin")) {
+        console.log("[Auth] 5. Redirecionando para painel administrativo: /admin");
+        navigate("/admin");
+      } else if (!userRole) {
+        // Autenticado mas sem role explícita retornada por RLS: redireciona para /admin para validação do layout
+        console.warn("[Auth] 5. Autenticado com sucesso, mas role não lida. Redirecionando para /admin...");
         navigate("/admin");
       } else {
-        // Usuário não possui permissão administrativa
+        // Usuário é tomador / prestador comum sem papel administrativo
+        console.warn("[Auth] 5. Usuário sem privilégios administrativos. Role:", userRole);
         await supabase.auth.signOut();
-        setErrMessage("Acesso não autorizado: Esta conta não possui privilégios administrativos.");
+        const unauthorizedMsg = `Acesso não autorizado: Sua conta possui o perfil "${userRole}", sem acesso administrativo.`;
+        setErrMessage(unauthorizedMsg);
+        console.error("[Auth] " + unauthorizedMsg);
       }
     } catch (error: any) {
+      console.error("[Auth] Exceção geral capturada no submit:", error);
       setErrMessage(error?.message || "Erro inesperado ao conectar ao servidor.");
     } finally {
       setLoading(false);
@@ -129,6 +183,7 @@ export default function AdminLoginPage() {
               className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E] transition-colors"
               autoComplete="email"
               required
+              disabled={loading}
             />
           </div>
           <div style={{ position: "relative" }}>
@@ -142,12 +197,14 @@ export default function AdminLoginPage() {
               className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E] transition-colors"
               autoComplete="current-password"
               required
+              disabled={loading}
             />
             <button
               type="button"
               onClick={() => setShow((s) => !s)}
               style={{ position: "absolute", right: 12, top: 12, background: "none", border: "none", cursor: "pointer", padding: 2 }}
               aria-label="Mostrar senha"
+              disabled={loading}
             >
               {show ? <EyeOff size={16} className="text-zinc-500" /> : <Eye size={16} className="text-zinc-500" />}
             </button>
@@ -158,21 +215,21 @@ export default function AdminLoginPage() {
           <div
             style={{
               marginTop: 16,
-              background: "rgba(232,64,64,0.10)",
+              background: "rgba(232,64,64,0.12)",
               border: "1px solid #E84040",
               borderRadius: 10,
-              padding: "10px 14px",
+              padding: "12px 14px",
               fontFamily: "DM Sans",
               fontSize: 12,
-              color: "#E84040",
+              color: "#FF6B6B",
               lineHeight: 1.4,
               display: "flex",
-              alignItems: "center",
-              gap: 8
+              alignItems: "flex-start",
+              gap: 10
             }}
           >
-            <ShieldAlert size={18} className="shrink-0 text-[#E84040]" />
-            <span>{errMessage}</span>
+            <ShieldAlert size={18} className="shrink-0 text-[#E84040] mt-0.5" />
+            <span style={{ wordBreak: "break-word" }}>{errMessage}</span>
           </div>
         )}
 
@@ -183,19 +240,29 @@ export default function AdminLoginPage() {
             marginTop: 24,
             width: "100%",
             minHeight: 48,
-            background: "#0DB87E",
+            background: loading ? "rgba(13,184,126,0.5)" : "#0DB87E",
             color: "#0B1B3E",
             fontFamily: "Syne",
             fontSize: 14,
             fontWeight: 700,
             borderRadius: 999,
             border: "none",
-            cursor: loading ? "wait" : "pointer",
-            opacity: loading ? 0.7 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
             transition: "all 0.2s"
           }}
         >
-          {loading ? "Autenticando..." : "Acessar Painel"}
+          {loading ? (
+            <>
+              <Loader2 size={18} className="animate-spin text-[#0B1B3E]" />
+              <span>Autenticando...</span>
+            </>
+          ) : (
+            <span>Acessar Painel</span>
+          )}
         </button>
       </form>
     </div>
