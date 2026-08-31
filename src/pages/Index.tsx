@@ -345,15 +345,27 @@ const waitlistSchema = z.object({
   email: z.string().email("E-mail inválido"),
   telefone: z.string().min(10, "Telefone incompleto"),
   perfil: z.array(z.string()).min(1, "Selecione ao menos um perfil"),
-  possuiContaMercadoPago: z.boolean({
-    required_error: "Por favor, responda esta pergunta."
-  }),
+  possuiContaMercadoPago: z.boolean().optional().nullable(),
   regiao_atuacao: z.array(z.string()).optional().default([]),
   praias: z.array(z.string()).optional().default([]),
   bairros: z.array(z.string()).optional().default([]),
   acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
 }).superRefine((data, ctx) => {
   const p = data.perfil || [];
+
+  // Exigir Mercado Pago APENAS para perfis profissionais/comerciais/associações
+  const PRO_PERFIS = ["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "tomador"];
+  const requiresMercadoPago = p.some(prof => PRO_PERFIS.includes(prof));
+
+  if (requiresMercadoPago) {
+    if (data.possuiContaMercadoPago === undefined || data.possuiContaMercadoPago === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Por favor, responda se possui conta no Mercado Pago",
+        path: ["possuiContaMercadoPago"],
+      });
+    }
+  }
 
   if (p.includes("associacao") || p.includes("mototaxista") || p.includes("diarista")) {
     if (!data.regiao_atuacao || data.regiao_atuacao.length === 0) {
@@ -769,7 +781,9 @@ export default function Index() {
       const parsedUA = parseUserAgent(ua);
 
       const obsParts = [];
-      obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
+      if (values.possuiContaMercadoPago !== undefined && values.possuiContaMercadoPago !== null) {
+        obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
+      }
       if (values.regiao_atuacao && values.regiao_atuacao.length > 0) {
         obsParts.push(`Regiao: ${values.regiao_atuacao.join(", ")}`);
       }
@@ -802,7 +816,10 @@ export default function Index() {
           observacoes: obsText
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("[Waitlist] Erro retornado pelo Supabase no insert:", insertError);
+        throw insertError;
+      }
 
       setSubmitSuccess(true);
       setRegisteredUser({ nome: values.nome.trim(), email: values.email.trim() });
@@ -811,9 +828,18 @@ export default function Index() {
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
-      console.error("Erro ao registrar no Supabase:", err);
-      setSubmitError("Ocorreu um erro ao processar o seu cadastro. Por favor, tente novamente.");
-      logSystem("ERROR", "WAITLIST", "founder_signup_error", err.message || "Insert failed");
+      console.error("[Waitlist] Erro ao registrar no Supabase:", err);
+      const userMessage = err?.message
+        ? `Falha no envio: ${err.message}`
+        : "Não foi possível enviar os dados devido a uma falha de conexão. Por favor, verifique sua rede e tente novamente.";
+      setSubmitError(userMessage);
+      
+      // Traz a mensagem de erro para visualização imediata no mobile
+      const formTop = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
+      if (formTop) {
+        formTop.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      logSystem("ERROR", "WAITLIST", "founder_signup_error", err?.message || "Insert failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -826,15 +852,17 @@ export default function Index() {
       setFocus(firstError);
       const element = document.getElementById(`waitlist-input-${firstError}`);
       if (element) {
-        element.focus();
+        element.focus?.();
         element.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      setSubmitError("Por favor, preencha todos os campos obrigatórios destacados em vermelho.");
+      const errorMessage = formErrors[firstError]?.message || "Por favor, preencha todos os campos obrigatórios destacados em vermelho.";
+      setSubmitError(errorMessage);
     }
   };
 
   const scrollToCta = () => {
-    document.getElementById("fundadores-cap")?.scrollIntoView({ behavior: "smooth" });
+    const el = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
     trackEvent("landing_cta_click", "marketing");
   };
 
@@ -1349,7 +1377,7 @@ export default function Index() {
 
       {/* CHAPTER 5: SEJA UM FUNDADOR (Formulário Supabase no anoitecer) */}
       {/* CHAPTER 5: SEJA UM FUNDADOR (Apresentação Centrada) */}
-      <section id="fundadores-cap" className="py-20 px-6 md:px-12 max-w-[1000px] mx-auto relative z-20 text-center flex flex-col items-center">
+      <section id="fundadores-cap" className="scroll-mt-24 py-20 px-6 md:px-12 max-w-[1000px] mx-auto relative z-20 text-center flex flex-col items-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-mono text-green uppercase tracking-widest mb-6">
           <span>Capítulo V</span>
           <span>•</span>
@@ -1378,7 +1406,7 @@ export default function Index() {
       </section>
 
       {/* SEÇÃO DO FORMULÁRIO DE CADASTRO (Quase largura inteira da tela com campos grandes) */}
-      <section id="cadastro-fundadores-cap" className="pb-0 px-6 md:px-12 max-w-[1400px] mx-auto relative z-20">
+      <section id="cadastro-fundadores-cap" className="scroll-mt-24 pb-0 px-6 md:px-12 max-w-[1400px] mx-auto relative z-20">
         <div className="bg-[#0b1329]/30 border border-white/5 rounded-[40px] p-[0.1rem] backdrop-blur-xl shadow-2xl relative overflow-hidden">
           
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-green/10 blur-[90px] pointer-events-none" />
@@ -1656,39 +1684,41 @@ export default function Index() {
                 </div>
               )}
 
-              {/* 6. Tem conta no Mercado Pago? */}
-              <div id="waitlist-input-possuiContaMercadoPago">
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
-                  Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { value: true, label: "Sim" },
-                    { value: false, label: "Não" }
-                  ].map((opt) => {
-                    const selected = watch("possuiContaMercadoPago") === opt.value;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
-                        className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
-                          selected
-                            ? "bg-green/10 border-green text-green"
-                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
+              {/* 6. Tem conta no Mercado Pago? (Obrigatório e visível apenas para perfis profissionais / associações) */}
+              {perfil?.some((p) => ["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "tomador"].includes(p)) && (
+                <div id="waitlist-input-possuiContaMercadoPago">
+                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
+                    Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { value: true, label: "Sim" },
+                      { value: false, label: "Não" }
+                    ].map((opt) => {
+                      const selected = watch("possuiContaMercadoPago") === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
+                          className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
+                            selected
+                              ? "bg-green/10 border-green text-green"
+                              : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {errors.possuiContaMercadoPago && (
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.possuiContaMercadoPago.message}
+                    </p>
+                  )}
                 </div>
-                {errors.possuiContaMercadoPago && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.possuiContaMercadoPago.message}
-                  </p>
-                )}
-              </div>
+              )}
 
               {/* 7. LGPD Accept Terms */}
               <div className="flex flex-col gap-1 mt-2" id="waitlist-input-acceptTerms">
