@@ -97,7 +97,9 @@ import AdminSecurityCenterPage from "./pages/admin/AdminSecurityCenterPage.tsx";
 import AdminWaitlistPage from "./pages/admin/AdminWaitlistPage.tsx";
 import AdminWikiPage from "./pages/admin/AdminWikiPage.tsx";
 import AdminAprovacoesPage from "./pages/admin/AdminAprovacoesPage.tsx";
-import AdminDocumentosPage from "./pages/admin/AdminDocumentosPage.tsx";
+import AdminCocoPage from "./pages/admin/AdminCocoPage.tsx";
+import AdminCocoSettings from "./pages/admin/AdminCocoSettings.tsx";
+import AdminCocoFrota from "./pages/admin/AdminCocoFrota.tsx";
 import CocoPage from "./pages/CocoPage.tsx";
 import CocoOnboardingPage from "./pages/CocoOnboardingPage.tsx";
 import CocoOnlinePage from "./pages/CocoOnlinePage.tsx";
@@ -214,7 +216,9 @@ const App = () => (
               <Route path="/admin/preco" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/arbitragem" element={adminGuard(<AdminArbitragemPage />, ["moderador", "admin", "super_admin"])} />
               <Route path="/admin/conteudo" element={adminGuard(<AdminConteudoPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/coco" element={adminGuard(<AdminCocoPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/coco" element={adminGuard(<AdminCocoPage />, ["operator", "admin", "super_admin", "cocoecia"])} />
+              <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia"])} />
+              <Route path="/admin/coco/frota" element={adminGuard(<AdminCocoFrota />, ["operator", "admin", "super_admin", "cocoecia"])} />
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
               <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />

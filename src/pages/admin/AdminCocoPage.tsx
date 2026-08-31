@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   MapPin, 
   Recycle, 
@@ -17,7 +18,8 @@ import {
   ExternalLink,
   Sparkles,
   Clock,
-  Layers
+  Layers,
+  Settings
 } from "lucide-react";
 import { Card, PrimaryButton, GhostButton, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -61,6 +63,7 @@ const DIAS_SEMANA = [
 export default function AdminCocoPage() {
   const toast = useAdminToast();
   const user = useCurrentUser();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>("visao_geral");
 
   // Frota e Pontos
@@ -423,41 +426,83 @@ export default function AdminCocoPage() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div style={{ display: "flex", gap: 6, background: "var(--admin-card-bg)", padding: 4, borderRadius: 12, border: "1px solid var(--admin-border)" }}>
-          {[
-            { id: "visao_geral", label: "Mapa & Frota", icon: Layers },
-            { id: "agenda_bairros", label: "Agenda de Bairros", icon: Calendar },
-            { id: "dicas_materiais", label: "Manuais & Dicas", icon: BookOpen },
-            { id: "captacao", label: "Captação & QR Code", icon: QrCode },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as AdminTab)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: active ? "#0DB87E" : "transparent",
-                  color: active ? "white" : "var(--admin-subtle)",
-                  fontFamily: "DM Sans",
-                  fontSize: 13,
-                  fontWeight: active ? 700 : 500,
-                  cursor: "pointer",
-                  transition: "all 0.2s"
-                }}
-              >
-                <Icon size={16} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* Tab Navigation & Subroutes */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 4, background: "var(--admin-card-bg)", padding: 4, borderRadius: 12, border: "1px solid var(--admin-border)" }}>
+            {[
+              { id: "visao_geral", label: "Mapa & Frota", icon: Layers },
+              { id: "agenda_bairros", label: "Agenda de Bairros", icon: Calendar },
+              { id: "dicas_materiais", label: "Manuais & Dicas", icon: BookOpen },
+              { id: "captacao", label: "Captação & QR Code", icon: QrCode },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as AdminTab)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: active ? "#0DB87E" : "transparent",
+                    color: active ? "white" : "var(--admin-subtle)",
+                    fontFamily: "DM Sans",
+                    fontSize: 13,
+                    fontWeight: active ? 700 : 500,
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <Icon size={16} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => navigate("/admin/coco/frota")}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid var(--admin-border)",
+              background: "var(--admin-card-bg)",
+              color: "var(--admin-text)",
+              fontFamily: "DM Sans",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <Truck size={16} color="#0DB87E" /> Frota
+          </button>
+
+          <button
+            onClick={() => navigate("/admin/coco/config")}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid var(--admin-border)",
+              background: "var(--admin-card-bg)",
+              color: "var(--admin-text)",
+              fontFamily: "DM Sans",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <Settings size={16} /> Configurações
+          </button>
         </div>
       </div>
 
