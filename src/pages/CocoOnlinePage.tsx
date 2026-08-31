@@ -82,10 +82,15 @@ const CocoOnlinePage = () => {
   const [selectedTruckForBairros, setSelectedTruckForBairros] = useState<any | null>(null);
   const [tempAreas, setTempAreas] = useState<string[]>([]);
 
+  const [mounted, setMounted] = useState(false);
   const watchIdRef = useRef<number | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   const { coords: geoCoords } = useGeolocation(isOnline);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const NEIGHBORHOODS = ["Centro", "Itaguá", "Perequê-Açu", "Praia Grande", "Tenório", "Toninhas"];
 
@@ -946,104 +951,107 @@ const CocoOnlinePage = () => {
 
 
       <div style={{ height: "55svh", position: "relative" }}>
-        <MapContainer
-          center={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]}
-          zoom={15}
-          style={{ width: "100%", height: "400px" }}
-          zoomControl={false}
-          attributionControl={false}
-        >
-          <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
-          <MapRef mapRef={mapRef} />
-          <Marker position={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]} icon={getTruckIcon(isOnline, true)} />
-          {pontos.map((p) => {
-            if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
-            const lat = Number(p.lat);
-            const lng = Number(p.lng);
-            return (
-              <Marker
-                key={p.id}
-                position={[lat, lng]}
-                icon={getPinIcon(p.material)}
-                eventHandlers={{ click: () => setSelectedPonto(p) }}
-              >
-              {selectedPonto?.id === p.id && (
-                <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
-                  <div style={{ padding: 4, minWidth: 180, fontFamily: "DM Sans" }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
-                      {selectedPonto.address}
-                    </p>
-                    <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
-                      {getMaterial(selectedPonto.material).emoji}{" "}
-                      {getMaterial(selectedPonto.material).nome}
-                    </p>
-                    {selectedPonto.horarioPrevisto && (
-                      <p style={{ fontSize: 11, color: "#0DB87E", fontWeight: 600, marginTop: 4 }}>
-                        ⏰ Previsto: {selectedPonto.horarioPrevisto}
+        {mounted && (
+          <MapContainer
+            center={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]}
+            zoom={15}
+            style={{ width: "100%", height: "400px" }}
+            zoomControl={false}
+            attributionControl={false}
+          >
+            <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
+            <MapRef mapRef={mapRef} />
+            <Marker position={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]} icon={getTruckIcon(isOnline, true)} />
+            {pontos.map((p) => {
+              if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
+              const lat = Number(p.lat);
+              const lng = Number(p.lng);
+              return (
+                <Marker
+                  key={p.id}
+                  position={[lat, lng]}
+                  icon={getPinIcon(p.material)}
+                  eventHandlers={{ click: () => setSelectedPonto(p) }}
+                >
+                {selectedPonto?.id === p.id && (
+                  <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
+                    <div style={{ padding: 4, minWidth: 180, fontFamily: "DM Sans" }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
+                        {selectedPonto.address}
                       </p>
-                    )}
-                    {selectedPonto.status === "aguardando" ? (
-                      <button
-                        onClick={() => setShowAgendarModal(selectedPonto.id)}
-                        style={{
-                          marginTop: 8,
-                          width: "100%",
-                          padding: "6px 12px",
-                          borderRadius: 8,
-                          border: "none",
-                          background: "#0DB87E",
-                          color: "white",
-                          fontFamily: "DM Sans",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        🚚 Agendar Coleta
-                      </button>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                      <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
+                        {getMaterial(selectedPonto.material).emoji}{" "}
+                        {getMaterial(selectedPonto.material).nome}
+                      </p>
+                      {selectedPonto.horarioPrevisto && (
+                        <p style={{ fontSize: 11, color: "#0DB87E", fontWeight: 600, marginTop: 4 }}>
+                          ⏰ Previsto: {selectedPonto.horarioPrevisto}
+                        </p>
+                      )}
+                      {selectedPonto.status === "aguardando" ? (
                         <button
-                          onClick={() => marcarColetado(selectedPonto.id)}
+                          onClick={() => setShowAgendarModal(selectedPonto.id)}
                           style={{
+                            marginTop: 8,
                             width: "100%",
-                            padding: "6px 12px",
+                            padding: "6px 10px",
                             borderRadius: 8,
-                            border: "none",
                             background: "#0DB87E",
+                            border: "none",
                             color: "white",
                             fontFamily: "DM Sans",
-                            fontSize: 12,
                             fontWeight: 600,
+                            fontSize: 12,
                             cursor: "pointer",
                           }}
                         >
-                          ✅ Concluir Coleta
+                          Agendar Coleta
                         </button>
-                        <button
-                          onClick={() => cancelarAgendamento(selectedPonto.id)}
-                          style={{
-                            width: "100%",
-                            padding: "4px 8px",
-                            borderRadius: 8,
-                            border: "1px solid #E84040",
-                            background: "transparent",
-                            color: "#E84040",
-                            fontFamily: "DM Sans",
-                            fontSize: 11,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </Popup>
-              )}
-            </Marker>
-          ))}
+                      ) : (
+                        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                          <button
+                            onClick={() => concluirColeta(selectedPonto.id)}
+                            style={{
+                              width: "100%",
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              background: "#0DB87E",
+                              border: "none",
+                              color: "white",
+                              fontFamily: "DM Sans",
+                              fontWeight: 600,
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                          >
+                            ✅ Concluir Coleta
+                          </button>
+                          <button
+                            onClick={() => cancelarAgendamento(selectedPonto.id)}
+                            style={{
+                              width: "100%",
+                              padding: "4px 8px",
+                              borderRadius: 8,
+                              border: "1px solid #E84040",
+                              background: "transparent",
+                              color: "#E84040",
+                              fontFamily: "DM Sans",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                )}
+              </Marker>
+            );
+          })}
         </MapContainer>
+      )}
       </div>
 
       {/* Bottom sheet */}

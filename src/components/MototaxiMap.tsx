@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet
 import L from 'leaflet';
 import { tomadorIcon, motoIcon, destinoIcon } from '../lib/mapIcons';
 import { getRouteInfo } from '../lib/geoService';
-import { FlyTo, MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from './UBTMap';
+import { isValidLatLng, FlyTo, MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from './UBTMap';
 
 interface Props {
     origin: { lat: number; lng: number } | null;
@@ -33,8 +33,8 @@ export function MototaxiMap({
         });
     }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, showRoute]);
 
-    const center: [number, number] = origin
-        ? [origin.lat, origin.lng]
+    const center: [number, number] = (origin && isValidLatLng(origin.lat, origin.lng))
+        ? [Number(origin.lat), Number(origin.lng)]
         : UBATUBA_CENTER;
 
     return (
@@ -45,15 +45,21 @@ export function MototaxiMap({
             attributionControl={false}>
             <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
             <MapRef mapRef={mapRef} />
-            {origin && <Marker position={[origin.lat, origin.lng]} icon={tomadorIcon} />}
-            {destination && <Marker position={[destination.lat, destination.lng]} icon={destinoIcon} />}
-            {prestadorLocation && (
-                <Marker position={[prestadorLocation.lat, prestadorLocation.lng]} icon={motoIcon(isPrestadorOnline)} />
+            {origin && isValidLatLng(origin.lat, origin.lng) && (
+                <Marker position={[Number(origin.lat), Number(origin.lng)]} icon={tomadorIcon} />
+            )}
+            {destination && isValidLatLng(destination.lat, destination.lng) && (
+                <Marker position={[Number(destination.lat), Number(destination.lng)]} icon={destinoIcon} />
+            )}
+            {prestadorLocation && isValidLatLng(prestadorLocation.lat, prestadorLocation.lng) && (
+                <Marker position={[Number(prestadorLocation.lat), Number(prestadorLocation.lng)]} icon={motoIcon(isPrestadorOnline)} />
             )}
             {polyline.length > 0 && (
                 <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
             )}
-            {origin && <FlyTo center={[origin.lat, origin.lng]} zoom={15} />}
+            {origin && isValidLatLng(origin.lat, origin.lng) && (
+                <FlyTo center={[Number(origin.lat), Number(origin.lng)]} zoom={15} />
+            )}
         </MapContainer>
     );
 }

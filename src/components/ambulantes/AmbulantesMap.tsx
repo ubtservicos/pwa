@@ -2,7 +2,7 @@ import { MapContainer, TileLayer, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import { getCategoriaIcon, type AmbulanteSession } from '@/mocks/ambulantesSessions';
 import { tomadorIcon } from '@/lib/mapIcons';
-import { DARK_TILES, ATTRIBUTION } from '@/components/UBTMap';
+import { DARK_TILES, ATTRIBUTION, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
 interface Props {
   center: { lat: number; lng: number };
@@ -72,7 +72,9 @@ const Fallback = ({ sessions, onMarkerClick }: Pick<Props, 'sessions' | 'onMarke
 );
 
 const AmbulantesMap = ({ center, sessions, onMarkerClick }: Props) => {
-  const mapCenter: [number, number] = [center.lat, center.lng];
+  const mapCenter: [number, number] = (center && isValidLatLng(center.lat, center.lng))
+    ? [Number(center.lat), Number(center.lng)]
+    : UBATUBA_CENTER;
 
   return (
     <MapContainer
@@ -85,11 +87,12 @@ const AmbulantesMap = ({ center, sessions, onMarkerClick }: Props) => {
       <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
       <Marker position={mapCenter} icon={tomadorIcon} />
       {sessions.map((s) => {
+        if (!s?.location || !isValidLatLng(s.location.lat, s.location.lng)) return null;
         const cat = getCategoriaIcon(s.produtos);
         return (
           <Marker
             key={s.sessionId}
-            position={[s.location.lat, s.location.lng]}
+            position={[Number(s.location.lat), Number(s.location.lng)]}
             icon={makeAmbuIcon(cat.emoji, cat.color)}
             eventHandlers={{ click: () => onMarkerClick?.(s) }}
           />

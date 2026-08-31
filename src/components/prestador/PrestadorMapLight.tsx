@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { motoIcon, tomadorIcon, destinoIcon, ambuIcon, coletaIcon } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
-import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from '@/components/UBTMap';
+import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from '@/components/UBTMap';
 
 interface Props {
   myLocation: { lat: number; lng: number } | null;
@@ -50,11 +50,11 @@ const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo
     });
   }, [routeFrom?.lat, routeFrom?.lng, routeTo?.lat, routeTo?.lng]);
 
-  if (!myLocation) {
+  if (!myLocation || !isValidLatLng(myLocation.lat, myLocation.lng)) {
     return <Fallback myLocation={myLocation} />;
   }
 
-  const center: [number, number] = [myLocation.lat, myLocation.lng];
+  const center: [number, number] = [Number(myLocation.lat), Number(myLocation.lng)];
 
   return (
     <MapContainer
@@ -66,14 +66,18 @@ const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo
     >
       <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
       <MapRef mapRef={mapRef} />
-      {myLocation && (
+      {myLocation && isValidLatLng(myLocation.lat, myLocation.lng) && (
         <Marker 
-          position={[myLocation.lat, myLocation.lng]} 
+          position={[Number(myLocation.lat), Number(myLocation.lng)]} 
           icon={providerType === "ambulante" ? ambuIcon("comida") : providerType === "coco" ? coletaIcon("misto") : motoIcon(true)} 
         />
       )}
-      {origin && <Marker position={[origin.lat, origin.lng]} icon={tomadorIcon} />}
-      {destination && <Marker position={[destination.lat, destination.lng]} icon={destinoIcon} />}
+      {origin && isValidLatLng(origin.lat, origin.lng) && (
+        <Marker position={[Number(origin.lat), Number(origin.lng)]} icon={tomadorIcon} />
+      )}
+      {destination && isValidLatLng(destination.lat, destination.lng) && (
+        <Marker position={[Number(destination.lat), Number(destination.lng)]} icon={destinoIcon} />
+      )}
       {polyline.length > 0 && (
         <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
       )}
