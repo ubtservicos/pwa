@@ -27,10 +27,25 @@ import {
   Shield,
   Settings,
   BookOpen,
-  FileCheck
+  FileCheck,
+  QrCode,
+  MapPin,
+  Calendar,
+  Truck
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+
+export const COCO_NAV_ITEMS = [
+  { icon: BarChart3, label: "Indicadores (Dashboard)", path: "/admin/coco", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: MapPin, label: "Mapa Operacional", path: "/admin/coco/mapa-operacional", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: Calendar, label: "Escala de Bairros", path: "/admin/coco/agenda", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: BookOpen, label: "Dicas & Manuais", path: "/admin/coco/manuais", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: QrCode, label: "Captação & Afiliados", path: "/admin/coco/captacao", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+];
 
 export const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["operator", "financeiro", "moderador", "admin", "super_admin"] },
@@ -58,7 +73,6 @@ export const NAV_ITEMS = [
   { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco", roles: ["operator", "admin", "super_admin"] },
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
-  { icon: Recycle, label: "Côco & Cia", path: "/admin/coco", roles: ["operator", "admin", "super_admin"] },
   { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
   { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
@@ -67,7 +81,8 @@ export const NAV_ITEMS = [
 
 const sectionTitle = (path: string) => {
   if (path === "/admin") return "Dashboard";
-  return NAV_ITEMS.find((n) => n.path === path)?.label ?? "Painel";
+  const all = [...NAV_ITEMS, ...COCO_NAV_ITEMS];
+  return all.find((n) => n.path === path)?.label ?? "Painel";
 };
 
 const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
@@ -111,15 +126,21 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     return item.roles.includes(role);
   });
 
+  const cocoItems = COCO_NAV_ITEMS.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(role);
+  });
+
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
-  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/coco", "/admin/entidades", "/admin/conteudo"].includes(item.path));
+  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
   const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/kyc-pendentes", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
+      coco: false,
       painel: false,
       operacoes: false,
       financeiro: false,
@@ -127,12 +148,13 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
       sistema: false
     };
     // Auto expand active section
-    if (painelItems.some(item => pathname === item.path)) initial.painel = true;
+    if (cocoItems.some(item => pathname === item.path || pathname.startsWith("/admin/coco"))) initial.coco = true;
+    else if (painelItems.some(item => pathname === item.path)) initial.painel = true;
     else if (operacoesItems.some(item => pathname === item.path)) initial.operacoes = true;
     else if (financeiroItems.some(item => pathname === item.path)) initial.financeiro = true;
     else if (complianceItems.some(item => pathname === item.path)) initial.compliance = true;
     else if (sistemaItems.some(item => pathname === item.path)) initial.sistema = true;
-    else initial.painel = true; // fallback default
+    else initial.coco = true;
     return initial;
   });
 
@@ -253,6 +275,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
         </span>
       </div>
       <nav style={{ flex: 1, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+        {renderCategory("coco", "Côco & Cia", Recycle, cocoItems)}
         {renderCategory("painel", "Painel de Controle", BarChart3, painelItems)}
         {renderCategory("operacoes", "Operações & Entidades", Users, operacoesItems)}
         {renderCategory("financeiro", "Financeiro", CreditCard, financeiroItems)}
