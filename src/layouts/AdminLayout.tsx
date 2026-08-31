@@ -60,8 +60,8 @@ export const COCO_NAV_ITEMS = [
 ];
 
 export const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["operator", "financeiro", "moderador", "admin", "super_admin", "tomador", "cocoecia"] },
-  { icon: Activity, label: "Saúde da Plataforma", path: "/admin/health", roles: ["operations_manager", "operator", "admin", "super_admin"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["admin", "super_admin"] },
+  { icon: Activity, label: "Saúde da Plataforma", path: "/admin/health", roles: ["admin", "super_admin"] },
   { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
   { icon: Users, label: "Clientes", path: "/admin/clientes", roles: ["operator", "moderador", "admin", "super_admin"] },
   { icon: BarChart2, label: "Financeiro", path: "/admin/financeiro", roles: ["financeiro", "admin", "super_admin"] },
@@ -70,7 +70,7 @@ export const NAV_ITEMS = [
   { icon: ShieldAlert, label: "Mediações", path: "/admin/disputes", roles: ["moderador", "admin", "super_admin"] },
   { icon: RefreshCw, label: "Estornos", path: "/admin/refunds", roles: ["financeiro", "admin", "super_admin"] },
   { icon: Ban, label: "Cancelamentos", path: "/admin/cancellations", roles: ["operator", "financeiro", "admin", "super_admin"] },
-  { icon: Activity, label: "Operações Realtime", path: "/admin/operacoes", roles: ["operator", "admin", "super_admin"] },
+  { icon: Activity, label: "Operações Realtime", path: "/admin/operacoes", roles: ["admin", "super_admin"] },
   { icon: ShieldCheck, label: "Privacidade / LGPD", path: "/admin/lgpd", roles: ["super_admin"] },
   { icon: Clock, label: "Auditoria / Logs", path: "/admin/auditoria", roles: ["super_admin"] },
   { icon: ShieldAlert, label: "Antifraude", path: "/admin/antifraude", roles: ["admin", "super_admin"] },

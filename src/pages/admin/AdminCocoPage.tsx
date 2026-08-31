@@ -31,11 +31,11 @@ export default function AdminCocoPage() {
   const [caminhoes, setCaminhoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // KPIs
-  const [kgsPrevistos, setKgsPrevistos] = useState<number>(3420);
-  const [usuariosAtendidos, setUsuariosAtendidos] = useState<number>(187);
-  const [doacoesRecebidas, setDoacoesRecebidas] = useState<number>(248);
-  const [apadrinhamentosReais, setApadrinhamentosReais] = useState<number>(4850);
+  // KPIs (Prod Ready - Dados Reais ou Zerados)
+  const [kgsPrevistos, setKgsPrevistos] = useState<number>(0);
+  const [usuariosAtendidos, setUsuariosAtendidos] = useState<number>(0);
+  const [doacoesRecebidas, setDoacoesRecebidas] = useState<number>(0);
+  const [apadrinhamentosReais, setApadrinhamentosReais] = useState<number>(0);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -54,8 +54,20 @@ export default function AdminCocoPage() {
           const totalAtendidos = dataPontos.filter(p => p.status === "coletado").length;
           const totalDoacoes = dataPontos.length;
           
-          if (totalAtendidos > 0) setUsuariosAtendidos(totalAtendidos);
-          if (totalDoacoes > 0) setDoacoesRecebidas(totalDoacoes);
+          // Estimar Kgs reais com base nos volumes cadastrados
+          const somaKgs = dataPontos.reduce((acc, curr) => {
+            const num = parseFloat(curr.quantidade_estimada) || 10;
+            return acc + num;
+          }, 0);
+
+          setKgsPrevistos(Math.round(somaKgs));
+          setUsuariosAtendidos(totalAtendidos);
+          setDoacoesRecebidas(totalDoacoes);
+        } else {
+          setPontos([]);
+          setKgsPrevistos(0);
+          setUsuariosAtendidos(0);
+          setDoacoesRecebidas(0);
         }
 
         // Buscar caminhões
@@ -66,6 +78,18 @@ export default function AdminCocoPage() {
 
         if (dataCaminhoes && dataCaminhoes.length > 0) {
           setCaminhoes(dataCaminhoes);
+        } else {
+          setCaminhoes([]);
+        }
+
+        // Buscar apadrinhamentos / configurações se existirem
+        const { data: dataConfig } = await supabase
+          .from("coco_config")
+          .select("*")
+          .maybeSingle();
+
+        if (dataConfig?.total_doacoes_reais) {
+          setApadrinhamentosReais(Number(dataConfig.total_doacoes_reais) || 0);
         }
       } catch (err) {
         console.warn("Erro ao carregar métricas do dashboard:", err);
@@ -150,8 +174,8 @@ export default function AdminCocoPage() {
           <div style={{ fontFamily: "Syne", fontSize: 28, fontWeight: 800, color: "var(--admin-text)", marginBottom: 4 }}>
             {kgsPrevistos.toLocaleString("pt-BR")} <span style={{ fontSize: 16, fontWeight: 600, color: "var(--admin-subtle)" }}>kg</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#0DB87E", fontFamily: "DM Sans" }}>
-            <TrendingUp size={14} /> +14.2% em relação à última semana
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
+            <TrendingUp size={14} color="#0DB87E" /> Estimativa baseada em coletas cadastradas
           </div>
         </Card>
 
@@ -169,7 +193,7 @@ export default function AdminCocoPage() {
             {usuariosAtendidos.toLocaleString("pt-BR")}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            <CheckCircle2 size={14} color="#0DB87E" /> Cidadãos com descarte confirmado
+            <CheckCircle2 size={14} color="#0DB87E" /> Cidadãos com descarte concluído
           </div>
         </Card>
 
@@ -205,13 +229,13 @@ export default function AdminCocoPage() {
             R$ {apadrinhamentosReais.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#0DB87E", fontFamily: "DM Sans" }}>
-            <Sparkles size={14} /> Via PIX Solidário & QR Codes
+            <Sparkles size={14} /> Arrecadação via PIX Solidário
           </div>
         </Card>
       </div>
 
-      {/* Grid de Seções e Atalhos Operacionais */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, marginBottom: 28 }}>
+      {/* Grid de Seções Operacionais */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
         {/* Status da Frota e Operação Realtime */}
         <Card style={{ padding: 22 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -225,7 +249,7 @@ export default function AdminCocoPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {caminhoes.length === 0 ? (
-              <div style={{ padding: "20px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
+              <div style={{ padding: "30px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
                 Nenhum caminhão registrado no sistema.
               </div>
             ) : (
@@ -294,7 +318,7 @@ export default function AdminCocoPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {pontos.length === 0 ? (
-              <div style={{ padding: "20px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
+              <div style={{ padding: "30px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
                 Nenhum ponto de descarte registrado no momento.
               </div>
             ) : (
@@ -351,87 +375,6 @@ export default function AdminCocoPage() {
           >
             Ver Fila de Despacho & Mapa <ArrowRight size={14} />
           </button>
-        </Card>
-      </div>
-
-      {/* Acessos Rápidos aos Módulos da Vertical */}
-      <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", marginBottom: 16 }}>
-        Módulos Operacionais da Côco & Cia
-      </h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-        <Card
-          onClick={() => navigate("/admin/coco/colaboradores")}
-          style={{ padding: 18, cursor: "pointer", transition: "transform 150ms", border: "1px solid var(--admin-border)" }}
-        >
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(13,184,126,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#0DB87E", marginBottom: 12 }}>
-            <Users size={20} />
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
-            Colaboradores
-          </div>
-          <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            Credenciamento de catadores e operadores autorizados.
-          </div>
-        </Card>
-
-        <Card
-          onClick={() => navigate("/admin/coco/agenda")}
-          style={{ padding: 18, cursor: "pointer", transition: "transform 150ms", border: "1px solid var(--admin-border)" }}
-        >
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(43,110,232,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#2B6EE8", marginBottom: 12 }}>
-            <Calendar size={20} />
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
-            Escala de Bairros
-          </div>
-          <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            Programação semanal de rotas de coleta em Ubatuba.
-          </div>
-        </Card>
-
-        <Card
-          onClick={() => navigate("/admin/coco/manuais")}
-          style={{ padding: 18, cursor: "pointer", transition: "transform 150ms", border: "1px solid var(--admin-border)" }}
-        >
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(245,166,35,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#F5A623", marginBottom: 12 }}>
-            <BookOpen size={20} />
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
-            Dicas & Manuais
-          </div>
-          <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            Guias de higienização e separação de materiais.
-          </div>
-        </Card>
-
-        <Card
-          onClick={() => navigate("/admin/coco/captacao")}
-          style={{ padding: 18, cursor: "pointer", transition: "transform 150ms", border: "1px solid var(--admin-border)" }}
-        >
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(155,89,182,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#9B59B6", marginBottom: 12 }}>
-            <QrCode size={20} />
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
-            Captação de Doadores
-          </div>
-          <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            Geração de QR Codes de apadrinhamento para comércios.
-          </div>
-        </Card>
-
-        <Card
-          onClick={() => navigate("/admin/coco/config")}
-          style={{ padding: 18, cursor: "pointer", transition: "transform 150ms", border: "1px solid var(--admin-border)" }}
-        >
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(232,64,64,0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#E84040", marginBottom: 12 }}>
-            <Settings size={20} />
-          </div>
-          <div style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginBottom: 4 }}>
-            Configurações
-          </div>
-          <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-            Credenciais de acesso e chave PIX da entidade.
-          </div>
         </Card>
       </div>
     </div>

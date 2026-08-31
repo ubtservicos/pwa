@@ -221,26 +221,6 @@ export default function AdminCocoFrota() {
 
         <div style={{ display: "flex", gap: 10 }}>
           <button
-            onClick={() => navigate("/admin/coco/config")}
-            style={{
-              padding: "10px 16px",
-              borderRadius: 10,
-              border: "1px solid var(--admin-border)",
-              background: "var(--admin-card-bg)",
-              color: "var(--admin-text)",
-              fontFamily: "DM Sans",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6
-            }}
-          >
-            <Settings size={16} /> Configurações
-          </button>
-
-          <button
             onClick={() => setIsModalOpen(true)}
             style={{
               padding: "10px 18px",

@@ -14,7 +14,6 @@ import { QRCodeCanvas } from "qrcode.react";
 
 export default function AdminCocoCaptacao() {
   const toast = useAdminToast();
-  const [partnerSlug, setPartnerSlug] = useState("praia-grande-quiosque-01");
   const [pixKey] = useState(() => {
     try {
       return localStorage.getItem("coco_pix_fallback") || "coco@pix.com.br";
@@ -23,11 +22,11 @@ export default function AdminCocoCaptacao() {
     }
   });
 
-  const referralUrl = `${window.location.origin}/app/coco?ref=${encodeURIComponent(partnerSlug)}`;
+  const landingUrl = `${window.location.origin}/#fundadores-cap`;
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(referralUrl);
-    toast.show("Link de apadrinhamento copiado para a área de transferência!");
+    navigator.clipboard.writeText(landingUrl);
+    toast.show("Link de cadastro copiado para a área de transferência!");
   };
 
   const handleDownloadQR = () => {
@@ -36,7 +35,7 @@ export default function AdminCocoCaptacao() {
       const pngUrl = canvas.toDataURL("image/png");
       const downloadLink = document.createElement("a");
       downloadLink.href = pngUrl;
-      downloadLink.download = `qrcode-coco-${partnerSlug}.png`;
+      downloadLink.download = "qrcode-cocoecia-oficial.png";
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -53,66 +52,44 @@ export default function AdminCocoCaptacao() {
             <QrCode size={20} />
           </div>
           <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, margin: 0, color: "var(--admin-text)" }}>
-            Captação de Doadores & Apadrinhamento
+            Captação de Doadores & QR Code Oficial
           </h1>
         </div>
         <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", margin: 0 }}>
-          Gere QR Codes inteligentes para quiosques, pousadas, marinas e comércios parceiros divulgarem a reciclagem com rastreio de captação.
+          QR Code único da Côco & Cia para materiais impressos, adesivos de caminhão e divulgação institucional.
         </p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 24 }}>
-        {/* Bloco de Configuração do QR */}
+        {/* Bloco de Informações */}
         <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
           <div>
             <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 8px 0" }}>
-              Identificador do Ponto Parceiro
+              Link Direto de Cadastro
             </h3>
             <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: 0 }}>
-              Insira o identificador do estabelecimento para vincular as doações e descartes ao parceiro.
+              Este QR Code direciona os cidadãos e turistas diretamente para a página de adesão e cadastro da UBT / Côco & Cia.
             </p>
           </div>
 
           <div>
             <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
-              Slug do Parceiro / Quiosque / Comércio
-            </label>
-            <input
-              type="text"
-              value={partnerSlug}
-              onChange={(e) => setPartnerSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
-              style={{
-                width: "100%",
-                background: "var(--admin-bg)",
-                border: "1px solid var(--admin-border)",
-                borderRadius: 8,
-                padding: "10px 12px",
-                color: "var(--admin-text)",
-                fontFamily: "DM Sans",
-                fontSize: 14
-              }}
-              placeholder="ex: quiosque-maranduba-12"
-            />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
-              Link de Divulgação Gerado
+              URL de Destino
             </label>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 type="text"
                 readOnly
-                value={referralUrl}
+                value={landingUrl}
                 style={{
                   flex: 1,
                   background: "var(--admin-bg)",
                   border: "1px solid var(--admin-border)",
                   borderRadius: 8,
                   padding: "10px 12px",
-                  color: "var(--admin-muted)",
+                  color: "var(--admin-text)",
                   fontFamily: "monospace",
-                  fontSize: 12
+                  fontSize: 13
                 }}
               />
               <button
@@ -142,7 +119,7 @@ export default function AdminCocoCaptacao() {
               <Sparkles size={16} /> Chave PIX da Entidade Vinculada
             </div>
             <div style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-              As contribuições financeiras dos turistas e moradores que utilizarem este QR Code serão direcionadas para a chave PIX: <strong>{pixKey}</strong>.
+              As contribuições financeiras voluntárias realizadas via QR Code e App são direcionadas para: <strong>{pixKey}</strong>.
             </div>
           </div>
         </Card>
@@ -163,16 +140,16 @@ export default function AdminCocoCaptacao() {
           >
             <QRCodeCanvas
               id="coco-qr-code"
-              value={referralUrl}
+              value={landingUrl}
               size={220}
               level="H"
               includeMargin={true}
             />
             <div style={{ marginTop: 8, fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0B1B3E" }}>
-              Côco & Cia · Ubatuba Limpa
+              Côco & Cia · Ubatuba Sustentável
             </div>
             <div style={{ fontSize: 11, color: "#5B6178", fontFamily: "DM Sans" }}>
-              Parceiro: {partnerSlug}
+              Adesão Oficial
             </div>
           </div>
 

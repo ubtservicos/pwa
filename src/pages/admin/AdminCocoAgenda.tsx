@@ -32,18 +32,9 @@ const DIAS_SEMANA = [
   "Domingo"
 ];
 
-const INITIAL_AGENDAS: AgendaBairro[] = [
-  { id: "ag-1", bairro_nome: "Centro", dia_semana: "Segunda-feira", horario_inicio: "08:00", horario_fim: "12:00", is_active: true },
-  { id: "ag-2", bairro_nome: "Itaguá", dia_semana: "Terça-feira", horario_inicio: "08:00", horario_fim: "12:00", is_active: true },
-  { id: "ag-3", bairro_nome: "Perequê-Açu", dia_semana: "Quarta-feira", horario_inicio: "13:00", horario_fim: "17:00", is_active: true },
-  { id: "ag-4", bairro_nome: "Praia Grande", dia_semana: "Quinta-feira", horario_inicio: "08:00", horario_fim: "12:00", is_active: true },
-  { id: "ag-5", bairro_nome: "Tenório", dia_semana: "Sexta-feira", horario_inicio: "09:00", horario_fim: "14:00", is_active: true },
-  { id: "ag-6", bairro_nome: "Toninhas", dia_semana: "Sábado", horario_inicio: "08:00", horario_fim: "12:00", is_active: true },
-];
-
 export default function AdminCocoAgenda() {
   const toast = useAdminToast();
-  const [agendas, setAgendas] = useState<AgendaBairro[]>(INITIAL_AGENDAS);
+  const [agendas, setAgendas] = useState<AgendaBairro[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAgenda, setEditingAgenda] = useState<AgendaBairro | null>(null);
   const [agendaBairroNome, setAgendaBairroNome] = useState("");

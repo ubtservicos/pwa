@@ -21,42 +21,9 @@ export interface DicaMaterial {
   conteudo_html: string;
 }
 
-const INITIAL_DICAS: DicaMaterial[] = [
-  {
-    id: "dica-1",
-    material_id: "plastico",
-    titulo: "Como preparar Plásticos para Coleta",
-    conteudo_html: "Lave bem garrafas PET, potes e frascos para retirar resíduos orgânicos e gordura. Amasse as garrafas para economizar espaço nos sacos de coleta."
-  },
-  {
-    id: "dica-2",
-    material_id: "vidro",
-    titulo: "Segurança no Descarte de Vidros",
-    conteudo_html: "Vidros inteiros devem ser limpos e secos. Em caso de vidros quebrados, embale em caixas de papelão ou garrafas PET cortadas com aviso visível para segurança do catador."
-  },
-  {
-    id: "dica-3",
-    material_id: "organico",
-    titulo: "Resíduos Orgânicos & Compostagem",
-    conteudo_html: "Separe cascas de frutas, legumes, restos de poda e borra de café. Evite misturar carnes e fezes de animais com a matéria vegetal."
-  },
-  {
-    id: "dica-4",
-    material_id: "metal",
-    titulo: "Latas e Alumínio",
-    conteudo_html: "Pressione as tampas para dentro das latinhas de conservas após enxaguar. Latinhas de alumínio podem ser amassadas para facilitar o transporte."
-  },
-  {
-    id: "dica-5",
-    material_id: "papel",
-    titulo: "Papel e Papelão Seco",
-    conteudo_html: "Mantenha caixas desmontadas e secas. Papéis engordurados ou plastificados não devem ser misturados com papelão limpo."
-  }
-];
-
 export default function AdminCocoManuais() {
   const toast = useAdminToast();
-  const [dicas, setDicas] = useState<DicaMaterial[]>(INITIAL_DICAS);
+  const [dicas, setDicas] = useState<DicaMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingDica, setEditingDica] = useState<DicaMaterial | null>(null);
   const [dicaMaterialId, setDicaMaterialId] = useState("plastico");
@@ -92,7 +59,7 @@ export default function AdminCocoManuais() {
       setEditingDica(dica);
       setDicaMaterialId(dica.material_id);
       setDicaTitulo(dica.titulo || "");
-      setDicaHtml(dica.conteudo_html);
+      setDicaHtml(dica.conteudo_html.replace(/<[^>]*>?/gm, ""));
     } else {
       setEditingDica(null);
       setDicaMaterialId("plastico");
@@ -104,7 +71,8 @@ export default function AdminCocoManuais() {
 
   const handleSaveDica = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dicaHtml.trim()) {
+    const cleanText = dicaHtml.replace(/<[^>]*>?/gm, "").trim();
+    if (!cleanText) {
       toast.show("Preencha o conteúdo orientativo do manual.");
       return;
     }
@@ -118,7 +86,7 @@ export default function AdminCocoManuais() {
           .update({
             material_id: dicaMaterialId,
             titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-            conteudo_html: dicaHtml
+            conteudo_html: cleanText
           })
           .eq("id", editingDica.id);
 
@@ -131,7 +99,7 @@ export default function AdminCocoManuais() {
           .insert([{
             material_id: dicaMaterialId,
             titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-            conteudo_html: dicaHtml
+            conteudo_html: cleanText
           }]);
 
         if (error) throw error;
@@ -146,14 +114,14 @@ export default function AdminCocoManuais() {
           ...d,
           material_id: dicaMaterialId,
           titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-          conteudo_html: dicaHtml
+          conteudo_html: cleanText
         } : d));
       } else {
         setDicas(prev => [...prev, {
           id: `local-${Date.now()}`,
           material_id: dicaMaterialId,
           titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-          conteudo_html: dicaHtml
+          conteudo_html: cleanText
         }]);
       }
       toast.show("Manual salvo localmente.");
@@ -221,63 +189,72 @@ export default function AdminCocoManuais() {
       </div>
 
       {/* Grid de Manuais */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20 }}>
-        {dicas.map((dica) => {
-          const mat = getMaterial(dica.material_id);
-          return (
-            <Card key={dica.id} style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 28, background: `${mat.cor}15`, width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {mat.emoji}
-                    </span>
-                    <div>
-                      <span style={{ fontSize: 11, fontFamily: "monospace", textTransform: "uppercase", color: mat.cor, fontWeight: 700 }}>
-                        {dica.material_id}
+      {dicas.length === 0 ? (
+        <Card style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
+          Nenhum manual de descarte cadastrado ainda. Clique em "Novo Manual" para cadastrar orientações para a população.
+        </Card>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20 }}>
+          {dicas.map((dica) => {
+            const mat = getMaterial(dica.material_id);
+            const plainContent = (dica.conteudo_html || "").replace(/<[^>]*>?/gm, "").trim();
+
+            return (
+              <Card key={dica.id} style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 28, background: `${mat.cor}15`, width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {mat.emoji}
                       </span>
-                      <h4 style={{ margin: "2px 0 0", fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)" }}>
-                        {dica.titulo || mat.nome}
-                      </h4>
+                      <div>
+                        <span style={{ fontSize: 11, fontFamily: "monospace", textTransform: "uppercase", color: mat.cor, fontWeight: 700 }}>
+                          {dica.material_id}
+                        </span>
+                        <h4 style={{ margin: "2px 0 0", fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {dica.titulo || mat.nome}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button
+                        onClick={() => handleOpenDicaModal(dica)}
+                        style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer", padding: 4 }}
+                        title="Editar Manual"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDica(dica.id, mat.nome)}
+                        style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 4 }}
+                        title="Remover Manual"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button
-                      onClick={() => handleOpenDicaModal(dica)}
-                      style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer", padding: 4 }}
-                      title="Editar Manual"
-                    >
-                      <Edit3 size={15} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteDica(dica.id, mat.nome)}
-                      style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 4 }}
-                      title="Remover Manual"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                  <div
+                    style={{
+                      fontFamily: "DM Sans",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      color: "var(--admin-subtle)",
+                      background: "var(--admin-bg)",
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      border: "1px solid var(--admin-border)"
+                    }}
+                  >
+                    {plainContent}
                   </div>
                 </div>
-
-                <div
-                  style={{
-                    fontFamily: "DM Sans",
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    color: "var(--admin-subtle)",
-                    background: "var(--admin-bg)",
-                    padding: "12px 14px",
-                    borderRadius: 10,
-                    border: "1px solid var(--admin-border)"
-                  }}
-                  dangerouslySetInnerHTML={{ __html: dica.conteudo_html }}
-                />
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modal de Manual / Dica */}
       {isDicaModalOpen && (

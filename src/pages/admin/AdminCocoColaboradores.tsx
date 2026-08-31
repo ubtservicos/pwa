@@ -38,41 +38,14 @@ const BAIRROS_UBATUBA = [
   "Estufa II"
 ];
 
-const INITIAL_COLABORADORES: ColaboradorCoco[] = [
-  {
-    id: "colab-1",
-    nome: "Carlos Eduardo Santos",
-    veiculo: "Caminhão Coletor 01 (Placa: UBT-2024)",
-    bairro_atuacao: "Centro & Itaguá",
-    telefone: "(12) 99711-2233",
-    is_ativo: true,
-  },
-  {
-    id: "colab-2",
-    nome: "Marcos Vinicius Pereira",
-    veiculo: "Triciclo de Carga Sustentável 02",
-    bairro_atuacao: "Perequê-Açu",
-    telefone: "(12) 99822-4455",
-    is_ativo: true,
-  },
-  {
-    id: "colab-3",
-    nome: "Ana Paula Silva",
-    veiculo: "Caminhão Coletor 02 (Placa: UBT-8899)",
-    bairro_atuacao: "Praia Grande & Tenório",
-    telefone: "(12) 99133-7788",
-    is_ativo: false,
-  }
-];
-
 export default function AdminCocoColaboradores() {
   const toast = useAdminToast();
   const [colaboradores, setColaboradores] = useState<ColaboradorCoco[]>(() => {
     try {
       const stored = localStorage.getItem("coco_colaboradores_local");
-      return stored ? JSON.parse(stored) : INITIAL_COLABORADORES;
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_COLABORADORES;
+      return [];
     }
   });
 
