@@ -25,10 +25,6 @@ import { Card, PrimaryButton, GhostButton, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import { MapRef, LIGHT_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
-import { getPinIcon, getTruckIcon } from "@/utils/cocoIcons";
 import { getMaterial, MATERIAIS_COCO } from "@/mocks/cocoMateriais";
 import { QRCodeCanvas } from "qrcode.react";
 
@@ -60,8 +56,6 @@ const DIAS_SEMANA = [
   "Domingo"
 ];
 
-const DEFAULT_CENTER: [number, number] = [-23.4332, -45.0711];
-
 export default function AdminCocoPage() {
   const toast = useAdminToast();
   const user = useCurrentUser();
@@ -81,8 +75,6 @@ export default function AdminCocoPage() {
   });
 
   const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number } | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const mapRef = useRef<L.Map | null>(null);
 
   // Agenda Bairros state
   const [agendas, setAgendas] = useState<AgendaBairro[]>([]);
@@ -151,7 +143,6 @@ export default function AdminCocoPage() {
   };
 
   useEffect(() => {
-    setMounted(true);
     fetchDados();
 
     // Inscrever canais realtime
@@ -690,76 +681,9 @@ export default function AdminCocoPage() {
           </div>
 
           {/* Coluna da Direita (Mapa Operacional) */}
-          <Card style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 600 }}>
-            <div style={{ height: "100%", width: "100%", position: "relative" }}>
-              {mounted && (
-                <MapContainer
-                  center={DEFAULT_CENTER}
-                  zoom={13}
-                  style={{ height: "100%", width: "100%", minHeight: 600 }}
-                >
-                  <MapRef mapRef={mapRef} />
-                  <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} />
-
-                  {/* Marcadores de Pontos de Coleta */}
-                  {pontos.map((p) => {
-                    if (!p || p.lat === undefined || p.lat === null || p.lng === undefined || p.lng === null) return null;
-                    const lat = Number(p.lat);
-                    const lng = Number(p.lng);
-                    if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) return null;
-
-                    return (
-                      <Marker
-                        key={p.id}
-                        position={[lat, lng]}
-                        icon={getPinIcon(p.material || "plastico")}
-                      >
-                        <Popup>
-                          <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
-                            <strong>{p.address || "Ponto de Coleta"}</strong>
-                            <p style={{ margin: "4px 0" }}>Material: {getMaterial(p.material || "plastico").nome}</p>
-                            {p.quantidade_estimada && <p style={{ margin: "2px 0", color: "#555" }}>Qtd: {p.quantidade_estimada}</p>}
-                            {p.local_armazenamento && <p style={{ margin: "2px 0", color: "#555" }}>Local: {p.local_armazenamento}</p>}
-                            <span style={{ fontSize: 11, fontWeight: 700, color: p.status === "coletado" ? "#0DB87E" : "#F5A623" }}>
-                              Status: {p.status || "pendente"}
-                            </span>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  })}
-
-                  {/* Marcadores de Caminhões */}
-                  {caminhoesAprovados.map((c) => {
-                    if (!c || c.lat === undefined || c.lat === null || c.lng === undefined || c.lng === null) return null;
-                    const lat = Number(c.lat);
-                    const lng = Number(c.lng);
-                    if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) return null;
-
-                    return (
-                      <Marker
-                        key={c.id}
-                        position={[lat, lng]}
-                        icon={getTruckIcon(!!c.is_online)}
-                      >
-                        <Popup>
-                          <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
-                            <strong>🚚 {c.apelido || "Caminhão"}</strong>
-                            <p style={{ margin: "4px 0" }}>Placa: {c.plate || "---"}</p>
-                            <p style={{ margin: "2px 0" }}>Status: {c.is_online ? "🟢 Ativo no Trânsito" : "⚪ Desconectado"}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  })}
-                </MapContainer>
-              )}
-
-              <div style={mapOverlayStyle}>
-                <div>
-                  <span style={{ fontWeight: 700, color: "var(--admin-text)" }}>{pontos.length}</span> pontos de descarte aguardando · <span style={{ fontWeight: 700, color: "#0DB87E" }}>{caminhoesOnline.length}</span> caminhões online
-                </div>
-              </div>
+          <Card style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 400 }}>
+            <div className="w-full h-[400px] bg-slate-800 flex items-center justify-center font-bold text-slate-400 rounded-lg border border-slate-700">
+              Mapa de Operações Temporariamente Desativado (Aguardando Dados)
             </div>
           </Card>
         </div>
