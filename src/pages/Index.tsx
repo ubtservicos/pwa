@@ -28,6 +28,7 @@ import { useNavigate } from "react-router-dom";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -757,19 +758,17 @@ export default function Index() {
     setSubmitError("");
 
     try {
-      const { data: existing, error: checkError } = await supabase
-        .from("waitlist")
-        .select("id")
-        .eq("email", values.email.trim())
-        .maybeSingle();
-
-      if (checkError) throw checkError;
-
-      if (existing) {
-        setSubmitError("Este e-mail já está cadastrado na nossa fila de fundadores!");
-        setIsSubmitting(false);
-        return;
-      }
+      // 1. Criar cliente Supabase estritamente anônimo para evitar conflitos de tokens JWT expirados/corrompidos no localStorage mobile
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+      
+      const publicClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+        }
+      });
 
       const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
@@ -780,12 +779,12 @@ export default function Index() {
       const ipHashVal = await sha256(seed);
       const parsedUA = parseUserAgent(ua);
 
-      const obsParts = [];
+      const obsParts: string[] = [];
       if (values.possuiContaMercadoPago !== undefined && values.possuiContaMercadoPago !== null) {
         obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
       }
       if (values.regiao_atuacao && values.regiao_atuacao.length > 0) {
-        obsParts.push(`Regiao: ${values.regiao_atuacao.join(", ")}`);
+        obsParts.push(`Região: ${values.regiao_atuacao.join(", ")}`);
       }
       if (values.praias && values.praias.length > 0) {
         obsParts.push(`Praias: ${values.praias.join(", ")}`);
@@ -795,31 +794,54 @@ export default function Index() {
       }
       const obsText = obsParts.join(" | ");
 
-      const { error: insertError } = await supabase
+      // 2. Montar Payload estrito alinhado com a tabela public.waitlist
+      const payload = {
+        nome: values.nome.trim(),
+        email: values.email.trim().toLowerCase(),
+        telefone: values.telefone.trim(),
+        cidade: "Ubatuba",
+        perfil: [values.perfil], // PostgreSQL ARRAY text[]
+        consentimento_lgpd: true,
+        status: "novo",
+        created_at_local: createdLocal,
+        origem: "direto",
+        referer: document.referrer || null,
+        ip_hash: ipHashVal,
+        device_type: parsedUA.device_type,
+        browser: parsedUA.browser,
+        os: parsedUA.os,
+        bairro_moradia: values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
+        bairro_trabalho: values.regiao_atuacao && values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null,
+        possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
+        observacoes: obsText || null
+      };
+
+      console.log("[Waitlist] Enviando cadastro com cliente público anon:", payload);
+
+      // 3. Execução direta do INSERT (sem pré-consulta SELECT restrita para anon)
+      const { data: insertData, error: insertError } = await publicClient
         .from("waitlist")
-        .insert({
-          nome: values.nome.trim(),
-          email: values.email.trim(),
-          telefone: values.telefone.trim(),
-          cidade: "Ubatuba",
-          perfil: values.perfil,
-          consentimento_lgpd: true,
-          status: "novo",
-          created_at_local: createdLocal,
-          origem: "direto",
-          ip_hash: ipHashVal,
-          device_type: parsedUA.device_type,
-          browser: parsedUA.browser,
-          os: parsedUA.os,
-          bairro_moradia: values.bairros.length > 0 ? values.bairros.join(", ") : null,
-          bairro_trabalho: values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null,
-          observacoes: obsText
-        });
+        .insert(payload);
 
       if (insertError) {
-        console.error("[Waitlist] Erro retornado pelo Supabase no insert:", insertError);
+        console.error("[Waitlist] Erro no Supabase Insert:", insertError);
+        
+        // Tratamento de duplicação (Unique constraint em email ou telefone)
+        if (
+          insertError.code === "23505" || 
+          insertError.message?.toLowerCase().includes("unique") || 
+          insertError.message?.toLowerCase().includes("duplicate") ||
+          insertError.details?.toLowerCase().includes("already exists")
+        ) {
+          setSubmitError("Este e-mail ou telefone já está cadastrado na nossa fila de fundadores!");
+          setIsSubmitting(false);
+          return;
+        }
+
         throw insertError;
       }
+
+      console.log("[Waitlist] Cadastro realizado com sucesso:", insertData);
 
       setSubmitSuccess(true);
       setRegisteredUser({ nome: values.nome.trim(), email: values.email.trim() });
@@ -828,11 +850,13 @@ export default function Index() {
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
-      console.error("[Waitlist] Erro ao registrar no Supabase:", err);
-      const userMessage = err?.message
-        ? `Falha no envio: ${err.message}`
-        : "Não foi possível enviar os dados devido a uma falha de conexão. Por favor, verifique sua rede e tente novamente.";
-      setSubmitError(userMessage);
+      console.error("[Waitlist] Falha ao registrar:", err);
+      
+      const errorMsg = err?.message || "Erro de conexão";
+      const errorDetails = err?.details ? ` (${err.details})` : "";
+      const errorHint = err?.hint ? ` - Dica: ${err.hint}` : "";
+      
+      setSubmitError(`Falha no envio: ${errorMsg}${errorDetails}${errorHint}`);
       
       // Traz a mensagem de erro para visualização imediata no mobile
       const formTop = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
