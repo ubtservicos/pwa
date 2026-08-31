@@ -376,7 +376,7 @@ const CocoPage = () => {
       {/* Map */}
       <div style={{ position: "absolute", inset: 0 }}>
         <MapContainer
-          center={[center.lat, center.lng]}
+          center={[center?.lat || -23.4332, center?.lng || -45.0711]}
           zoom={14}
           style={{ width: "100%", height: "400px" }}
           zoomControl={false}

@@ -60,6 +60,8 @@ const DIAS_SEMANA = [
   "Domingo"
 ];
 
+const DEFAULT_CENTER: [number, number] = [-23.4332, -45.0711];
+
 export default function AdminCocoPage() {
   const toast = useAdminToast();
   const user = useCurrentUser();
@@ -689,7 +691,7 @@ export default function AdminCocoPage() {
           <Card style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 600 }}>
             <div style={{ height: "100%", width: "100%", position: "relative" }}>
               <MapContainer
-                center={[UBATUBA_CENTER?.lat || -23.4332, UBATUBA_CENTER?.lng || -45.0711]}
+                center={DEFAULT_CENTER}
                 zoom={13}
                 style={{ height: "100%", width: "100%", minHeight: 600 }}
               >
@@ -698,23 +700,25 @@ export default function AdminCocoPage() {
 
                 {/* Marcadores de Pontos de Coleta */}
                 {pontos.map((p) => {
-                  if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
+                  if (!p || p.lat === undefined || p.lat === null || p.lng === undefined || p.lng === null) return null;
                   const lat = Number(p.lat);
                   const lng = Number(p.lng);
+                  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) return null;
+
                   return (
                     <Marker
                       key={p.id}
                       position={[lat, lng]}
-                      icon={getPinIcon(p.material)}
+                      icon={getPinIcon(p.material || "plastico")}
                     >
                       <Popup>
                         <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
                           <strong>{p.address || "Ponto de Coleta"}</strong>
-                          <p style={{ margin: "4px 0" }}>Material: {getMaterial(p.material).nome}</p>
+                          <p style={{ margin: "4px 0" }}>Material: {getMaterial(p.material || "plastico").nome}</p>
                           {p.quantidade_estimada && <p style={{ margin: "2px 0", color: "#555" }}>Qtd: {p.quantidade_estimada}</p>}
                           {p.local_armazenamento && <p style={{ margin: "2px 0", color: "#555" }}>Local: {p.local_armazenamento}</p>}
                           <span style={{ fontSize: 11, fontWeight: 700, color: p.status === "coletado" ? "#0DB87E" : "#F5A623" }}>
-                            Status: {p.status}
+                            Status: {p.status || "pendente"}
                           </span>
                         </div>
                       </Popup>
@@ -724,19 +728,21 @@ export default function AdminCocoPage() {
 
                 {/* Marcadores de Caminhões */}
                 {caminhoesAprovados.map((c) => {
-                  if (!c.lat || !c.lng || isNaN(Number(c.lat)) || isNaN(Number(c.lng))) return null;
+                  if (!c || c.lat === undefined || c.lat === null || c.lng === undefined || c.lng === null) return null;
                   const lat = Number(c.lat);
                   const lng = Number(c.lng);
+                  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) return null;
+
                   return (
                     <Marker
                       key={c.id}
                       position={[lat, lng]}
-                      icon={getTruckIcon(c.is_online)}
+                      icon={getTruckIcon(!!c.is_online)}
                     >
                       <Popup>
                         <div style={{ fontFamily: "DM Sans", fontSize: 13 }}>
-                          <strong>🚚 {c.apelido}</strong>
-                          <p style={{ margin: "4px 0" }}>Placa: {c.plate}</p>
+                          <strong>🚚 {c.apelido || "Caminhão"}</strong>
+                          <p style={{ margin: "4px 0" }}>Placa: {c.plate || "---"}</p>
                           <p style={{ margin: "2px 0" }}>Status: {c.is_online ? "🟢 Ativo no Trânsito" : "⚪ Desconectado"}</p>
                         </div>
                       </Popup>
