@@ -54,12 +54,65 @@ const Login = () => {
         showToast("Credenciais inválidas. Por favor, verifique seu e-mail e senha. ❌");
         trackEvent("login_failed", "ux", { reason: error.message });
         logSystem("WARNING", "AUTH", "login_submit", "failed", duration, error.message, error.status?.toString() || "AUTH_FAILED", { email });
-      } else {
+      } else if (data?.user) {
         trackEvent("login", "ux", { user_id: data.user.id });
         logSystem("INFO", "AUTH", "login_submit", "success", duration, undefined, undefined, { email });
-        if (email === "ubt.servicos@gmail.com") {
+
+        // 1. Resolução assíncrona da Role do usuário
+        let userRole: string | null = email === "ubt.servicos@gmail.com" ? "super_admin" : null;
+
+        if (!userRole) {
+          try {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", data.user.id)
+              .maybeSingle();
+            if (profile?.role) userRole = profile.role;
+          } catch (pErr) {
+            console.warn("[Login] Erro ao consultar profiles:", pErr);
+          }
+        }
+
+        if (!userRole) {
+          try {
+            const { data: dbUser } = await supabase
+              .from("usuarios")
+              .select("role")
+              .eq("id", data.user.id)
+              .maybeSingle();
+            if (dbUser?.role) userRole = dbUser.role;
+          } catch (uErr) {
+            console.warn("[Login] Erro ao consultar usuarios:", uErr);
+          }
+        }
+
+        if (!userRole) {
+          userRole = (data.user.user_metadata?.role as string) || (data.user.app_metadata?.role as string) || "tomador";
+        }
+
+        console.log("[Login] Autenticado com sucesso. Role:", userRole);
+
+        // 2. Roteamento Condicional Estrito Baseado em Role
+        if (
+          userRole === "cocoecia" || 
+          userRole === "cocoecia-dirigentes" || 
+          userRole === "cocoecia-colaborador" ||
+          userRole === "associacao"
+        ) {
+          navigate("/admin/coco");
+        } else if (
+          userRole === "super_admin" || 
+          userRole === "superadmin" || 
+          userRole === "admin" || 
+          userRole === "operator" ||
+          userRole === "financeiro" ||
+          userRole === "moderador" ||
+          userRole === "operations_manager"
+        ) {
           navigate("/admin");
         } else {
+          // Usuário comum (turista, morador, tomador, diarista, mototaxi, ambulante)
           navigate("/app/home");
         }
       }
