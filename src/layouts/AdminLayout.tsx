@@ -36,19 +36,31 @@ import {
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
+const ALLOWED_COCO_ROLES = [
+  "cocoecia",
+  "tomador",
+  "admin",
+  "super_admin",
+  "operator",
+  "associacao",
+  "associacao_lider",
+  "cocoecia-dirigentes",
+  "cocoecia-colaborador"
+];
+
 export const COCO_NAV_ITEMS = [
-  { icon: BarChart3, label: "Indicadores (Dashboard)", path: "/admin/coco", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: MapPin, label: "Mapa Operacional", path: "/admin/coco/mapa-operacional", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: Calendar, label: "Escala de Bairros", path: "/admin/coco/agenda", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: BookOpen, label: "Dicas & Manuais", path: "/admin/coco/manuais", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: QrCode, label: "Captação & Afiliados", path: "/admin/coco/captacao", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: ["cocoecia", "operator", "admin", "super_admin"] },
-  { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: ["cocoecia", "operator", "admin", "super_admin"] },
+  { icon: BarChart3, label: "Indicadores (Dashboard)", path: "/admin/coco", roles: ALLOWED_COCO_ROLES },
+  { icon: MapPin, label: "Mapa Operacional", path: "/admin/coco/mapa-operacional", roles: ALLOWED_COCO_ROLES },
+  { icon: Calendar, label: "Escala de Bairros", path: "/admin/coco/agenda", roles: ALLOWED_COCO_ROLES },
+  { icon: BookOpen, label: "Dicas & Manuais", path: "/admin/coco/manuais", roles: ALLOWED_COCO_ROLES },
+  { icon: QrCode, label: "Captação & Afiliados", path: "/admin/coco/captacao", roles: ALLOWED_COCO_ROLES },
+  { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: ALLOWED_COCO_ROLES },
+  { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: ALLOWED_COCO_ROLES },
+  { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: ALLOWED_COCO_ROLES },
 ];
 
 export const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["operator", "financeiro", "moderador", "admin", "super_admin"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin", roles: ["operator", "financeiro", "moderador", "admin", "super_admin", "tomador", "cocoecia"] },
   { icon: Activity, label: "Saúde da Plataforma", path: "/admin/health", roles: ["operations_manager", "operator", "admin", "super_admin"] },
   { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
   { icon: Users, label: "Clientes", path: "/admin/clientes", roles: ["operator", "moderador", "admin", "super_admin"] },
@@ -88,22 +100,50 @@ const sectionTitle = (path: string) => {
 const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [role, setRole] = useState<string>("tomador");
-  const [adminName, setAdminName] = useState<string>("Admin UBT");
+  const [role, setRole] = useState<string>("cocoecia");
+  const [adminName, setAdminName] = useState<string>("Gestor Côco & Cia");
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: dbUser } = await supabase
-          .from("usuarios")
-          .select("nome, role")
-          .eq("id", user.id)
-          .maybeSingle();
-        
-        const resolvedRole = user.email === "ubt.servicos@gmail.com" ? "super_admin" : (dbUser?.role || "tomador");
-        setRole(resolvedRole);
-        setAdminName(dbUser?.nome || user.email || "Admin UBT");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          let resolvedRole: string | null = user.email === "ubt.servicos@gmail.com" ? "super_admin" : null;
+          let resolvedName = user.email || "Admin UBT";
+
+          if (!resolvedRole) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role, full_name")
+              .eq("id", user.id)
+              .maybeSingle();
+            if (profile?.role) {
+              resolvedRole = profile.role;
+              if (profile.full_name) resolvedName = profile.full_name;
+            }
+          }
+
+          if (!resolvedRole) {
+            const { data: dbUser } = await supabase
+              .from("usuarios")
+              .select("nome, role")
+              .eq("id", user.id)
+              .maybeSingle();
+            if (dbUser?.role) {
+              resolvedRole = dbUser.role;
+              if (dbUser.nome) resolvedName = dbUser.nome;
+            }
+          }
+
+          if (!resolvedRole) {
+            resolvedRole = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "cocoecia";
+          }
+
+          setRole(resolvedRole);
+          setAdminName(resolvedName);
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar role no AdminLayout:", e);
       }
     };
     fetchUserRole();

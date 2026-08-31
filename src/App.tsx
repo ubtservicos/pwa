@@ -221,14 +221,14 @@ const App = () => (
               <Route path="/admin/preco" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/arbitragem" element={adminGuard(<AdminArbitragemPage />, ["moderador", "admin", "super_admin"])} />
               <Route path="/admin/conteudo" element={adminGuard(<AdminConteudoPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/coco" element={adminGuard(<AdminCocoPage />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/mapa-operacional" element={adminGuard(<AdminCocoMapa />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/agenda" element={adminGuard(<AdminCocoAgenda />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/manuais" element={adminGuard(<AdminCocoManuais />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/captacao" element={adminGuard(<AdminCocoCaptacao />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/frota" element={adminGuard(<AdminCocoFrota />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "cocoecia"])} />
-              <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia"])} />
+              <Route path="/admin/coco" element={adminGuard(<AdminCocoPage />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/mapa-operacional" element={adminGuard(<AdminCocoMapa />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/agenda" element={adminGuard(<AdminCocoAgenda />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/manuais" element={adminGuard(<AdminCocoManuais />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/captacao" element={adminGuard(<AdminCocoCaptacao />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/frota" element={adminGuard(<AdminCocoFrota />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
+              <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
               <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
