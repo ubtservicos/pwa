@@ -7,8 +7,7 @@ import { MOCK_COCO_CONFIG, type PontoColeta } from "@/mocks/cocoMock";
 import { getMaterial } from "@/mocks/cocoMateriais";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { formatDist, haversineKm } from "@/utils/geo";
-import { useSimpleToast } from "@/hooks/useToast2";
-import { MapRef, DARK_TILES, ATTRIBUTION } from "@/components/UBTMap";
+import { MapRef, DARK_TILES, ATTRIBUTION, isValidLatLng } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -1369,7 +1368,9 @@ const CocoOnlinePage = () => {
                 key={p.id}
                 onClick={() => {
                   setSelectedPonto(p);
-                  mapRef.current?.flyTo([p.lat, p.lng], 17);
+                  if (isValidLatLng(p.lat, p.lng)) {
+                    mapRef.current?.flyTo([Number(p.lat), Number(p.lng)], 17);
+                  }
                 }}
                 style={{
                   display: "flex",

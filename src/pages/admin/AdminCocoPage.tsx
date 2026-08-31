@@ -27,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-import { MapRef, LIGHT_TILES, ATTRIBUTION, UBATUBA_CENTER } from "@/components/UBTMap";
+import { MapRef, LIGHT_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
 import { getPinIcon, getTruckIcon } from "@/utils/cocoIcons";
 import { getMaterial, MATERIAIS_COCO } from "@/mocks/cocoMateriais";
 import { QRCodeCanvas } from "qrcode.react";

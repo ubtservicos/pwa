@@ -22,12 +22,24 @@ export const ATTRIBUTION =
 // Ubatuba como centro padrão
 export const UBATUBA_CENTER: [number, number] = [-23.4336, -45.0838];
 
+// Validador estrito de coordenadas geográficas
+export const isValidLatLng = (lat: any, lng: any): boolean => {
+    if (lat === null || lat === undefined || lng === null || lng === undefined) return false;
+    const nLat = typeof lat === 'number' ? lat : Number(String(lat).trim());
+    const nLng = typeof lng === 'number' ? lng : Number(String(lng).trim());
+    return typeof nLat === 'number' && typeof nLng === 'number' && !isNaN(nLat) && !isNaN(nLng) && isFinite(nLat) && isFinite(nLng) && nLat !== 0 && nLng !== 0;
+};
+
 // Componente auxiliar para mover o mapa programaticamente
 export function FlyTo({ center, zoom }: { center: [number, number]; zoom?: number }) {
     const map = useMap();
     useEffect(() => {
-        map.flyTo(center, zoom ?? map.getZoom(), { duration: 1.2 });
-    }, [center, zoom]);
+        if (Array.isArray(center) && isValidLatLng(center[0], center[1])) {
+            const lat = Number(center[0]);
+            const lng = Number(center[1]);
+            map.flyTo([lat, lng], zoom ?? map.getZoom(), { duration: 1.2 });
+        }
+    }, [center, zoom, map]);
     return null;
 }
 

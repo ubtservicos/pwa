@@ -30,7 +30,7 @@ import {
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { tomadorIcon } from "@/lib/mapIcons";
 import { reverseGeocode } from "@/lib/geoService";
-import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from "@/components/UBTMap";
+import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -1090,8 +1090,8 @@ const CocoPage = () => {
                   <button
                     onClick={() => {
                       const p = pontos.find((x) => x.id === pontoConfirmadoId);
-                      if (p) {
-                        mapRef.current?.flyTo([p.lat, p.lng], 17);
+                      if (p && isValidLatLng(p.lat, p.lng)) {
+                        mapRef.current?.flyTo([Number(p.lat), Number(p.lng)], 17);
                       }
                     }}
                     style={{
@@ -1163,7 +1163,9 @@ const CocoPage = () => {
                 <div
                   key={c.id}
                   onClick={() => {
-                    mapRef.current?.flyTo([c.location.lat, c.location.lng], 16);
+                    if (c?.location && isValidLatLng(c.location.lat, c.location.lng)) {
+                      mapRef.current?.flyTo([Number(c.location.lat), Number(c.location.lng)], 16);
+                    }
                   }}
                   style={{
                     background: "rgba(255,255,255,0.05)",
@@ -1268,7 +1270,9 @@ const CocoPage = () => {
                   <div
                     key={p.id}
                     onClick={() => {
-                      mapRef.current?.flyTo([p.lat, p.lng], 17);
+                      if (isValidLatLng(p.lat, p.lng)) {
+                        mapRef.current?.flyTo([Number(p.lat), Number(p.lng)], 17);
+                      }
                     }}
                     style={{
                       display: "flex",
