@@ -97,7 +97,7 @@ import AdminSecurityCenterPage from "./pages/admin/AdminSecurityCenterPage.tsx";
 import AdminWaitlistPage from "./pages/admin/AdminWaitlistPage.tsx";
 import AdminWikiPage from "./pages/admin/AdminWikiPage.tsx";
 import AdminAprovacoesPage from "./pages/admin/AdminAprovacoesPage.tsx";
-import AdminCocoPage from "./pages/admin/AdminCocoPage.tsx";
+import AdminDocumentosPage from "./pages/admin/AdminDocumentosPage.tsx";
 import AdminCocoSettings from "./pages/admin/AdminCocoSettings.tsx";
 import AdminCocoFrota from "./pages/admin/AdminCocoFrota.tsx";
 import CocoPage from "./pages/CocoPage.tsx";
