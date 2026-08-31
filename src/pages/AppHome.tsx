@@ -18,6 +18,8 @@ import {
 import { setCurrentUid, useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
+import InAppNotificationBell from "@/components/notifications/InAppNotificationBell";
+import CocoSmartBanner from "@/components/notifications/CocoSmartBanner";
 
 interface ServiceItem {
   label: string;
@@ -200,18 +202,27 @@ const AppHome = () => {
             </span>
           </div>
         </div>
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ background: "rgba(13,184,126,0.15)" }}
-        >
-          <span
-            className="font-display text-[14px] font-bold"
-            style={{ color: "#0DB87E" }}
+
+        <div className="flex items-center gap-3">
+          <InAppNotificationBell />
+
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer"
+            onClick={() => navigate("/app/perfil")}
+            style={{ background: "rgba(13,184,126,0.15)" }}
           >
-            {initials}
-          </span>
+            <span
+              className="font-display text-[14px] font-bold"
+              style={{ color: "#0DB87E" }}
+            >
+              {initials}
+            </span>
+          </div>
         </div>
       </header>
+
+      {/* Dynamic Smart Recycling Reminder Banner */}
+      <CocoSmartBanner />
 
       {/* Toggle Tomador/Prestador no Topo */}
       <section className="mt-5 flex">

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
@@ -17,7 +17,9 @@ import {
   X,
   UploadCloud,
   Layers,
-  Clock
+  Clock,
+  Calendar,
+  AlertTriangle
 } from "lucide-react";
 import { MATERIAIS_COCO, getMaterial } from "@/mocks/cocoMateriais";
 import {
@@ -33,6 +35,8 @@ import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { validateGeofence } from "@/services/GeofenceService";
+import InAppNotificationBell, { sendInAppNotification } from "@/components/notifications/InAppNotificationBell";
+import CocoSmartBanner from "@/components/notifications/CocoSmartBanner";
 
 
 type Tab = "informar" | "acompanhar" | "contribuir";
@@ -93,6 +97,7 @@ const CocoPage = () => {
   const [localArmazenamento, setLocalArmazenamento] = useState<string>("");
   const [dicasMateriais, setDicasMateriais] = useState<Record<string, { titulo: string; conteudo_html: string }>>({});
   const [activeMaterialDica, setActiveMaterialDica] = useState<{ id: string; nome: string; emoji: string; cor: string; titulo?: string; html?: string } | null>(null);
+  const [agendaBairros, setAgendaBairros] = useState<any[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [pontoConfirmadoId, setPontoConfirmadoId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -108,14 +113,14 @@ const CocoPage = () => {
 
   const { coords: geoCoords, address: geoAddress, refresh: refreshGeo } = useGeolocation();
 
-  // Fetch educational tips for recyclable materials
+  // Fetch educational tips and active neighborhood agenda
   useEffect(() => {
-    const fetchDicas = async () => {
+    const fetchDicasEAgenda = async () => {
       try {
-        const { data } = await supabase.from("coco_dicas_materiais").select("*");
-        if (data && data.length > 0) {
+        const { data: dicasData } = await supabase.from("coco_dicas_materiais").select("*");
+        if (dicasData && dicasData.length > 0) {
           const mapped: Record<string, { titulo: string; conteudo_html: string }> = {};
-          data.forEach((d: any) => {
+          dicasData.forEach((d: any) => {
             mapped[d.material_id] = {
               titulo: d.titulo || `Como descartar ${d.material_id}`,
               conteudo_html: d.conteudo_html
@@ -123,12 +128,39 @@ const CocoPage = () => {
           });
           setDicasMateriais(mapped);
         }
+
+        const { data: agendaData } = await supabase
+          .from("coco_agenda_bairros")
+          .select("*")
+          .eq("is_active", true);
+        if (agendaData) {
+          setAgendaBairros(agendaData);
+        }
       } catch (e) {
-        console.warn("Dicas materiais offline fallback:", e);
+        console.warn("Offline fallback para dicas/agenda:", e);
       }
     };
-    fetchDicas();
+    fetchDicasEAgenda();
   }, []);
+
+  const DIAS_MAP: Record<number, string> = {
+    0: "Domingo",
+    1: "Segunda-feira",
+    2: "Terça-feira",
+    3: "Quarta-feira",
+    4: "Quinta-feira",
+    5: "Sexta-feira",
+    6: "Sábado"
+  };
+  const hojeNome = DIAS_MAP[new Date().getDay()];
+
+  const matchedBairroAgenda = useMemo(() => {
+    if (!endereco) return null;
+    const endLower = endereco.toLowerCase();
+    return agendaBairros.find((a) => endLower.includes(a.bairro_nome.toLowerCase())) || null;
+  }, [endereco, agendaBairros]);
+
+  const isBairroHoje = matchedBairroAgenda ? matchedBairroAgenda.dia_semana === hojeNome : true;
 
   const fetchCaminhoes = async () => {
     const { data, error } = await supabase
@@ -254,6 +286,12 @@ const CocoPage = () => {
       return;
     }
 
+    const horarioPrevisto = matchedBairroAgenda
+      ? isBairroHoje
+        ? `Hoje (${matchedBairroAgenda.horario_inicio} às ${matchedBairroAgenda.horario_fim})`
+        : `Agendado: ${matchedBairroAgenda.dia_semana} (${matchedBairroAgenda.horario_inicio} às ${matchedBairroAgenda.horario_fim})`
+      : "Aguardando rota";
+
     try {
       const { data, error } = await supabase
         .from("coco_pontos")
@@ -266,6 +304,7 @@ const CocoPage = () => {
           foto_url: fotoSel || null,
           quantidade_estimada: quantidadeEstimada || null,
           local_armazenamento: localArmazenamento || null,
+          horario_previsto: horarioPrevisto,
           status: "aguardando"
         })
         .select()
@@ -275,6 +314,16 @@ const CocoPage = () => {
       setPontoConfirmadoId(data.id);
       setShowSuccess(true);
       fetchPontos();
+
+      // Trigger In-App Notification (Req 6)
+      await sendInAppNotification(
+        user.uid,
+        matchedBairroAgenda && !isBairroHoje ? "Coleta Agendada 📅" : "Descarte Registrado ♻️",
+        matchedBairroAgenda && !isBairroHoje
+          ? `O caminhão passa em ${matchedBairroAgenda.bairro_nome} às ${matchedBairroAgenda.dia_semana}s (${matchedBairroAgenda.horario_inicio} às ${matchedBairroAgenda.horario_fim}). Seu resíduo foi agendado.`
+          : `Seu ponto de coleta em "${endereco}" foi registrado e já está visível para os caminhões da Côco & Cia!`,
+        "/app/coco"
+      );
     } catch (err: any) {
       alert("Erro ao salvar ponto no Supabase: " + err.message);
     }
@@ -309,23 +358,20 @@ const CocoPage = () => {
       className="relative overflow-hidden"
       style={{ height: "100svh", background: "#0B1B3E" }}
     >
-      {/* Top bar */}
-      <button
-        onClick={() => navigate("/app/home")}
-        aria-label="voltar"
-        className="absolute z-[1010] flex items-center justify-center rounded-full"
-        style={{
-          top: 16,
-          left: 16,
-          width: 40,
-          height: 40,
-          background: "rgba(11,27,62,0.75)",
-          backdropFilter: "blur(8px)",
-          border: "1px solid rgba(255,255,255,0.10)",
-        }}
-      >
-        <ArrowLeft size={20} color="white" />
-      </button>
+      {/* Top bar with Back Button and InApp Notification Bell */}
+      <div className="absolute top-4 left-4 right-4 z-[1010] flex items-center justify-between pointer-events-none">
+        <button
+          onClick={() => navigate("/app/home")}
+          aria-label="voltar"
+          className="pointer-events-auto flex items-center justify-center rounded-full w-10 h-10 bg-[#0B1B3E]/80 backdrop-blur-md border border-white/10 text-white hover:bg-[#0B1B3E] transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={20} />
+        </button>
+
+        <div className="pointer-events-auto">
+          <InAppNotificationBell />
+        </div>
+      </div>
 
       {/* Map */}
       <div style={{ position: "absolute", inset: 0 }}>
@@ -420,6 +466,9 @@ const CocoPage = () => {
             margin: "0 auto 12px",
           }}
         />
+
+        {/* Smart Scheduled Pickup Notification Banner */}
+        <CocoSmartBanner currentAddress={endereco} onCtaClick={() => setActiveTab("informar")} />
 
         {/* Tabs */}
         <div
@@ -864,6 +913,47 @@ const CocoPage = () => {
                   )}
                 </div>
 
+                {/* Trava Geográfica de Bairros (Req 5) */}
+                {matchedBairroAgenda && (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      background: isBairroHoje ? "rgba(13,184,126,0.12)" : "rgba(245,166,35,0.12)",
+                      border: "1px solid",
+                      borderColor: isBairroHoje ? "rgba(13,184,126,0.30)" : "rgba(245,166,35,0.30)",
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "center"
+                    }}
+                  >
+                    {isBairroHoje ? (
+                      <CheckCircle size={20} color="#0DB87E" style={{ flexShrink: 0 }} />
+                    ) : (
+                      <Calendar size={20} color="#F5A623" style={{ flexShrink: 0 }} />
+                    )}
+                    <div
+                      style={{
+                        fontFamily: "DM Sans",
+                        fontSize: 12,
+                        color: isBairroHoje ? "#0DB87E" : "#F5A623",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      {isBairroHoje ? (
+                        <>
+                          <strong>Rota Ativa Hoje!</strong> O caminhão da Côco & Cia atende <strong>{matchedBairroAgenda.bairro_nome}</strong> hoje ({matchedBairroAgenda.horario_inicio} às {matchedBairroAgenda.horario_fim}).
+                        </>
+                      ) : (
+                        <>
+                          <strong>Aviso de Rota:</strong> O caminhão passa em <strong>{matchedBairroAgenda.bairro_nome}</strong> às <strong>{matchedBairroAgenda.dia_semana}s</strong> ({matchedBairroAgenda.horario_inicio} às {matchedBairroAgenda.horario_fim}). Seu resíduo será <strong>agendado</strong> para a próxima data.
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={confirmarPonto}
                   disabled={!endereco}
@@ -874,15 +964,30 @@ const CocoPage = () => {
                     borderRadius: 999,
                     border: "none",
                     cursor: endereco ? "pointer" : "not-allowed",
-                    background: "#0DB87E",
-                    color: "white",
+                    background: matchedBairroAgenda && !isBairroHoje ? "#F5A623" : "#0DB87E",
+                    color: matchedBairroAgenda && !isBairroHoje ? "#0B1B3E" : "white",
                     fontFamily: "Syne",
                     fontSize: 15,
                     fontWeight: 700,
                     opacity: endereco ? 1 : 0.5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    transition: "all 0.2s"
                   }}
                 >
-                  Confirmar ponto
+                  {matchedBairroAgenda && !isBairroHoje ? (
+                    <>
+                      <Calendar size={18} />
+                      <span>Agendar Coleta ({matchedBairroAgenda.dia_semana})</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={18} />
+                      <span>Confirmar Ponto de Descarte</span>
+                    </>
+                  )}
                 </button>
               </>
             )}
