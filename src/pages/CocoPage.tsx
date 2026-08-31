@@ -443,20 +443,21 @@ const CocoPage = () => {
                   icon={getTruckIcon(c.isOnline)}
                   eventHandlers={{ click: () => setSelectedCaminhao(c) }}
                 >
-                {selectedCaminhao?.id === c.id && (
-                  <Popup eventHandlers={{ remove: () => setSelectedCaminhao(null) }}>
-                    <div style={{ minWidth: 160, fontFamily: "DM Sans" }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
-                        🚚 {c.apelido}
-                      </p>
-                      <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
-                        {c.plate} · {c.collectionsToday} coletas hoje
-                      </p>
-                    </div>
-                  </Popup>
-                )}
-              </Marker>
-            ))}
+                  {selectedCaminhao?.id === c.id && (
+                    <Popup eventHandlers={{ remove: () => setSelectedCaminhao(null) }}>
+                      <div style={{ minWidth: 160, fontFamily: "DM Sans" }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
+                          🚚 {c.apelido}
+                        </p>
+                        <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
+                          {c.plate} · {c.collectionsToday} coletas hoje
+                        </p>
+                      </div>
+                    </Popup>
+                  )}
+                </Marker>
+              );
+            })}
           </MapContainer>
         )}
       </div>
