@@ -21,6 +21,7 @@ import { isValidEmail, maskCPF, maskPhone, maskCNPJ } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
+import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -141,15 +142,19 @@ const Cadastro = () => {
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [biometriaOpen, setBiometriaOpen] = useState(false);
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
+  const [registeredName, setRegisteredName] = useState("");
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
-    formState: { errors },
+    setFocus,
+    formState: { errors, isValid },
   } = useForm<CadastroFormData>({
     resolver: zodResolver(cadastroSchema),
+    mode: "onChange",
     defaultValues: {
       nome: "",
       cpf: "",
@@ -173,6 +178,20 @@ const Cadastro = () => {
   const strength = useMemo(() => getStrength(passwordValue), [passwordValue]);
 
   const [searchParams] = useSearchParams();
+
+  const onInvalid = (formErrors: typeof errors) => {
+    const errorKeys = Object.keys(formErrors) as (keyof CadastroFormData)[];
+    if (errorKeys.length > 0) {
+      const firstError = errorKeys[0];
+      setFocus(firstError);
+      const element = document.getElementsByName(firstError)[0] as HTMLElement;
+      if (element) {
+        element.focus();
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      showToast("Preencha todos os campos obrigatórios em destaque.");
+    }
+  };
 
   const onSubmit = async (values: CadastroFormData) => {
     setLoading(true);
@@ -226,10 +245,14 @@ const Cadastro = () => {
         if (dbError) {
           console.error("Erro ao salvar perfil do usuario logado:", dbError);
         }
-      }
 
-      setLoading(false);
-      setBiometriaOpen(true);
+        setRegisteredName(values.nome);
+        setLoading(false);
+        setWelcomeModalOpen(true);
+      } else {
+        setLoading(false);
+        setBiometriaOpen(true);
+      }
     } catch (err: any) {
       setLoading(false);
       const duration = Date.now() - startTime;
@@ -274,7 +297,7 @@ const Cadastro = () => {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="mt-7 flex flex-col gap-4" noValidate>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="mt-7 flex flex-col gap-4" noValidate>
         {/* Dynamic Profile Selector */}
         <div className="mb-2">
           <label className="block font-sans text-[12px] font-semibold mb-1.5 text-white/70">
@@ -530,6 +553,7 @@ const Cadastro = () => {
 
         <PrimaryButton
           type="submit"
+          disabled={!isValid || loading}
           loading={loading}
           loadingText="Criando conta..."
           className="mt-4"
@@ -563,6 +587,21 @@ const Cadastro = () => {
           Entrar
         </button>
       </div>
+
+      {/* Welcome Celebration Modal for New Registered Founders */}
+      <WelcomeFundadorModal
+        isOpen={welcomeModalOpen}
+        onClose={() => {
+          setWelcomeModalOpen(false);
+          setBiometriaOpen(true);
+        }}
+        userName={registeredName}
+        ctaText="Acessar meu Painel"
+        onCtaClick={() => {
+          setWelcomeModalOpen(false);
+          setBiometriaOpen(true);
+        }}
+      />
 
       <BiometriaModal
         open={biometriaOpen}

@@ -21,8 +21,10 @@ import {
   Users,
   Share2,
   Menu,
-  UserPlus
+  UserPlus,
+  Loader2
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import { supabase } from "@/lib/supabase";
@@ -31,6 +33,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { maskPhone } from "@/utils/masks";
+import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 
 interface FaqItemProps {
   question: string;
@@ -435,10 +438,14 @@ export default function Index() {
   const [isMuted, setIsMuted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  const navigate = useNavigate();
+  
   // Waitlist Form States
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [registeredUser, setRegisteredUser] = useState<{ nome: string; email: string } | null>(null);
 
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
@@ -450,9 +457,11 @@ export default function Index() {
     handleSubmit,
     setValue,
     watch,
-    formState: { errors },
+    setFocus,
+    formState: { errors, isValid },
   } = useForm<WaitlistFormData>({
     resolver: zodResolver(waitlistSchema),
+    mode: "onChange",
     defaultValues: {
       nome: "",
       telefone: "",
@@ -796,6 +805,8 @@ export default function Index() {
       if (insertError) throw insertError;
 
       setSubmitSuccess(true);
+      setRegisteredUser({ nome: values.nome.trim(), email: values.email.trim() });
+      setShowWelcomeModal(true);
       trackEvent("landing_waitlist_success", "marketing", { perfil: values.perfil });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
@@ -805,6 +816,20 @@ export default function Index() {
       logSystem("ERROR", "WAITLIST", "founder_signup_error", err.message || "Insert failed");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const onInvalid = (formErrors: typeof errors) => {
+    const errorKeys = Object.keys(formErrors) as (keyof WaitlistFormData)[];
+    if (errorKeys.length > 0) {
+      const firstError = errorKeys[0];
+      setFocus(firstError);
+      const element = document.getElementById(`waitlist-input-${firstError}`);
+      if (element) {
+        element.focus();
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      setSubmitError("Por favor, preencha todos os campos obrigatórios destacados em vermelho.");
     }
   };
 
@@ -1395,69 +1420,94 @@ export default function Index() {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 p-2 md:p-8" noValidate>
+            <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-6 p-2 md:p-8" noValidate>
               <div className="text-center mb-8">
                 <h3 className="font-display font-bold text-2xl text-white mb-2 mt-[16px]">Cadastro de Fundador</h3>
                 <p className="text-xs text-white/50 font-sans">Preencha as informações abaixo para garantir seus benefícios de pioneiro.</p>
               </div>
 
               {submitError && (
-                <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive font-semibold leading-relaxed text-center">
+                <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive font-semibold leading-relaxed text-center animate-in fade-in">
                   {submitError}
                 </div>
               )}
 
               {/* 1. Nome completo */}
               <div>
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">Nome Completo</label>
+                <label htmlFor="waitlist-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                  Nome Completo <span className="text-red-500">*</span>
+                </label>
                 <input 
+                  id="waitlist-input-nome"
                   type="text" 
                   placeholder="Ex: Carlos da Silva" 
                   {...register("nome")}
-                  className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                  className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  } outline-none text-white text-base transition-all`}
                 />
                 {errors.nome && (
-                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.nome.message}</p>
+                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.nome.message}
+                  </p>
                 )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* 2. WhatsApp */}
                 <div>
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">WhatsApp</label>
+                  <label htmlFor="waitlist-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    WhatsApp <span className="text-red-500">*</span>
+                  </label>
                   <input 
+                    id="waitlist-input-telefone"
                     type="tel" 
                     placeholder="Ex: (12) 99999-9999" 
                     {...register("telefone", {
                       onChange: (e) => {
-                        setValue("telefone", maskPhone(e.target.value));
+                        setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
                       }
                     })}
-                    className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                      errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                    } outline-none text-white text-base transition-all`}
                   />
                   {errors.telefone && (
-                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.telefone.message}</p>
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.telefone.message}
+                    </p>
                   )}
                 </div>
                 {/* 3. E-mail */}
                 <div>
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">E-mail</label>
+                  <label htmlFor="waitlist-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    E-mail <span className="text-red-500">*</span>
+                  </label>
                   <input 
+                    id="waitlist-input-email"
                     type="email" 
                     placeholder="Ex: carlos@email.com" 
                     {...register("email")}
-                    className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base focus:border-green transition-all"
+                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                      errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                    } outline-none text-white text-base transition-all`}
                   />
                   {errors.email && (
-                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.email.message}</p>
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.email.message}
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* 4. Seu perfil */}
-              <div>
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Seu Perfil</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <div id="waitlist-input-perfil">
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
+                  Seu Perfil <span className="text-red-500">*</span>
+                </label>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/5 border ${
+                  errors.perfil ? "border-red-500/70" : "border-white/10"
+                }`}>
                   {([
                     { id: "associacao", label: "Associação de Trabalhadores" },
                     { id: "mototaxista", label: "Mototaxista" },
@@ -1495,15 +1545,21 @@ export default function Index() {
                   })}
                 </div>
                 {errors.perfil && (
-                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.perfil.message}</p>
+                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.perfil.message}
+                  </p>
                 )}
               </div>
 
               {/* 5. ÁREA CONDICIONAL DE ENDEREÇO */}
               {(perfil?.includes("associacao") || perfil?.includes("mototaxista") || perfil?.includes("diarista")) && (
-                <div className="w-full">
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Região de atuação</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                <div className="w-full" id="waitlist-input-regiao_atuacao">
+                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
+                    Região de atuação <span className="text-red-500">*</span>
+                  </label>
+                  <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/5 border ${
+                    errors.regiao_atuacao ? "border-red-500/70" : "border-white/10"
+                  }`}>
                     {["Sul", "Norte", "Centro", "Oeste"].map((reg) => {
                       const selectedRegions = watch("regiao_atuacao") || [];
                       const checked = selectedRegions.includes(reg);
@@ -1533,7 +1589,9 @@ export default function Index() {
                     })}
                   </div>
                   {errors.regiao_atuacao && (
-                    <p className="mt-1 text-red-500 text-xs pl-1">{errors.regiao_atuacao.message}</p>
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.regiao_atuacao.message}
+                    </p>
                   )}
                 </div>
               )}
@@ -1542,14 +1600,16 @@ export default function Index() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Bairros Column */}
                   {(perfil?.includes("morador") || perfil?.includes("turista")) && (
-                    <div className="w-full">
+                    <div className="w-full" id="waitlist-input-bairros">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        {perfil?.includes("morador") ? "Bairro de residência" : "Bairro que costuma se hospedar"}
+                        {perfil?.includes("morador") ? "Bairro de residência" : "Bairro que costuma se hospedar"} <span className="text-red-500">*</span>
                       </label>
                       <button
                         type="button"
                         onClick={() => setIsBairroModalOpen(true)}
-                        className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.bairros ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center`}
                       >
                         <span>
                           {selectedBairros.length > 0
@@ -1559,21 +1619,25 @@ export default function Index() {
                         <ChevronDown className="w-5 h-5 text-white/40" />
                       </button>
                       {errors.bairros && (
-                        <p className="mt-1 text-red-500 text-xs pl-1">{errors.bairros.message}</p>
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.bairros.message}
+                        </p>
                       )}
                     </div>
                   )}
 
                   {/* Praias Column */}
                   {(perfil?.includes("ambulante") || perfil?.includes("morador") || perfil?.includes("turista")) && (
-                    <div className="w-full">
+                    <div className="w-full" id="waitlist-input-praias">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        {perfil?.includes("ambulante") ? "Praias de atuação" : "Praias que costuma frequentar"}
+                        {perfil?.includes("ambulante") ? "Praias de atuação" : "Praias que costuma frequentar"} <span className="text-red-500">*</span>
                       </label>
                       <button
                         type="button"
                         onClick={() => setIsPraiaModalOpen(true)}
-                        className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center"
+                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.praias ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center`}
                       >
                         <span>
                           {selectedPraias.length > 0
@@ -1583,7 +1647,9 @@ export default function Index() {
                         <ChevronDown className="w-5 h-5 text-white/40" />
                       </button>
                       {errors.praias && (
-                        <p className="mt-1 text-red-500 text-xs pl-1">{errors.praias.message}</p>
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.praias.message}
+                        </p>
                       )}
                     </div>
                   )}
@@ -1591,8 +1657,10 @@ export default function Index() {
               )}
 
               {/* 6. Tem conta no Mercado Pago? */}
-              <div>
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">Você já possui uma conta no Mercado Pago?</label>
+              <div id="waitlist-input-possuiContaMercadoPago">
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
+                  Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
+                </label>
                 <div className="grid grid-cols-2 gap-4">
                   {[
                     { value: true, label: "Sim" },
@@ -1604,7 +1672,7 @@ export default function Index() {
                         key={opt.label}
                         type="button"
                         onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
-                        className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all ${
+                        className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
                           selected
                             ? "bg-green/10 border-green text-green"
                             : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
@@ -1616,37 +1684,53 @@ export default function Index() {
                   })}
                 </div>
                 {errors.possuiContaMercadoPago && (
-                  <p className="mt-1 text-red-500 text-xs pl-1">{errors.possuiContaMercadoPago.message}</p>
+                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.possuiContaMercadoPago.message}
+                  </p>
                 )}
               </div>
 
               {/* 7. LGPD Accept Terms */}
-              <div className="flex gap-3 items-start mt-2">
-                <input 
-                  type="checkbox" 
-                  id="consent-lgpd" 
-                  {...register("acceptTerms")}
-                  className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer" 
-                />
-                <label htmlFor="consent-lgpd" className="text-xs text-white/50 leading-relaxed font-sans cursor-pointer select-none">
-                  Aceito os Termos de Uso e autorizo a coleta dos meus dados para fins exclusivos de desenvolvimento da UBT, conforme a LGPD.
-                </label>
+              <div className="flex flex-col gap-1 mt-2" id="waitlist-input-acceptTerms">
+                <div className="flex gap-3 items-start">
+                  <input 
+                    type="checkbox" 
+                    id="consent-lgpd" 
+                    {...register("acceptTerms")}
+                    className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer" 
+                  />
+                  <label htmlFor="consent-lgpd" className="text-xs text-white/50 leading-relaxed font-sans cursor-pointer select-none">
+                    Aceito os Termos de Uso e autorizo a coleta dos meus dados para fins exclusivos de desenvolvimento da UBT, conforme a LGPD. <span className="text-red-500">*</span>
+                  </label>
+                </div>
+                {errors.acceptTerms && (
+                  <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-1">
+                    <span>⚠</span> {errors.acceptTerms.message}
+                  </p>
+                )}
               </div>
-              {errors.acceptTerms && (
-                <p className="text-red-500 text-xs pl-1">{errors.acceptTerms.message}</p>
-              )}
 
+              {/* Submit Button with Reactive Validation & Loading Spinner */}
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-[0.6rem] tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
-                  isSubmitting 
-                    ? "bg-white/10 text-white/30 cursor-not-allowed" 
-                    : "bg-green hover:bg-green-dark active:scale-95 text-navy shadow-lg shadow-green/20"
+                disabled={!isValid || isSubmitting}
+                className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-sm tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
+                  !isValid || isSubmitting 
+                    ? "bg-white/10 text-white/30 cursor-not-allowed border border-white/5" 
+                    : "bg-green hover:bg-green-dark active:scale-[0.98] text-navy shadow-lg shadow-green/25 cursor-pointer"
                 }`}
               >
-                {isSubmitting ? "Enviando..." : "Quero ser um Fundador"}
-                <Send className="w-5 h-5" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-white/60" />
+                    <span>Processando Inscrição...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Quero ser um Fundador</span>
+                    <Send className="w-5 h-5" />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -2003,6 +2087,19 @@ export default function Index() {
           scrollbar-width: none;
         }
       `}</style>
+
+      {/* Welcome Founder Celebration Modal */}
+      <WelcomeFundadorModal
+        isOpen={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+        userName={registeredUser?.nome}
+        userEmail={registeredUser?.email}
+        ctaText="Acessar meu Painel"
+        onCtaClick={() => {
+          setShowWelcomeModal(false);
+          navigate("/login");
+        }}
+      />
 
     </div>
   );

@@ -445,7 +445,12 @@ export default function ConceptExperience() {
 
             <button
               type="submit"
-              className="w-full py-4 rounded-xl bg-[#0DB87E] hover:bg-[#0ca36e] active:scale-95 font-display font-extrabold text-[15px] transition-all text-white flex items-center justify-center gap-2 mt-2 shadow-lg shadow-[#0DB87E]/20"
+              disabled={!formName.trim() || !formEmail.trim() || !formEmail.includes("@")}
+              className={`w-full py-4 rounded-xl font-display font-extrabold text-[15px] transition-all flex items-center justify-center gap-2 mt-2 shadow-lg ${
+                !formName.trim() || !formEmail.trim() || !formEmail.includes("@")
+                  ? "bg-white/10 text-white/30 cursor-not-allowed border border-white/5 shadow-none"
+                  : "bg-[#0DB87E] hover:bg-[#0ca36e] active:scale-95 text-white shadow-[#0DB87E]/20 cursor-pointer"
+              }`}
             >
               Quero ser um Fundador da UBT
             </button>
