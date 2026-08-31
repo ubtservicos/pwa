@@ -3,6 +3,9 @@ import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
 
+// Sentry telemetry neutralized until production DSNs are definitively provisioned
+// to avoid client-side 403 Forbidden errors in the console.
+/*
 try {
   const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
   if (sentryDsn && typeof sentryDsn === "string" && sentryDsn.startsWith("http")) {
@@ -26,8 +29,8 @@ try {
     });
   }
 } catch (sentryInitError) {
-  // Silent fallback so telemetry issues (e.g. 403 Forbidden on ingest) never break app loading or thread
   console.warn("[Sentry] Telemetry initialization bypassed:", sentryInitError);
 }
+*/
 
 createRoot(document.getElementById("root")!).render(<App />);

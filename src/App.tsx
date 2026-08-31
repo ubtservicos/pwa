@@ -244,19 +244,4 @@ const App = () => (
   </QueryClientProvider>
 );
 
-export default Sentry.withErrorBoundary(App, {
-  fallback: (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#09090B", color: "#fff", padding: 24, textAlign: "center" }}>
-      <h2 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Ops! Algo deu errado.</h2>
-      <p style={{ fontFamily: "DM Sans", fontSize: 15, color: "rgba(255,255,255,0.7)", maxWidth: 400, marginBottom: 24 }}>
-        Ocorreu um erro inesperado no aplicativo. Nossa equipe técnica já foi notificada automaticamente.
-      </p>
-      <button
-        onClick={() => window.location.reload()}
-        style={{ padding: "12px 24px", borderRadius: 12, background: "#0DB87E", color: "#fff", border: "none", fontFamily: "Syne", fontWeight: 700, cursor: "pointer" }}
-      >
-        Recarregar Aplicativo
-      </button>
-    </div>
-  )
-});
+export default App;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, ShieldAlert, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +30,15 @@ export default function AdminLoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errMessage, setErrMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (import.meta.env.DEV || window.location.hostname.includes("localhost")) {
+      console.warn(
+        `[UBT Config Guard] Endpoint Supabase atual: ${import.meta.env.VITE_SUPABASE_URL || "NÃO DEFINIDO"}.\n` +
+        `Certifique-se de que as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no painel da Vercel (Produção) estão apontando para o banco novo e que o script seed_admin.sql foi executado no SQL Editor do Supabase para criar o usuário cocoecia@teste.com.`
+      );
+    }
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
