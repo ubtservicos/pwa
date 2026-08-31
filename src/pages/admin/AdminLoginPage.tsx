@@ -1,8 +1,23 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
-
+import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+
+const ADMIN_ROLES = [
+  "admin",
+  "super_admin",
+  "operator",
+  "moderador",
+  "financeiro",
+  "operations_manager",
+  "marketing"
+];
+
+const COCO_ROLES = [
+  "cocoecia",
+  "cocoecia-dirigentes",
+  "cocoecia-colaborador"
+];
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
@@ -10,41 +25,61 @@ export default function AdminLoginPage() {
   const [senha, setSenha] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState(false);
+  const [errMessage, setErrMessage] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErr(false);
-    
+    setErrMessage(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !senha) {
+      setErrMessage("Informe o e-mail e a senha de acesso.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password: senha,
       });
 
       if (error || !authData.user) {
-        setErr(true);
-      } else {
-        // Fetch user role from database
+        setErrMessage(error?.message || "E-mail ou senha incorretos.");
+        return;
+      }
+
+      // Buscar a role do usuário na tabela profiles (com fallback para usuarios)
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      let userRole = profile?.role;
+
+      if (!userRole) {
         const { data: dbUser } = await supabase
           .from("usuarios")
           .select("role")
           .eq("id", authData.user.id)
           .maybeSingle();
-
-        const role = email === "ubt.servicos@gmail.com" ? "admin" : (dbUser?.role || "tomador");
-        
-        if (role === "admin") {
-          navigate("/admin");
-        } else {
-          // If not admin, log out and show error
-          await supabase.auth.signOut();
-          setErr(true);
-        }
+        userRole = dbUser?.role;
       }
-    } catch (error) {
-      setErr(true);
+
+      // Redirecionamento baseado na role
+      if (userRole && COCO_ROLES.includes(userRole)) {
+        navigate("/admin/coco");
+      } else if (userRole && (ADMIN_ROLES.includes(userRole) || userRole === "superadmin")) {
+        navigate("/admin");
+      } else {
+        // Usuário não possui permissão administrativa
+        await supabase.auth.signOut();
+        setErrMessage("Acesso não autorizado: Esta conta não possui privilégios administrativos.");
+      }
+    } catch (error: any) {
+      setErrMessage(error?.message || "Erro inesperado ao conectar ao servidor.");
     } finally {
       setLoading(false);
     }
@@ -73,12 +108,12 @@ export default function AdminLoginPage() {
     >
       <form
         onSubmit={submit}
-        className="bg-zinc-900 border border-zinc-800 rounded-2xl p-10 w-full max-w-[360px]"
+        className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 sm:p-10 w-full max-w-[380px] shadow-2xl shadow-black/80"
       >
         <div style={{ textAlign: "center" }}>
           <div style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "#fff" }}>UBT.</div>
           <div className="text-zinc-400" style={{ fontFamily: "DM Sans", fontSize: 13, marginTop: 4 }}>
-            Painel Administrativo
+            Painel Administrativo & Gestão
           </div>
         </div>
 
@@ -87,24 +122,26 @@ export default function AdminLoginPage() {
             <Mail size={16} className="text-zinc-500" style={{ position: "absolute", left: 14, top: 14 }} />
             <input
               type="email"
-              placeholder="admin@ubt.com"
+              placeholder="seu.email@exemplo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={inputStyle}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E]"
+              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E] transition-colors"
               autoComplete="email"
+              required
             />
           </div>
           <div style={{ position: "relative" }}>
             <Lock size={16} className="text-zinc-500" style={{ position: "absolute", left: 14, top: 14 }} />
             <input
               type={show ? "text" : "password"}
-              placeholder="••••••••"
+              placeholder="Sua senha"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               style={{ ...inputStyle, paddingRight: 40 }}
-              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E]"
+              className="bg-zinc-950 border border-zinc-800 text-zinc-100 focus:border-[#0DB87E] transition-colors"
               autoComplete="current-password"
+              required
             />
             <button
               type="button"
@@ -117,20 +154,25 @@ export default function AdminLoginPage() {
           </div>
         </div>
 
-        {err && (
+        {errMessage && (
           <div
             style={{
-              marginTop: 14,
+              marginTop: 16,
               background: "rgba(232,64,64,0.10)",
               border: "1px solid #E84040",
-              borderRadius: 8,
+              borderRadius: 10,
               padding: "10px 14px",
               fontFamily: "DM Sans",
-              fontSize: 13,
+              fontSize: 12,
               color: "#E84040",
+              lineHeight: 1.4,
+              display: "flex",
+              alignItems: "center",
+              gap: 8
             }}
           >
-            Credenciais inválidas.
+            <ShieldAlert size={18} className="shrink-0 text-[#E84040]" />
+            <span>{errMessage}</span>
           </div>
         )}
 
@@ -138,26 +180,23 @@ export default function AdminLoginPage() {
           type="submit"
           disabled={loading}
           style={{
-            marginTop: 20,
+            marginTop: 24,
             width: "100%",
             minHeight: 48,
             background: "#0DB87E",
-            color: "#fff",
+            color: "#0B1B3E",
             fontFamily: "Syne",
             fontSize: 14,
-            fontWeight: 600,
+            fontWeight: 700,
             borderRadius: 999,
             border: "none",
             cursor: loading ? "wait" : "pointer",
             opacity: loading ? 0.7 : 1,
+            transition: "all 0.2s"
           }}
         >
-          {loading ? "Acessando..." : "Acessar painel"}
+          {loading ? "Autenticando..." : "Acessar Painel"}
         </button>
-
-        <div style={{ marginTop: 12, textAlign: "center", fontFamily: "DM Sans", fontSize: 11, color: "rgba(255,255,255,0.30)" }}>
-          Use admin@ubt.com / admin123
-        </div>
       </form>
     </div>
   );
