@@ -48,6 +48,77 @@ export interface WaitlistItem {
   bairro_trabalho?: string | null;
 }
 
+const PERFIL_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  morador: { label: "Morador", bg: "rgba(13,184,126,0.12)", color: "#0DB87E" },
+  turista: { label: "Turista", bg: "rgba(245,166,35,0.12)", color: "#F5A623" },
+  visitante: { label: "Turista", bg: "rgba(245,166,35,0.12)", color: "#F5A623" },
+  tomador: { label: "Tomador", bg: "rgba(59,130,246,0.12)", color: "#3B82F6" },
+  diarista: { label: "Diarista", bg: "rgba(147,51,234,0.12)", color: "#9333EA" },
+  mototaxi: { label: "Mototaxista", bg: "rgba(59,130,246,0.12)", color: "#3B82F6" },
+  mototaxista: { label: "Mototaxista", bg: "rgba(59,130,246,0.12)", color: "#3B82F6" },
+  ambulante: { label: "Ambulante", bg: "rgba(236,72,153,0.12)", color: "#EC4899" },
+  associacao: { label: "Associação", bg: "rgba(16,185,129,0.12)", color: "#10B981" },
+  associacao_lider: { label: "Líder Associação", bg: "rgba(16,185,129,0.12)", color: "#10B981" },
+  cocoecia: { label: "Côco & Cia", bg: "rgba(13,184,126,0.12)", color: "#0DB87E" },
+  "cocoecia-colaborador": { label: "Colaborador Côco", bg: "rgba(13,184,126,0.12)", color: "#0DB87E" },
+  "cocoecia-dirigentes": { label: "Dirigente Côco", bg: "rgba(13,184,126,0.12)", color: "#0DB87E" },
+  prestador: { label: "Prestador", bg: "rgba(43,110,232,0.12)", color: "#2B6EE8" },
+  empresa: { label: "Comércio / Empresa", bg: "rgba(236,72,153,0.12)", color: "#EC4899" },
+  comerciante: { label: "Comerciante", bg: "rgba(236,72,153,0.12)", color: "#EC4899" },
+  quiosque: { label: "Quiosque", bg: "rgba(236,72,153,0.12)", color: "#EC4899" },
+};
+
+function parsePerfilList(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.flatMap(item => parsePerfilList(item));
+  }
+  if (typeof raw === "string") {
+    let clean = raw.trim();
+    if (clean.startsWith("[") && clean.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(clean);
+        return parsePerfilList(parsed);
+      } catch {
+        clean = clean.slice(1, -1);
+      }
+    }
+    if (clean.startsWith("{") && clean.endsWith("}")) {
+      clean = clean.slice(1, -1);
+    }
+    return clean
+      .split(",")
+      .map(s => s.replace(/["']/g, "").trim())
+      .filter(Boolean);
+  }
+  return [String(raw)];
+}
+
+function renderPerfilBadges(raw: any) {
+  const list = parsePerfilList(raw);
+  if (list.length === 0) {
+    return <span style={{ fontSize: 12, color: "var(--admin-muted)", fontStyle: "italic" }}>—</span>;
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+      {list.map((item, idx) => {
+        const key = item.toLowerCase().trim();
+        const conf = PERFIL_CONFIG[key] || {
+          label: item.charAt(0).toUpperCase() + item.slice(1),
+          bg: "rgba(255,255,255,0.08)",
+          color: "var(--admin-text)"
+        };
+        return (
+          <Pill key={`${key}-${idx}`} bg={conf.bg} color={conf.color} size="sm">
+            {conf.label}
+          </Pill>
+        );
+      })}
+    </div>
+  );
+}
+
 interface WaitlistStats {
   total: number;
   moradores: number;
@@ -202,10 +273,10 @@ export default function AdminWaitlistPage() {
         const aggregated = data.reduce(
           (acc, item) => {
             acc.total++;
-            const perfilArr = Array.isArray(item.perfil) ? item.perfil : [item.perfil];
-            if (perfilArr.includes("morador")) acc.moradores++;
-            if (perfilArr.includes("prestador")) acc.prestadores++;
-            if (perfilArr.includes("visitante") || perfilArr.includes("visitantes")) acc.visitantes++;
+            const perfilArr = parsePerfilList(item.perfil).map(p => p.toLowerCase());
+            if (perfilArr.includes("morador") || perfilArr.includes("tomador")) acc.moradores++;
+            if (perfilArr.some(p => ["prestador", "diarista", "mototaxi", "mototaxista", "ambulante", "associacao", "cocoecia"].includes(p))) acc.prestadores++;
+            if (perfilArr.includes("visitante") || perfilArr.includes("visitantes") || perfilArr.includes("turista")) acc.visitantes++;
             
             if (item.origem && item.origem !== "direto") acc.com_referral++;
             return acc;
@@ -230,7 +301,7 @@ export default function AdminWaitlistPage() {
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
       if (selectedPerfil !== "Todos") {
-        query = query.cs("perfil", [selectedPerfil]);
+        query = query.or(`perfil.cs.{${selectedPerfil}},perfil.ilike.%${selectedPerfil}%`);
       }
 
       if (selectedStatus !== "Todos") {
@@ -382,12 +453,15 @@ export default function AdminWaitlistPage() {
               style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
               <option value="Todos">Todos</option>
-              <option value="morador">Morador / Tomador</option>
+              <option value="morador">Morador</option>
+              <option value="tomador">Tomador</option>
+              <option value="turista">Turista / Visitante</option>
               <option value="diarista">Diarista</option>
               <option value="mototaxista">Mototaxista</option>
               <option value="ambulante">Ambulante</option>
               <option value="associacao">Associação</option>
-              <option value="prestador">Trabalhar (Prestador - Legado)</option>
+              <option value="cocoecia">Côco & Cia</option>
+              <option value="prestador">Prestador Geral</option>
             </select>
           </div>
 
@@ -570,21 +644,7 @@ export default function AdminWaitlistPage() {
                       {lead.cidade}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      {(() => {
-                        const perfilArr = Array.isArray(lead.perfil) ? lead.perfil : [lead.perfil];
-                        return (
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Morador</Pill>}
-                            {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA" size="sm">Diarista</Pill>}
-                            {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6" size="sm">Mototaxista</Pill>}
-                            {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Ambulante</Pill>}
-                            {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981" size="sm">Associação</Pill>}
-                            {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Prestador</Pill>}
-                            {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623" size="sm">Turista</Pill>}
-                            {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Empresa</Pill>}
-                          </div>
-                        );
-                      })()}
+                      {renderPerfilBadges(lead.perfil)}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       {lead.observacoes?.includes("Mercado Pago: Sim") || (lead as any).possui_conta_mercado_pago === true ? (
@@ -710,22 +770,8 @@ export default function AdminWaitlistPage() {
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
-                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-                    {(() => {
-                      const perfilArr = Array.isArray(selectedLeadModal.perfil) ? selectedLeadModal.perfil : [selectedLeadModal.perfil];
-                      return (
-                        <>
-                          {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Morador</Pill>}
-                          {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA">Diarista</Pill>}
-                          {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6">Mototaxista</Pill>}
-                          {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Ambulante</Pill>}
-                          {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981">Associação</Pill>}
-                          {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">Prestador</Pill>}
-                          {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Turista</Pill>}
-                          {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Empresa</Pill>}
-                        </>
-                      );
-                    })()}
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", marginTop: 4 }}>
+                    {renderPerfilBadges(selectedLeadModal.perfil)}
                   </div>
                 </div>
               </div>
@@ -777,7 +823,7 @@ export default function AdminWaitlistPage() {
               )}
 
               {/* UTM & Origin Details */}
-              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14 }}>
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14 }}>
                 <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: 6 }}>Informações de Aquisição (UTMs)</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8, fontFamily: "monospace" }}>
                   <div>Source: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_source || "—"}</span></div>
@@ -800,28 +846,58 @@ export default function AdminWaitlistPage() {
               </div>
 
               {/* Status Update Options */}
-              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14, display: "flex", alignItems: "center", justifySelf: "stretch", justifyContent: "space-between" }}>
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16, display: "flex", alignItems: "center", justifySelf: "stretch", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 4 }}>Alterar Status</span>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Alterar Status</span>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "novo"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "novo")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "novo" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: "1px solid var(--admin-border)",
+                        background: selectedLeadModal.status === "novo" ? "rgba(59,130,246,0.18)" : "var(--admin-bg)",
+                        color: selectedLeadModal.status === "novo" ? "#3B82F6" : "var(--admin-text)",
+                        cursor: selectedLeadModal.status === "novo" ? "default" : "pointer",
+                        fontWeight: 600,
+                        transition: "all 150ms"
+                      }}
                     >
                       Novo
                     </button>
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "contatado"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "contatado")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #0DB87E", background: selectedLeadModal.status === "contatado" ? "rgba(13,184,126,0.1)" : "#fff", color: "#0DB87E", cursor: "pointer", fontWeight: 600 }}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: selectedLeadModal.status === "contatado" ? "1px solid #F5A623" : "1px solid var(--admin-border)",
+                        background: selectedLeadModal.status === "contatado" ? "rgba(245,166,35,0.18)" : "var(--admin-bg)",
+                        color: selectedLeadModal.status === "contatado" ? "#F5A623" : "var(--admin-text)",
+                        cursor: selectedLeadModal.status === "contatado" ? "default" : "pointer",
+                        fontWeight: 600,
+                        transition: "all 150ms"
+                      }}
                     >
                       Contatado
                     </button>
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "arquivado"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "arquivado")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "arquivado" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: selectedLeadModal.status === "arquivado" ? "1px solid #EF4444" : "1px solid var(--admin-border)",
+                        background: selectedLeadModal.status === "arquivado" ? "rgba(239,68,68,0.18)" : "var(--admin-bg)",
+                        color: selectedLeadModal.status === "arquivado" ? "#EF4444" : "var(--admin-text)",
+                        cursor: selectedLeadModal.status === "arquivado" ? "default" : "pointer",
+                        fontWeight: 600,
+                        transition: "all 150ms"
+                      }}
                     >
                       Arquivar
                     </button>
@@ -831,20 +907,22 @@ export default function AdminWaitlistPage() {
                         disabled={updatingStatus}
                         onClick={() => handleApproveLeads([selectedLeadModal.id])}
                         style={{
-                          padding: "4px 10px",
-                          fontSize: 11,
-                          borderRadius: 6,
+                          padding: "6px 14px",
+                          fontSize: 12,
+                          borderRadius: 8,
                           border: "1px solid #0DB87E",
                           background: "#0DB87E",
-                          color: "#fff",
+                          color: "#FFFFFF",
                           cursor: "pointer",
-                          fontWeight: 600,
+                          fontWeight: 700,
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: 4
+                          gap: 6,
+                          boxShadow: "0 2px 8px rgba(13,184,126,0.3)",
+                          transition: "all 150ms"
                         }}
                       >
-                        <CheckCircle size={12} /> Aprovar Lead
+                        <CheckCircle size={14} /> Aprovar Lead
                       </button>
                     )}
                   </div>
