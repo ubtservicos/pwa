@@ -148,14 +148,9 @@ async function processAnswerEngine(
     }
   }
 
-  if (parsedPayload.knowledge) {
-    let knowledgeChars = 0;
-    if (parsedPayload.knowledge.sources) {
-      knowledgeChars += parsedPayload.knowledge.sources.reduce((acc: number, s: any) => acc + (s.content?.length || 0), 0);
-    }
-    if (parsedPayload.knowledge.errata) {
-      knowledgeChars += parsedPayload.knowledge.errata.reduce((acc: number, e: any) => acc + (e.content?.length || 0), 0);
-    }
+  // Knowledge limits
+  if (parsedPayload.knowledge?.sources) {
+    const knowledgeChars = parsedPayload.knowledge.sources.reduce((acc: number, s: any) => acc + (s.content?.length || 0), 0);
     if (knowledgeChars > MAX_KNOWLEDGE_CHARS) {
       return {
         status: 413,
@@ -240,21 +235,14 @@ async function processAnswerEngine(
     normalizedQuery.includes("sandbox_order_status") || 
     normalizedQuery.includes("status do pedido") || 
     normalizedQuery.includes("status do meu pedido") ||
-    normalizedQuery.includes("status da corrida") ||
-    parsedPayload.context?.requested_tool === "sandbox_order_status"
+    normalizedQuery.includes("status da corrida")
   ) {
     const liveEvidence = {
-      id: "R1",
+      reference: "R1",
       kind: "runtime_tool",
       tool_key: "sandbox_order_status",
       label: "Status Operacional do Pedido",
-      observed_at: new Date().toISOString(),
-      data: {
-        status: "pending",
-        service_type: "mototaxi_coleta",
-        driver_assigned: true,
-        estimated_arrival_minutes: 12
-      }
+      observed_at: new Date().toISOString()
     };
 
     return {
@@ -263,7 +251,7 @@ async function processAnswerEngine(
         version: PROTOCOL_VERSION,
         request_id: requestId,
         status: "answered",
-        answer: "Identificamos o seu pedido em andamento (R1). O status atual é: 'pending' (mototáxi a caminho).",
+        answer: "Identificamos o seu pedido em andamento (R1). O status atual é: 'pending' (mototáxi a caminho, previsão de chegada em 12 minutos).",
         citation_references: ["R1"],
         runtime_evidence: [liveEvidence]
       }
@@ -271,17 +259,17 @@ async function processAnswerEngine(
   }
 
   // Scenario B: Errata Precedence (E* > S*)
-  const erratas = parsedPayload.knowledge?.errata || [];
-  const sources = parsedPayload.knowledge?.sources || [];
+  const sources = parsedPayload.knowledge?.sources ?? [];
+  const erratas = sources.filter((source: any) => source?.is_errata === true);
 
   if (erratas.length > 0) {
     const primaryErrata = erratas[0];
-    const primaryErrataRef = primaryErrata.reference || primaryErrata.id;
+    const primaryErrataRef = primaryErrata?.reference;
     if (
       typeof primaryErrataRef === "string" &&
-      /^[SE]\d+/i.test(primaryErrataRef.trim())
+      /^E[1-9]\d*$/.test(primaryErrataRef.trim())
     ) {
-      const cleanRef = primaryErrataRef.trim().toUpperCase();
+      const cleanRef = primaryErrataRef.trim();
       return {
         status: 200,
         body: {
@@ -297,14 +285,15 @@ async function processAnswerEngine(
   }
 
   // Scenario A: Answered from S*
-  if (sources.length > 0) {
-    const primarySource = sources[0];
-    const primaryReference = primarySource.reference || primarySource.id;
+  const standardSources = sources.filter((source: any) => !source?.is_errata);
+  if (standardSources.length > 0) {
+    const primarySource = standardSources[0];
+    const primaryReference = primarySource?.reference;
     if (
       typeof primaryReference === "string" &&
-      /^[SE]\d+/i.test(primaryReference.trim())
+      /^S[1-9]\d*$/.test(primaryReference.trim())
     ) {
-      const cleanRef = primaryReference.trim().toUpperCase();
+      const cleanRef = primaryReference.trim();
       return {
         status: 200,
         body: {
@@ -368,7 +357,7 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     const { headers, rawBodyBytes } = await buildSignedRequest({
       version: "1",
       message: { text: "Qual o horário de funcionamento?" },
-      knowledge: { sources: [{ id: "S1", content: "Segunda a Sexta das 08h às 18h." }] }
+      knowledge: { sources: [{ reference: "S1", content: "Segunda a Sexta das 08h às 18h." }] }
     });
 
     const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });
@@ -494,7 +483,7 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
       version: "1",
       deadline_at: futureDeadline,
       message: { text: "Pergunta" },
-      knowledge: { sources: [{ id: "S1", content: "Resposta" }] }
+      knowledge: { sources: [{ reference: "S1", content: "Resposta" }] }
     });
 
     const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });
@@ -508,7 +497,7 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
       version: "1",
       deadline_at: pastDeadline,
       message: { text: "Pergunta" },
-      knowledge: { sources: [{ id: "S1", content: "Resposta" }] }
+      knowledge: { sources: [{ reference: "S1", content: "Resposta" }] }
     });
 
     const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });
@@ -553,13 +542,15 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     expect(res.body.runtime_evidence).toEqual([]);
   });
 
-  it("Scenario B: Answered from E* (Human Errata Precedence over S*)", async () => {
+  it("Scenario B: Answered from E* (Human Errata Precedence via is_errata)", async () => {
     const { headers, rawBodyBytes } = await buildSignedRequest({
       version: "1",
       message: { text: "Qual o horário da coleta hoje no Centro?" },
       knowledge: {
-        sources: [{ reference: "S1", title: "Escala Padrão", content: "Horário padrão: 18:00h." }],
-        errata: [{ reference: "E1", title: "Aviso Feriado", content: "Horário excepcional hoje: 15:00h devido a manutenção." }]
+        sources: [
+          { reference: "S1", title: "Escala Padrão", content: "Horário padrão: 18:00h." },
+          { reference: "E1", title: "Aviso Feriado", content: "Horário excepcional hoje: 15:00h devido a manutenção.", is_errata: true }
+        ]
       }
     });
 
@@ -574,12 +565,29 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     expect(res.body.answer).not.toContain("undefined");
   });
 
-  it("Scenario C: Answered with R* (Live Transactional State Authority)", async () => {
+  it("Scenario B: Fails closed when errata reference violates /^E[1-9]\\d*$/ (e.g. E0, e1, E01foo)", async () => {
+    const { headers, rawBodyBytes } = await buildSignedRequest({
+      version: "1",
+      message: { text: "Qual o horário da coleta hoje?" },
+      knowledge: {
+        sources: [
+          { reference: "E0", content: "Errata com referência inválida E0", is_errata: true }
+        ]
+      }
+    });
+
+    const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("insufficient_knowledge");
+    expect(res.body.citation_references).toEqual([]);
+  });
+
+  it("Scenario C: Answered with R* (Live Transactional State Authority strictly adhering to schema)", async () => {
     const { headers, rawBodyBytes } = await buildSignedRequest({
       version: "1",
       message: { text: "Qual o status do meu pedido de mototáxi?" },
       knowledge: {
-        errata: [{ id: "E1", content: "Pagamentos normalmente são aprovados de imediato." }]
+        sources: [{ reference: "E1", content: "Pagamentos normalmente são aprovados de imediato.", is_errata: true }]
       }
     });
 
@@ -588,17 +596,27 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     expect(res.body.status).toBe("answered");
     expect(res.body.citation_references).toEqual(["R1"]);
     expect(res.body.runtime_evidence.length).toBe(1);
-    expect(res.body.runtime_evidence[0].tool_key).toBe("sandbox_order_status");
-    // Transactional state "pending" must NOT be overwritten by errata
-    expect(res.body.runtime_evidence[0].data.status).toBe("pending");
+    
+    // Strict schema assertions: reference present, id and data absent
+    const evidence = res.body.runtime_evidence[0];
+    expect(evidence.reference).toBe("R1");
+    expect(evidence.kind).toBe("runtime_tool");
+    expect(evidence.tool_key).toBe("sandbox_order_status");
+    expect(evidence.label).toBe("Status Operacional do Pedido");
+    expect(evidence.observed_at).toBeDefined();
+    expect(evidence.id).toBeUndefined();
+    expect(evidence.data).toBeUndefined();
+    
+    // Transactional state interpolated into answer
     expect(res.body.answer).toContain("pending");
+    expect(res.body.answer).toContain("12 minutos");
   });
 
   it("Scenario D: Insufficient Knowledge (No matching context/evidence)", async () => {
     const { headers, rawBodyBytes } = await buildSignedRequest({
       version: "1",
       message: { text: "Qual a altitude do Morro do Pico em metros?" },
-      knowledge: { sources: [], errata: [] }
+      knowledge: { sources: [] }
     });
 
     const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });

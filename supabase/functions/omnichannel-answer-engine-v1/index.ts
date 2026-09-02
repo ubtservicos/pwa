@@ -53,18 +53,17 @@ export function constantTimeCompare(a: string, b: string): boolean {
 // ==============================================================================
 export interface KnowledgeItem {
   reference?: string;
-  id?: string;
   title?: string;
   content: string;
+  is_errata?: boolean;
 }
 
 export interface RuntimeEvidence {
-  id: string;
+  reference: string;
   kind: "runtime_tool";
   tool_key: string;
   label: string;
   observed_at: string;
-  data: Record<string, unknown>;
 }
 
 export interface AnswerEngineRequest {
@@ -85,7 +84,6 @@ export interface AnswerEngineRequest {
   context?: Record<string, unknown>;
   knowledge?: {
     sources?: KnowledgeItem[];
-    errata?: KnowledgeItem[];
   };
 }
 
@@ -228,14 +226,8 @@ export async function processAnswerEngineRequest(
   }
 
   // Knowledge limits
-  if (parsedPayload.knowledge) {
-    let knowledgeChars = 0;
-    if (parsedPayload.knowledge.sources) {
-      knowledgeChars += parsedPayload.knowledge.sources.reduce((acc, s) => acc + (s.content?.length || 0), 0);
-    }
-    if (parsedPayload.knowledge.errata) {
-      knowledgeChars += parsedPayload.knowledge.errata.reduce((acc, e) => acc + (e.content?.length || 0), 0);
-    }
+  if (parsedPayload.knowledge?.sources) {
+    const knowledgeChars = parsedPayload.knowledge.sources.reduce((acc, s) => acc + (s.content?.length || 0), 0);
     if (knowledgeChars > MAX_KNOWLEDGE_CHARS) {
       return {
         status: 413,
@@ -341,8 +333,7 @@ export async function processAnswerEngineRequest(
   if (
     normalizedQuery.includes("sandbox_order_status") || 
     normalizedQuery.includes("status do pedido") || 
-    normalizedQuery.includes("status da corrida") ||
-    parsedPayload.context?.requested_tool === "sandbox_order_status"
+    normalizedQuery.includes("status da corrida")
   ) {
     const toolKey = "sandbox_order_status";
     if (!ALLOWED_RUNTIME_TOOLS.includes(toolKey)) {
@@ -353,17 +344,11 @@ export async function processAnswerEngineRequest(
     }
 
     const liveEvidence: RuntimeEvidence = {
-      id: "R1",
+      reference: "R1",
       kind: "runtime_tool",
       tool_key: toolKey,
       label: "Status Operacional do Pedido",
-      observed_at: new Date().toISOString(),
-      data: {
-        status: "pending",
-        service_type: "mototaxi_coleta",
-        driver_assigned: true,
-        estimated_arrival_minutes: 12
-      }
+      observed_at: new Date().toISOString()
     };
 
     // Note: Live transactional state is authoritative: order status is "pending".
@@ -380,17 +365,17 @@ export async function processAnswerEngineRequest(
   }
 
   // --- Scenario B: Errata Precedence ($E^* > S^*$) ---
-  const erratas = parsedPayload.knowledge?.errata || [];
-  const sources = parsedPayload.knowledge?.sources || [];
+  const sources = parsedPayload.knowledge?.sources ?? [];
+  const erratas = sources.filter((source) => source?.is_errata === true);
 
   if (erratas.length > 0) {
     const primaryErrata = erratas[0];
-    const primaryErrataRef = primaryErrata.reference || primaryErrata.id;
+    const primaryErrataRef = primaryErrata?.reference;
     if (
       typeof primaryErrataRef === "string" &&
-      /^[SE]\d+/i.test(primaryErrataRef.trim())
+      /^E[1-9]\d*$/.test(primaryErrataRef.trim())
     ) {
-      const cleanRef = primaryErrataRef.trim().toUpperCase();
+      const cleanRef = primaryErrataRef.trim();
       const response: AnswerEngineResponse = {
         version: PROTOCOL_VERSION,
         request_id: requestIdHeader,
@@ -405,14 +390,15 @@ export async function processAnswerEngineRequest(
   }
 
   // --- Scenario A: Answered from Governed Knowledge ($S^*$) ---
-  if (sources.length > 0) {
-    const primarySource = sources[0];
-    const primaryReference = primarySource.reference || primarySource.id;
+  const standardSources = sources.filter((source) => !source?.is_errata);
+  if (standardSources.length > 0) {
+    const primarySource = standardSources[0];
+    const primaryReference = primarySource?.reference;
     if (
       typeof primaryReference === "string" &&
-      /^[SE]\d+/i.test(primaryReference.trim())
+      /^S[1-9]\d*$/.test(primaryReference.trim())
     ) {
-      const cleanRef = primaryReference.trim().toUpperCase();
+      const cleanRef = primaryReference.trim();
       const response: AnswerEngineResponse = {
         version: PROTOCOL_VERSION,
         request_id: requestIdHeader,
