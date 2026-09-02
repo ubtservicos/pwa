@@ -31,7 +31,8 @@ import {
   QrCode,
   MapPin,
   Calendar,
-  Truck
+  Truck,
+  Send
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -86,6 +87,7 @@ export const NAV_ITEMS = [
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
   { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
+  { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["super_admin"] },
   { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
   { icon: FileCheck, label: "Auditoria de Docs", path: "/app/admin/documentos", roles: ["admin", "super_admin"] },
@@ -173,7 +175,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
 
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
-  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
+  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/admin/mensageria", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
   const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/kyc-pendentes", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));

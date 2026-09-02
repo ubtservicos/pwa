@@ -98,6 +98,7 @@ import AdminWaitlistPage from "./pages/admin/AdminWaitlistPage.tsx";
 import AdminWikiPage from "./pages/admin/AdminWikiPage.tsx";
 import AdminAprovacoesPage from "./pages/admin/AdminAprovacoesPage.tsx";
 import AdminDocumentosPage from "./pages/admin/AdminDocumentosPage.tsx";
+import AdminMensageriaPage from "./pages/admin/AdminMensageriaPage.tsx";
 import AdminCocoSettings from "./pages/admin/AdminCocoSettings.tsx";
 import AdminCocoFrota from "./pages/admin/AdminCocoFrota.tsx";
 import AdminCocoMapa from "./pages/admin/AdminCocoMapa.tsx";
@@ -230,6 +231,7 @@ const App = () => (
               <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["super_admin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
               <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
               <Route path="/app/admin/documentos" element={adminGuard(<AdminDocumentosPage />, ["admin", "super_admin"])} />
