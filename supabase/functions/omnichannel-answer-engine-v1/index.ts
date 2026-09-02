@@ -52,7 +52,8 @@ export function constantTimeCompare(a: string, b: string): boolean {
 // TYPES
 // ==============================================================================
 export interface KnowledgeItem {
-  id: string;
+  reference?: string;
+  id?: string;
   title?: string;
   content: string;
 }
@@ -384,31 +385,45 @@ export async function processAnswerEngineRequest(
 
   if (erratas.length > 0) {
     const primaryErrata = erratas[0];
-    const response: AnswerEngineResponse = {
-      version: PROTOCOL_VERSION,
-      request_id: requestIdHeader,
-      status: "answered",
-      answer: `Conforme a atualização e errata oficial recente (${primaryErrata.id}): ${primaryErrata.content}`,
-      citation_references: [primaryErrata.id],
-      runtime_evidence: []
-    };
-    logSafeMetrics(requestIdHeader, "scenario_errata_precedence", response.status, Date.now() - startTime);
-    return { status: 200, body: response };
+    const primaryErrataRef = primaryErrata.reference || primaryErrata.id;
+    if (
+      typeof primaryErrataRef === "string" &&
+      /^[SE]\d+/i.test(primaryErrataRef.trim())
+    ) {
+      const cleanRef = primaryErrataRef.trim().toUpperCase();
+      const response: AnswerEngineResponse = {
+        version: PROTOCOL_VERSION,
+        request_id: requestIdHeader,
+        status: "answered",
+        answer: `Conforme a atualização e errata oficial recente (${cleanRef}): ${primaryErrata.content}`,
+        citation_references: [cleanRef],
+        runtime_evidence: []
+      };
+      logSafeMetrics(requestIdHeader, "scenario_errata_precedence", response.status, Date.now() - startTime);
+      return { status: 200, body: response };
+    }
   }
 
   // --- Scenario A: Answered from Governed Knowledge ($S^*$) ---
   if (sources.length > 0) {
     const primarySource = sources[0];
-    const response: AnswerEngineResponse = {
-      version: PROTOCOL_VERSION,
-      request_id: requestIdHeader,
-      status: "answered",
-      answer: `De acordo com as diretrizes e base de conhecimento oficial (${primarySource.id}): ${primarySource.content}`,
-      citation_references: [primarySource.id],
-      runtime_evidence: []
-    };
-    logSafeMetrics(requestIdHeader, "scenario_source_knowledge", response.status, Date.now() - startTime);
-    return { status: 200, body: response };
+    const primaryReference = primarySource.reference || primarySource.id;
+    if (
+      typeof primaryReference === "string" &&
+      /^[SE]\d+/i.test(primaryReference.trim())
+    ) {
+      const cleanRef = primaryReference.trim().toUpperCase();
+      const response: AnswerEngineResponse = {
+        version: PROTOCOL_VERSION,
+        request_id: requestIdHeader,
+        status: "answered",
+        answer: `De acordo com as diretrizes e base de conhecimento oficial (${cleanRef}): ${primarySource.content}`,
+        citation_references: [cleanRef],
+        runtime_evidence: []
+      };
+      logSafeMetrics(requestIdHeader, "scenario_source_knowledge", response.status, Date.now() - startTime);
+      return { status: 200, body: response };
+    }
   }
 
   // --- Scenario D: Insufficient Knowledge ---

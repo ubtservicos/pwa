@@ -276,33 +276,47 @@ async function processAnswerEngine(
 
   if (erratas.length > 0) {
     const primaryErrata = erratas[0];
-    return {
-      status: 200,
-      body: {
-        version: PROTOCOL_VERSION,
-        request_id: requestId,
-        status: "answered",
-        answer: `Conforme a atualização e errata oficial recente (${primaryErrata.id}): ${primaryErrata.content}`,
-        citation_references: [primaryErrata.id],
-        runtime_evidence: []
-      }
-    };
+    const primaryErrataRef = primaryErrata.reference || primaryErrata.id;
+    if (
+      typeof primaryErrataRef === "string" &&
+      /^[SE]\d+/i.test(primaryErrataRef.trim())
+    ) {
+      const cleanRef = primaryErrataRef.trim().toUpperCase();
+      return {
+        status: 200,
+        body: {
+          version: PROTOCOL_VERSION,
+          request_id: requestId,
+          status: "answered",
+          answer: `Conforme a atualização e errata oficial recente (${cleanRef}): ${primaryErrata.content}`,
+          citation_references: [cleanRef],
+          runtime_evidence: []
+        }
+      };
+    }
   }
 
   // Scenario A: Answered from S*
   if (sources.length > 0) {
     const primarySource = sources[0];
-    return {
-      status: 200,
-      body: {
-        version: PROTOCOL_VERSION,
-        request_id: requestId,
-        status: "answered",
-        answer: `De acordo com as diretrizes oficiais (${primarySource.id}): ${primarySource.content}`,
-        citation_references: [primarySource.id],
-        runtime_evidence: []
-      }
-    };
+    const primaryReference = primarySource.reference || primarySource.id;
+    if (
+      typeof primaryReference === "string" &&
+      /^[SE]\d+/i.test(primaryReference.trim())
+    ) {
+      const cleanRef = primaryReference.trim().toUpperCase();
+      return {
+        status: 200,
+        body: {
+          version: PROTOCOL_VERSION,
+          request_id: requestId,
+          status: "answered",
+          answer: `De acordo com as diretrizes oficiais (${cleanRef}): ${primarySource.content}`,
+          citation_references: [cleanRef],
+          runtime_evidence: []
+        }
+      };
+    }
   }
 
   // Scenario D: Insufficient Knowledge
@@ -504,12 +518,12 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
   });
 
   // 6. Six Controlled Deterministic Scenarios
-  it("Scenario A: Answered from S* (Governed Knowledge Source)", async () => {
+  it("Scenario A: Answered from S* (Governed Knowledge Source with reference)", async () => {
     const { headers, rawBodyBytes } = await buildSignedRequest({
       version: "1",
       message: { text: "Onde descartar garrafas PET em Ubatuba?" },
       knowledge: {
-        sources: [{ id: "S1", title: "Ecopontos UBT", content: "O descarte de PET pode ser feito nos Ecopontos do Centro e Itaguá." }]
+        sources: [{ reference: "S1", title: "Ecopontos UBT", content: "O descarte de PET pode ser feito nos Ecopontos do Centro e Itaguá." }]
       }
     });
 
@@ -517,7 +531,25 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("answered");
     expect(res.body.citation_references).toEqual(["S1"]);
+    expect(typeof res.body.citation_references[0]).toBe("string");
     expect(res.body.answer).toContain("S1");
+    expect(res.body.answer).not.toContain("undefined");
+    expect(res.body.runtime_evidence).toEqual([]);
+  });
+
+  it("Scenario A: Fails closed to insufficient_knowledge when source reference is missing or invalid", async () => {
+    const { headers, rawBodyBytes } = await buildSignedRequest({
+      version: "1",
+      message: { text: "Onde descartar garrafas PET?" },
+      knowledge: {
+        sources: [{ title: "Ecopontos UBT", content: "Sem referência válida" } as any]
+      }
+    });
+
+    const res = await processAnswerEngine(headers, rawBodyBytes, { secretOverride: TEST_SECRET });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("insufficient_knowledge");
+    expect(res.body.citation_references).toEqual([]);
     expect(res.body.runtime_evidence).toEqual([]);
   });
 
@@ -526,8 +558,8 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
       version: "1",
       message: { text: "Qual o horário da coleta hoje no Centro?" },
       knowledge: {
-        sources: [{ id: "S1", title: "Escala Padrão", content: "Horário padrão: 18:00h." }],
-        errata: [{ id: "E1", title: "Aviso Feriado", content: "Horário excepcional hoje: 15:00h devido a manutenção." }]
+        sources: [{ reference: "S1", title: "Escala Padrão", content: "Horário padrão: 18:00h." }],
+        errata: [{ reference: "E1", title: "Aviso Feriado", content: "Horário excepcional hoje: 15:00h devido a manutenção." }]
       }
     });
 
@@ -536,8 +568,10 @@ describe("UBT Omnichannel Answer Engine Sandbox V1 — Comprehensive Protocol Te
     expect(res.body.status).toBe("answered");
     // Precedence rule: E* > S*
     expect(res.body.citation_references).toEqual(["E1"]);
+    expect(typeof res.body.citation_references[0]).toBe("string");
     expect(res.body.answer).toContain("15:00h");
     expect(res.body.answer).toContain("E1");
+    expect(res.body.answer).not.toContain("undefined");
   });
 
   it("Scenario C: Answered with R* (Live Transactional State Authority)", async () => {
