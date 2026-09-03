@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export const ADMIN_ROLES = ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"];
+export const ADMIN_ROLES = ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "superadmin", "kyc", "auditoria", "analytics"];
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -43,7 +43,7 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
             role = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
           }
           
-          if (role === "super_admin") {
+          if (role === "super_admin" || role === "superadmin") {
             setIsAuthorized(true);
           } else if (permission) {
             const { data: hasPerm } = await supabase.rpc("has_permission", {

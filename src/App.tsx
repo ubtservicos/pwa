@@ -231,7 +231,7 @@ const App = () => (
               <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["super_admin"])} />
+              <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["admin", "super_admin", "superadmin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
               <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
               <Route path="/app/admin/documentos" element={adminGuard(<AdminDocumentosPage />, ["admin", "super_admin"])} />

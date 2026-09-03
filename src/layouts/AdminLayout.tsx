@@ -87,7 +87,7 @@ export const NAV_ITEMS = [
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
   { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
-  { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["super_admin"] },
+  { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["admin", "super_admin", "superadmin"] },
   { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
   { icon: FileCheck, label: "Auditoria de Docs", path: "/app/admin/documentos", roles: ["admin", "super_admin"] },
