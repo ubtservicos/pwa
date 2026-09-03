@@ -18,7 +18,11 @@ import {
   ShieldCheck,
   RefreshCw,
   Eye,
-  Radio
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  Wifi,
+  BatteryMedium
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -92,6 +96,9 @@ const CHANNELS = [
 export default function AdminMensageriaPage() {
   const { addToast } = useAdminToast();
 
+  // Wizard Tab Navigation State
+  const [activeTab, setActiveTab] = useState<"segmentation" | "composition" | "review">("segmentation");
+
   // Form State
   const [title, setTitle] = useState("");
   const [channel, setChannel] = useState("omnichannel"); // DEFAULT PRE-SELECTED VALUE
@@ -104,9 +111,12 @@ export default function AdminMensageriaPage() {
   const [scheduledTime, setScheduledTime] = useState("10:00");
   const [recurrence, setRecurrence] = useState<"none" | "daily" | "weekly" | "monthly">("none");
 
-  // History & Loading State
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  // Dispatch lifecycle states
   const [loading, setLoading] = useState(false);
+  const [successDispatched, setSuccessDispatched] = useState(false);
+
+  // History & Table State
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [fetching, setFetching] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -139,23 +149,54 @@ export default function AdminMensageriaPage() {
     setMessage((prev) => `${prev} {{${variable}}}`);
   };
 
-  // Submit Handler
+  // Audience Count Helper
+  const getAudienceCount = () => {
+    if (targetType === "broadcast") return 2896;
+    if (targetType === "niche") {
+      const found = NICHES.find((n) => n.id === niche);
+      return found ? found.count : 100;
+    }
+    return 1;
+  };
+
+  // Step Validation & Navigation
+  const handleNextToComposition = () => {
+    if (!title.trim()) {
+      addToast("Informe o título/identificador da campanha antes de prosseguir.", "error");
+      return;
+    }
+    if (targetType === "individual" && !individualRecipient.trim()) {
+      addToast("Informe o destinatário específico para o envio individual.", "error");
+      return;
+    }
+    setActiveTab("composition");
+  };
+
+  const handleNextToReview = () => {
+    if (!message.trim()) {
+      addToast("Escreva a mensagem antes de avançar para a revisão.", "error");
+      return;
+    }
+    setActiveTab("review");
+  };
+
+  // Dispatch Handler
   const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       addToast("Informe um título identificador para a campanha.", "error");
+      setActiveTab("segmentation");
       return;
     }
     if (!message.trim()) {
       addToast("Escreva o conteúdo da mensagem a ser enviada.", "error");
-      return;
-    }
-    if (targetType === "individual" && !individualRecipient.trim()) {
-      addToast("Informe o destinatário específico para envio individual.", "error");
+      setActiveTab("composition");
       return;
     }
 
     setLoading(true);
+    setSuccessDispatched(false);
+
     try {
       const { data: userData } = await supabase.auth.getUser();
       const authorName = userData?.user?.email || "Admin UBT";
@@ -165,14 +206,7 @@ export default function AdminMensageriaPage() {
         scheduledForIso = new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString();
       }
 
-      let audienceCount = 2896; // Total base
-      if (targetType === "niche") {
-        const found = NICHES.find((n) => n.id === niche);
-        audienceCount = found ? found.count : 100;
-      } else if (targetType === "individual") {
-        audienceCount = 1;
-      }
-
+      const audienceCount = getAudienceCount();
       const isNow = scheduledType === "now";
       const newStatus = isNow ? "concluido" : "agendado";
       const sentCount = isNow ? audienceCount : 0;
@@ -203,6 +237,7 @@ export default function AdminMensageriaPage() {
 
       if (error) throw error;
 
+      setSuccessDispatched(true);
       addToast(
         isNow
           ? `Disparo executado com sucesso via ${channel === "omnichannel" ? "Omnichannel Agent" : channel} para ${audienceCount} destinatários!`
@@ -210,17 +245,20 @@ export default function AdminMensageriaPage() {
         "success"
       );
 
-      // Reset form fields
-      setTitle("");
-      setMessage("");
-      setTargetType("broadcast");
-      setIndividualRecipient("");
-      setScheduledType("now");
-      setRecurrence("none");
-      setChannel("omnichannel");
+      // Reset form after short delay
+      setTimeout(() => {
+        setTitle("");
+        setMessage("");
+        setTargetType("broadcast");
+        setIndividualRecipient("");
+        setScheduledType("now");
+        setRecurrence("none");
+        setChannel("omnichannel");
+        setActiveTab("segmentation");
+        setSuccessDispatched(false);
+        fetchCampaigns();
+      }, 1500);
 
-      // Refresh list
-      fetchCampaigns();
     } catch (err: any) {
       console.error("Erro ao registrar campanha:", err);
       addToast(err?.message || "Falha ao processar campanha de mensageria.", "error");
@@ -229,7 +267,7 @@ export default function AdminMensageriaPage() {
     }
   };
 
-  // Filtered List
+  // Filtered History
   const filteredCampaigns = campaigns.filter((c) => {
     const matchesSearch =
       c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -249,7 +287,7 @@ export default function AdminMensageriaPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-16">
-      {/* 1. Header & Badges */}
+      {/* Header & Badges */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
@@ -264,7 +302,7 @@ export default function AdminMensageriaPage() {
             <Send className="text-[#0DB87E]" size={22} /> Central de Mensageria & Campanhas
           </h1>
           <p className="text-sm text-zinc-400 m-0">
-            Gerencie disparos em broadcast, automações por nicho e integrações com o motor <strong>Omnichannel Agent v1</strong>.
+            Fluxo guiado de segmentação, composição e transmissão segura via <strong>Omnichannel Agent v1</strong>.
           </p>
         </div>
 
@@ -279,7 +317,7 @@ export default function AdminMensageriaPage() {
         </div>
       </div>
 
-      {/* 2. Top KPI Cards */}
+      {/* Top KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-5 shadow-sm hover:border-zinc-700 transition-all flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-[#0DB87E]/10 border border-[#0DB87E]/20 flex items-center justify-center text-[#0DB87E] shrink-0">
@@ -330,395 +368,563 @@ export default function AdminMensageriaPage() {
         </div>
       </div>
 
-      {/* 3. Main Form (2 cols) + Live Preview (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Form Composer (2 cols) */}
-        <div className="lg:col-span-2 bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-6 shadow-sm space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3.5">
-            <h2 className="text-lg font-bold text-white m-0 flex items-center gap-2">
-              <Sparkles size={18} className="text-[#0DB87E]" /> Nova Transmissão / Comunicado
-            </h2>
-            <span className="text-xs text-zinc-400">Configuração de Disparo</span>
-          </div>
+      {/* Process Wizard Container */}
+      <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden">
+        {/* Wizard Tab Bar */}
+        <div className="flex border-b border-zinc-800 bg-zinc-950/60 p-2 gap-2 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("segmentation")}
+            className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-[200px] ${
+              activeTab === "segmentation"
+                ? "bg-[#0DB87E]/15 text-[#0DB87E] border border-[#0DB87E]/30 shadow-sm"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            }`}
+          >
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+              activeTab === "segmentation" ? "bg-[#0DB87E] text-black" : "bg-zinc-800 text-zinc-400"
+            }`}>
+              1
+            </span>
+            <span>Aba 1: Segmentação (Quem recebe?)</span>
+          </button>
 
-          <form onSubmit={handleDispatch} className="space-y-6">
-            {/* Title Input */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
-                Título / Identificador Interno da Campanha <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Comunicado Geral de Recadastramento 2026"
-                className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:bg-zinc-800 focus:border-[#0DB87E] focus:ring-1 focus:ring-[#0DB87E] outline-none transition-all"
-                required
-              />
-            </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!title.trim()) {
+                addToast("Preencha o título na Aba 1 antes de avançar.", "error");
+                return;
+              }
+              setActiveTab("composition");
+            }}
+            className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-[200px] ${
+              activeTab === "composition"
+                ? "bg-[#0DB87E]/15 text-[#0DB87E] border border-[#0DB87E]/30 shadow-sm"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            }`}
+          >
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+              activeTab === "composition" ? "bg-[#0DB87E] text-black" : "bg-zinc-800 text-zinc-400"
+            }`}>
+              2
+            </span>
+            <span>Aba 2: Composição (O que enviar?)</span>
+          </button>
 
-            {/* Target Audience Selector */}
-            <div className="space-y-3">
-              <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
-                Público-Alvo (Segmentação)
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTargetType("broadcast")}
-                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-                    targetType === "broadcast"
-                      ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
-                      : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="font-semibold text-sm flex items-center gap-2 text-white">
-                    🌐 Broadcast Geral
-                  </div>
-                  <div className="text-xs text-zinc-400 mt-1">Toda a base (~2.890 usuários)</div>
-                </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!title.trim() || !message.trim()) {
+                addToast("Complete o título e a mensagem antes da revisão.", "error");
+                return;
+              }
+              setActiveTab("review");
+            }}
+            className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-[200px] ${
+              activeTab === "review"
+                ? "bg-[#0DB87E]/15 text-[#0DB87E] border border-[#0DB87E]/30 shadow-sm"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            }`}
+          >
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+              activeTab === "review" ? "bg-[#0DB87E] text-black" : "bg-zinc-800 text-zinc-400"
+            }`}>
+              3
+            </span>
+            <span>Aba 3: Revisão & Disparo</span>
+          </button>
+        </div>
 
-                <button
-                  type="button"
-                  onClick={() => setTargetType("niche")}
-                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-                    targetType === "niche"
-                      ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
-                      : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="font-semibold text-sm flex items-center gap-2 text-white">
-                    🎯 Nicho Específico
-                  </div>
-                  <div className="text-xs text-zinc-400 mt-1">Filtrar por atividade profissional</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTargetType("individual")}
-                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-                    targetType === "individual"
-                      ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
-                      : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="font-semibold text-sm flex items-center gap-2 text-white">
-                    👤 Destinatário Único
-                  </div>
-                  <div className="text-xs text-zinc-400 mt-1">Envio direto para 1 contato</div>
-                </button>
+        {/* Wizard Content Body */}
+        <div className="p-6 sm:p-8">
+          {/* TAB 1: SEGMENTAÇÃO */}
+          {activeTab === "segmentation" && (
+            <div className="space-y-6 max-w-4xl">
+              <div>
+                <h3 className="text-lg font-bold text-white m-0">Segmentação e Identificação da Campanha</h3>
+                <p className="text-xs text-zinc-400 mt-1">Defina o identificador da transmissão e selecione a base de usuários de destino.</p>
               </div>
 
-              {/* Niche Badges */}
-              {targetType === "niche" && (
-                <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-2.5">
-                  <div className="text-xs font-semibold text-[#0DB87E] flex items-center gap-1.5">
-                    <Filter size={14} /> Selecione o Nicho Destinatário:
+              {/* Title Input */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
+                  Título / Identificador Interno da Campanha <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ex: Comunicado Geral de Recadastramento 2026"
+                  className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:bg-zinc-800 focus:border-[#0DB87E] focus:ring-1 focus:ring-[#0DB87E] outline-none transition-all"
+                  required
+                />
+              </div>
+
+              {/* Target Audience Cards */}
+              <div className="space-y-3">
+                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
+                  Selecione o Público-Alvo (Targeting)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTargetType("broadcast")}
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      targetType === "broadcast"
+                        ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
+                        : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="font-semibold text-sm flex items-center gap-2 text-white">
+                      🌐 Broadcast Geral
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-1">Toda a base ativa (~2.890 usuários)</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTargetType("niche")}
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      targetType === "niche"
+                        ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
+                        : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="font-semibold text-sm flex items-center gap-2 text-white">
+                      🎯 Nicho Específico
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-1">Filtrar por papel e atividade profissional</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTargetType("individual")}
+                    className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                      targetType === "individual"
+                        ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
+                        : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
+                    }`}
+                  >
+                    <div className="font-semibold text-sm flex items-center gap-2 text-white">
+                      👤 Destinatário Único
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-1">Envio direto para 1 usuário</div>
+                  </button>
+                </div>
+
+                {/* Niche Badges */}
+                {targetType === "niche" && (
+                  <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-2.5">
+                    <div className="text-xs font-semibold text-[#0DB87E] flex items-center gap-1.5">
+                      <Filter size={14} /> Selecione a Categoria / Nicho:
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {NICHES.map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => setNiche(n.id)}
+                          className={`px-3.5 py-2.5 rounded-lg border text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
+                            niche === n.id
+                              ? "bg-[#0DB87E]/20 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/40"
+                              : "bg-zinc-800/60 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          <span>{n.icon} {n.label.split(" ")[0]}</span>
+                          <span className="text-[10px] text-zinc-400">({n.count})</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {NICHES.map((n) => (
+                )}
+
+                {/* Individual Input */}
+                {targetType === "individual" && (
+                  <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-2">
+                    <label className="text-xs font-semibold text-[#0DB87E] flex items-center gap-1.5">
+                      <Search size={14} /> Destinatário (Nome, Telefone ou E-mail):
+                    </label>
+                    <input
+                      type="text"
+                      value={individualRecipient}
+                      onChange={(e) => setIndividualRecipient(e.target.value)}
+                      placeholder="Ex: (12) 99123-4567 ou joao.silva@exemplo.com"
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#0DB87E] outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Next Action */}
+              <div className="flex justify-end pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={handleNextToComposition}
+                  className="px-6 py-3 bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black font-extrabold text-sm rounded-xl flex items-center gap-2 shadow-lg shadow-[#0DB87E]/20 transition-all cursor-pointer"
+                >
+                  Avançar para Composição <ArrowRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: COMPOSIÇÃO */}
+          {activeTab === "composition" && (
+            <div className="space-y-6 max-w-4xl">
+              <div>
+                <h3 className="text-lg font-bold text-white m-0">Composição do Conteúdo & Canal</h3>
+                <p className="text-xs text-zinc-400 mt-1">Redija o comunicado, utilize variáveis dinâmicas e escolha o canal e agendamento.</p>
+              </div>
+
+              {/* Channel Selector */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
+                    Canal Principal de Envio
+                  </label>
+                  <span className="text-xs text-[#0DB87E] font-medium flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Omnichannel Agent (Default)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {CHANNELS.map((c) => {
+                    const Icon = c.icon;
+                    const isSelected = channel === c.id;
+                    return (
                       <button
-                        key={n.id}
+                        key={c.id}
                         type="button"
-                        onClick={() => setNiche(n.id)}
-                        className={`px-3 py-2 rounded-lg border text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
-                          niche === n.id
-                            ? "bg-[#0DB87E]/20 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/40"
-                            : "bg-zinc-800/60 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-500"
+                        onClick={() => setChannel(c.id)}
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                          isSelected
+                            ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
+                            : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
                         }`}
                       >
-                        <span>{n.icon} {n.label.split(" ")[0]}</span>
-                        <span className="text-[10px] text-zinc-400">({n.count})</span>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2 font-semibold text-xs text-white">
+                              <Icon size={16} className={isSelected ? "text-[#0DB87E]" : "text-zinc-400"} />
+                              {c.name}
+                            </div>
+                            {c.highlight && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30">
+                                DEFAULT
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-zinc-400 m-0 line-clamp-2 leading-relaxed">
+                            {c.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {channel === "omnichannel" && (
+                  <div className="p-3.5 rounded-xl bg-zinc-800/50 border border-zinc-700/60 flex items-start gap-3 text-xs text-zinc-300">
+                    <ShieldCheck size={18} className="text-[#0DB87E] shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-white">Motor Omnichannel v1 Ativo:</strong> As mensagens enviadas por este canal utilizam assinatura criptográfica Server-to-Server (HMAC-SHA256) com proteção de replay store atômica.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Message Template & Dynamic Variables */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
+                    Corpo da Mensagem <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                    <span>Tags dinâmicas:</span>
+                    {["nome", "cidade", "categoria", "data"].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => insertVariable(v)}
+                        className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700/60 text-[10px] font-medium text-zinc-300 hover:text-white hover:border-zinc-500 transition-all cursor-pointer"
+                      >
+                        +{v}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Individual Input */}
-              {targetType === "individual" && (
-                <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-2">
-                  <label className="text-xs font-semibold text-[#0DB87E] flex items-center gap-1.5">
-                    <Search size={14} /> Destinatário (Nome, Telefone ou E-mail):
-                  </label>
-                  <input
-                    type="text"
-                    value={individualRecipient}
-                    onChange={(e) => setIndividualRecipient(e.target.value)}
-                    placeholder="Ex: (12) 99123-4567 ou joao.silva@exemplo.com"
-                    className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#0DB87E] outline-none"
-                  />
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Olá {{nome}}, informamos que o SuperApp UBT passará por uma atualização programada para novas funcionalidades na cidade de {{cidade}}..."
+                  rows={5}
+                  className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-xl p-4 text-sm text-white placeholder-zinc-500 focus:bg-zinc-800 focus:border-[#0DB87E] focus:ring-1 focus:ring-[#0DB87E] outline-none transition-all resize-y"
+                  required
+                />
+
+                <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+                  <span>Caracteres: {message.length}</span>
+                  <span>Tags: {"{{nome}}, {{cidade}}, {{categoria}}, {{data}}"}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Delivery Channel Selector */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
-                  Canal Principal de Envio
-                </label>
-                <span className="text-xs text-[#0DB87E] font-medium flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Omnichannel Agent (Default)
-                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {CHANNELS.map((c) => {
-                  const Icon = c.icon;
-                  const isSelected = channel === c.id;
-                  return (
+              {/* Scheduling & Recurrence */}
+              <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar size={14} className="text-[#0DB87E]" /> Agendamento e Recorrência
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-700/60">
                     <button
-                      key={c.id}
                       type="button"
-                      onClick={() => setChannel(c.id)}
-                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                        isSelected
-                          ? "bg-[#0DB87E]/10 border-[#0DB87E] text-white ring-1 ring-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
-                          : "bg-zinc-800/40 border-zinc-700/60 text-zinc-300 hover:bg-zinc-800/80 hover:border-zinc-500"
+                      onClick={() => setScheduledType("now")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        scheduledType === "now"
+                          ? "bg-[#0DB87E] text-black shadow-sm font-bold"
+                          : "text-zinc-400 hover:text-white"
                       }`}
                     >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2 font-semibold text-xs text-white">
-                            <Icon size={16} className={isSelected ? "text-[#0DB87E]" : "text-zinc-400"} />
-                            {c.name}
-                          </div>
-                          {c.highlight && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30">
-                              DEFAULT
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-zinc-400 m-0 line-clamp-2 leading-relaxed">
-                          {c.description}
-                        </p>
-                      </div>
+                      🚀 Enviar Agora
                     </button>
-                  );
-                })}
-              </div>
-
-              {channel === "omnichannel" && (
-                <div className="p-3.5 rounded-xl bg-zinc-800/50 border border-zinc-700/60 flex items-start gap-3 text-xs text-zinc-300">
-                  <ShieldCheck size={18} className="text-[#0DB87E] shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-white">Motor Omnichannel v1 Ativo:</strong> As mensagens enviadas por este canal utilizam assinatura criptográfica Server-to-Server (HMAC-SHA256) com proteção de replay store atômica.
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Message Template & Dynamic Variables */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider block">
-                  Conteúdo da Mensagem <span className="text-red-400">*</span>
-                </label>
-                <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                  <span>Variáveis:</span>
-                  {["nome", "cidade", "categoria", "data"].map((v) => (
                     <button
-                      key={v}
                       type="button"
-                      onClick={() => insertVariable(v)}
-                      className="px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700/60 text-[10px] font-medium text-zinc-300 hover:text-white hover:border-zinc-500 transition-all cursor-pointer"
+                      onClick={() => setScheduledType("scheduled")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        scheduledType === "scheduled"
+                          ? "bg-[#0DB87E] text-black shadow-sm font-bold"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
                     >
-                      +{v}
+                      📅 Agendar
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Olá {{nome}}, informamos que o SuperApp UBT passará por uma atualização programada para novas funcionalidades na cidade de {{cidade}}..."
-                rows={5}
-                className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-xl p-4 text-sm text-white placeholder-zinc-500 focus:bg-zinc-800 focus:border-[#0DB87E] focus:ring-1 focus:ring-[#0DB87E] outline-none transition-all resize-y"
-                required
-              />
-
-              <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
-                <span>Caracteres: {message.length}</span>
-                <span>Tags: {"{{nome}}, {{cidade}}, {{categoria}}, {{data}}"}</span>
-              </div>
-            </div>
-
-            {/* Scheduling & Recurrence */}
-            <div className="p-4 bg-zinc-800/50 border border-zinc-700/60 rounded-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-                  <Calendar size={14} className="text-[#0DB87E]" /> Agendamento e Recorrência
-                </label>
-                <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-700/60">
-                  <button
-                    type="button"
-                    onClick={() => setScheduledType("now")}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      scheduledType === "now"
-                        ? "bg-[#0DB87E] text-black shadow-sm font-bold"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    🚀 Enviar Agora
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScheduledType("scheduled")}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      scheduledType === "scheduled"
-                        ? "bg-[#0DB87E] text-black shadow-sm font-bold"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    📅 Agendar
-                  </button>
-                </div>
-              </div>
-
-              {scheduledType === "scheduled" && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-zinc-700/40 animate-fadeIn">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Data do Disparo</label>
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#0DB87E]"
-                      required={scheduledType === "scheduled"}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Horário (UTC-3)</label>
-                    <input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={(e) => setScheduledTime(e.target.value)}
-                      className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#0DB87E]"
-                      required={scheduledType === "scheduled"}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Frequência</label>
-                    <select
-                      value={recurrence}
-                      onChange={(e) => setRecurrence(e.target.value as any)}
-                      className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-zinc-200 outline-none focus:border-[#0DB87E] cursor-pointer"
-                    >
-                      <option value="none">Única (Sem repetição)</option>
-                      <option value="daily">Diária (Todos os dias)</option>
-                      <option value="weekly">Semanal (A cada 7 dias)</option>
-                      <option value="monthly">Mensal (Mesmo dia)</option>
-                    </select>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* CTA Button */}
-            <div className="flex items-center justify-end pt-2">
-              <button
-                type="submit"
-                disabled={loading || !title || !message}
-                className="w-full sm:w-auto px-8 py-3 bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black font-bold text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-[#0DB87E]/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" /> Processando...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} /> {scheduledType === "now" ? "Disparar Transmissão Agora" : "Confirmar Agendamento"}
-                  </>
+                {scheduledType === "scheduled" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-zinc-700/40 animate-fadeIn">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Data do Disparo</label>
+                      <input
+                        type="date"
+                        value={scheduledDate}
+                        onChange={(e) => setScheduledDate(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#0DB87E]"
+                        required={scheduledType === "scheduled"}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Horário (UTC-3)</label>
+                      <input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#0DB87E]"
+                        required={scheduledType === "scheduled"}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-zinc-400 mb-1.5">Frequência</label>
+                      <select
+                        value={recurrence}
+                        onChange={(e) => setRecurrence(e.target.value as any)}
+                        className="w-full bg-zinc-800 border border-zinc-700/60 rounded-xl px-3 py-2 text-xs text-zinc-200 outline-none focus:border-[#0DB87E] cursor-pointer"
+                      >
+                        <option value="none">Única (Sem repetição)</option>
+                        <option value="daily">Diária (Todos os dias)</option>
+                        <option value="weekly">Semanal (A cada 7 dias)</option>
+                        <option value="monthly">Mensal (Mesmo dia)</option>
+                      </select>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
+
+              {/* Actions Bar */}
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("segmentation")}
+                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Voltar para Segmentação
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNextToReview}
+                  className="px-6 py-3 bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black font-extrabold text-sm rounded-xl flex items-center gap-2 shadow-lg shadow-[#0DB87E]/20 transition-all cursor-pointer"
+                >
+                  Avançar para Revisão & Disparo <ArrowRight size={16} />
+                </button>
+              </div>
             </div>
-          </form>
-        </div>
+          )}
 
-        {/* Right Live Preview Panel (1 col) */}
-        <div className="lg:col-span-1 bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3.5">
-            <h3 className="text-base font-bold text-white m-0 flex items-center gap-2">
-              <Eye size={16} className="text-[#0DB87E]" /> Preview em Tempo Real
-            </h3>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/50">
-              {channel.toUpperCase()}
-            </span>
-          </div>
-
-          {/* Smartphone Frame Simulation */}
-          <div className="bg-zinc-950 border-2 border-zinc-700/80 rounded-3xl p-4 shadow-2xl space-y-3">
-            {/* Phone speaker top bar */}
-            <div className="w-16 h-1 bg-zinc-800 rounded-full mx-auto mb-1"></div>
-
-            {/* Notification Bar */}
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-[#0DB87E] flex items-center justify-center text-black font-extrabold text-[10px]">
-                  U
-                </div>
+          {/* TAB 3: REVISÃO & DISPARO */}
+          {activeTab === "review" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Column: Summary and Primary Action Button */}
+              <div className="lg:col-span-7 space-y-6">
                 <div>
-                  <div className="text-xs font-bold text-white">UBT Notificações</div>
-                  <div className="text-[9px] text-zinc-400">Agora • Mensagem Oficial</div>
+                  <h3 className="text-lg font-bold text-white m-0">Revisão Final & Confirmação de Disparo</h3>
+                  <p className="text-xs text-zinc-400 mt-1">Valide os parâmetros operacionais antes de autorizar a transmissão na rede.</p>
+                </div>
+
+                {/* Summary Card */}
+                <div className="bg-zinc-800/40 border border-zinc-700/60 rounded-2xl p-5 space-y-4">
+                  <div className="text-xs font-bold text-[#0DB87E] uppercase tracking-wider">
+                    Resumo do Envio:
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="bg-zinc-900/80 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400 block text-[11px]">Identificador da Campanha:</span>
+                      <strong className="text-white text-sm font-semibold">{title || "Sem título"}</strong>
+                    </div>
+
+                    <div className="bg-zinc-900/80 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400 block text-[11px]">Canal de Disparo:</span>
+                      <strong className="text-[#0DB87E] text-sm font-semibold">
+                        {CHANNELS.find((c) => c.id === channel)?.name}
+                      </strong>
+                    </div>
+
+                    <div className="bg-zinc-900/80 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400 block text-[11px]">Público-Alvo:</span>
+                      <strong className="text-white text-sm font-semibold">
+                        {targetType === "broadcast" ? "🌐 Toda a base" : targetType === "niche" ? `🎯 Nicho: ${niche}` : `👤 ${individualRecipient}`}
+                      </strong>
+                    </div>
+
+                    <div className="bg-zinc-900/80 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400 block text-[11px]">Alcance Estimado:</span>
+                      <strong className="text-[#0DB87E] text-sm font-bold">
+                        {getAudienceCount().toLocaleString("pt-BR")} usuários
+                      </strong>
+                    </div>
+
+                    <div className="col-span-2 bg-zinc-900/80 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400 block text-[11px]">Agendamento & Modo:</span>
+                      <strong className="text-white text-xs font-semibold">
+                        {scheduledType === "now" ? "🚀 Transmissão Imediata" : `📅 Agendado para ${scheduledDate} às ${scheduledTime} (${recurrence})`}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Primary Action Button with strict states */}
+                <form onSubmit={handleDispatch} className="space-y-4 pt-2">
+                  <button
+                    type="submit"
+                    disabled={loading || successDispatched}
+                    className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-extrabold text-base shadow-xl transition-all cursor-pointer ${
+                      successDispatched
+                        ? "bg-[#0DB87E] text-black shadow-[#0DB87E]/30"
+                        : loading
+                        ? "bg-zinc-700 text-zinc-300 opacity-80 cursor-not-allowed"
+                        : "bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black shadow-[#0DB87E]/20"
+                    }`}
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw size={20} className="animate-spin text-white" />
+                        <span className="text-white">Processando Motor Omnichannel...</span>
+                      </>
+                    ) : successDispatched ? (
+                      <>
+                        <Check size={20} className="text-black stroke-[3]" />
+                        <span>Campanha Disparada com Sucesso!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={18} />
+                        <span>Confirmar e Disparar Campanha</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("composition")}
+                      className="text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <ArrowLeft size={14} /> Editar mensagem
+                    </button>
+                    <span>Autenticação HMAC-SHA256 ativa</span>
+                  </div>
+                </form>
+              </div>
+
+              {/* Right Column: Realistic Smartphone Mockup */}
+              <div className="lg:col-span-5 flex flex-col items-center">
+                <div className="w-full max-w-[320px] bg-zinc-950 border-[6px] border-zinc-800 rounded-[40px] shadow-2xl overflow-hidden relative">
+                  {/* Phone Notch */}
+                  <div className="w-28 h-4 bg-zinc-800 rounded-b-xl mx-auto flex items-center justify-center">
+                    <div className="w-8 h-1 bg-zinc-900 rounded-full"></div>
+                  </div>
+
+                  {/* Status Bar */}
+                  <div className="h-6 bg-zinc-950 flex justify-between items-center px-5 text-[10px] text-zinc-400 font-medium">
+                    <span>11:22</span>
+                    <div className="flex items-center gap-1.5">
+                      <Wifi size={10} />
+                      <span>4G</span>
+                      <BatteryMedium size={12} />
+                    </div>
+                  </div>
+
+                  {/* Mobile Screen Area */}
+                  <div className="p-4 space-y-4 min-h-[380px] bg-zinc-900/40">
+                    {/* Header bar */}
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-[#0DB87E] flex items-center justify-center text-black font-black text-[11px]">
+                          U
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white leading-tight">UBT Notificações</div>
+                          <div className="text-[9px] text-zinc-400">Agora • Canal Oficial</div>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-[#0DB87E] bg-[#0DB87E]/10 px-1.5 py-0.5 rounded">Verificado ✓</span>
+                    </div>
+
+                    {/* Realistic Message Balloon */}
+                    <div className="bg-zinc-800/90 border border-zinc-700/80 rounded-2xl p-4 text-xs text-zinc-100 leading-relaxed shadow-lg">
+                      {message ? (
+                        message
+                          .replace(/{{nome}}/g, "Carlos Eduardo")
+                          .replace(/{{cidade}}/g, "Ubatuba")
+                          .replace(/{{categoria}}/g, "Mototaxista")
+                          .replace(/{{data}}/g, new Date().toLocaleDateString("pt-BR"))
+                      ) : (
+                        <span className="text-zinc-500 italic">
+                          O texto da mensagem aparecerá aqui renderizado em tempo real...
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Phone footer helper */}
+                    <div className="text-center text-[10px] text-zinc-500 pt-8">
+                      Canal: <strong className="text-zinc-300">{CHANNELS.find((c) => c.id === channel)?.name}</strong>
+                    </div>
+                  </div>
+
+                  {/* Phone Home Bar */}
+                  <div className="w-24 h-1 bg-zinc-700 rounded-full mx-auto my-2"></div>
                 </div>
               </div>
-              <span className="text-[9px] text-[#0DB87E] font-semibold">Verificado ✓</span>
             </div>
-
-            {/* Message Bubble */}
-            <div className="bg-zinc-900 border border-zinc-700/60 rounded-2xl p-3.5 text-xs text-zinc-200 leading-relaxed font-sans shadow-inner">
-              {message ? (
-                message
-                  .replace(/{{nome}}/g, "Carlos Eduardo")
-                  .replace(/{{cidade}}/g, "Ubatuba")
-                  .replace(/{{categoria}}/g, "Mototaxista")
-                  .replace(/{{data}}/g, new Date().toLocaleDateString("pt-BR"))
-              ) : (
-                <span className="text-zinc-500 italic">
-                  Digite a mensagem no formulário para visualizar como ela será entregue ao usuário...
-                </span>
-              )}
-            </div>
-
-            <div className="text-[10px] text-zinc-400 text-right">
-              Canal: <strong className="text-zinc-300">{CHANNELS.find((c) => c.id === channel)?.name}</strong>
-            </div>
-          </div>
-
-          {/* Audience Summary Box */}
-          <div className="p-4 rounded-xl bg-zinc-800/40 border border-zinc-700/50 space-y-2 text-xs">
-            <div className="font-semibold text-zinc-300">Resumo do Público-Alvo:</div>
-            <div className="flex justify-between text-zinc-400">
-              <span>Segmentação:</span>
-              <span className="text-white font-medium capitalize">
-                {targetType === "broadcast" ? "Broadcast Geral" : targetType === "niche" ? `Nicho: ${niche}` : "Individual"}
-              </span>
-            </div>
-            <div className="flex justify-between text-zinc-400">
-              <span>Alcance Estimado:</span>
-              <span className="text-[#0DB87E] font-bold">
-                {targetType === "broadcast"
-                  ? "2.896 usuários"
-                  : targetType === "niche"
-                  ? `${NICHES.find((n) => n.id === niche)?.count || 0} usuários`
-                  : "1 usuário"}
-              </span>
-            </div>
-            <div className="flex justify-between text-zinc-400">
-              <span>Disparo:</span>
-              <span className="text-white font-medium">
-                {scheduledType === "now" ? "Imediato" : `Agendado (${recurrence})`}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* 4. History Table (Bottom Section) */}
+      {/* History and Telemetry Table */}
       <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-6 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
           <div>
@@ -726,7 +932,7 @@ export default function AdminMensageriaPage() {
               <Clock size={18} className="text-[#0DB87E]" /> Histórico de Transmissões & Campanhas
             </h3>
             <p className="text-xs text-zinc-400 mt-1 mb-0">
-              Registro completo de todas as mensagens disparadas ou programadas.
+              Registro de auditoria e telemetria de todas as transmissões processadas no motor.
             </p>
           </div>
 
