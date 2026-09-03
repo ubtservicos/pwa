@@ -25,7 +25,7 @@ import {
   BatteryMedium
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useAdminToast } from "@/components/admin/AdminToast";
+import { toast } from "sonner";
 
 interface Campaign {
   id: string;
@@ -94,8 +94,6 @@ const CHANNELS = [
 ];
 
 export default function AdminMensageriaPage() {
-  const { addToast } = useAdminToast();
-
   // Wizard Tab Navigation State
   const [activeTab, setActiveTab] = useState<"segmentation" | "composition" | "review">("segmentation");
 
@@ -162,11 +160,11 @@ export default function AdminMensageriaPage() {
   // Step Validation & Navigation
   const handleNextToComposition = () => {
     if (!title.trim()) {
-      addToast("Informe o título/identificador da campanha antes de prosseguir.", "error");
+      toast.error("Informe o título/identificador da campanha antes de prosseguir.");
       return;
     }
     if (targetType === "individual" && !individualRecipient.trim()) {
-      addToast("Informe o destinatário específico para o envio individual.", "error");
+      toast.error("Informe o destinatário específico para o envio individual.");
       return;
     }
     setActiveTab("composition");
@@ -174,7 +172,7 @@ export default function AdminMensageriaPage() {
 
   const handleNextToReview = () => {
     if (!message.trim()) {
-      addToast("Escreva a mensagem antes de avançar para a revisão.", "error");
+      toast.error("Escreva a mensagem antes de avançar para a revisão.");
       return;
     }
     setActiveTab("review");
@@ -184,12 +182,12 @@ export default function AdminMensageriaPage() {
   const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      addToast("Informe um título identificador para a campanha.", "error");
+      toast.error("Informe um título identificador para a campanha.");
       setActiveTab("segmentation");
       return;
     }
     if (!message.trim()) {
-      addToast("Escreva o conteúdo da mensagem a ser enviada.", "error");
+      toast.error("Escreva o conteúdo da mensagem a ser enviada.");
       setActiveTab("composition");
       return;
     }
@@ -238,11 +236,10 @@ export default function AdminMensageriaPage() {
       if (error) throw error;
 
       setSuccessDispatched(true);
-      addToast(
+      toast.success(
         isNow
           ? `Disparo executado com sucesso via ${channel === "omnichannel" ? "Omnichannel Agent" : channel} para ${audienceCount} destinatários!`
-          : `Campanha agendada com sucesso para ${scheduledDate} às ${scheduledTime}!`,
-        "success"
+          : `Campanha agendada com sucesso para ${scheduledDate} às ${scheduledTime}!`
       );
 
       // Reset form after short delay
@@ -261,7 +258,7 @@ export default function AdminMensageriaPage() {
 
     } catch (err: any) {
       console.error("Erro ao registrar campanha:", err);
-      addToast(err?.message || "Falha ao processar campanha de mensageria.", "error");
+      toast.error(err?.message || "Falha ao processar campanha de mensageria.");
     } finally {
       setLoading(false);
     }
@@ -393,7 +390,7 @@ export default function AdminMensageriaPage() {
             type="button"
             onClick={() => {
               if (!title.trim()) {
-                addToast("Preencha o título na Aba 1 antes de avançar.", "error");
+                toast.error("Preencha o título na Aba 1 antes de avançar.");
                 return;
               }
               setActiveTab("composition");
@@ -415,8 +412,12 @@ export default function AdminMensageriaPage() {
           <button
             type="button"
             onClick={() => {
-              if (!title.trim() || !message.trim()) {
-                addToast("Complete o título e a mensagem antes da revisão.", "error");
+              if (!title.trim()) {
+                toast.error("Preencha o título na Aba 1 antes de avançar.");
+                return;
+              }
+              if (!message.trim()) {
+                toast.error("Complete o texto da mensagem antes da revisão.");
                 return;
               }
               setActiveTab("review");
@@ -560,7 +561,7 @@ export default function AdminMensageriaPage() {
               <div className="flex justify-end pt-4 border-t border-zinc-800">
                 <button
                   type="button"
-                  onClick={handleNextToComposition}
+                  onClick={() => handleNextToComposition()}
                   className="px-6 py-3 bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black font-extrabold text-sm rounded-xl flex items-center gap-2 shadow-lg shadow-[#0DB87E]/20 transition-all cursor-pointer"
                 >
                   Avançar para Composição <ArrowRight size={16} />
@@ -755,7 +756,7 @@ export default function AdminMensageriaPage() {
 
                 <button
                   type="button"
-                  onClick={handleNextToReview}
+                  onClick={() => handleNextToReview()}
                   className="px-6 py-3 bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-black font-extrabold text-sm rounded-xl flex items-center gap-2 shadow-lg shadow-[#0DB87E]/20 transition-all cursor-pointer"
                 >
                   Avançar para Revisão & Disparo <ArrowRight size={16} />
