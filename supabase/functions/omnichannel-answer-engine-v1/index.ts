@@ -4,6 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ==============================================================================
 // CONSTANTS & LIMITS
 // ==============================================================================
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-omnichannel-request-id, x-omnichannel-timestamp, x-omnichannel-signature",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 export const PROTOCOL_VERSION = "1";
 export const MAX_BODY_SIZE_BYTES = 64 * 1024; // 64 KiB
 export const MAX_HISTORY_MESSAGES = 10;
@@ -445,11 +451,22 @@ function logSafeMetrics(requestId: string, scenario: string, status: string, dur
 // HTTP SERVER LISTENER
 // ==============================================================================
 serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      status: 200,
+      headers: corsHeaders
+    });
+  }
+
   // Only accept POST
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method Not Allowed. Use POST." }), {
       status: 405,
-      headers: { "Content-Type": "application/json" }
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
     });
   }
 
@@ -462,6 +479,7 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify(result.body), {
       status: result.status,
       headers: {
+        ...corsHeaders,
         "Content-Type": "application/json",
         "X-Omnichannel-Version": PROTOCOL_VERSION
       }
@@ -470,7 +488,10 @@ serve(async (req: Request) => {
     console.error("[Omnichannel Answer Engine] Unhandled server error:", err?.message || err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
     });
   }
 });
