@@ -56,12 +56,12 @@ export default function AdminCocoSettings() {
         if (user.uid) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("full_name, phone")
+            .select("name, phone")
             .eq("id", user.uid)
             .maybeSingle();
 
           if (profile) {
-            if (profile.full_name) setNomeEntidade(profile.full_name);
+            if (profile.name) setNomeEntidade(profile.name);
             if (profile.phone) setTelefone(profile.phone);
           }
         }

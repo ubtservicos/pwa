@@ -119,6 +119,7 @@ export default function AdminMensageriaPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [channelFilter, setChannelFilter] = useState("todos");
+  const [sampleRecipientName, setSampleRecipientName] = useState<string>("Usuário UBT");
 
   // Fetch Campaigns from Supabase
   const fetchCampaigns = async () => {
@@ -140,11 +141,64 @@ export default function AdminMensageriaPage() {
 
   useEffect(() => {
     fetchCampaigns();
+
+    const loadSampleRecipient = async () => {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, phone, role")
+          .not("name", "is", null)
+          .limit(1)
+          .maybeSingle();
+
+        if (profile?.name) {
+          setSampleRecipientName(profile.name);
+        } else {
+          const { data: usuario } = await supabase
+            .from("usuarios")
+            .select("nome, role")
+            .not("nome", "is", null)
+            .limit(1)
+            .maybeSingle();
+          if (usuario?.nome) {
+            setSampleRecipientName(usuario.nome);
+          }
+        }
+      } catch (e) {
+        console.warn("Aviso ao carregar sample recipient:", e);
+      }
+    };
+
+    loadSampleRecipient();
   }, []);
 
   // Insert Variable helper
   const insertVariable = (variable: string) => {
     setMessage((prev) => `${prev} {{${variable}}}`);
+  };
+
+  // Dynamic Preview text resolver
+  const getPreviewText = () => {
+    if (!message) return "";
+
+    let resolvedName = sampleRecipientName;
+    if (targetType === "individual" && individualRecipient.trim()) {
+      const parts = individualRecipient.trim().split(/[@\s]/);
+      resolvedName = parts[0] || "Destinatário";
+    }
+
+    let resolvedCategory = "Usuário";
+    if (targetType === "niche") {
+      const foundNiche = NICHES.find((n) => n.id === niche);
+      resolvedCategory = foundNiche ? foundNiche.label.split(" ")[0] : "Prestador";
+    }
+
+    return message
+      .replace(/{{nome}}/g, resolvedName)
+      .replace(/{{cidade}}/g, "Ubatuba")
+      .replace(/{{categoria}}/g, resolvedCategory)
+      .replace(/{{data}}/g, new Date().toLocaleDateString("pt-BR"))
+      .replace(/{{protocolo}}/g, "UBT-2026");
   };
 
   // Audience Count Helper
@@ -197,7 +251,24 @@ export default function AdminMensageriaPage() {
 
     try {
       const { data: userData } = await supabase.auth.getUser();
-      const authorName = userData?.user?.email || "Admin UBT";
+      let authorName = userData?.user?.email || "Admin UBT";
+      if (userData?.user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name")
+          .eq("id", userData.user.id)
+          .maybeSingle();
+        if (profile?.name) {
+          authorName = profile.name;
+        } else {
+          const { data: dbUser } = await supabase
+            .from("usuarios")
+            .select("nome")
+            .eq("id", userData.user.id)
+            .maybeSingle();
+          if (dbUser?.nome) authorName = dbUser.nome;
+        }
+      }
 
       let scheduledForIso: string | null = null;
       if (scheduledType === "scheduled" && scheduledDate) {
@@ -898,11 +969,7 @@ export default function AdminMensageriaPage() {
                     {/* Realistic Message Balloon */}
                     <div className="bg-zinc-800/90 border border-zinc-700/80 rounded-2xl p-4 text-xs text-zinc-100 leading-relaxed shadow-lg">
                       {message ? (
-                        message
-                          .replace(/{{nome}}/g, "Carlos Eduardo")
-                          .replace(/{{cidade}}/g, "Ubatuba")
-                          .replace(/{{categoria}}/g, "Mototaxista")
-                          .replace(/{{data}}/g, new Date().toLocaleDateString("pt-BR"))
+                        getPreviewText()
                       ) : (
                         <span className="text-zinc-500 italic">
                           O texto da mensagem aparecerá aqui renderizado em tempo real...

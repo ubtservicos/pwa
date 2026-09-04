@@ -116,12 +116,12 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
           if (!resolvedRole) {
             const { data: profile } = await supabase
               .from("profiles")
-              .select("role, full_name")
+              .select("role, name")
               .eq("id", user.id)
               .maybeSingle();
             if (profile?.role) {
               resolvedRole = profile.role;
-              if (profile.full_name) resolvedName = profile.full_name;
+              if (profile.name) resolvedName = profile.name;
             }
           }
 
