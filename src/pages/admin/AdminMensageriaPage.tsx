@@ -308,9 +308,12 @@ export default function AdminMensageriaPage() {
 
       if (error) throw error;
 
-      // Invocação explícita da Edge Function omnichannel-answer-engine
+      // Invocação explícita da Edge Function omnichannel-answer-engine com Sessão Admin JWT
       const campaignRecord = insertedCampaign || newCampaignPayload;
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+
         const { data: funcData, error: invokeError } = await supabase.functions.invoke("omnichannel-answer-engine", {
           body: {
             record: campaignRecord,
@@ -325,7 +328,10 @@ export default function AdminMensageriaPage() {
             total_targeted: campaignRecord?.total_targeted,
             scheduled_type: campaignRecord?.scheduled_type,
             scheduled_for: campaignRecord?.scheduled_for
-          }
+          },
+          headers: authToken ? {
+            Authorization: `Bearer ${authToken}`
+          } : undefined
         });
 
         if (invokeError) {
