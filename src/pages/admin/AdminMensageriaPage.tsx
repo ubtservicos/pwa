@@ -300,11 +300,42 @@ export default function AdminMensageriaPage() {
         }
       };
 
-      const { error } = await supabase
+      const { data: insertedCampaign, error } = await supabase
         .from("broadcast_campaigns")
-        .insert([newCampaignPayload]);
+        .insert([newCampaignPayload])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Invocação explícita da Edge Function omnichannel-answer-engine
+      const campaignRecord = insertedCampaign || newCampaignPayload;
+      try {
+        const { data: funcData, error: invokeError } = await supabase.functions.invoke("omnichannel-answer-engine", {
+          body: {
+            record: campaignRecord,
+            campaign_id: campaignRecord?.id,
+            action: isNow ? "broadcast_dispatch" : "broadcast_schedule",
+            title: campaignRecord?.title,
+            channel: campaignRecord?.channel,
+            message: campaignRecord?.message_template,
+            target_type: campaignRecord?.target_type,
+            niche: campaignRecord?.niche,
+            individual_recipient: campaignRecord?.individual_recipient,
+            total_targeted: campaignRecord?.total_targeted,
+            scheduled_type: campaignRecord?.scheduled_type,
+            scheduled_for: campaignRecord?.scheduled_for
+          }
+        });
+
+        if (invokeError) {
+          console.warn("Aviso ao invocar Edge Function omnichannel-answer-engine:", invokeError);
+        } else {
+          console.log("Resposta da Edge Function omnichannel-answer-engine:", funcData);
+        }
+      } catch (funcErr) {
+        console.warn("Falha na invocação da Edge Function omnichannel-answer-engine:", funcErr);
+      }
 
       setSuccessDispatched(true);
       toast.success(
