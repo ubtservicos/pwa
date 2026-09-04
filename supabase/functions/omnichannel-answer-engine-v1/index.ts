@@ -249,11 +249,276 @@ export async function processAnswerEngineRequest(
   // Check if this is an Admin Broadcast Campaign Dispatch
   if (parsedPayload.action?.startsWith("broadcast") || parsedPayload.record) {
     const campaignId = parsedPayload.campaign_id || parsedPayload.record?.id || requestIdHeader;
-    const channelName = parsedPayload.channel || parsedPayload.record?.channel || "omnichannel";
+    const channelName = (parsedPayload.channel || parsedPayload.record?.channel || "omnichannel").toLowerCase();
     const targets = parsedPayload.total_targeted || parsedPayload.record?.total_targeted || 1;
+    const title = parsedPayload.title || parsedPayload.record?.title || "Comunicado Oficial";
+    const msgText = parsedPayload.message || parsedPayload.record?.message_template || "";
+    const targetType = parsedPayload.target_type || parsedPayload.record?.target_type || "broadcast";
+    const individualRecipient = parsedPayload.individual_recipient || parsedPayload.record?.individual_recipient || "";
 
-    console.log(`[Omnichannel Engine] Broadcast dispatch processed for campaign ${campaignId} via ${channelName} to ${targets} targets`);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const client = options?.supabaseClientOverride || (supabaseUrl && (supabaseServiceKey || supabaseAnonKey)
+      ? createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey!)
+      : null);
 
+    // --- CHANNEL 1: RESEND (Email & Omnichannel Agent default) ---
+    if (channelName === "omnichannel" || channelName === "email") {
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
+      const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") || "UBT Notificações <notificacoes@ubtservicos.com.br>";
+
+      if (!resendApiKey) {
+        const errorMsg = "Configuração Ausente: A secret RESEND_API_KEY não foi configurada nas Secrets do Supabase para o envio de e-mails.";
+        console.error("[Omnichannel Provider Error - Resend]", errorMsg);
+        return {
+          status: 502,
+          body: {
+            error: errorMsg,
+            provider: "resend",
+            channel: channelName,
+            status: "configuration_error"
+          }
+        };
+      }
+
+      // Resolve recipient emails
+      let toRecipients: string[] = [];
+      if (targetType === "individual" && individualRecipient && individualRecipient.includes("@")) {
+        toRecipients = [individualRecipient.trim()];
+      } else if (client) {
+        try {
+          const { data: users } = await client.from("usuarios").select("email").not("email", "is", null).limit(20);
+          if (users && users.length > 0) {
+            toRecipients = users.map((u: any) => u.email).filter(Boolean);
+          }
+        } catch (dbErr: any) {
+          console.warn("[Omnichannel Engine] Aviso ao consultar destinatários do banco:", dbErr?.message || dbErr);
+        }
+      }
+
+      if (toRecipients.length === 0) {
+        toRecipients = ["ubt.servicos@gmail.com"];
+      }
+
+      const emailPayload = {
+        from: resendFromEmail,
+        to: toRecipients,
+        subject: `[UBT Oficial] ${title}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #09090b; color: #f4f4f5; border-radius: 16px; border: 1px solid #27272a;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #27272a; padding-bottom: 16px;">
+              <div style="background: #0DB87E; color: #000; font-weight: 900; width: 32px; height: 32px; border-radius: 50%; text-align: center; line-height: 32px; font-size: 14px;">U</div>
+              <div>
+                <h2 style="margin: 0; font-size: 16px; color: #ffffff;">UBT Central de Notificações</h2>
+                <span style="font-size: 11px; color: #a1a1aa;">Comunicado Oficial via Omnichannel Agent</span>
+              </div>
+            </div>
+            <h3 style="color: #0DB87E; font-size: 18px; margin-top: 0;">${title}</h3>
+            <div style="font-size: 14px; line-height: 1.6; color: #e4e4e7; background: #18181b; padding: 16px; border-radius: 12px; border: 1px solid #27272a; white-space: pre-wrap;">
+              ${msgText}
+            </div>
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #27272a; text-align: center; font-size: 11px; color: #71717a;">
+              UBT Serviços • Ubatuba - SP • Autenticado via Protocolo v1 HMAC
+            </div>
+          </div>
+        `,
+        text: `${title}\n\n${msgText}\n\nUBT Serviços - Ubatuba SP`
+      };
+
+      console.log(`[Omnichannel Engine] Disparando e-mail via Resend API para ${toRecipients.length} destinatários...`);
+
+      const resendResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(emailPayload)
+      });
+
+      const responseBody = await resendResponse.text();
+
+      if (!resendResponse.ok) {
+        console.error(`[Omnichannel Provider Error - Resend HTTP ${resendResponse.status}]:`, responseBody);
+        return {
+          status: 502,
+          body: {
+            error: `Falha na API da Resend (HTTP ${resendResponse.status}): ${responseBody}`,
+            provider: "resend",
+            channel: channelName,
+            http_status: resendResponse.status
+          }
+        };
+      }
+
+      let parsedResend: any = {};
+      try {
+        parsedResend = JSON.parse(responseBody);
+      } catch (_) {
+        parsedResend = { raw: responseBody };
+      }
+
+      console.log("[Omnichannel Engine] E-mail enviado com sucesso via Resend:", parsedResend);
+
+      return {
+        status: 200,
+        body: {
+          version: PROTOCOL_VERSION,
+          request_id: requestIdHeader,
+          status: "answered",
+          campaign_id: campaignId,
+          channel: channelName,
+          provider: "resend",
+          external_id: parsedResend.id,
+          total_targeted: targets,
+          dispatched_at: new Date().toISOString(),
+          answer: `Transmissão por e-mail entregue com sucesso via Resend (ID: ${parsedResend.id || "ok"}).`,
+          citation_references: [],
+          runtime_evidence: []
+        }
+      };
+    }
+
+    // --- CHANNEL 2: WHATSAPP ---
+    if (channelName === "whatsapp") {
+      const whatsappApiUrl = Deno.env.get("WHATSAPP_API_URL") || Deno.env.get("EVOLUTION_API_URL");
+      const whatsappToken = Deno.env.get("WHATSAPP_API_TOKEN") || Deno.env.get("WHATSAPP_TOKEN") || Deno.env.get("EVOLUTION_API_KEY");
+
+      if (!whatsappApiUrl || !whatsappToken) {
+        const errorMsg = "Configuração Ausente: WHATSAPP_API_URL ou WHATSAPP_API_TOKEN não configurados no Supabase Secrets.";
+        console.error("[Omnichannel Provider Error - WhatsApp]", errorMsg);
+        return {
+          status: 502,
+          body: {
+            error: errorMsg,
+            provider: "whatsapp",
+            channel: channelName,
+            status: "configuration_error"
+          }
+        };
+      }
+
+      const targetPhone = (individualRecipient ? individualRecipient.replace(/\D/g, "") : "");
+      if (!targetPhone) {
+        const errorMsg = "WhatsApp Delivery Error: Nenhum número de telefone válido fornecido.";
+        console.error("[Omnichannel Provider Error - WhatsApp]", errorMsg);
+        return {
+          status: 400,
+          body: { error: errorMsg, provider: "whatsapp" }
+        };
+      }
+
+      const waResponse = await fetch(whatsappApiUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${whatsappToken}`,
+          "apikey": whatsappToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          number: targetPhone,
+          text: `*${title}*\n\n${msgText}\n\n_UBT Notificações Oficiais_`
+        })
+      });
+
+      const responseBody = await waResponse.text();
+      if (!waResponse.ok) {
+        console.error(`[Omnichannel Provider Error - WhatsApp HTTP ${waResponse.status}]:`, responseBody);
+        return {
+          status: 502,
+          body: {
+            error: `Falha na API de WhatsApp (HTTP ${waResponse.status}): ${responseBody}`,
+            provider: "whatsapp"
+          }
+        };
+      }
+
+      return {
+        status: 200,
+        body: {
+          version: PROTOCOL_VERSION,
+          request_id: requestIdHeader,
+          status: "answered",
+          campaign_id: campaignId,
+          channel: channelName,
+          provider: "whatsapp",
+          total_targeted: targets,
+          dispatched_at: new Date().toISOString(),
+          answer: `Mensagem WhatsApp disparada com sucesso para ${targetPhone}.`,
+          citation_references: [],
+          runtime_evidence: []
+        }
+      };
+    }
+
+    // --- CHANNEL 3: SMS ---
+    if (channelName === "sms") {
+      const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+      const twilioAuthToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+      const twilioFrom = Deno.env.get("TWILIO_FROM_NUMBER");
+
+      if (!twilioSid || !twilioAuthToken || !twilioFrom) {
+        const errorMsg = "Configuração Ausente: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN ou TWILIO_FROM_NUMBER não configurados nas Secrets.";
+        console.error("[Omnichannel Provider Error - Twilio]", errorMsg);
+        return {
+          status: 502,
+          body: {
+            error: errorMsg,
+            provider: "twilio",
+            channel: channelName,
+            status: "configuration_error"
+          }
+        };
+      }
+
+      const targetPhone = individualRecipient.replace(/\D/g, "");
+      const bodyParams = new URLSearchParams();
+      bodyParams.append("To", targetPhone.startsWith("+") ? targetPhone : `+55${targetPhone}`);
+      bodyParams.append("From", twilioFrom);
+      bodyParams.append("Body", `${title}: ${msgText}`);
+
+      const twilioRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${btoa(`${twilioSid}:${twilioAuthToken}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: bodyParams.toString()
+      });
+
+      const responseBody = await twilioRes.text();
+      if (!twilioRes.ok) {
+        console.error(`[Omnichannel Provider Error - Twilio HTTP ${twilioRes.status}]:`, responseBody);
+        return {
+          status: 502,
+          body: {
+            error: `Falha na API do Twilio SMS (HTTP ${twilioRes.status}): ${responseBody}`,
+            provider: "twilio"
+          }
+        };
+      }
+
+      return {
+        status: 200,
+        body: {
+          version: PROTOCOL_VERSION,
+          request_id: requestIdHeader,
+          status: "answered",
+          campaign_id: campaignId,
+          channel: channelName,
+          provider: "twilio",
+          total_targeted: targets,
+          dispatched_at: new Date().toISOString(),
+          answer: `SMS transmitido com sucesso via Twilio.`,
+          citation_references: [],
+          runtime_evidence: []
+        }
+      };
+    }
+
+    // --- CHANNEL 4: PUSH / IN-APP ---
+    console.log(`[Omnichannel Engine] Broadcast In-App/Push registrado com sucesso para campanha ${campaignId}`);
     return {
       status: 200,
       body: {
@@ -262,9 +527,10 @@ export async function processAnswerEngineRequest(
         status: "answered",
         campaign_id: campaignId,
         channel: channelName,
+        provider: "in_app",
         total_targeted: targets,
         dispatched_at: new Date().toISOString(),
-        answer: `Transmissão processada com sucesso no motor Omnichannel para ${targets} destinatários.`,
+        answer: `Transmissão In-App/Push registrada com sucesso no feed para ${targets} destinatários.`,
         citation_references: [],
         runtime_evidence: []
       }
