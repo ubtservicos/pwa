@@ -373,6 +373,8 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     console.log("RAW REQ BODY:", JSON.stringify(body));
+    const action = body.action || "create_payment_intent";
+    console.log(`[payment-gateway] Handling action="${action}"`);
 
     // ----------------------------------------------------------------
     // ROUTE: Payment Intent / Checkout (with Split)
