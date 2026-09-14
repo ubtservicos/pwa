@@ -301,13 +301,13 @@ async function createMercadoPagoPayment({
     description,
     payment_method_id: paymentMethodId || "master",
     payer: {
-      email: payerEmailToUse,
-      first_name: payerFirstName || "APRO",
-      last_name: payerLastName || "TEST USER",
+      email: "TESTUSER367958859718560557@testuser.com",
       identification: {
         type: "CPF",
         number: "85311283087",
       },
+      first_name: payerFirstName || "MASTERCARD",
+      last_name: payerLastName || "Santander",
     },
     // application_fee: the marketplace fee withheld by UBT from the total.
     application_fee: applicationFee,
@@ -403,12 +403,9 @@ serve(async (req: Request): Promise<Response> => {
       const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
       const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
       const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
-      let payer_email = String(body.payer_email || body.email || body.payerEmail || "").trim();
-      if (!payer_email.includes("testuser")) {
-        payer_email = "TESTUSER367958859718560557@testuser.com";
-      }
-      const payer_first_name = String(body.payer_first_name || body.payerFirstName || (body.card_holder || "APRO").split(" ")[0]);
-      const payer_last_name = String(body.payer_last_name || body.payerLastName || (body.card_holder || "TEST USER").split(" ").slice(1).join(" ") || "TEST USER");
+      let payer_email = "TESTUSER367958859718560557@testuser.com";
+      const payer_first_name = String(body.payer_first_name || body.payerFirstName || "MASTERCARD");
+      const payer_last_name = String(body.payer_last_name || body.payerLastName || "Santander");
       
       let payment_method_id = String(
         body.payment_method_id ||
