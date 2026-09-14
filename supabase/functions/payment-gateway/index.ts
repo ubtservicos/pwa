@@ -16,6 +16,15 @@ const CORS_HEADERS = {
 const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Global Mercado Pago access token extraction
+const MP_TOKEN_FINAL = (
+  Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+  Deno.env.get("MP_ACCESS_TOKEN") ||
+  Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
+  Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+  ""
+).trim();
+
 const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
   : ({ from: () => { throw new Error("Supabase client not initialized (missing env vars)"); } } as any);
@@ -276,13 +285,17 @@ async function createMercadoPagoPayment({
   externalReference?: string;
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
-  const mpToken =
+  const mpToken = (
     Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
     Deno.env.get("MP_ACCESS_TOKEN") ||
+    Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
     Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-    "";
+    MP_TOKEN_FINAL ||
+    ""
+  ).trim();
 
   if (!mpToken) {
+    console.error("[CRITICAL MP TOKEN ERROR] MERCADOPAGO_ACCESS_TOKEN não está presente no ambiente!");
     throw new Error("MERCADOPAGO_ACCESS_TOKEN ou MP_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
   }
 
@@ -325,12 +338,13 @@ async function createMercadoPagoPayment({
     mpPayload.installments = Number(installments) || 1;
   }
 
-  console.log("[DEBUG MP] Prefixo do Access Token sendo usado:", mpToken.substring(0, 15) + "...");
+  const authHeader = `Bearer ${mpToken}`;
+  console.log(`[DEBUG MP] Token len=${mpToken.length}, Prefix=${mpToken.substring(0, 15)}... HeaderPrefix=${authHeader.substring(0, 22)}...`);
 
   const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
     method: "POST",
     headers: {
-      "Authorization":    `Bearer ${mpToken}`,
+      "Authorization":    authHeader,
       "X-Idempotency-Key": idempotencyKey,
       "Content-Type":     "application/json",
     },
@@ -501,11 +515,14 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [MOCK PIX IN TEST ENV] ---
-      const mpToken =
+      const mpToken = (
         Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
         Deno.env.get("MP_ACCESS_TOKEN") ||
+        Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
         Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-        "";
+        MP_TOKEN_FINAL ||
+        ""
+      ).trim();
       let mpData: any;
       let mpStatus: number = 200;
       let mpResult: { data: any; rawText: string; httpStatus: number; ok: boolean } | null = null;
