@@ -16,12 +16,16 @@ const CORS_HEADERS = {
 const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+// Chave de homologação injetada de forma estrita para evitar falhas de Deno.env.get
+const MERCADOPAGO_ACCESS_TOKEN_FIXED = "APP_USR-06223682-ed31-4005-a8ed-84779a4ccd1b";
+
 // Global Mercado Pago access token extraction
 const MP_TOKEN_FINAL = (
   Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
   Deno.env.get("MP_ACCESS_TOKEN") ||
   Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
   Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+  MERCADOPAGO_ACCESS_TOKEN_FIXED ||
   ""
 ).trim();
 
