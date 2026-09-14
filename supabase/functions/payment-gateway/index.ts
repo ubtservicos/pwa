@@ -277,10 +277,14 @@ async function createMercadoPagoPayment({
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
   const isProd = Deno.env.get("ENVIRONMENT") === "production";
-  const mpAccessToken = (isProd ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) || Deno.env.get("MP_ACCESS_TOKEN_TEST");
+  const mpAccessToken =
+    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+    (isProd ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) ||
+    Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+    Deno.env.get("MP_ACCESS_TOKEN");
 
   if (!mpAccessToken) {
-    throw new Error("MP_ACCESS_TOKEN_TEST or MP_ACCESS_TOKEN is not configured in Edge Function secrets.");
+    throw new Error("MERCADOPAGO_ACCESS_TOKEN, MP_ACCESS_TOKEN_TEST or MP_ACCESS_TOKEN is not configured in Edge Function secrets.");
   }
 
   // Unique idempotency key per attempt
@@ -316,6 +320,9 @@ async function createMercadoPagoPayment({
   if (isCard) {
     mpPayload.installments = Number(installments) || 1;
   }
+
+  const mpToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || mpAccessToken || "";
+  console.log("[DEBUG MP] Prefixo do Access Token sendo usado:", mpToken.substring(0, 15) + "...");
 
   const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
     method: "POST",
@@ -478,7 +485,12 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [MOCK PIX IN TEST ENV] ---
-      const mpAccessToken = (Deno.env.get("ENVIRONMENT") === "production" ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) || Deno.env.get("MP_ACCESS_TOKEN_TEST") || "";
+      const mpAccessToken =
+        Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+        (Deno.env.get("ENVIRONMENT") === "production" ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) ||
+        Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+        Deno.env.get("MP_ACCESS_TOKEN") ||
+        "";
       let mpData: any;
       let mpStatus: number;
 
