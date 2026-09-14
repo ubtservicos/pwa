@@ -293,7 +293,7 @@ async function createMercadoPagoPayment({
     description,
     payment_method_id: paymentMethodId || "master",
     payer: {
-      email: payerEmail,
+      email: "TESTUSER367958859718560557@testuser.com", // E-mail oficial do Buyer Test User
       ...(payerFirstName && { first_name: payerFirstName }),
       ...(payerLastName && { last_name: payerLastName }),
       identification: {
