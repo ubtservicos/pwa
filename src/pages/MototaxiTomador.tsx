@@ -825,17 +825,20 @@ const CompletedScreen = ({
         body: payloadParaEdge,
       });
 
-      if (invokeError || !data || data.error) {
+      if (invokeError || !data || data.error || data.success === false) {
+        console.error("[PAYMENT GATEWAY ERROR RESPONSE]:", data || invokeError);
         const errMain = data?.error || invokeError?.message || "Pagamento rejeitado pelo gateway";
         let errDetails = "";
-        if (data?.details) {
+        if (data?.mp_error) {
+          errDetails = typeof data.mp_error === "object" ? JSON.stringify(data.mp_error) : String(data.mp_error);
+        } else if (data?.details) {
           errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
         } else if (data?.detail) {
           errDetails = data.detail;
         } else if (data?.message) {
           errDetails = data.message;
         }
-        throw new Error(errDetails ? `${errMain} (${errDetails})` : errMain);
+        throw new Error(errDetails ? `${errMain}: ${errDetails}` : errMain);
       }
 
       if (data?.split?.statement) {

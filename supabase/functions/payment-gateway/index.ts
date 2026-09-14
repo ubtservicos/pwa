@@ -337,19 +337,20 @@ async function createMercadoPagoPayment({
     body: JSON.stringify(mpPayload),
   });
 
-  const rawText = await mpResponse.text();
+  const mpResponseBody = await mpResponse.text();
+  
+  if (!mpResponse.ok) {
+    console.error("[MP CRITICAL REJECTION]", mpResponseBody);
+  }
+
   let data: any;
   try {
-    data = JSON.parse(rawText);
+    data = JSON.parse(mpResponseBody);
   } catch (parseErr) {
-    data = { error: "Invalid JSON from MP", raw: rawText };
+    data = { error: "Invalid JSON from MP", raw: mpResponseBody };
   }
 
-  if (mpResponse.status >= 400 || data?.error) {
-    console.error(`[payment-gateway] MP Error (Status ${mpResponse.status}):`, JSON.stringify(data));
-  }
-
-  return { data, httpStatus: mpResponse.status };
+  return { data, rawText: mpResponseBody, httpStatus: mpResponse.status, ok: mpResponse.ok };
 }
 
 // ============================================================
@@ -555,25 +556,29 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       }
 
       // --- [5] Audit: raw MP response ---
-      const auditStatus = mpData.status ?? (mpStatus >= 400 ? "failed" : "unknown");
+      const auditStatus = mpData?.status ?? (mpStatus >= 400 ? "failed" : "unknown");
       await logAuditEvent({
         transactionType: "pix_intent",
         status: auditStatus,
         payload: mpData as Record<string, unknown>,
-        errorDetails: mpData.error
+        errorDetails: mpData?.error
           ? `[${mpData.error}] ${mpData.message ?? ""} ${JSON.stringify(mpData.cause ?? [])}`
           : undefined,
       });
 
       // --- [6] Handle MP API errors ---
-      if (mpStatus >= 400 || mpData?.error) {
-        console.error(`[payment-gateway] MP Error (Status ${mpStatus}):`, JSON.stringify(mpData));
+      if ((result && !result.ok) || mpStatus >= 400 || mpData?.error) {
+        const rawRejection = result?.rawText || JSON.stringify(mpData);
+        console.error("[MP CRITICAL REJECTION]", rawRejection);
         return new Response(
           JSON.stringify({
+            success: false,
+            mp_error: rawRejection,
             error: "MP API Error",
             message: mpData?.message || mpData?.error || "Erro ao processar pagamento",
             details: mpData?.cause || mpData,
-            mp_status: mpData?.status,
+            status: mpStatus,
+            mp_status: mpData?.status || mpStatus,
             mp_status_detail: mpData?.status_detail,
           }),
           {
