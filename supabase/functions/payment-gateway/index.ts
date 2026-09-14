@@ -679,22 +679,32 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
 
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const errorStack   = err instanceof Error ? err.stack    : undefined;
+  } catch (error: any) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack   = error instanceof Error ? error.stack    : undefined;
 
-    console.error("[payment-gateway] Unhandled error:", errorMessage);
+    console.error("[CRITICAL ERROR CATCH]", error);
 
-    await logAuditEvent({
-      transactionType: "unknown",
-      status: "failed",
-      payload: { timestamp: new Date().toISOString() },
-      errorDetails: `${errorMessage}${errorStack ? `\n${errorStack}` : ""}`,
-    });
+    try {
+      await logAuditEvent({
+        transactionType: "unknown",
+        status: "failed",
+        payload: { timestamp: new Date().toISOString() },
+        errorDetails: `${errorMessage}${errorStack ? `\n${errorStack}` : ""}`,
+      });
+    } catch {
+      // ignore audit failure on fatal catch
+    }
 
     return new Response(
-      JSON.stringify({ error: errorMessage || "Internal server error. Incident logged.", details: errorStack }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      JSON.stringify({
+        success: false,
+        error: errorMessage || "Internal server error. Incident logged.",
+        message: errorMessage,
+        stack: errorStack,
+        details: error,
+      }),
+      { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
 });
