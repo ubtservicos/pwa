@@ -276,15 +276,14 @@ async function createMercadoPagoPayment({
   externalReference?: string;
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
-  const isProd = Deno.env.get("ENVIRONMENT") === "production";
-  const mpAccessToken =
+  const mpToken =
     Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-    (isProd ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) ||
+    Deno.env.get("MP_ACCESS_TOKEN") ||
     Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-    Deno.env.get("MP_ACCESS_TOKEN");
+    "";
 
-  if (!mpAccessToken) {
-    throw new Error("MERCADOPAGO_ACCESS_TOKEN, MP_ACCESS_TOKEN_TEST or MP_ACCESS_TOKEN is not configured in Edge Function secrets.");
+  if (!mpToken) {
+    throw new Error("MERCADOPAGO_ACCESS_TOKEN ou MP_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
   }
 
   // Unique idempotency key per attempt
@@ -321,13 +320,12 @@ async function createMercadoPagoPayment({
     mpPayload.installments = Number(installments) || 1;
   }
 
-  const mpToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || mpAccessToken || "";
   console.log("[DEBUG MP] Prefixo do Access Token sendo usado:", mpToken.substring(0, 15) + "...");
 
   const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
     method: "POST",
     headers: {
-      "Authorization":    `Bearer ${mpAccessToken}`,
+      "Authorization":    `Bearer ${mpToken}`,
       "X-Idempotency-Key": idempotencyKey,
       "Content-Type":     "application/json",
     },
@@ -485,16 +483,15 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [MOCK PIX IN TEST ENV] ---
-      const mpAccessToken =
+      const mpToken =
         Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-        (Deno.env.get("ENVIRONMENT") === "production" ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) ||
-        Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
         Deno.env.get("MP_ACCESS_TOKEN") ||
+        Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
         "";
       let mpData: any;
       let mpStatus: number;
 
-      if (payment_method_id === "pix" && mpAccessToken.startsWith("TEST-")) {
+      if (payment_method_id === "pix" && mpToken.startsWith("TEST-")) {
         console.log("[payment-gateway] MOCKING PIX PAYMENT FOR SANDBOX");
         mpStatus = 201;
         mpData = {
@@ -527,7 +524,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         mpData = result.data;
         mpStatus = result.httpStatus;
 
-        if (payment_method_id !== "pix" && mpAccessToken.startsWith("TEST-") && (mpStatus >= 400 || mpData.error)) {
+        if (payment_method_id !== "pix" && mpToken.startsWith("TEST-") && (mpStatus >= 400 || mpData.error)) {
           console.log("[payment-gateway] SANDBOX CARD FALLBACK: Approving test card transaction in sandbox environment");
           mpStatus = 200;
           mpData = {
