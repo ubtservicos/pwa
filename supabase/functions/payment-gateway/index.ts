@@ -507,7 +507,8 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
         "";
       let mpData: any;
-      let mpStatus: number;
+      let mpStatus: number = 200;
+      let mpResult: { data: any; rawText: string; httpStatus: number; ok: boolean } | null = null;
 
       if (payment_method_id === "pix" && mpToken.startsWith("TEST-")) {
         console.log("[payment-gateway] MOCKING PIX PAYMENT FOR SANDBOX");
@@ -526,7 +527,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         };
       } else {
         // --- [4] Call Mercado Pago with application_fee ---
-        const result = await createMercadoPagoPayment({
+        mpResult = await createMercadoPagoPayment({
           transactionAmount:  transaction_amount,
           description,
           payerEmail:         payer_email,
@@ -539,8 +540,8 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           externalReference:  external_reference,
           metadata,
         });
-        mpData = result.data;
-        mpStatus = result.httpStatus;
+        mpData = mpResult.data;
+        mpStatus = mpResult.httpStatus;
 
         if (payment_method_id !== "pix" && mpToken.startsWith("TEST-") && (mpStatus >= 400 || mpData.error)) {
           console.log("[payment-gateway] SANDBOX CARD FALLBACK: Approving test card transaction in sandbox environment");
@@ -567,8 +568,8 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [6] Handle MP API errors ---
-      if ((result && !result.ok) || mpStatus >= 400 || mpData?.error) {
-        const rawRejection = result?.rawText || JSON.stringify(mpData);
+      if ((mpResult && !mpResult.ok) || mpStatus >= 400 || mpData?.error) {
+        const rawRejection = mpResult?.rawText || JSON.stringify(mpData);
         console.error("[MP CRITICAL REJECTION]", rawRejection);
         return new Response(
           JSON.stringify({
