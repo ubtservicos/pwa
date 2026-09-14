@@ -788,9 +788,13 @@ const CompletedScreen = ({
         transaction_amount: finalAmount,
         provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
         provider_name: prestadorInfo?.name || "Silvina Luz",
-        payer_email: user?.email || "felipe@exemplo.com",
-        payer_first_name: (cardHolder || user?.name || "Felipe").split(" ")[0],
-        payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
+        payer_email: "TESTUSER367958859718560557@testuser.com",
+        payer_first_name: "APRO",
+        payer_last_name: "TEST USER",
+        payer_identification: {
+          type: "CPF",
+          number: "85311283087",
+        },
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
         // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
@@ -799,7 +803,7 @@ const CompletedScreen = ({
         card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
-          cardholder_name: cardHolder || "Felipe Santander",
+          cardholder_name: cardHolder || "APRO TEST USER",
           expiration_month: expMonth,
           expiration_year: expYear,
           security_code: cardCvv || "123",

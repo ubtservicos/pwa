@@ -291,18 +291,23 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
+  const payerEmailToUse =
+    payerEmail && !payerEmail.includes("testuser")
+      ? "TESTUSER367958859718560557@testuser.com"
+      : (payerEmail || "TESTUSER367958859718560557@testuser.com");
+
   const mpPayload: Record<string, unknown> = {
     transaction_amount: transactionAmount,
     description,
     payment_method_id: paymentMethodId || "master",
     payer: {
-      email: "TESTUSER367958859718560557@testuser.com", // E-mail oficial do Buyer Test User
-      ...(payerFirstName && { first_name: payerFirstName }),
-      ...(payerLastName && { last_name: payerLastName }),
+      email: payerEmailToUse,
+      first_name: payerFirstName || "APRO",
+      last_name: payerLastName || "TEST USER",
       identification: {
         type: "CPF",
-        number: "85311283087"
-      }
+        number: "85311283087",
+      },
     },
     // application_fee: the marketplace fee withheld by UBT from the total.
     application_fee: applicationFee,
@@ -398,12 +403,12 @@ serve(async (req: Request): Promise<Response> => {
       const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
       const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
       const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
-      let payer_email = String(body.payer_email || body.email || body.payerEmail || "contato@ubt.app").trim();
-      if (!payer_email || !payer_email.includes("@")) {
-        payer_email = "contato@ubt.app";
+      let payer_email = String(body.payer_email || body.email || body.payerEmail || "").trim();
+      if (!payer_email.includes("testuser")) {
+        payer_email = "TESTUSER367958859718560557@testuser.com";
       }
-      const payer_first_name = String(body.payer_first_name || body.payerFirstName || (body.card_holder || "Cliente").split(" ")[0]);
-      const payer_last_name = String(body.payer_last_name || body.payerLastName || (body.card_holder || "UBT").split(" ").slice(1).join(" ") || "UBT");
+      const payer_first_name = String(body.payer_first_name || body.payerFirstName || (body.card_holder || "APRO").split(" ")[0]);
+      const payer_last_name = String(body.payer_last_name || body.payerLastName || (body.card_holder || "TEST USER").split(" ").slice(1).join(" ") || "TEST USER");
       
       let payment_method_id = String(
         body.payment_method_id ||
