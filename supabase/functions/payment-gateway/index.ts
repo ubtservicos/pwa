@@ -378,49 +378,64 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     console.log("RAW REQ BODY:", JSON.stringify(body));
-    const action = body.action || "create_payment_intent";
-    console.log(`[payment-gateway] Handling action="${action}"`);
+
+    // Desempacota payload caso venha aninhado em body.body
+    if (body && typeof body === "object" && body.body && typeof body.body === "object") {
+      body = { ...body.body, ...body };
+    }
+
+    const rawAction = String(body.action || body.type || body.event || "create_payment_intent").toLowerCase().trim();
+    const action = rawAction.includes("checkout") ? "checkout" : "create_payment_intent";
+    console.log(`[payment-gateway] Handling action="${action}" (raw="${rawAction}")`);
 
     // ----------------------------------------------------------------
     // ROUTE: Payment Intent / Checkout (with Split)
     // ----------------------------------------------------------------
     if (action === "create_payment_intent" || action === "checkout") {
-      const transaction_amount = Number(body.transaction_amount ?? body.amount ?? 0);
-      const rawServiceType = String(body.service_type || "mototaxi").toLowerCase().trim();
+      const rawAmount = body.transaction_amount ?? body.amount ?? body.final_amount ?? body.total_amount ?? body.price ?? body.final_price;
+      const transaction_amount = Math.max(0.01, Number(rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) ? Number(rawAmount) : 10.0));
+      const rawServiceType = String(body.service_type || body.serviceType || "mototaxi").toLowerCase().trim();
       const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
-      const service_id = String(body.service_id || body.ride_id || body.order_id || crypto.randomUUID());
+      const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
       const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
-      const payer_email = String(body.payer_email || body.email || "contato@ubt.app").trim();
-      const payer_first_name = String(body.payer_first_name || (body.card_holder || "Cliente").split(" ")[0]);
-      const payer_last_name = String(body.payer_last_name || (body.card_holder || "UBT").split(" ").slice(1).join(" ") || "UBT");
-      const payment_method_id = String(body.payment_method_id || body.payment_method || "pix").toLowerCase().trim();
-      const external_reference = body.external_reference || body.service_id || service_id;
-      const entity_id = body.entity_id;
-      const godparent_id = body.godparent_id;
-      const godparent_tomador_id = body.godparent_tomador_id;
-      const godparent_prestador_id = body.godparent_prestador_id;
-      const provider_id = body.provider_id || "0a5edf64-7585-401f-b310-126529607da0";
-      const provider_name = body.provider_name || "Silvina Luz";
+      let payer_email = String(body.payer_email || body.email || body.payerEmail || "contato@ubt.app").trim();
+      if (!payer_email || !payer_email.includes("@")) {
+        payer_email = "contato@ubt.app";
+      }
+      const payer_first_name = String(body.payer_first_name || body.payerFirstName || (body.card_holder || "Cliente").split(" ")[0]);
+      const payer_last_name = String(body.payer_last_name || body.payerLastName || (body.card_holder || "UBT").split(" ").slice(1).join(" ") || "UBT");
+      
+      let payment_method_id = String(
+        body.payment_method_id ||
+        body.paymentMethodId ||
+        body.payment_method ||
+        body.paymentMethod ||
+        (body.token || body.card_token ? "master" : "pix")
+      ).toLowerCase().trim();
+
+      if (payment_method_id === "cartao" || payment_method_id === "cartão" || payment_method_id === "credit_card" || payment_method_id === "card") {
+        payment_method_id = "master";
+      }
+
+      const external_reference = body.external_reference || body.externalReference || body.service_id || service_id;
+      const entity_id = body.entity_id || body.entityId;
+      const godparent_id = body.godparent_id || body.godparentId;
+      const godparent_tomador_id = body.godparent_tomador_id || body.godparentTomadorId;
+      const godparent_prestador_id = body.godparent_prestador_id || body.godparentPrestadorId;
+      const provider_id = body.provider_id || body.providerId || "0a5edf64-7585-401f-b310-126529607da0";
+      const provider_name = body.provider_name || body.providerName || "Silvina Luz";
       const metadata = body.metadata || {};
-      const cardToken = body.token || body.card_token || body.card_token_id || body.cardToken || body.cardTokenId;
+      const cardToken =
+        body.token ||
+        body.card_token ||
+        body.card_token_id ||
+        body.cardToken ||
+        body.cardTokenId ||
+        body.card_data?.token ||
+        body.cardData?.token;
+
       console.log(`[payment-gateway] Extracted cardToken:`, cardToken ? `${cardToken.slice(0, 8)}... (${cardToken.length} chars)` : "NONE");
       const installments = Number(body.installments) || 1;
-
-      // 1. Basic Validations
-      if (isNaN(transaction_amount) || transaction_amount <= 0) {
-        console.error("[payment-gateway] 400: Invalid transaction_amount:", body.transaction_amount, body.amount);
-        return new Response(
-          JSON.stringify({ error: "Invalid transaction_amount. Must be a positive number.", received: body.transaction_amount }),
-          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-        );
-      }
-      if (!payer_email.includes("@")) {
-        console.error("[payment-gateway] 400: Invalid payer_email:", payer_email);
-        return new Response(
-          JSON.stringify({ error: "Missing or invalid payer_email.", received: payer_email }),
-          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-        );
-      }
 
       // --- [1] Fetch live split rules from DB ---
       const { config: splitConfig, fromDb: splitFromDb } = await fetchSplitConfig();
