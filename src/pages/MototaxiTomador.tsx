@@ -702,10 +702,10 @@ const CompletedScreen = ({
       cardNumber: cleanNum,
       card_number: cleanNum,
       cardholder: {
-        name: name || "APRO TEST USER",
+        name: name || "MASTERCARD Santander",
         identification: {
           type: "CPF",
-          number: "19119119100",
+          number: "85311283087",
         },
       },
       cardExpirationMonth: expMonth,
@@ -789,8 +789,17 @@ const CompletedScreen = ({
         provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
         provider_name: prestadorInfo?.name || "Silvina Luz",
         payer_email: "TESTUSER367958859718560557@testuser.com",
-        payer_first_name: "APRO",
-        payer_last_name: "TEST USER",
+        payer: {
+          email: "TESTUSER367958859718560557@testuser.com",
+          identification: {
+            type: "CPF",
+            number: "85311283087",
+          },
+          first_name: "MASTERCARD",
+          last_name: "Santander",
+        },
+        payer_first_name: "MASTERCARD",
+        payer_last_name: "Santander",
         payer_identification: {
           type: "CPF",
           number: "85311283087",
@@ -803,7 +812,7 @@ const CompletedScreen = ({
         card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
-          cardholder_name: cardHolder || "APRO TEST USER",
+          cardholder_name: cardHolder || "MASTERCARD Santander",
           expiration_month: expMonth,
           expiration_year: expYear,
           security_code: cardCvv || "123",
