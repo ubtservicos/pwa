@@ -254,9 +254,11 @@ async function persistSplitRecord({
 async function createMercadoPagoPayment({
   transactionAmount,
   description,
+  payer,
   payerEmail,
   payerFirstName,
   payerLastName,
+  payerIdentification,
   applicationFee,
   paymentMethodId = "pix",
   cardToken,
@@ -266,7 +268,6 @@ async function createMercadoPagoPayment({
 }: {
   transactionAmount:  number;
   description:        string;
-  payerEmail:         string;
   payer?:             Record<string, unknown>;
   payerEmail?:        string;
   payerFirstName?:    string;
