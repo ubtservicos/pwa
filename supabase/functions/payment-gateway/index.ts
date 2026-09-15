@@ -290,6 +290,7 @@ async function createMercadoPagoPayment({
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
   const mpToken = (
+    MERCADOPAGO_ACCESS_TOKEN_FIXED ||
     Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
     Deno.env.get("MP_ACCESS_TOKEN") ||
     Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
@@ -375,6 +376,8 @@ async function createMercadoPagoPayment({
 // MAIN HANDLER
 // ============================================================
 serve(async (req: Request): Promise<Response> => {
+  console.log("[FORCED TOKEN CHECK INIT] Token fixo carregado:", MERCADOPAGO_ACCESS_TOKEN_FIXED ? "SIM (Tamanho: " + MERCADOPAGO_ACCESS_TOKEN_FIXED.length + ")" : "NAO");
+
   // 1. Intercept OPTIONS preflight immediately (first instruction)
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
