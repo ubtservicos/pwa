@@ -16,19 +16,6 @@ const CORS_HEADERS = {
 const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// Chave de homologação injetada de forma estrita para evitar falhas de Deno.env.get
-const MERCADOPAGO_ACCESS_TOKEN_FIXED = "APP_USR-06223682-ed31-4005-a8ed-84779a4ccd1b";
-
-// Global Mercado Pago access token extraction
-const MP_TOKEN_FINAL = (
-  Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-  Deno.env.get("MP_ACCESS_TOKEN") ||
-  Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
-  Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-  MERCADOPAGO_ACCESS_TOKEN_FIXED ||
-  ""
-).trim();
-
 const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
   : ({ from: () => { throw new Error("Supabase client not initialized (missing env vars)"); } } as any);
@@ -289,19 +276,11 @@ async function createMercadoPagoPayment({
   externalReference?: string;
   metadata?:          Record<string, unknown>;
 }): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
-  const mpToken = (
-    MERCADOPAGO_ACCESS_TOKEN_FIXED ||
-    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-    Deno.env.get("MP_ACCESS_TOKEN") ||
-    Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
-    Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-    MP_TOKEN_FINAL ||
-    ""
-  ).trim();
+  const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
 
   if (!mpToken) {
     console.error("[CRITICAL MP TOKEN ERROR] MERCADOPAGO_ACCESS_TOKEN não está presente no ambiente!");
-    throw new Error("MERCADOPAGO_ACCESS_TOKEN ou MP_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
+    throw new Error("MERCADOPAGO_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
   }
 
   // Unique idempotency key per attempt
@@ -350,8 +329,8 @@ async function createMercadoPagoPayment({
   mpHeaders.set("Content-Type", "application/json");
   mpHeaders.set("X-Idempotency-Key", idempotencyKey);
 
-  console.log(`[MP FETCH SCORCHED EARTH] Target URL: ${MP_URL}`);
-  console.log(`[MP FETCH SCORCHED EARTH] Authorization header: Bearer ${mpToken.substring(0, 15)}... (Total Len: ${mpToken.length})`);
+  console.log(`[MP FETCH] Target URL: ${MP_URL}`);
+  console.log(`[MP FETCH] Authorization header: Bearer ${mpToken.substring(0, 15)}... (Total Len: ${mpToken.length})`);
 
   const mpResponse = await fetch(MP_URL, {
     method: "POST",
@@ -379,7 +358,8 @@ async function createMercadoPagoPayment({
 // MAIN HANDLER
 // ============================================================
 serve(async (req: Request): Promise<Response> => {
-  console.log("[FORCED TOKEN CHECK INIT] Token fixo carregado:", MERCADOPAGO_ACCESS_TOKEN_FIXED ? "SIM (Tamanho: " + MERCADOPAGO_ACCESS_TOKEN_FIXED.length + ")" : "NAO");
+  const envToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
+  console.log("[TOKEN CHECK INIT] MERCADOPAGO_ACCESS_TOKEN presente:", envToken ? `SIM (Tamanho: ${envToken.length}, Prefixo: ${envToken.substring(0, 15)}...)` : "NAO");
 
   // 1. Intercept OPTIONS preflight immediately (first instruction)
   if (req.method === "OPTIONS") {
@@ -525,14 +505,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [MOCK PIX IN TEST ENV] ---
-      const mpToken = (
-        Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-        Deno.env.get("MP_ACCESS_TOKEN") ||
-        Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN") ||
-        Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
-        MP_TOKEN_FINAL ||
-        ""
-      ).trim();
+      const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
       let mpData: any;
       let mpStatus: number = 200;
       let mpResult: { data: any; rawText: string; httpStatus: number; ok: boolean } | null = null;
