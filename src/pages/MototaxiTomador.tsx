@@ -698,15 +698,19 @@ const CompletedScreen = ({
     }
 
     const cleanKey = mpPublicKey.trim();
-    const payload = {
+    const cleanCpf = (user?.cpf || "").replace(/\D/g, "");
+    const cardHolderName = (name || user?.name || "Cliente UBT").trim();
+    const payload: Record<string, unknown> = {
       cardNumber: cleanNum,
       card_number: cleanNum,
       cardholder: {
-        name: name || "MASTERCARD Santander",
-        identification: {
-          type: "CPF",
-          number: "85311283087",
-        },
+        name: cardHolderName,
+        ...(cleanCpf ? {
+          identification: {
+            type: "CPF",
+            number: cleanCpf,
+          }
+        } : {}),
       },
       cardExpirationMonth: expMonth,
       card_expiration_month: expMonth,
@@ -775,35 +779,38 @@ const CompletedScreen = ({
         cardToken = generatedToken;
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://bexbgvsqgjhjuhupkdfp.supabase.co";
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJleGJndnNxZ2poanVodXBrZGZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3NDY1MDgsImV4cCI6MjA2MjMyMjUwOH0.B8L4tLlhK8Q-8M5rZ1M6Vq1bZkE6Z8c7zK2g5jY1e7E";
       const session = (await supabase.auth.getSession()).data.session;
-      const token = session?.access_token || anonKey;
+      const userEmail = session?.user?.email || user?.email || "";
+      const userCpf = (user?.cpf || (session?.user?.user_metadata as any)?.cpf || "").replace(/\D/g, "");
+      const cardHolderName = (cardHolder || user?.name || "").trim();
+      const nameParts = cardHolderName ? cardHolderName.split(" ") : [];
+      const firstName = nameParts[0] || (user?.name || "").split(" ")[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || (user?.name || "").split(" ").slice(1).join(" ") || "";
+
+      const payerData: Record<string, unknown> = {};
+      if (userEmail) payerData.email = userEmail;
+      if (firstName) payerData.first_name = firstName;
+      if (lastName) payerData.last_name = lastName;
+      if (userCpf) {
+        payerData.identification = {
+          type: "CPF",
+          number: userCpf,
+        };
+      }
 
       const payloadParaEdge = {
         action: "create_payment_intent",
         service_type: "mototaxi",
-        service_id: rideId || "00000000-0000-0000-0000-000000000001",
+        service_id: rideId || crypto.randomUUID(),
         external_reference: rideId || undefined,
         transaction_amount: finalAmount,
         provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
         provider_name: prestadorInfo?.name || "Silvina Luz",
-        payer_email: "TESTUSER367958859718560557@testuser.com",
-        payer: {
-          email: "TESTUSER367958859718560557@testuser.com",
-          identification: {
-            type: "CPF",
-            number: "85311283087",
-          },
-          first_name: "MASTERCARD",
-          last_name: "Santander",
-        },
-        payer_first_name: "MASTERCARD",
-        payer_last_name: "Santander",
-        payer_identification: {
-          type: "CPF",
-          number: "85311283087",
-        },
+        payer_email: userEmail || undefined,
+        payer: Object.keys(payerData).length > 0 ? payerData : undefined,
+        payer_first_name: firstName || undefined,
+        payer_last_name: lastName || undefined,
+        payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
         // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
@@ -812,7 +819,7 @@ const CompletedScreen = ({
         card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
-          cardholder_name: cardHolder || "MASTERCARD Santander",
+          cardholder_name: cardHolderName || "Cliente UBT",
           expiration_month: expMonth,
           expiration_year: expYear,
           security_code: cardCvv || "123",

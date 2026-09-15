@@ -267,15 +267,18 @@ async function createMercadoPagoPayment({
   transactionAmount:  number;
   description:        string;
   payerEmail:         string;
+  payer?:             Record<string, unknown>;
+  payerEmail?:        string;
   payerFirstName?:    string;
   payerLastName?:     string;
+  payerIdentification?: { type?: string; number?: string };
   applicationFee:     number;
   paymentMethodId?:   string;
   cardToken?:         string;
   installments?:      number;
   externalReference?: string;
   metadata?:          Record<string, unknown>;
-}): Promise<{ data: MercadoPagoPixResponse; httpStatus: number }> {
+}): Promise<{ data: MercadoPagoPixResponse; rawText: string; httpStatus: number; ok: boolean }> {
   const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
 
   if (!mpToken) {
@@ -288,24 +291,27 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
-  const payerEmailToUse =
-    payerEmail && !payerEmail.includes("testuser")
-      ? "TESTUSER367958859718560557@testuser.com"
-      : (payerEmail || "TESTUSER367958859718560557@testuser.com");
+  const payerObj: Record<string, unknown> = {
+    ...(payer || {}),
+  };
+  if (payerEmail && !payerObj.email) {
+    payerObj.email = payerEmail;
+  }
+  if (payerFirstName && !payerObj.first_name) {
+    payerObj.first_name = payerFirstName;
+  }
+  if (payerLastName && !payerObj.last_name) {
+    payerObj.last_name = payerLastName;
+  }
+  if (payerIdentification && !payerObj.identification) {
+    payerObj.identification = payerIdentification;
+  }
 
   const mpPayload: Record<string, unknown> = {
     transaction_amount: transactionAmount,
     description,
-    payment_method_id: paymentMethodId || "master",
-    payer: {
-      email: "TESTUSER367958859718560557@testuser.com",
-      identification: {
-        type: "CPF",
-        number: "85311283087",
-      },
-      first_name: payerFirstName || "MASTERCARD",
-      last_name: payerLastName || "Santander",
-    },
+    payment_method_id: paymentMethodId || (cardToken ? "master" : "pix"),
+    ...(Object.keys(payerObj).length > 0 ? { payer: payerObj } : {}),
     // application_fee: the marketplace fee withheld by UBT from the total.
     application_fee: applicationFee,
     // external_reference is the key link between MP and our internal pagamentos_split table.
@@ -408,9 +414,11 @@ serve(async (req: Request): Promise<Response> => {
       const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
       const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
       const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
-      let payer_email = "TESTUSER367958859718560557@testuser.com";
-      const payer_first_name = String(body.payer_first_name || body.payerFirstName || "MASTERCARD");
-      const payer_last_name = String(body.payer_last_name || body.payerLastName || "Santander");
+      const payer_email = String(body.payer_email || body.email || body.payerEmail || body.payer?.email || "").trim();
+      const payer_first_name = body.payer_first_name || body.payerFirstName || body.payer?.first_name || undefined;
+      const payer_last_name = body.payer_last_name || body.payerLastName || body.payer?.last_name || undefined;
+      const payer_identification = body.payer_identification || body.payerIdentification || body.payer?.identification || undefined;
+      const payer = body.payer && typeof body.payer === "object" ? body.payer : undefined;
       
       let payment_method_id = String(
         body.payment_method_id ||
@@ -530,9 +538,11 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         mpResult = await createMercadoPagoPayment({
           transactionAmount:  transaction_amount,
           description,
-          payerEmail:         payer_email,
+          payer,
+          payerEmail:         payer_email || undefined,
           payerFirstName:     payer_first_name,
           payerLastName:      payer_last_name,
+          payerIdentification: payer_identification,
           applicationFee:     split.application_fee,
           paymentMethodId:    payment_method_id,
           cardToken,
