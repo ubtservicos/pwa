@@ -343,16 +343,19 @@ async function createMercadoPagoPayment({
     mpPayload.installments = Number(installments) || 1;
   }
 
-  const authHeader = `Bearer ${mpToken}`;
-  console.log(`[DEBUG MP] Token len=${mpToken.length}, Prefix=${mpToken.substring(0, 15)}... HeaderPrefix=${authHeader.substring(0, 22)}...`);
+  const MP_URL = "https://api.mercadopago.com/v1/payments";
 
-  const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
+  const mpHeaders = new Headers();
+  mpHeaders.set("Authorization", `Bearer ${mpToken}`);
+  mpHeaders.set("Content-Type", "application/json");
+  mpHeaders.set("X-Idempotency-Key", idempotencyKey);
+
+  console.log(`[MP FETCH SCORCHED EARTH] Target URL: ${MP_URL}`);
+  console.log(`[MP FETCH SCORCHED EARTH] Authorization header: Bearer ${mpToken.substring(0, 15)}... (Total Len: ${mpToken.length})`);
+
+  const mpResponse = await fetch(MP_URL, {
     method: "POST",
-    headers: {
-      "Authorization":    authHeader,
-      "X-Idempotency-Key": idempotencyKey,
-      "Content-Type":     "application/json",
-    },
+    headers: mpHeaders,
     body: JSON.stringify(mpPayload),
   });
 
