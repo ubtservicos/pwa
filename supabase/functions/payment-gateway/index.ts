@@ -292,15 +292,9 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
-  // Intercepta e força o email de sandbox exigido pelo Mercado Pago
-  const rawEmail = payerEmail || (payer as any)?.email || "";
-  const safePayerEmail = rawEmail.includes("@testuser.com") 
-    ? rawEmail 
-    : "TESTUSER367958859718560557@testuser.com";
-
   const payerObj: Record<string, unknown> = {
     ...(payer || {}),
-    email: safePayerEmail, // Sobrescreve garantindo a regra do Sandbox
+    email: "TESTUSER367958859718560557@testuser.com",
   };
   if (payerFirstName && !payerObj.first_name) {
     payerObj.first_name = payerFirstName;
