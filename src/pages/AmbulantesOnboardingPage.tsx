@@ -37,6 +37,31 @@ const AmbulantesOnboardingPage = () => {
 
   const allList: Array<Produto | CustomItem & { id?: string }> = [...CATALOGO_PADRAO, ...customItems];
 
+  const toggleProduto = (id: string) => {
+    const prod = CATALOGO_PADRAO.find((p) => p.id === id);
+    const defaultPreco = prod && typeof prod.precoPadrao === "number" ? prod.precoPadrao : 10;
+    setSelectedProds((prev) => {
+      const next = { ...prev };
+      if (next[id] !== undefined) {
+        delete next[id];
+      } else {
+        next[id] = { preco: defaultPreco, variosValores: false };
+      }
+      return next;
+    });
+  };
+
+  const handlePrecoChange = (id: string, val: string) => {
+    const parsed = parseFloat(val.replace(",", ".")) || 0;
+    setSelectedProds((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] || { variosValores: false }),
+        preco: parsed,
+      },
+    }));
+  };
+
   const toggleProd = (id: string, preco: number) => {
     setSelectedProds((p) => {
       const n = { ...p };
@@ -293,11 +318,29 @@ const AmbulantesOnboardingPage = () => {
 
       {activeTab === "Cardápio" && (
         <div style={{ marginTop: 24 }}>
+          {/* Banner Marcas Parceiras (Kibon, Nestlé, Frutverão, Oggi, Napoleta, Ky-sabor) */}
+          <div
+            onClick={() => navigate('/app/prestador/ambulantes/catalogo')}
+            className="p-3.5 rounded-2xl bg-gradient-to-r from-[#0DB87E]/20 via-[#18181B] to-[#18181B] border border-[#0DB87E]/40 mb-4 cursor-pointer hover:border-[#00FF66] transition-all flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🍦</span>
+              <div>
+                <p className="text-xs font-bold text-white font-display">
+                  Vender Marcas Parceiras (Kibon, Nestlé, Frutverão, Oggi...)
+                </p>
+                <p className="text-[11px] text-[#00FF66] mt-0.5">
+                  Acessar Catálogo Oficial de Marcas & Estoque →
+                </p>
+              </div>
+            </div>
+          </div>
+
           <h2 className="font-display text-[18px] font-bold text-white" style={{ margin: 0 }}>
-            Seu Cardápio
+            Seu Cardápio Rápido
           </h2>
           <p className="font-sans text-[14px]" style={{ color: "#A1A1AA", marginTop: 4 }}>
-            Edite os preços conforme desejar.
+            Selecione as categorias que você comercializa e ajuste os valores.
           </p>
           <div className="grid grid-cols-2 gap-3" style={{ marginTop: 16 }}>
             {CATALOGO_PADRAO.map((p) => {

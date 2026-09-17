@@ -268,7 +268,7 @@ const PrestadorMototaxiActive = () => {
         if (parsed && parsed.id) {
           setRide((prev) => prev || {
             ...parsed,
-            startTime: parsed.startTime || (parsed.created_at ? new Date(parsed.created_at).getTime() : Date.now()),
+            startTime: parsed?.startTime || (parsed?.created_at ? new Date(parsed.created_at).getTime() : Date.now()),
           });
           loadRideFromDb(parsed.id);
         }

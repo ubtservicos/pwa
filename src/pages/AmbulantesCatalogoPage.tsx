@@ -239,7 +239,7 @@ export default function AmbulantesCatalogoPage() {
   const totalSelectedItems = Object.values(estoque).filter((i) => i.disponivel && i.quantidade > 0).length;
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-zinc-100 font-sans pb-32">
+    <div className="min-h-screen bg-[#09090B] text-zinc-100 font-sans pb-48">
       {/* Toast Feedback */}
       {feedbackMsg && (
         <div
@@ -623,8 +623,8 @@ export default function AmbulantesCatalogoPage() {
         )}
       </main>
 
-      {/* Floating Bottom Summary Bar */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-[#09090B]/95 backdrop-blur-lg border-t border-[#27272A] p-4">
+      {/* Floating Bottom Summary Bar (Fixed directly above BottomNav) */}
+      <footer className="fixed bottom-16 left-0 right-0 z-40 bg-[#09090B]/95 backdrop-blur-lg border-t border-[#27272A] p-3.5">
         <div className="max-w-md mx-auto flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-zinc-400">Total no seu estoque</p>

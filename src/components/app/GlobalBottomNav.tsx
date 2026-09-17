@@ -15,7 +15,7 @@ const GlobalBottomNav = () => {
     path === "/login" ||
     path === "/cadastro" ||
     path === "/recuperar-senha" ||
-    path.includes("/onboarding") ||
+    path === "/onboarding" ||
     path.includes("/agendar") ||
     path.includes("/agendamento") ||
     path.includes("/corrida") ||
