@@ -2,10 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Info, Pencil, Plus, X, Truck, MapPin } from "lucide-react";
 
-import FormFieldLight from "@/components/prestador/FormFieldLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 import { CATALOGO_PADRAO, type Produto } from "@/mocks/ambulantesProdutos";
-import { maskCPF } from "@/utils/masks";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { useEffect } from "react";
@@ -29,7 +27,6 @@ const AmbulantesOnboardingPage = () => {
   }, [activeTab]);
 
 
-  const [cpf, setCpf] = useState("");
   const [modalidades, setModalidades] = useState<Array<"delivery" | "local_fixo">>([]);
   const [selectedProds, setSelectedProds] = useState<Record<string, { preco: number, variosValores: boolean }>>({});
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
@@ -37,12 +34,6 @@ const AmbulantesOnboardingPage = () => {
   const [customDraft, setCustomDraft] = useState<Omit<CustomItem, "id">>({ nome: "", emoji: "🍽️", preco: 10, variosValores: false });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (user.cpf && !cpf) {
-      setCpf(maskCPF(user.cpf));
-    }
-  }, [user.cpf, cpf]);
 
   const allList: Array<Produto | CustomItem & { id?: string }> = [...CATALOGO_PADRAO, ...customItems];
 
@@ -209,7 +200,7 @@ const AmbulantesOnboardingPage = () => {
     }
   };
 
-  const canContinueStep1 = cpf.replace(/\D/g, "").length >= 11 && modalidades.length > 0;
+  const canContinueStep1 = modalidades.length > 0;
   const canContinueStep2 = Object.keys(selectedProds).length > 0;
 
   return (
@@ -252,13 +243,7 @@ const AmbulantesOnboardingPage = () => {
 
       {activeTab === "Dados" && (
         <div style={{ marginTop: 28 }}>
-          <FormFieldLight
-            label="CPF"
-            placeholder="000.000.000-00"
-            value={cpf}
-            onChange={(e) => setCpf(maskCPF(e.target.value))}
-          />
-          <h2 className="font-display text-[16px] font-bold text-white" style={{ marginTop: 24, marginBottom: 12 }}>
+          <h2 className="font-display text-[16px] font-bold text-white" style={{ marginTop: 8, marginBottom: 12 }}>
             Como você quer trabalhar?
           </h2>
           <div className="flex gap-3">
