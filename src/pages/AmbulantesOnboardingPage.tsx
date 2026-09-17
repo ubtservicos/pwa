@@ -1,16 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Info, Pencil, Plus, X, Truck, MapPin } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Plus, X, Truck, MapPin, ShoppingBag } from "lucide-react";
 
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 import { CATALOGO_PADRAO, type Produto } from "@/mocks/ambulantesProdutos";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
-import { useEffect } from "react";
+import { Switch } from "@/components/ui/switch";
 
 type Modalidade = "delivery" | "local_fixo" | "both";
 
-interface CustomItem { id?: string; nome: string; emoji: string; foto?: string; preco: number; variosValores?: boolean; }
+interface CustomItem {
+  id?: string;
+  nome: string;
+  emoji: string;
+  foto?: string;
+  preco: number;
+  variosValores?: boolean;
+}
 
 const EMOJIS = ["🍽️", "🥤", "🍺", "🍫", "🍰", "🍔", "🍕", "🌭", "🍟", "🍿", "🍩", "🧁", "🍉", "🍇", "🍓", "🥥", "🥖", "🥐", "🧀", "🍦", "🧊"];
 
@@ -18,6 +25,7 @@ const AmbulantesOnboardingPage = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const [activeTab, setActiveTab] = useState("Dados");
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
     const tabEl = document.getElementById(`tab-${activeTab}`);
@@ -26,16 +34,22 @@ const AmbulantesOnboardingPage = () => {
     }
   }, [activeTab]);
 
-
   const [modalidades, setModalidades] = useState<Array<"delivery" | "local_fixo">>([]);
-  const [selectedProds, setSelectedProds] = useState<Record<string, { preco: number, variosValores: boolean }>>({});
+  const [selectedProds, setSelectedProds] = useState<Record<string, { preco: number; variosValores: boolean }>>({
+    sorvete: { preco: 0, variosValores: false } // Pré-ativado por padrão para agilizar o fluxo
+  });
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
   const [showCustomModal, setShowCustomModal] = useState(false);
-  const [customDraft, setCustomDraft] = useState<Omit<CustomItem, "id">>({ nome: "", emoji: "🍽️", preco: 10, variosValores: false });
+  const [customDraft, setCustomDraft] = useState<Omit<CustomItem, "id">>({
+    nome: "",
+    emoji: "🍽️",
+    preco: 10,
+    variosValores: false,
+  });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const allList: Array<Produto | CustomItem & { id?: string }> = [...CATALOGO_PADRAO, ...customItems];
+  const allList: Array<Produto | (CustomItem & { id?: string })> = [...CATALOGO_PADRAO, ...customItems];
 
   const toggleProduto = (id: string) => {
     setSelectedProds((prev) => {
@@ -49,36 +63,17 @@ const AmbulantesOnboardingPage = () => {
     });
   };
 
-  const toggleProd = (id: string) => {
-    toggleProduto(id);
-  };
-
-  const updateProdPreco = (id: string, preco: number) => {
-    setSelectedProds((p) => ({ ...p, [id]: { ...p[id], preco } }));
-  };
-
-  const toggleProdVariosValores = (id: string) => {
-    setSelectedProds((p) => ({ ...p, [id]: { ...p[id], variosValores: !p[id].variosValores } }));
-  };
-
-  const addCustom = () => {
+  const handleSaveCustomProduct = () => {
     if (!customDraft.nome.trim()) return;
     const id = `custom-${Date.now()}`;
-    setCustomItems((c) => [...c, { ...customDraft, id }]);
-    setSelectedProds((p) => ({ ...p, [id]: { preco: customDraft.preco, variosValores: !!customDraft.variosValores } }));
-    setCustomDraft({ nome: "", emoji: "🍽️", preco: 10, variosValores: false, foto: undefined });
+    const newItem: CustomItem = { ...customDraft, id };
+    setCustomItems((c) => [...c, newItem]);
+    setSelectedProds((p) => ({
+      ...p,
+      [id]: { preco: customDraft.preco, variosValores: !!customDraft.variosValores }
+    }));
+    setCustomDraft({ nome: "", emoji: "🍽️", preco: 10, variosValores: false });
     setShowCustomModal(false);
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setCustomDraft((c) => ({ ...c, foto: ev.target?.result as string, emoji: "" }));
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const PRODUCT_UUID_MAP: Record<string, string> = {
@@ -98,8 +93,8 @@ const AmbulantesOnboardingPage = () => {
 
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
   };
@@ -117,9 +112,6 @@ const AmbulantesOnboardingPage = () => {
         nome: user.name || 'Ambulante',
         role: 'prestador'
       });
-
-      // Atualiza o CPF se aplicável
-      supabase.auth.updateUser({ data: { cpf } }).catch(() => { });
 
       let modalidadeSalvar: Modalidade | null = null;
       if (modalidades.length === 2) {
@@ -224,11 +216,12 @@ const AmbulantesOnboardingPage = () => {
         <span className="font-display" style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>UBT.</span>
       </header>
 
-
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16, marginBottom: 16, scrollbarWidth: "none" }}>
-        {["Dados", "Cardápio"].map(t => (
+        {["Dados", "Cardápio"].map((t) => (
           <button
-            key={t} id={`tab-${t}`} onClick={() => setActiveTab(t)}
+            key={t}
+            id={`tab-${t}`}
+            onClick={() => setActiveTab(t)}
             style={{
               padding: "10px 20px",
               borderRadius: 999,
@@ -246,7 +239,6 @@ const AmbulantesOnboardingPage = () => {
           </button>
         ))}
       </div>
-
 
       {activeTab === "Dados" && (
         <div style={{ marginTop: 28 }}>
@@ -294,7 +286,6 @@ const AmbulantesOnboardingPage = () => {
               );
             })}
           </div>
-
         </div>
       )}
 
@@ -303,88 +294,167 @@ const AmbulantesOnboardingPage = () => {
           {/* Banner Marcas Parceiras (Kibon, Nestlé, Frutverão, Oggi, Napoleta, Ky-sabor) */}
           <div
             onClick={() => navigate('/app/prestador/ambulantes/catalogo')}
-            className="p-3.5 rounded-2xl bg-gradient-to-r from-[#0DB87E]/20 via-[#18181B] to-[#18181B] border border-[#0DB87E]/40 mb-4 cursor-pointer hover:border-[#00FF66] transition-all flex items-center justify-between"
+            className="p-4 rounded-2xl bg-gradient-to-r from-[#0DB87E]/20 via-[#18181B] to-[#18181B] border border-[#0DB87E]/40 mb-5 cursor-pointer hover:border-[#00FF66] transition-all flex items-center justify-between shadow-lg shadow-[#0DB87E]/5"
           >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🍦</span>
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-[#0DB87E]/20 flex items-center justify-center text-xl flex-shrink-0">
+                🍦
+              </div>
               <div>
-                <p className="text-xs font-bold text-white font-display">
-                  Vender Marcas Parceiras (Kibon, Nestlé, Frutverão, Oggi...)
+                <p className="text-sm font-bold text-white font-display">
+                  Marcas Parceiras (Kibon, Nestlé, Oggi...)
                 </p>
-                <p className="text-[11px] text-[#00FF66] mt-0.5">
+                <p className="text-xs text-[#00FF66] mt-0.5">
                   Acessar Catálogo Oficial de Marcas & Estoque →
                 </p>
               </div>
             </div>
+            <ChevronRight size={20} className="text-[#00FF66] shrink-0" />
           </div>
 
-          <h2 className="font-display text-[18px] font-bold text-white" style={{ margin: 0 }}>
-            Seu Cardápio Rápido
-          </h2>
-          <p className="font-sans text-[14px]" style={{ color: "#A1A1AA", marginTop: 4 }}>
-            Toque nas categorias que você vende na praia para ativá-las no seu perfil.
-          </p>
-          <div className="grid grid-cols-2 gap-3" style={{ marginTop: 16 }}>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="font-display text-[18px] font-bold text-white" style={{ margin: 0 }}>
+                Seu Cardápio & Serviços
+              </h2>
+              <p className="font-sans text-[13px] text-zinc-400 mt-1">
+                Ative as categorias que você comercializa. Categorias ativadas permitem gerenciar marcas e itens.
+              </p>
+            </div>
+          </div>
+
+          {/* Lista Vertical de Cards Largos (Padronizado com 'Meus Serviços Ativos') */}
+          <div className="flex flex-col gap-3 mt-4">
             {CATALOGO_PADRAO.map((p) => {
-              const selected = !!selectedProds[p.id];
+              const isSelected = !!selectedProds[p.id];
+
               return (
-                <button
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() => toggleProduto(p.id)}
-                  className="text-left rounded-2xl p-4 relative transition-all flex flex-col justify-between"
+                  onClick={() => {
+                    if (isSelected) {
+                      navigate('/app/prestador/ambulantes/catalogo');
+                    }
+                  }}
+                  className={`flex items-center w-full rounded-[20px] p-4 text-left transition-all ${
+                    isSelected ? "cursor-pointer hover:border-[#00FF66]" : "opacity-75"
+                  }`}
                   style={{
-                    background: selected ? "rgba(13,184,126,0.18)" : "var(--prestador-card)",
-                    border: selected ? "2px solid #00FF66" : "1px solid var(--prestador-border)",
-                    boxShadow: selected ? "0 0 16px rgba(13,184,126,0.25)" : "none",
-                    opacity: selected ? 1 : 0.65,
-                    filter: selected ? "none" : "grayscale(30%)",
-                    minHeight: 110,
-                    cursor: "pointer",
+                    background: isSelected ? "rgba(13,184,126,0.12)" : "var(--prestador-card)",
+                    border: `1.5px solid ${isSelected ? "#00FF66" : "var(--prestador-border)"}`,
+                    boxShadow: isSelected ? "0 4px 20px rgba(13,184,126,0.15)" : "none",
                   }}
                 >
-                  <div className="flex items-center justify-between w-full">
-                    <span style={{ fontSize: 26 }}>{p.emoji}</span>
-                    {selected && (
-                      <span className="w-5 h-5 rounded-full bg-[#00FF66] text-[#09090B] flex items-center justify-center font-bold text-[11px] shadow">
-                        ✓
-                      </span>
+                  {/* Ícone à esquerda */}
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl"
+                    style={{
+                      background: isSelected ? "rgba(13,184,126,0.25)" : "rgba(255,255,255,0.06)",
+                      border: `1px solid ${isSelected ? "rgba(0,255,102,0.4)" : "transparent"}`
+                    }}
+                  >
+                    {p.emoji}
+                  </div>
+
+                  {/* Título e Subtítulo */}
+                  <div className="ml-3.5 flex-1 pr-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display text-[15px] font-bold text-white leading-snug">
+                        {p.nome}
+                      </h3>
+                      {isSelected && (
+                        <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/30">
+                          Ativo
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-sans text-[12px] text-zinc-400 mt-0.5 line-clamp-1">
+                      {p.descricao}
+                    </p>
+                    {isSelected && (
+                      <p className="font-sans text-[11px] text-[#00FF66] mt-1 font-semibold flex items-center gap-1">
+                        <span>Acessar cardápio pré-cadastrado</span>
+                        <span>→</span>
+                      </p>
                     )}
                   </div>
-                  <div className="w-full mt-2">
-                    <p className="font-sans text-[14px] font-bold text-white text-center" style={{ margin: 0 }}>
-                      {p.nome}
-                    </p>
-                    <p className="font-sans text-[11px] text-center mt-1 font-semibold" style={{ color: selected ? "#00FF66" : "#71717A" }}>
-                      {selected ? "Ativado" : "Toque para ativar"}
-                    </p>
+
+                  {/* Switch Toggle à direita + Seta Chevron quando ativo */}
+                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      checked={isSelected}
+                      onCheckedChange={() => toggleProduto(p.id)}
+                    />
+                    {isSelected && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/app/prestador/ambulantes/catalogo');
+                        }}
+                        className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#00FF66] transition-colors"
+                        title="Acessar catálogo de marcas"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    )}
                   </div>
-                </button>
+                </div>
               );
             })}
 
+            {/* Custom Items */}
+            {customItems.map((c) => {
+              const cId = c.id || `custom-${c.nome}`;
+              const isSelected = !!selectedProds[cId];
+
+              return (
+                <div
+                  key={cId}
+                  className="flex items-center w-full rounded-[20px] p-4 text-left transition-all"
+                  style={{
+                    background: isSelected ? "rgba(13,184,126,0.12)" : "var(--prestador-card)",
+                    border: `1.5px solid ${isSelected ? "#00FF66" : "var(--prestador-border)"}`,
+                  }}
+                >
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl"
+                    style={{ background: isSelected ? "rgba(13,184,126,0.25)" : "rgba(255,255,255,0.06)" }}
+                  >
+                    {c.emoji}
+                  </div>
+                  <div className="ml-3.5 flex-1 pr-2">
+                    <h3 className="font-display text-[15px] font-bold text-white leading-snug">
+                      {c.nome}
+                    </h3>
+                    <p className="font-sans text-[12px] text-zinc-400 mt-0.5">
+                      Item personalizado • R$ {Number(c.preco).toFixed(2)}
+                    </p>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      checked={isSelected}
+                      onCheckedChange={() => toggleProduto(cId)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Botão Adicionar Item Customizado */}
             <button
               type="button"
               onClick={() => setShowCustomModal(true)}
-              style={{
-                border: "2px dashed var(--prestador-border)", borderRadius: 14, padding: 14,
-                cursor: "pointer", display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", minHeight: 110,
-                background: "transparent",
-              }}
+              className="flex items-center justify-center gap-2 w-full rounded-[20px] p-4 border border-dashed border-[#27272A] hover:border-[#0DB87E] text-zinc-400 hover:text-white transition-all bg-transparent cursor-pointer"
             >
-              <Plus size={24} color="#0DB87E" />
-              <p className="font-sans text-[12px] text-[#0DB87E]" style={{ marginTop: 6 }}>Novo item</p>
+              <Plus size={18} className="text-[#0DB87E]" />
+              <span className="font-sans text-sm font-semibold text-[#0DB87E]">Adicionar outro item personalizado</span>
             </button>
           </div>
-
-
         </div>
       )}
 
-
-
-
+      {/* Footer Fixo */}
       <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "var(--prestador-bg)", borderTop: "1px solid var(--prestador-border)", zIndex: 10 }}>
         {activeTab === "Dados" ? (
           <PrimaryButtonLight
@@ -422,20 +492,36 @@ const AmbulantesOnboardingPage = () => {
         )}
       </div>
 
-      {/* Custom modal */}
+      {/* Modal de Item Customizado */}
       {showCustomModal && (
         <div
           style={{
-            position: "fixed", inset: 0, zIndex: 50,
-            background: "rgba(11,27,62,0.40)",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
           }}
           onClick={() => setShowCustomModal(false)}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--prestador-card)", borderRadius: 16, padding: 24, width: 320, maxWidth: "100%", border: "1px solid var(--prestador-border)" }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--prestador-card)",
+              borderRadius: 20,
+              padding: 24,
+              width: 340,
+              maxWidth: "100%",
+              border: "1px solid var(--prestador-border)"
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3 className="font-display text-[18px] font-bold text-white" style={{ margin: 0 }}>
-                Adicionar Item
+                Adicionar Item Personalizado
               </h3>
               <button
                 type="button"
@@ -457,55 +543,51 @@ const AmbulantesOnboardingPage = () => {
                     onClick={() => setShowEmojiPicker(true)}
                     style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid var(--prestador-border)", background: "var(--prestador-bg)", fontSize: 20, cursor: "pointer" }}
                   >
-                    {customEmoji}
+                    {customDraft.emoji}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(true)}
                     style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid var(--prestador-border)", background: "var(--prestador-bg)", fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#A1A1AA", fontFamily: "DM Sans", fontWeight: 500 }}
                   >
-                    Alterar
+                    Alterar Ícone
                   </button>
                 </div>
               </div>
 
-              <FormFieldLight
-                label="Nome do Produto/Serviço"
-                value={customNome}
-                onChange={(e) => setCustomNome(e.target.value)}
-                placeholder="Ex: Água mineral sem gás"
-              />
-
-              <FormFieldLight
-                label="Preço Base (R$)"
-                value={customPreco}
-                onChange={(e) => setCustomPreco(e.target.value)}
-                placeholder="Ex: 5.00"
-                inputMode="decimal"
-              />
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Nome do Item</label>
                 <input
-                  type="checkbox"
-                  id="varios-valores-custom"
-                  checked={customVariosValores}
-                  onChange={(e) => setCustomVariosValores(e.target.checked)}
-                  style={{ width: 18, height: 18 }}
+                  type="text"
+                  value={customDraft.nome}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, nome: e.target.value }))}
+                  placeholder="Ex: Água mineral sem gás"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-[#0DB87E]"
                 />
-                <label htmlFor="varios-valores-custom" style={{ fontFamily: "DM Sans", fontSize: 13, color: "#FFFFFF", cursor: "pointer" }}>
-                  Preço varia (ex: por tamanho)
-                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Preço Sugerido (R$)</label>
+                <input
+                  type="number"
+                  step="0.50"
+                  value={customDraft.preco}
+                  onChange={(e) => setCustomDraft((d) => ({ ...d, preco: parseFloat(e.target.value) || 0 }))}
+                  placeholder="Ex: 5.00"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-[#0DB87E]"
+                />
               </div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 24 }}>
               <PrimaryButtonLight
                 onClick={handleSaveCustomProduct}
-                disabled={!customNome}
+                disabled={!customDraft.nome.trim()}
               >
                 Confirmar
               </PrimaryButtonLight>
               <button
+                type="button"
                 onClick={() => setShowCustomModal(false)}
                 style={{ background: "transparent", border: "none", color: "#A1A1AA", padding: 12, cursor: "pointer", marginTop: 6 }}
               >
@@ -515,30 +597,76 @@ const AmbulantesOnboardingPage = () => {
           </div>
         </div>
       )}
+
+      {/* Picker de Emojis */}
       {showEmojiPicker && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(11,27,62,0.40)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowEmojiPicker(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--prestador-card)", borderRadius: 16, padding: 24, width: 320, maxWidth: "100%", border: "1px solid var(--prestador-border)" }}>
-            <h3 className="font-display text-[16px] font-bold text-white" style={{ marginBottom: 16 }}>Escolha um ícone</h3>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            background: "rgba(0,0,0,0.8)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24
+          }}
+          onClick={() => setShowEmojiPicker(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--prestador-card)",
+              borderRadius: 20,
+              padding: 24,
+              width: 320,
+              maxWidth: "100%",
+              border: "1px solid var(--prestador-border)"
+            }}
+          >
+            <h3 className="font-display text-[16px] font-bold text-white" style={{ marginBottom: 16 }}>
+              Escolha um ícone
+            </h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => { setCustomEmoji("🛍️"); setShowEmojiPicker(false); }}
-                style={{ fontSize: 14, padding: 8, background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", borderRadius: 8, cursor: "pointer", gridColumn: "span 5", fontWeight: 600, color: "#A1A1AA", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-              >
-                Sacola Padrão 🛍️
-              </button>
-              {COMMON_EMOJIS.map(em => (
+              {EMOJIS.map((em) => (
                 <button
                   key={em}
                   type="button"
-                  onClick={() => { setCustomEmoji(em); setShowEmojiPicker(false); }}
-                  style={{ fontSize: 24, padding: 8, background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", borderRadius: 8, cursor: "pointer" }}
+                  onClick={() => {
+                    setCustomDraft((d) => ({ ...d, emoji: em }));
+                    setShowEmojiPicker(false);
+                  }}
+                  style={{
+                    fontSize: 24,
+                    padding: 8,
+                    background: "var(--prestador-bg)",
+                    border: "1px solid var(--prestador-border)",
+                    borderRadius: 10,
+                    cursor: "pointer"
+                  }}
                 >
                   {em}
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowEmojiPicker(false)} style={{ width: "100%", padding: 12, marginTop: 16, border: "none", background: "transparent", color: "#A1A1AA", fontFamily: "DM Sans", fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker(false)}
+              style={{
+                width: "100%",
+                padding: 12,
+                marginTop: 16,
+                border: "none",
+                background: "transparent",
+                color: "#A1A1AA",
+                fontFamily: "DM Sans",
+                fontWeight: 600,
+                cursor: "pointer"
+              }}
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}

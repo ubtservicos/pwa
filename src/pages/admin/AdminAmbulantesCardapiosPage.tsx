@@ -130,12 +130,15 @@ export default function AdminAmbulantesCardapiosPage() {
     }
   }
 
-  // Upload direto para o bucket catalogo-ambulantes
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const supplierLogoInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload direto para o bucket catalogo-ambulantes (Produtos)
   const handleImageUpload = async (file: File) => {
     try {
       setUploadingImage(true);
       const fileExt = file.name.split(".").pop() || "jpg";
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+      const fileName = `produtos/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("catalogo-ambulantes")
@@ -151,12 +154,42 @@ export default function AdminAmbulantesCardapiosPage() {
         .getPublicUrl(fileName);
 
       setProdImagemUrl(urlData.publicUrl);
-      toast.show("Imagem carregada no bucket com sucesso!");
+      toast.show("Imagem do produto carregada no bucket com sucesso!");
     } catch (err: any) {
       console.error("Erro no upload da imagem:", err);
       toast.show("Falha no upload: " + (err.message || "Erro desconhecido"));
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // Upload direto para o bucket catalogo-ambulantes (Logos de Fornecedor)
+  const handleSupplierLogoUpload = async (file: File) => {
+    try {
+      setUploadingLogo(true);
+      const fileExt = file.name.split(".").pop() || "jpg";
+      const fileName = `logos/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("catalogo-ambulantes")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("catalogo-ambulantes")
+        .getPublicUrl(fileName);
+
+      setSuppLogoUrl(urlData.publicUrl);
+      toast.show("Logotipo da marca carregado no bucket com sucesso!");
+    } catch (err: any) {
+      console.error("Erro no upload do logotipo:", err);
+      toast.show("Falha no upload: " + (err.message || "Erro desconhecido"));
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -1219,13 +1252,55 @@ export default function AdminAmbulantesCardapiosPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">URL da Logo (Opcional)</label>
+                <label className="block text-xs text-zinc-400 mb-1">Logotipo da Marca (Upload para Bucket / URL)</label>
+                <div
+                  onClick={() => supplierLogoInputRef.current?.click()}
+                  className="border-2 border-dashed border-[#27272A] hover:border-[#0DB87E] rounded-xl p-3 text-center cursor-pointer transition-colors bg-[#18181B] mb-2"
+                >
+                  <input
+                    type="file"
+                    ref={supplierLogoInputRef}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleSupplierLogoUpload(e.target.files[0]);
+                    }}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  {uploadingLogo ? (
+                    <div className="py-2 text-xs text-[#00FF66] flex items-center justify-center gap-2">
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Enviando logo para o bucket...</span>
+                    </div>
+                  ) : suppLogoUrl ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <img
+                        src={suppLogoUrl}
+                        alt="Logo Preview"
+                        className="w-10 h-10 rounded-lg object-contain bg-white/5 border border-[#27272A] p-1"
+                      />
+                      <div className="text-left">
+                        <p className="text-xs font-semibold text-white">Logotipo vinculado</p>
+                        <p className="text-[10px] text-[#00FF66]">Clique para alterar</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      <UploadCloud size={20} className="mx-auto text-[#0DB87E] mb-1" />
+                      <p className="text-xs text-zinc-300 font-semibold">
+                        Clique para selecionar o logotipo
+                      </p>
+                      <p className="text-[10px] text-zinc-500">
+                        Bucket <code>catalogo-ambulantes/logos</code>
+                      </p>
+                    </div>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={suppLogoUrl}
                   onChange={(e) => setSuppLogoUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-[#18181B] border border-[#27272A] rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[#0DB87E]"
+                  placeholder="https://... ou preenchimento automático via upload"
+                  className="w-full bg-[#18181B] border border-[#27272A] rounded-xl px-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-[#0DB87E]"
                 />
               </div>
 
