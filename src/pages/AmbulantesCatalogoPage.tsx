@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { Switch } from "@/components/ui/switch";
 
 interface Fornecedor {
   id: string;
@@ -56,6 +57,7 @@ export default function AmbulantesCatalogoPage() {
   // Navigation steps
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedBrand, setSelectedBrand] = useState<Fornecedor | null>(null);
+  const [isOnline, setIsOnline] = useState(false);
 
   // Data states
   const [brands, setBrands] = useState<Fornecedor[]>([]);
@@ -273,11 +275,8 @@ export default function AmbulantesCatalogoPage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-1.5 font-display">
-              <span>Cardápio do Ambulante</span>
-              <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-[#0DB87E]/20 text-[#00FF66] border border-[#0DB87E]/40">
-                Gamer Dark
-              </span>
+            <h1 className="text-base font-bold tracking-tight text-white font-display">
+              Cardápio do Ambulante
             </h1>
             <p className="text-xs text-zinc-400">
               {step === 1 ? "Selecione uma marca parceira" : selectedBrand?.nome_marca || "Todos os Produtos"}
@@ -285,14 +284,26 @@ export default function AmbulantesCatalogoPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigate("/app/prestador/ambulantes/online")}
-          className="text-xs font-bold text-[#00FF66] bg-[#18181B] border border-[#0DB87E]/40 hover:bg-[#0DB87E]/10 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all active:scale-95"
-        >
-          <Store size={14} />
-          <span>Ficar Online</span>
-        </button>
+        {/* Toggle Switch Padrão do Sistema */}
+        <div className="flex items-center gap-2 bg-[#18181B] border border-[#27272A] px-2.5 py-1.5 rounded-xl">
+          <div className="flex flex-col text-right">
+            <span className="text-[11px] font-bold text-white leading-tight">
+              {isOnline ? "Na Praia" : "Offline"}
+            </span>
+            <span className="text-[9px] text-[#00FF66] font-medium leading-none">
+              {isOnline ? "Online" : "Pausado"}
+            </span>
+          </div>
+          <Switch
+            checked={isOnline}
+            onCheckedChange={(checked) => {
+              setIsOnline(checked);
+              if (checked) {
+                navigate("/app/prestador/ambulantes/online");
+              }
+            }}
+          />
+        </div>
       </header>
 
       {/* Main Content */}
@@ -353,12 +364,12 @@ export default function AmbulantesCatalogoPage() {
                       className="group relative p-4 rounded-2xl bg-[#18181B] border border-[#27272A] hover:border-[#0DB87E] active:scale-[0.98] transition-all flex flex-col items-center text-center justify-between min-h-[140px] shadow-lg shadow-black/40 hover:shadow-[#0DB87E]/10"
                     >
                       {/* Logo / Thumbnail */}
-                      <div className="w-14 h-14 rounded-2xl bg-[#09090B] border border-[#27272A] overflow-hidden flex items-center justify-center p-1 group-hover:border-[#0DB87E]/60 transition-colors">
+                      <div className="w-20 h-14 rounded-2xl bg-white/95 border border-[#27272A] overflow-hidden flex items-center justify-center p-2 group-hover:border-[#0DB87E]/80 transition-all shadow-md">
                         {brand.logo_url ? (
                           <img
                             src={brand.logo_url}
                             alt={brand.nome_marca}
-                            className="w-full h-full object-cover rounded-xl"
+                            className="w-full h-full object-contain"
                             loading="lazy"
                           />
                         ) : (

@@ -38,37 +38,19 @@ const AmbulantesOnboardingPage = () => {
   const allList: Array<Produto | CustomItem & { id?: string }> = [...CATALOGO_PADRAO, ...customItems];
 
   const toggleProduto = (id: string) => {
-    const prod = CATALOGO_PADRAO.find((p) => p.id === id);
-    const defaultPreco = prod && typeof prod.precoPadrao === "number" ? prod.precoPadrao : 10;
     setSelectedProds((prev) => {
       const next = { ...prev };
       if (next[id] !== undefined) {
         delete next[id];
       } else {
-        next[id] = { preco: defaultPreco, variosValores: false };
+        next[id] = { preco: 0, variosValores: false };
       }
       return next;
     });
   };
 
-  const handlePrecoChange = (id: string, val: string) => {
-    const parsed = parseFloat(val.replace(",", ".")) || 0;
-    setSelectedProds((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] || { variosValores: false }),
-        preco: parsed,
-      },
-    }));
-  };
-
-  const toggleProd = (id: string, preco: number) => {
-    setSelectedProds((p) => {
-      const n = { ...p };
-      if (n[id] !== undefined) delete n[id];
-      else n[id] = { preco, variosValores: false };
-      return n;
-    });
+  const toggleProd = (id: string) => {
+    toggleProduto(id);
   };
 
   const updateProdPreco = (id: string, preco: number) => {
@@ -340,59 +322,42 @@ const AmbulantesOnboardingPage = () => {
             Seu Cardápio Rápido
           </h2>
           <p className="font-sans text-[14px]" style={{ color: "#A1A1AA", marginTop: 4 }}>
-            Selecione as categorias que você comercializa e ajuste os valores.
+            Toque nas categorias que você vende na praia para ativá-las no seu perfil.
           </p>
           <div className="grid grid-cols-2 gap-3" style={{ marginTop: 16 }}>
             {CATALOGO_PADRAO.map((p) => {
-              const selected = selectedProds[p.id];
+              const selected = !!selectedProds[p.id];
               return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => toggleProduto(p.id)}
-                  className="text-left rounded-2xl p-4 relative transition-all"
+                  className="text-left rounded-2xl p-4 relative transition-all flex flex-col justify-between"
                   style={{
-                    background: selected ? "rgba(13,184,126,0.15)" : "var(--prestador-card)",
-                    border: `2px solid ${selected ? "#0DB87E" : "var(--prestador-border)"}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
+                    background: selected ? "rgba(13,184,126,0.18)" : "var(--prestador-card)",
+                    border: selected ? "2px solid #00FF66" : "1px solid var(--prestador-border)",
+                    boxShadow: selected ? "0 0 16px rgba(13,184,126,0.25)" : "none",
+                    opacity: selected ? 1 : 0.65,
+                    filter: selected ? "none" : "grayscale(30%)",
                     minHeight: 110,
-                    cursor: "pointer"
+                    cursor: "pointer",
                   }}
                 >
-                  <span style={{ fontSize: 24 }}>{p.emoji}</span>
-                  <div>
-                    <p className="font-sans text-[13px] font-semibold text-white" style={{ textAlign: "center", marginTop: 6 }}>
+                  <div className="flex items-center justify-between w-full">
+                    <span style={{ fontSize: 26 }}>{p.emoji}</span>
+                    {selected && (
+                      <span className="w-5 h-5 rounded-full bg-[#00FF66] text-[#09090B] flex items-center justify-center font-bold text-[11px] shadow">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full mt-2">
+                    <p className="font-sans text-[14px] font-bold text-white text-center" style={{ margin: 0 }}>
                       {p.nome}
                     </p>
-                    {selected && (
-                      <div style={{ display: "flex", gap: 4, marginTop: 4, alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                        {selected.preco === null ? (
-                          <span className="font-sans text-[11px]" style={{ color: "#A1A1AA" }}>Diversos valores</span>
-                        ) : (
-                          <>
-                            <span className="font-sans text-[11px]" style={{ color: "#A1A1AA" }}>R$</span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={selected.preco}
-                              onChange={(e) => handlePrecoChange(p.id, e.target.value)}
-                              style={{
-                                width: 50,
-                                fontSize: 12,
-                                color: "#FFFFFF",
-                                background: "var(--prestador-bg)",
-                                border: "1px solid var(--prestador-border)",
-                                borderRadius: 8,
-                                padding: "4px 6px",
-                                textAlign: "center"
-                              }}
-                            />
-                          </>
-                        )}
-                      </div>
-                    )}
+                    <p className="font-sans text-[11px] text-center mt-1 font-semibold" style={{ color: selected ? "#00FF66" : "#71717A" }}>
+                      {selected ? "Ativado" : "Toque para ativar"}
+                    </p>
                   </div>
                 </button>
               );
@@ -404,7 +369,7 @@ const AmbulantesOnboardingPage = () => {
               style={{
                 border: "2px dashed var(--prestador-border)", borderRadius: 14, padding: 14,
                 cursor: "pointer", display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", minHeight: 120,
+                alignItems: "center", justifyContent: "center", minHeight: 110,
                 background: "transparent",
               }}
             >

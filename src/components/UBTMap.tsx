@@ -1,10 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, Component, ErrorInfo } from 'react';
 import {
   APIProvider,
   Map as GoogleMap,
   AdvancedMarker,
   useMap,
-  useMapsLibrary
 } from '@vis.gl/react-google-maps';
 import {
   GOOGLE_MAPS_API_KEY,
@@ -13,6 +12,7 @@ import {
   isValidLatLng,
   GOOGLE_MAPS_DARK_STYLE,
 } from '@/lib/googleMapsConfig';
+import { Compass } from 'lucide-react';
 
 export {
   GOOGLE_MAPS_API_KEY,
@@ -21,6 +21,67 @@ export {
   isValidLatLng,
   GOOGLE_MAPS_DARK_STYLE,
 };
+
+interface MapErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+}
+
+interface MapErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class MapErrorBoundary extends Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+  constructor(props: MapErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): MapErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn('[UBTMap] Google Maps Error caught by Boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function TacticalMapFallback({ style }: { style?: React.CSSProperties }) {
+  return (
+    <div
+      style={style}
+      className="relative w-full h-[400px] bg-[#07122a] border border-[#1c3261] rounded-2xl overflow-hidden flex flex-col items-center justify-center p-6 text-center select-none"
+    >
+      {/* Radar Grid Background */}
+      <div className="absolute inset-0 bg-[radial-gradient(#1c3261_1px,transparent_1px)] [background-size:20px_20px] opacity-40 pointer-events-none" />
+
+      {/* Pulse Rings */}
+      <div className="absolute w-48 h-48 rounded-full border border-[#00FF66]/20 animate-ping opacity-25 pointer-events-none" />
+      <div className="absolute w-32 h-32 rounded-full border border-[#00FF66]/40 pointer-events-none" />
+
+      {/* Center Icon */}
+      <div className="relative z-10 w-12 h-12 rounded-full bg-[#0B1B3E] border border-[#00FF66]/60 flex items-center justify-center shadow-lg shadow-[#00FF66]/10 mb-3">
+        <Compass className="w-6 h-6 text-[#00FF66]" />
+      </div>
+
+      {/* Info */}
+      <div className="relative z-10 space-y-1">
+        <h4 className="text-white font-semibold text-sm tracking-wide">UBT Radar GPS (Modo Tático)</h4>
+        <p className="text-xs text-white/50 max-w-xs">
+          Posicionamento Ubatuba-SP.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // Componente para desenhar Polyline no Google Map
 export function GooglePolyline({
@@ -130,24 +191,30 @@ export function UBTMap({
     ? { lat: Number(center[0]), lng: Number(center[1]) }
     : { lat: Number(center.lat), lng: Number(center.lng) };
 
+  if (!GOOGLE_MAPS_API_KEY) {
+    return <TacticalMapFallback style={style} />;
+  }
+
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'routes', 'geometry', 'marker']}>
-      <GoogleMap
-        mapId={mapId}
-        defaultCenter={defaultCenter}
-        defaultZoom={zoom}
-        style={style}
-        disableDefaultUI={true}
-        gestureHandling={gestureHandling}
-        restriction={{
-          latLngBounds: UBATUBA_BOUNDS,
-          strictBounds: false,
-        }}
-      >
-        {onClick && <MapClickHandler onClick={onClick} />}
-        {children}
-      </GoogleMap>
-    </APIProvider>
+    <MapErrorBoundary fallback={<TacticalMapFallback style={style} />}>
+      <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'routes', 'geometry', 'marker']}>
+        <GoogleMap
+          mapId={mapId}
+          defaultCenter={defaultCenter}
+          defaultZoom={zoom}
+          style={style}
+          disableDefaultUI={true}
+          gestureHandling={gestureHandling}
+          restriction={{
+            latLngBounds: UBATUBA_BOUNDS,
+            strictBounds: false,
+          }}
+        >
+          {onClick && <MapClickHandler onClick={onClick} />}
+          {children}
+        </GoogleMap>
+      </APIProvider>
+    </MapErrorBoundary>
   );
 }
 
