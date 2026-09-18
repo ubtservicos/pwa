@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { Key, Trash2, Plus, Info, Users, Gift, Star, Heart, AlertCircle, CreditCard, Shield } from "lucide-react";
+import { Key, Trash2, Plus, Users, CreditCard, Shield, CheckCircle2, Unlink, ExternalLink, RefreshCw } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -12,221 +12,15 @@ import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
 import { maskCPF, maskPhone, maskCardNumber, maskExpiry, maskCNPJ } from "@/utils/masks";
 
-
-interface SegmentedSliderProps {
-  poolSize: number;
-  values: { comunidade: number; trabalhador: number; tomador: number; padrinho: number };
-  onChange: (newValues: { comunidade: number; trabalhador: number; tomador: number; padrinho: number }) => void;
-  theme: any;
-}
-
-const SegmentedPoolSlider = ({ poolSize, values, onChange, theme }: SegmentedSliderProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const colors = {
-    trabalhador: "#9B59B6",
-    tomador: "#E84040",
-    padrinho: "#0DB87E",
-    comunidade: "#2B6EE8",
-  };
-
-  const t = values.trabalhador;
-  const o = values.tomador;
-  const p = values.padrinho;
-  const c = values.comunidade;
-
-  const d1 = t;
-  const d2 = t + o;
-  const d3 = t + o + p;
-
-  const handleDrag = (handleIndex: number, clientX: number) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const percent = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-    const rawVal = percent * poolSize;
-    const snapped = Math.round(rawVal * 2) / 2;
-    const minPct = 0.5;
-
-    if (handleIndex === 1) {
-      const minD1 = minPct;
-      const maxD1 = d2 - minPct;
-      const newD1 = Math.max(minD1, Math.min(snapped, maxD1));
-      onChange({
-        trabalhador: newD1,
-        tomador: Number((d2 - newD1).toFixed(1)),
-        padrinho: p,
-        comunidade: c,
-      });
-    } else if (handleIndex === 2) {
-      const minD2 = d1 + minPct;
-      const maxD2 = d3 - minPct;
-      const newD2 = Math.max(minD2, Math.min(snapped, maxD2));
-      onChange({
-        trabalhador: t,
-        tomador: Number((newD2 - d1).toFixed(1)),
-        padrinho: Number((d3 - newD2).toFixed(1)),
-        comunidade: c,
-      });
-    } else if (handleIndex === 3) {
-      const minD3 = d2 + minPct;
-      const maxD3 = poolSize - minPct;
-      const newD3 = Math.max(minD3, Math.min(snapped, maxD3));
-      onChange({
-        trabalhador: t,
-        tomador: o,
-        padrinho: Number((newD3 - d2).toFixed(1)),
-        comunidade: Number((poolSize - newD3).toFixed(1)),
-      });
-    }
-  };
-
-  const setupDrag = (handleIndex: number) => (e: React.MouseEvent | React.TouchEvent) => {
-    const isTouch = "touches" in e;
-    
-    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
-      const clientX = "touches" in moveEvent ? (moveEvent as TouchEvent).touches[0].clientX : (moveEvent as MouseEvent).clientX;
-      handleDrag(handleIndex, clientX);
-    };
-
-    const onEnd = () => {
-      window.removeEventListener(isTouch ? "touchmove" : "mousemove", onMove);
-      window.removeEventListener(isTouch ? "touchend" : "mouseup", onEnd);
-    };
-
-    window.addEventListener(isTouch ? "touchmove" : "mousemove", onMove);
-    window.addEventListener(isTouch ? "touchend" : "mouseup", onEnd);
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {[
-          { key: "trabalhador", label: "Prêmio Trabalhador", val: t, color: colors.trabalhador },
-          { key: "tomador", label: "Prêmio Tomador", val: o, color: colors.tomador },
-          { key: "padrinho", label: "Padrinho/Madrinha", val: p, color: colors.padrinho },
-          { key: "comunidade", label: "Associação", val: c, color: colors.comunidade },
-        ].map((item) => (
-          <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: item.color }} />
-            <span style={{ fontFamily: "DM Sans", fontSize: 13, color: theme.text, flex: 1 }}>{item.label}</span>
-            <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: theme.text }}>{item.val.toFixed(1).replace(".", ",")}%</span>
-          </div>
-        ))}
-      </div>
-
-      <div 
-        ref={containerRef}
-        className="touch-none"
-        style={{
-          position: "relative",
-          height: 36,
-          background: "#09090B",
-          border: "1px solid #27272A",
-          borderRadius: 12,
-          display: "flex",
-          overflow: "visible",
-          userSelect: "none"
-        }}
-      >
-        <div style={{ width: `${(t / poolSize) * 100}%`, background: colors.trabalhador, borderRadius: "12px 0 0 12px" }} />
-        <div style={{ width: `${(o / poolSize) * 100}%`, background: colors.tomador }} />
-        <div style={{ width: `${(p / poolSize) * 100}%`, background: colors.padrinho }} />
-        <div style={{ width: `${(c / poolSize) * 100}%`, background: colors.comunidade, borderRadius: "0 12px 12px 0" }} />
-
-        <button
-          type="button"
-          onMouseDown={setupDrag(1)}
-          onTouchStart={setupDrag(1)}
-          style={{
-            position: "absolute",
-            top: -4,
-            left: `calc(${(d1 / poolSize) * 100}% - 8px)`,
-            width: 16,
-            height: 44,
-            borderRadius: 4,
-            background: "#18181B",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
-            border: "1px solid #27272A",
-            cursor: "col-resize",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            zIndex: 10,
-            outline: "none"
-          }}
-        >
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-        </button>
-
-        <button
-          type="button"
-          onMouseDown={setupDrag(2)}
-          onTouchStart={setupDrag(2)}
-          style={{
-            position: "absolute",
-            top: -4,
-            left: `calc(${(d2 / poolSize) * 100}% - 8px)`,
-            width: 16,
-            height: 44,
-            borderRadius: 4,
-            background: "#18181B",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
-            border: "1px solid #27272A",
-            cursor: "col-resize",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            zIndex: 10,
-            outline: "none"
-          }}
-        >
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-        </button>
-
-        <button
-          type="button"
-          onMouseDown={setupDrag(3)}
-          onTouchStart={setupDrag(3)}
-          style={{
-            position: "absolute",
-            top: -4,
-            left: `calc(${(d3 / poolSize) * 100}% - 8px)`,
-            width: 16,
-            height: 44,
-            borderRadius: 4,
-            background: "#18181B",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.30)",
-            border: "1px solid #27272A",
-            cursor: "col-resize",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            zIndex: 10,
-            outline: "none"
-          }}
-        >
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-          <div style={{ width: 1.5, height: 16, background: "#A1A1AA" }} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 type PixKey = { id: string; tipo: "CPF" | "E-mail" | "Telefone" | "CNPJ"; valor: string };
 type Card = { id: string; bandeira: string; final: string; vence: string };
 
-const SPLIT_ITEMS = [
-  { key: "comunidade", label: "Comunidade", icon: Users, color: "#2B6EE8" },
-  { key: "trabalhador", label: "Prêmio Trabalhador", icon: Gift, color: "#9B59B6" },
-  { key: "tomador", label: "Prêmio Tomador", icon: Star, color: "#E84040" },
-  { key: "padrinho", label: "Padrinho/Madrinha", icon: Heart, color: "#0DB87E" },
-] as const;
+interface MpAccountData {
+  status: string;
+  connected_at?: string;
+  mercado_pago_user_id?: string;
+  ambiente?: string;
+}
 
 const ConfigFinanceiroPage = () => {
   const t = useTheme();
@@ -248,19 +42,10 @@ const ConfigFinanceiroPage = () => {
   const [cardCvv, setCardCvv] = useState("");
   const [cardCpfCnpj, setCardCpfCnpj] = useState("");
 
-  const [mpStatus, setMpStatus] = useState<"NOT_CONNECTED" | "CONNECTED" | "ERROR" | "TOKEN_EXPIRING" | "AUTHORIZATION_STARTED">("NOT_CONNECTED");
-  const [showMpRegisterModal, setShowMpRegisterModal] = useState(false);
-
-  const [split, setSplit] = useState<Record<string, number>>({
-    comunidade: 2,
-    trabalhador: 1,
-    tomador: 1,
-    padrinho: 1,
-  });
-  const [poolSize, setPoolSize] = useState(5.0);
-  const [prestadorPct, setPrestadorPct] = useState(90);
-  const [ubtPct, setUbtPct] = useState(5);
-  const [loadingSplit, setLoadingSplit] = useState(true);
+  // Mercado Pago Marketplace Account State
+  const [mpAccount, setMpAccount] = useState<MpAccountData | null>(null);
+  const [loadingMp, setLoadingMp] = useState(true);
+  const [isConnectingMp, setIsConnectingMp] = useState(false);
 
   const [providerAssoc, setProviderAssoc] = useState<any[]>([]);
   const [allAssocs, setAllAssocs] = useState<any[]>([]);
@@ -284,73 +69,44 @@ const ConfigFinanceiroPage = () => {
       if (savedPix) setPixKeys(JSON.parse(savedPix));
       const savedCards = localStorage.getItem("ubt_cards_user");
       if (savedCards) setCards(JSON.parse(savedCards));
-      const savedMpStatus = localStorage.getItem("ubt_mp_status_user");
-      if (savedMpStatus) setMpStatus(savedMpStatus as any);
     } catch (e) {
       console.error(e);
     }
   }, []);
 
+  // Fetch Mercado Pago Connection and Associations
   useEffect(() => {
     if (!user?.uid) return;
 
-    const loadSplitAndAssociations = async () => {
-      setLoadingSplit(true);
+    const loadFinancialData = async () => {
+      setLoadingMp(true);
       try {
-        const { data: dbConfig } = await supabase
-          .from("split_config")
-          .select("*")
-          .eq("id", 1)
-          .single();
-
-        let baseP = 90;
-        let baseU = 5;
-        let baseC = 2;
-        let baseT = 1;
-        let baseO = 1;
-        let baseG = 1;
-
-        if (dbConfig) {
-          baseP = Number(dbConfig.prestador_pct);
-          baseU = Number(dbConfig.ubt_pct);
-          baseC = Number(dbConfig.comunidade_pct);
-          baseT = Number(dbConfig.premio_trabalhador_pct);
-          baseO = Number(dbConfig.premio_consumidor_pct);
-          baseG = Number(dbConfig.padrinho_pct);
-        }
-
-        setPrestadorPct(baseP);
-        setUbtPct(baseU);
-        const resolvedPool = baseC + baseT + baseO + baseG;
-        setPoolSize(resolvedPool);
-
-        const { data: customConfig } = await supabase
-          .from("provider_split_settings")
-          .select("*")
-          .eq("provider_id", user.uid)
+        // 1. Check Mercado Pago OAuth Account in marketplace_accounts
+        const { data: mpData, error: mpErr } = await supabase
+          .from("marketplace_accounts")
+          .select("status, connected_at, mercado_pago_user_id, ambiente")
+          .eq("user_id", user.uid)
+          .eq("status", "CONNECTED")
+          .order("connected_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
-        if (customConfig) {
-          const sumCustom = 
-            Number(customConfig.comunidade_pct) +
-            Number(customConfig.premio_trabalhador_pct) +
-            Number(customConfig.premio_consumidor_pct) +
-            Number(customConfig.padrinho_pct);
-
-          if (Math.abs(sumCustom - resolvedPool) < 0.01) {
-            setSplit({
-              comunidade: Number(customConfig.comunidade_pct),
-              trabalhador: Number(customConfig.premio_trabalhador_pct),
-              tomador: Number(customConfig.premio_consumidor_pct),
-              padrinho: Number(customConfig.padrinho_pct),
-            });
-          } else {
-            setSplit({ comunidade: baseC, trabalhador: baseT, tomador: baseO, padrinho: baseG });
-          }
+        if (mpData) {
+          setMpAccount(mpData as MpAccountData);
         } else {
-          setSplit({ comunidade: baseC, trabalhador: baseT, tomador: baseO, padrinho: baseG });
+          setMpAccount(null);
         }
 
+        // 2. Check for OAuth callback code in URL search params
+        const searchParams = new URLSearchParams(window.location.search);
+        const code = searchParams.get("code");
+        const state = searchParams.get("state");
+
+        if (code) {
+          await handleExchangeCode(code, state);
+        }
+
+        // 3. Associations
         const { data: assocData } = await supabase
           .from("provider_associations")
           .select("service_type, association_id, associations(name)")
@@ -373,34 +129,113 @@ const ConfigFinanceiroPage = () => {
         }
 
       } catch (err) {
-        console.error("Erro ao carregar configurações de split/associações:", err);
+        console.error("Erro ao carregar dados financeiros:", err);
       } finally {
-        setLoadingSplit(false);
+        setLoadingMp(false);
       }
     };
 
-    loadSplitAndAssociations();
+    loadFinancialData();
   }, [user?.uid]);
 
-  const handleSaveSplit = async () => {
+  // Exchange authorization code for test tokens
+  const handleExchangeCode = async (code: string, state: string | null) => {
     if (!user?.uid) return;
+    setIsConnectingMp(true);
+    try {
+      const redirectUri = `${window.location.origin}/app/config/financeiro`;
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "exchange_oauth_code",
+          code,
+          state,
+          redirect_uri: redirectUri,
+          user_id: user.uid,
+        }
+      });
+
+      if (error || !data?.success) {
+        throw new Error(data?.error || error?.message || "Falha na vinculação do Mercado Pago");
+      }
+
+      showToast("Conta Mercado Pago vinculada com sucesso! ✓");
+      setMpAccount({
+        status: "CONNECTED",
+        connected_at: new Date().toISOString(),
+        mercado_pago_user_id: String(data.user_id || ""),
+        ambiente: "sandbox",
+      });
+
+      // Clear query params from browser URL without reloading
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (err: any) {
+      console.error("Erro na troca de código MP:", err);
+      showToast("Erro ao vincular conta: " + (err.message || err));
+    } finally {
+      setIsConnectingMp(false);
+    }
+  };
+
+  // Trigger OAuth redirect
+  const handleConnectMercadoPago = async () => {
+    if (!user?.uid) {
+      showToast("Faça login para conectar sua conta.");
+      return;
+    }
+    setIsConnectingMp(true);
+    try {
+      const redirectUri = `${window.location.origin}/app/config/financeiro`;
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "get_oauth_url",
+          user_id: user.uid,
+          redirect_uri: redirectUri,
+          origin: window.location.origin,
+          test_token: true, // Garante geração de token de homologação
+        }
+      });
+
+      if (error || !data?.oauth_url) {
+        throw new Error(data?.error || error?.message || "Não foi possível gerar a URL de autorização.");
+      }
+
+      // Redireciona para o Mercado Pago
+      window.location.href = data.oauth_url;
+    } catch (err: any) {
+      console.error("Erro ao conectar Mercado Pago:", err);
+      showToast("Erro ao iniciar conexão: " + (err.message || err));
+      setIsConnectingMp(false);
+    }
+  };
+
+  // Disconnect Mercado Pago
+  const handleDisconnectMercadoPago = async () => {
+    if (!user?.uid) return;
+    const confirmed = window.confirm(
+      "Deseja realmente desvincular sua conta do Mercado Pago? Os repasses automáticos de corridas serão pausados até nova conexão."
+    );
+    if (!confirmed) return;
+
+    setIsConnectingMp(true);
     try {
       const { error } = await supabase
-        .from("provider_split_settings")
-        .upsert({
-          provider_id: user.uid,
-          comunidade_pct: split.comunidade,
-          premio_trabalhador_pct: split.trabalhador,
-          premio_consumidor_pct: split.tomador,
-          padrinho_pct: split.padrinho,
+        .from("marketplace_accounts")
+        .update({
+          status: "REVOKED",
+          disconnected_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        }, { onConflict: "provider_id" });
+        })
+        .eq("user_id", user.uid);
 
       if (error) throw error;
-      showToast("Configuração de split salva com sucesso! ✓");
+
+      setMpAccount(null);
+      showToast("Conta do Mercado Pago desvinculada.");
     } catch (err: any) {
-      console.error("Erro ao salvar split individual:", err);
-      showToast("Erro ao salvar: " + (err.message || err));
+      console.error("Erro ao desvincular Mercado Pago:", err);
+      showToast("Erro ao desvincular: " + (err.message || err));
+    } finally {
+      setIsConnectingMp(false);
     }
   };
 
@@ -491,9 +326,7 @@ const ConfigFinanceiroPage = () => {
     showToast("Cartão adicionado via Mercado Pago! ✓");
   };
 
-
-
-  const showSplit =
+  const showPrestadorFinance =
     ["prestador", "cocoecia", "cocoecia-colaborador", "cocoecia-dirigentes", "admin"].includes(user.role) ||
     user.kycStatus === "approved" ||
     (() => {
@@ -513,6 +346,182 @@ const ConfigFinanceiroPage = () => {
       <div style={{ padding: "8px 24px 80px" }}>
         <PageHeader title="Financeiro" onBack={() => navigate("/app/config")} />
 
+        {/* ---------------------------------------------------------------- */}
+        {/* SEÇÃO MERCADO PAGO / RECEBIMENTOS                                */}
+        {/* ---------------------------------------------------------------- */}
+        {showPrestadorFinance && (
+          <div style={{ marginBottom: 28 }}>
+            <SectionHeader>RECEBIMENTOS & MERCADO PAGO</SectionHeader>
+
+            {loadingMp ? (
+              <div style={{ padding: 24, textAlign: "center", color: t.subtle, fontFamily: "DM Sans" }}>
+                Verificando vinculação da conta...
+              </div>
+            ) : mpAccount?.status === "CONNECTED" ? (
+              <SettingsGroup>
+                <div style={{ padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        background: "rgba(13,184,126,0.15)",
+                        border: "1px solid rgba(13,184,126,0.30)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <CheckCircle2 size={22} color="#0DB87E" />
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                        <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: t.text }}>
+                          Mercado Pago Conectado
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "DM Sans",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: "#0DB87E",
+                            background: "rgba(13,184,126,0.12)",
+                            padding: "2px 8px",
+                            borderRadius: 999,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Ativo (Homologação)
+                        </span>
+                      </div>
+                      <p style={{ fontFamily: "DM Sans", fontSize: 12, color: t.subtle, margin: 0 }}>
+                        {mpAccount.mercado_pago_user_id
+                          ? `ID Vendedor: ${mpAccount.mercado_pago_user_id}`
+                          : "Sua conta está pronta para receber o split de 90% das corridas."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 14,
+                      paddingTop: 14,
+                      borderTop: `1px solid ${t.border}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: t.muted }}>
+                      Conectado em: {mpAccount.connected_at ? new Date(mpAccount.connected_at).toLocaleDateString("pt-BR") : "Recente"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectMercadoPago}
+                      disabled={isConnectingMp}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "rgba(232,64,64,0.85)",
+                        fontFamily: "DM Sans",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                      }}
+                    >
+                      <Unlink size={13} />
+                      Desvincular
+                    </button>
+                  </div>
+                </div>
+              </SettingsGroup>
+            ) : (
+              <div
+                style={{
+                  background: "rgba(13,184,126,0.04)",
+                  border: "1px solid rgba(13,184,126,0.20)",
+                  borderRadius: 16,
+                  padding: 20,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                }}
+              >
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: "rgba(13,184,126,0.12)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CreditCard size={20} color="#0DB87E" />
+                  </div>
+                  <div>
+                    <h3 style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: t.text, margin: "0 0 4px 0" }}>
+                      Receba seus pagamentos na hora
+                    </h3>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0, lineHeight: 1.4 }}>
+                      Vincule sua conta do Mercado Pago para receber automaticamente o valor de 90% das corridas e serviços direto no seu saldo.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleConnectMercadoPago}
+                  disabled={isConnectingMp}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    borderRadius: 12,
+                    background: "#0DB87E",
+                    color: "#FFF",
+                    border: "none",
+                    fontFamily: "DM Sans",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    cursor: isConnectingMp ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    boxShadow: "0 4px 14px rgba(13,184,126,0.30)",
+                    opacity: isConnectingMp ? 0.7 : 1,
+                  }}
+                >
+                  {isConnectingMp ? (
+                    <>
+                      <RefreshCw size={18} className="animate-spin" />
+                      Iniciando conexão...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink size={18} />
+                      Conectar Mercado Pago
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* CHAVES PIX                                                       */}
+        {/* ---------------------------------------------------------------- */}
         <SectionHeader>CHAVES PIX</SectionHeader>
         {pixKeys.map((key) => (
           <SettingsGroup key={key.id}>
@@ -594,6 +603,9 @@ const ConfigFinanceiroPage = () => {
           </span>
         </button>
 
+        {/* ---------------------------------------------------------------- */}
+        {/* CARTÕES DE CRÉDITO                                               */}
+        {/* ---------------------------------------------------------------- */}
         <div style={{ marginTop: 24 }}>
           <SectionHeader>CARTÕES DE CRÉDITO</SectionHeader>
         </div>
@@ -666,74 +678,11 @@ const ConfigFinanceiroPage = () => {
           </span>
         </button>
 
-
-        {showSplit && (
+        {/* ---------------------------------------------------------------- */}
+        {/* ASSOCIAÇÃO DE MORADORES                                          */}
+        {/* ---------------------------------------------------------------- */}
+        {showPrestadorFinance && (
           <>
-            <div style={{ marginTop: 24 }}>
-              <SectionHeader>TAXA DE SERVIÇO</SectionHeader>
-            </div>
-            <div
-              style={{
-                background: "rgba(13,184,126,0.06)",
-                border: "1px solid rgba(13,184,126,0.15)",
-                borderRadius: 12,
-                padding: 14,
-                display: "flex",
-                gap: 10,
-                marginBottom: 16,
-              }}
-            >
-              <Info size={16} color="#0DB87E" style={{ flexShrink: 0, marginTop: 2 }} />
-              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0 }}>
-                Você sempre recebe {prestadorPct}% e a UBT {ubtPct}%. Utilize o slider segmentado abaixo para redistribuir os {poolSize}% da taxa de benefícios conforme sua preferência:
-              </p>
-            </div>
-
-            {loadingSplit ? (
-              <div style={{ padding: 24, textAlign: "center", color: t.subtle, fontFamily: "DM Sans" }}>
-                Carregando configurações financeiras...
-              </div>
-            ) : (
-              <SettingsGroup>
-                <div style={{ padding: "20px" }}>
-                  <SegmentedPoolSlider
-                    poolSize={poolSize}
-                    values={{
-                      comunidade: split.comunidade,
-                      trabalhador: split.trabalhador,
-                      tomador: split.tomador,
-                      padrinho: split.padrinho,
-                    }}
-                    onChange={(newVal) => setSplit(newVal)}
-                    theme={t}
-                  />
-                </div>
-              </SettingsGroup>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSaveSplit}
-              disabled={loadingSplit}
-              style={{
-                width: "100%",
-                padding: "14px",
-                borderRadius: 12,
-                background: "#0DB87E",
-                color: "#FFF",
-                border: "none",
-                fontFamily: "DM Sans",
-                fontSize: 15,
-                fontWeight: 600,
-                cursor: loadingSplit ? "not-allowed" : "pointer",
-                opacity: loadingSplit ? 0.5 : 1,
-                marginTop: 16,
-              }}
-            >
-              Salvar distribuição
-            </button>
-
-            {/* ASSOCIATIONS SECTION */}
             <div style={{ marginTop: 24 }}>
               <SectionHeader>ASSOCIAÇÃO DE MORADORES</SectionHeader>
             </div>
