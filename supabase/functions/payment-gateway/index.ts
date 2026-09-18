@@ -416,25 +416,30 @@ serve(async (req: Request): Promise<Response> => {
     // ----------------------------------------------------------------
     // ROUTE: OAUTH - Gerar URL de Autorização (com test_token=true)
     // ----------------------------------------------------------------
-    if (rawAction === "get_oauth_url" || rawAction === "oauth_url") {
+    if (rawAction === "get_oauth_url" || rawAction === "oauth_url" || rawAction === "get_auth_url" || rawAction === "oauth") {
       const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
       const state = body.state || crypto.randomUUID();
-      const redirectUri = body.redirect_uri || `${body.origin || "https://app-git-feature-ambulantes-cardapios-ubtservicos-projects.vercel.app"}/app/prestador/mototaxi/config`;
+      const redirectUri = body.redirect_uri || `${body.origin || "https://app-git-main-ubtservicos-projects.vercel.app"}/app/config/financeiro`;
       const isTestToken = body.test_token !== false;
 
       if (body.user_id) {
         try {
-          await supabaseAdmin.from("marketplace_oauth_connections").insert({
+          const { error: insertErr } = await supabaseAdmin.from("marketplace_oauth_connections").insert({
             user_id: body.user_id,
             state_reference: state,
             authorization_status: "started",
           });
+          if (insertErr) {
+            console.warn("[payment-gateway] Non-blocking: could not record oauth start in DB:", insertErr.message);
+          }
         } catch (e) {
-          console.warn("[payment-gateway] Error inserting oauth state:", e);
+          console.warn("[payment-gateway] Exception inserting oauth state:", e);
         }
       }
 
       const authUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}${isTestToken ? "&test_token=true" : ""}`;
+
+      console.log(`[payment-gateway] Generated OAuth URL (test_token=${isTestToken}):`, authUrl);
 
       return new Response(
         JSON.stringify({
@@ -451,7 +456,7 @@ serve(async (req: Request): Promise<Response> => {
     // ----------------------------------------------------------------
     // ROUTE: OAUTH - Troca de Authorization Code por Tokens (test_token=true)
     // ----------------------------------------------------------------
-    if (rawAction === "exchange_oauth_code" || rawAction === "oauth_callback") {
+    if (rawAction === "exchange_oauth_code" || rawAction === "oauth_callback" || rawAction === "exchange_code") {
       const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
       const clientSecret = (Deno.env.get("MERCADOPAGO_CLIENT_SECRET") || Deno.env.get("MP_CLIENT_SECRET") || "").trim();
       const { code, redirect_uri, user_id, state } = body;

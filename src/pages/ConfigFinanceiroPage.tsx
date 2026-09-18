@@ -144,6 +144,8 @@ const ConfigFinanceiroPage = () => {
     setIsConnectingMp(true);
     try {
       const redirectUri = `${window.location.origin}/app/config/financeiro`;
+      console.log("[MercadoPago OAuth] Exchanging code:", { code: `${code.slice(0, 8)}...`, state, redirectUri });
+
       const { data, error } = await supabase.functions.invoke("payment-gateway", {
         body: {
           action: "exchange_oauth_code",
@@ -154,8 +156,16 @@ const ConfigFinanceiroPage = () => {
         }
       });
 
+      let errorMsg = error?.message;
+      if (error && (error as any).context) {
+        try {
+          const errJson = await (error as any).context.json();
+          errorMsg = errJson.error || errJson.message || errorMsg;
+        } catch {}
+      }
+
       if (error || !data?.success) {
-        throw new Error(data?.error || error?.message || "Falha na vinculação do Mercado Pago");
+        throw new Error(data?.error || errorMsg || "Falha na vinculação do Mercado Pago");
       }
 
       showToast("Conta Mercado Pago vinculada com sucesso! ✓");
@@ -169,7 +179,7 @@ const ConfigFinanceiroPage = () => {
       // Clear query params from browser URL without reloading
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (err: any) {
-      console.error("Erro na troca de código MP:", err);
+      console.error("[MercadoPago OAuth] Erro na troca de código MP:", err);
       showToast("Erro ao vincular conta: " + (err.message || err));
     } finally {
       setIsConnectingMp(false);
@@ -183,28 +193,37 @@ const ConfigFinanceiroPage = () => {
       return;
     }
     setIsConnectingMp(true);
+    const redirectUri = `${window.location.origin}/app/config/financeiro`;
+    const clientId = import.meta.env.VITE_MP_CLIENT_ID || "3679588597185605";
+    const state = crypto.randomUUID();
+
     try {
-      const redirectUri = `${window.location.origin}/app/config/financeiro`;
+      console.log("[MercadoPago OAuth] Requesting authorization URL from payment-gateway...");
       const { data, error } = await supabase.functions.invoke("payment-gateway", {
         body: {
           action: "get_oauth_url",
           user_id: user.uid,
           redirect_uri: redirectUri,
           origin: window.location.origin,
+          state,
           test_token: true, // Garante geração de token de homologação
         }
       });
 
-      if (error || !data?.oauth_url) {
-        throw new Error(data?.error || error?.message || "Não foi possível gerar a URL de autorização.");
+      let oauthUrl = data?.oauth_url;
+
+      if (error || !oauthUrl) {
+        console.warn("[MercadoPago OAuth] Edge function returned error or older version deployed, applying client fallback URL:", error || data);
+        // Fallback robusto direto para OAuth do Mercado Pago com test_token=true
+        oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
       }
 
-      // Redireciona para o Mercado Pago
-      window.location.href = data.oauth_url;
+      console.log("[MercadoPago OAuth] Redirecting to:", oauthUrl);
+      window.location.href = oauthUrl;
     } catch (err: any) {
-      console.error("Erro ao conectar Mercado Pago:", err);
-      showToast("Erro ao iniciar conexão: " + (err.message || err));
-      setIsConnectingMp(false);
+      console.warn("[MercadoPago OAuth] Exception calling Edge Function, redirecting via direct client URL:", err);
+      const fallbackUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+      window.location.href = fallbackUrl;
     }
   };
 
