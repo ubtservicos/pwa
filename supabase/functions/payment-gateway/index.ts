@@ -265,6 +265,7 @@ async function createMercadoPagoPayment({
   installments = 1,
   externalReference,
   metadata,
+  sellerAccessToken,
 }: {
   transactionAmount:  number;
   description:        string;
@@ -279,12 +280,20 @@ async function createMercadoPagoPayment({
   installments?:      number;
   externalReference?: string;
   metadata?:          Record<string, unknown>;
+  sellerAccessToken?: string;
 }): Promise<{ data: MercadoPagoPixResponse; rawText: string; httpStatus: number; ok: boolean }> {
-  const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
+  // O token dinâmico do Seller de Teste (obtido via OAuth com test_token=true ou env fallback)
+  const mpToken = (
+    sellerAccessToken ||
+    Deno.env.get("MERCADOPAGO_SELLER_TEST_TOKEN") ||
+    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+    Deno.env.get("MP_ACCESS_TOKEN") ||
+    ""
+  ).trim();
 
   if (!mpToken) {
-    console.error("[CRITICAL MP TOKEN ERROR] MERCADOPAGO_ACCESS_TOKEN não está presente no ambiente!");
-    throw new Error("MERCADOPAGO_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
+    console.error("[CRITICAL MP TOKEN ERROR] Token de acesso (Seller) não está presente no ambiente nem na conta vinculada!");
+    throw new Error("Token de acesso do vendedor não configurado. Complete o fluxo OAuth do prestador.");
   }
 
   // Unique idempotency key per attempt
@@ -292,9 +301,14 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
+  // Email de comprador homologado no sandbox Mercado Pago
+  const safePayerEmail = (payerEmail || "").includes("@testuser.com")
+    ? payerEmail
+    : "TESTUSER367958859718560557@testuser.com";
+
   const payerObj: Record<string, unknown> = {
     ...(payer || {}),
-    email: "TESTUSER367958859718560557@testuser.com",
+    email: safePayerEmail,
   };
   if (payerFirstName && !payerObj.first_name) {
     payerObj.first_name = payerFirstName;
@@ -311,15 +325,13 @@ async function createMercadoPagoPayment({
     description,
     payment_method_id: paymentMethodId || (cardToken ? "master" : "pix"),
     ...(Object.keys(payerObj).length > 0 ? { payer: payerObj } : {}),
-    // application_fee: the marketplace fee withheld by UBT from the total.
+    // application_fee: a taxa retida pela UBT (marketplace) do total
     application_fee: applicationFee,
-    // external_reference is the key link between MP and our internal pagamentos_split table.
-    // Format convention: "<entity>_<uuid>_ts_<timestamp>" (e.g. "pedido_abc123_ts_1723000000000")
     ...(externalReference ? { external_reference: externalReference } : {}),
     ...(metadata ? { metadata } : {}),
   };
 
-  // INJEÇÃO OBRIGATÓRIA DO TOKEN PARA O MERCADO PAGO (/v1/payments):
+  // Injeção do token de cartão para /v1/payments
   if (cardToken) {
     mpPayload.token = cardToken;
   }
@@ -335,7 +347,7 @@ async function createMercadoPagoPayment({
   mpHeaders.set("X-Idempotency-Key", idempotencyKey);
 
   console.log(`[MP FETCH] Target URL: ${MP_URL}`);
-  console.log(`[MP FETCH] Authorization header: Bearer ${mpToken.substring(0, 15)}... (Total Len: ${mpToken.length})`);
+  console.log(`[MP FETCH] Seller Authorization: Bearer ${mpToken.substring(0, 15)}... (Len: ${mpToken.length}) [${mpToken.startsWith("TEST-") ? "SANDBOX SELLER TOKEN" : "CUSTOM TOKEN"}]`);
 
   const mpResponse = await fetch(MP_URL, {
     method: "POST",
@@ -366,7 +378,7 @@ serve(async (req: Request): Promise<Response> => {
   const envToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
   console.log("[TOKEN CHECK INIT] MERCADOPAGO_ACCESS_TOKEN presente:", envToken ? `SIM (Tamanho: ${envToken.length}, Prefixo: ${envToken.substring(0, 15)}...)` : "NAO");
 
-  // 1. Intercept OPTIONS preflight immediately (first instruction)
+  // 1. Intercept OPTIONS preflight immediately
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
   }
@@ -379,7 +391,6 @@ serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  // ---- Central try/catch — all errors MUST be caught and logged ----
   try {
     let body: any;
     try {
@@ -400,12 +411,128 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const rawAction = String(body.action || body.type || body.event || "create_payment_intent").toLowerCase().trim();
-    const action = rawAction.includes("checkout") ? "checkout" : "create_payment_intent";
-    console.log(`[payment-gateway] Handling action="${action}" (raw="${rawAction}")`);
+    console.log(`[payment-gateway] Handling action="${rawAction}"`);
+
+    // ----------------------------------------------------------------
+    // ROUTE: OAUTH - Gerar URL de Autorização (com test_token=true)
+    // ----------------------------------------------------------------
+    if (rawAction === "get_oauth_url" || rawAction === "oauth_url") {
+      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
+      const state = body.state || crypto.randomUUID();
+      const redirectUri = body.redirect_uri || `${body.origin || "https://app-git-feature-ambulantes-cardapios-ubtservicos-projects.vercel.app"}/app/prestador/mototaxi/config`;
+      const isTestToken = body.test_token !== false;
+
+      if (body.user_id) {
+        try {
+          await supabaseAdmin.from("marketplace_oauth_connections").insert({
+            user_id: body.user_id,
+            state_reference: state,
+            authorization_status: "started",
+          });
+        } catch (e) {
+          console.warn("[payment-gateway] Error inserting oauth state:", e);
+        }
+      }
+
+      const authUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}${isTestToken ? "&test_token=true" : ""}`;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          oauth_url: authUrl,
+          state,
+          client_id: clientId,
+          test_token: isTestToken,
+        }),
+        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ----------------------------------------------------------------
+    // ROUTE: OAUTH - Troca de Authorization Code por Tokens (test_token=true)
+    // ----------------------------------------------------------------
+    if (rawAction === "exchange_oauth_code" || rawAction === "oauth_callback") {
+      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
+      const clientSecret = (Deno.env.get("MERCADOPAGO_CLIENT_SECRET") || Deno.env.get("MP_CLIENT_SECRET") || "").trim();
+      const { code, redirect_uri, user_id, state } = body;
+
+      if (!code) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing authorization code" }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      const formParams = new URLSearchParams();
+      formParams.append("client_id", clientId);
+      formParams.append("client_secret", clientSecret);
+      formParams.append("grant_type", "authorization_code");
+      formParams.append("code", code);
+      if (redirect_uri) formParams.append("redirect_uri", redirect_uri);
+      formParams.append("test_token", "true"); // OBRIGATÓRIO CONFORME DIRETRIZ TÉCNICA MP
+
+      console.log(`[MP OAUTH TOKEN EXCHANGE] Exchanging code for user_id=${user_id} with test_token=true`);
+
+      const mpTokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json",
+        },
+        body: formParams.toString(),
+      });
+
+      const tokenData = await mpTokenRes.json();
+      console.log("[MP OAUTH TOKEN RESULT]:", mpTokenRes.status, tokenData);
+
+      if (!mpTokenRes.ok) {
+        return new Response(
+          JSON.stringify({ success: false, error: "MP OAuth Token Error", details: tokenData }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (user_id) {
+        try {
+          await supabaseAdmin.from("marketplace_accounts").upsert({
+            user_id,
+            mercado_pago_user_id: String(tokenData.user_id),
+            status: "CONNECTED",
+            ambiente: "sandbox",
+            access_token_encrypted: tokenData.access_token,
+            refresh_token_encrypted: tokenData.refresh_token,
+            token_metadata: tokenData,
+            connected_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id,ambiente" });
+
+          if (state) {
+            await supabaseAdmin.from("marketplace_oauth_connections")
+              .update({ authorization_status: "exchanged", updated_at: new Date().toISOString() })
+              .eq("state_reference", state);
+          }
+        } catch (dbErr) {
+          console.error("[payment-gateway] Error persisting marketplace_account:", dbErr);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Conta de Teste Mercado Pago vinculada com sucesso ao vendedor",
+          user_id: tokenData.user_id,
+          public_key: tokenData.public_key,
+          live_mode: tokenData.live_mode,
+          test_token: true,
+        }),
+        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
 
     // ----------------------------------------------------------------
     // ROUTE: Payment Intent / Checkout (with Split)
     // ----------------------------------------------------------------
+    const action = rawAction.includes("checkout") ? "checkout" : "create_payment_intent";
     if (action === "create_payment_intent" || action === "checkout") {
       const rawAmount = body.transaction_amount ?? body.amount ?? body.final_amount ?? body.total_amount ?? body.price ?? body.final_price;
       const transaction_amount = Math.max(0.01, Number(rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) ? Number(rawAmount) : 10.0));
@@ -450,6 +577,28 @@ serve(async (req: Request): Promise<Response> => {
 
       console.log(`[payment-gateway] Extracted cardToken:`, cardToken ? `${cardToken.slice(0, 8)}... (${cardToken.length} chars)` : "NONE");
       const installments = Number(body.installments) || 1;
+
+      // --- [1.1] Dynamic Seller Token Resolution ---
+      let resolvedSellerToken = (body.seller_access_token || body.sellerToken || body.provider_token || "").trim();
+      if (!resolvedSellerToken && provider_id) {
+        try {
+          const { data: sellerAcc } = await supabaseAdmin
+            .from("marketplace_accounts")
+            .select("access_token_encrypted")
+            .eq("user_id", provider_id)
+            .eq("status", "CONNECTED")
+            .order("connected_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (sellerAcc?.access_token_encrypted) {
+            resolvedSellerToken = sellerAcc.access_token_encrypted.trim();
+            console.log(`[payment-gateway] Loaded OAuth Seller Token for provider ${provider_id}`);
+          }
+        } catch (accErr) {
+          console.warn("[payment-gateway] Error querying marketplace_accounts for provider:", accErr);
+        }
+      }
 
       // --- [1] Fetch live split rules from DB ---
       const { config: splitConfig, fromDb: splitFromDb } = await fetchSplitConfig();
@@ -511,59 +660,29 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         },
       });
 
-      // --- [MOCK PIX IN TEST ENV] ---
-      const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
+      // --- [4] Call Mercado Pago with dynamic seller token & application_fee ---
       let mpData: any;
       let mpStatus: number = 200;
       let mpResult: { data: any; rawText: string; httpStatus: number; ok: boolean } | null = null;
 
-      if (payment_method_id === "pix" && mpToken.startsWith("TEST-")) {
-        console.log("[payment-gateway] MOCKING PIX PAYMENT FOR SANDBOX");
-        mpStatus = 201;
-        mpData = {
-          id: 99999999999,
-          status: "pending",
-          status_detail: "pending_waiting_transfer",
-          point_of_interaction: {
-            transaction_data: {
-              qr_code: "00020101021243650016COM.MERCADOLIBRE02013063638f1192a-5fd1-4180-a180-8bcae3556bc35204000053039865802BR5925PAGAMENTO MOCK PIX SANDBOX6009SAO PAULO62070503***6304A1B2",
-              qr_code_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", // 1x1 transparent pixel base64
-              ticket_url: "https://sandbox.mercadopago.com.br/ticket/mock"
-            }
-          }
-        };
-      } else {
-        // --- [4] Call Mercado Pago with application_fee ---
-        mpResult = await createMercadoPagoPayment({
-          transactionAmount:  transaction_amount,
-          description,
-          payer,
-          payerEmail:         payer_email || undefined,
-          payerFirstName:     payer_first_name,
-          payerLastName:      payer_last_name,
-          payerIdentification: payer_identification,
-          applicationFee:     split.application_fee,
-          paymentMethodId:    payment_method_id,
-          cardToken,
-          installments,
-          externalReference:  external_reference,
-          metadata,
-        });
-        mpData = mpResult.data;
-        mpStatus = mpResult.httpStatus;
-
-        if (payment_method_id !== "pix" && mpToken.startsWith("TEST-") && (mpStatus >= 400 || mpData.error)) {
-          console.log("[payment-gateway] SANDBOX CARD FALLBACK: Approving test card transaction in sandbox environment");
-          mpStatus = 200;
-          mpData = {
-            id: Date.now(),
-            status: "approved",
-            status_detail: "accredited",
-            payment_method_id,
-            transaction_amount,
-          };
-        }
-      }
+      mpResult = await createMercadoPagoPayment({
+        transactionAmount:  transaction_amount,
+        description,
+        payer,
+        payerEmail:         payer_email || undefined,
+        payerFirstName:     payer_first_name,
+        payerLastName:      payer_last_name,
+        payerIdentification: payer_identification,
+        applicationFee:     split.application_fee,
+        paymentMethodId:    payment_method_id,
+        cardToken,
+        installments,
+        externalReference:  external_reference,
+        metadata,
+        sellerAccessToken:  resolvedSellerToken || undefined,
+      });
+      mpData = mpResult.data;
+      mpStatus = mpResult.httpStatus;
 
       // --- [5] Audit: raw MP response ---
       const auditStatus = mpData?.status ?? (mpStatus >= 400 ? "failed" : "unknown");
@@ -611,7 +730,6 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       if (!splitPersisted) {
-        // Non-blocking: log the failure but do not abort the payment response
         console.error("[payment-gateway] Split record persistence failed:", splitError);
         await logAuditEvent({
           transactionType: "split_persist_failed",
@@ -620,7 +738,6 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           errorDetails: splitError,
         });
       } else {
-        // Audit: split successfully registered
         await logAuditEvent({
           transactionType: "split_registered",
           status: "pending",
@@ -655,12 +772,19 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         }
       }
 
-      // --- [8] Return structured PIX data ---
+      // --- [8] Return structured PIX/Card data ---
       const txData = mpData.point_of_interaction?.transaction_data;
 
       return new Response(
         JSON.stringify({
           success: true,
+          payment: {
+            id:                 mpData.id,
+            status:             mpData.status,
+            status_detail:      mpData.status_detail,
+            payment_method_id:  mpData.payment_method_id || payment_method_id,
+            transaction_amount: mpData.transaction_amount || transaction_amount,
+          },
           pix: {
             payment_id:         mpData.id,
             status:             mpData.status,
@@ -692,7 +816,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
 
     // --- Unrecognized action ---
     return new Response(
-      JSON.stringify({ error: `Unknown action: ${action}` }),
+      JSON.stringify({ error: `Unknown action: ${rawAction}` }),
       { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
 
