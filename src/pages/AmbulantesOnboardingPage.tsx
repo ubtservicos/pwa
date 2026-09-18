@@ -334,71 +334,69 @@ const AmbulantesOnboardingPage = () => {
                   onClick={() => {
                     if (isSelected) {
                       navigate('/app/prestador/ambulantes/catalogo');
+                    } else {
+                      toggleProduto(p.id);
                     }
                   }}
-                  className={`flex items-center w-full rounded-[20px] p-4 text-left transition-all ${
-                    isSelected ? "cursor-pointer hover:border-[#00FF66]" : "opacity-75"
-                  }`}
+                  className="flex items-center w-full rounded-[20px] p-4 text-left transition-all cursor-pointer"
                   style={{
-                    background: isSelected ? "rgba(13,184,126,0.12)" : "var(--prestador-card)",
-                    border: `1.5px solid ${isSelected ? "#00FF66" : "var(--prestador-border)"}`,
-                    boxShadow: isSelected ? "0 4px 20px rgba(13,184,126,0.15)" : "none",
+                    background: isSelected ? "var(--prestador-card)" : "var(--prestador-card)",
+                    border: `1px solid ${isSelected ? "#0DB87E" : "var(--prestador-border)"}`,
+                    boxShadow: isSelected ? "0 4px 20px rgba(13,184,126,0.12)" : "none",
                   }}
                 >
                   {/* Ícone à esquerda */}
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl"
                     style={{
-                      background: isSelected ? "rgba(13,184,126,0.25)" : "rgba(255,255,255,0.06)",
-                      border: `1px solid ${isSelected ? "rgba(0,255,102,0.4)" : "transparent"}`
+                      background: isSelected ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.05)",
                     }}
                   >
                     {p.emoji}
                   </div>
 
                   {/* Título e Subtítulo */}
-                  <div className="ml-3.5 flex-1 pr-2">
+                  <div className="ml-4 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-display text-[15px] font-bold text-white leading-snug">
+                      <h3 className="font-display text-[16px] font-bold text-white leading-snug">
                         {p.nome}
                       </h3>
                       {isSelected && (
-                        <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/30">
+                        <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-[#0DB87E]/20 text-[#00FF66] border border-[#0DB87E]/30">
                           Ativo
                         </span>
                       )}
                     </div>
-                    <p className="font-sans text-[12px] text-zinc-400 mt-0.5 line-clamp-1">
+                    <p className="font-sans text-[13px] text-[#A1A1AA] mt-0.5 line-clamp-1">
                       {p.descricao}
                     </p>
                     {isSelected && (
-                      <p className="font-sans text-[11px] text-[#00FF66] mt-1 font-semibold flex items-center gap-1">
+                      <p className="font-sans text-[12px] text-[#0DB87E] mt-1 font-semibold flex items-center gap-1">
                         <span>Acessar cardápio pré-cadastrado</span>
-                        <span>→</span>
+                        <ChevronRight size={14} />
                       </p>
                     )}
                   </div>
 
-                  {/* Switch Toggle à direita + Seta Chevron quando ativo */}
-                  <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Switch
-                      checked={isSelected}
-                      onCheckedChange={() => toggleProduto(p.id)}
+                  {/* Switch Oficial (Idêntico ao Mototaxi na Home) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleProduto(p.id);
+                    }}
+                    className="w-[52px] h-[28px] rounded-full relative transition-colors flex-shrink-0 ml-3 cursor-pointer"
+                    style={{ background: isSelected ? "#0DB87E" : "var(--prestador-border, #3F3F46)" }}
+                    aria-label={`Alternar ${p.nome}`}
+                  >
+                    <span
+                      className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
+                      style={{
+                        transform: isSelected ? "translateX(26px)" : "translateX(2px)",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.3)"
+                      }}
                     />
-                    {isSelected && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate('/app/prestador/ambulantes/catalogo');
-                        }}
-                        className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#00FF66] transition-colors"
-                        title="Acessar catálogo de marcas"
-                      >
-                        <ChevronRight size={18} />
-                      </button>
-                    )}
-                  </div>
+                  </button>
                 </div>
               );
             })}
@@ -411,44 +409,68 @@ const AmbulantesOnboardingPage = () => {
               return (
                 <div
                   key={cId}
-                  className="flex items-center w-full rounded-[20px] p-4 text-left transition-all"
+                  onClick={() => toggleProduto(cId)}
+                  className="flex items-center w-full rounded-[20px] p-4 text-left transition-all cursor-pointer"
                   style={{
-                    background: isSelected ? "rgba(13,184,126,0.12)" : "var(--prestador-card)",
-                    border: `1.5px solid ${isSelected ? "#00FF66" : "var(--prestador-border)"}`,
+                    background: "var(--prestador-card)",
+                    border: `1px solid ${isSelected ? "#0DB87E" : "var(--prestador-border)"}`,
+                    boxShadow: isSelected ? "0 4px 20px rgba(13,184,126,0.12)" : "none",
                   }}
                 >
                   <div
                     className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl"
-                    style={{ background: isSelected ? "rgba(13,184,126,0.25)" : "rgba(255,255,255,0.06)" }}
+                    style={{ background: isSelected ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.05)" }}
                   >
                     {c.emoji}
                   </div>
-                  <div className="ml-3.5 flex-1 pr-2">
-                    <h3 className="font-display text-[15px] font-bold text-white leading-snug">
+                  <div className="ml-4 flex-1">
+                    <h3 className="font-display text-[16px] font-bold text-white leading-snug">
                       {c.nome}
                     </h3>
-                    <p className="font-sans text-[12px] text-zinc-400 mt-0.5">
+                    <p className="font-sans text-[13px] text-[#A1A1AA] mt-0.5">
                       Item personalizado • R$ {Number(c.preco).toFixed(2)}
                     </p>
                   </div>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <Switch
-                      checked={isSelected}
-                      onCheckedChange={() => toggleProduto(cId)}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleProduto(cId);
+                    }}
+                    className="w-[52px] h-[28px] rounded-full relative transition-colors flex-shrink-0 ml-3 cursor-pointer"
+                    style={{ background: isSelected ? "#0DB87E" : "var(--prestador-border, #3F3F46)" }}
+                    aria-label={`Alternar ${c.nome}`}
+                  >
+                    <span
+                      className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
+                      style={{
+                        transform: isSelected ? "translateX(26px)" : "translateX(2px)",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.3)"
+                      }}
                     />
-                  </div>
+                  </button>
                 </div>
               );
             })}
 
-            {/* Botão Adicionar Item Customizado */}
+            {/* Botão Adicionar Item Customizado (Estilo Mais Oportunidades) */}
             <button
               type="button"
               onClick={() => setShowCustomModal(true)}
-              className="flex items-center justify-center gap-2 w-full rounded-[20px] p-4 border border-dashed border-[#27272A] hover:border-[#0DB87E] text-zinc-400 hover:text-white transition-all bg-transparent cursor-pointer"
+              className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left transition-colors cursor-pointer"
+              style={{ borderColor: "var(--prestador-border)" }}
             >
-              <Plus size={18} className="text-[#0DB87E]" />
-              <span className="font-sans text-sm font-semibold text-[#0DB87E]">Adicionar outro item personalizado</span>
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(255,255,255,0.05)" }}
+              >
+                <Plus size={20} color="#0DB87E" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="font-display text-[15px] font-bold text-white">Outro Item Personalizado</h3>
+                <p className="font-sans text-[12px] text-[#A1A1AA]">Adicionar produto específico que você vende</p>
+              </div>
+              <ChevronRight size={18} color="#71717A" />
             </button>
           </div>
         </div>
