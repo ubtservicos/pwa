@@ -191,15 +191,20 @@ const ConfigFinanceiroPage = () => {
 
   // Trigger OAuth redirect
   const handleConnectMercadoPago = async () => {
-    if (!user?.uid) {
+    console.log("Iniciando conexão Mercado Pago...");
+    const currentUserId = user?.uid || (await supabase.auth.getUser()).data.user?.id;
+    if (!currentUserId) {
+      console.warn("[MercadoPago OAuth] Usuário não autenticado.");
       showToast("Faça login para conectar sua conta.");
       return;
     }
+
     setIsConnectingMp(true);
     const redirectUri = `${window.location.origin}/app/config/financeiro`;
     const clientId = import.meta.env.VITE_MP_CLIENT_ID;
 
     if (!clientId || !clientId.trim()) {
+      console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no ambiente.");
       showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
       setIsConnectingMp(false);
       return;
@@ -212,7 +217,7 @@ const ConfigFinanceiroPage = () => {
       const { data, error } = await supabase.functions.invoke("payment-gateway", {
         body: {
           action: "get_oauth_url",
-          user_id: user.uid,
+          user_id: currentUserId,
           redirect_uri: redirectUri,
           origin: window.location.origin,
           state,
