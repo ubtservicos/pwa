@@ -192,6 +192,8 @@ const ConfigFinanceiroPage = () => {
   // Trigger OAuth redirect
   const handleConnectMercadoPago = async () => {
     console.log("Iniciando conexão Mercado Pago...");
+    console.log("Variáveis VITE disponíveis no frontend:", Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+
     const currentUserId = user?.uid || (await supabase.auth.getUser()).data.user?.id;
     if (!currentUserId) {
       console.warn("[MercadoPago OAuth] Usuário não autenticado.");
@@ -201,19 +203,16 @@ const ConfigFinanceiroPage = () => {
 
     setIsConnectingMp(true);
     const redirectUri = `${window.location.origin}/app/config/financeiro`;
-    const clientId = import.meta.env.VITE_MP_CLIENT_ID;
-
-    if (!clientId || !clientId.trim()) {
-      console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no ambiente.");
-      showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
-      setIsConnectingMp(false);
-      return;
-    }
-
     const state = crypto.randomUUID();
 
+    // Acesso direto e estático para substituição pelo compilador do Vite
+    const clientId =
+      import.meta.env.VITE_MP_CLIENT_ID ||
+      import.meta.env.VITE_MERCADOPAGO_CLIENT_ID ||
+      import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID;
+
     try {
-      console.log("[MercadoPago OAuth] Requesting authorization URL from payment-gateway...");
+      console.log("[MercadoPago OAuth] Requesting authorization URL from payment-gateway Edge Function...");
       const { data, error } = await supabase.functions.invoke("payment-gateway", {
         body: {
           action: "get_oauth_url",
@@ -227,17 +226,37 @@ const ConfigFinanceiroPage = () => {
 
       let oauthUrl = data?.oauth_url;
 
-      if (error || !oauthUrl) {
-        console.warn("[MercadoPago OAuth] Edge function returned error or older version deployed, applying client fallback URL:", error || data);
-        // Fallback robusto direto para OAuth do Mercado Pago com test_token=true
-        oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+      if (oauthUrl) {
+        console.log("[MercadoPago OAuth] Redirecting to backend-generated OAuth URL:", oauthUrl);
+        window.location.href = oauthUrl;
+        return;
       }
 
-      console.log("[MercadoPago OAuth] Redirecting to:", oauthUrl);
+      console.warn("[MercadoPago OAuth] Edge function did not return oauth_url, checking client fallback:", error || data);
+
+      if (!clientId || !clientId.trim()) {
+        console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no bundle e Edge Function indisponível.");
+        showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
+        setIsConnectingMp(false);
+        return;
+      }
+
+      // Fallback direto no cliente com test_token=true
+      oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+      console.log("[MercadoPago OAuth] Redirecting to client fallback URL:", oauthUrl);
       window.location.href = oauthUrl;
     } catch (err: any) {
-      console.warn("[MercadoPago OAuth] Exception calling Edge Function, redirecting via direct client URL:", err);
+      console.warn("[MercadoPago OAuth] Exception calling Edge Function:", err);
+
+      if (!clientId || !clientId.trim()) {
+        console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no bundle e falha ao invocar backend.");
+        showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
+        setIsConnectingMp(false);
+        return;
+      }
+
       const fallbackUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+      console.log("[MercadoPago OAuth] Redirecting to fallback URL:", fallbackUrl);
       window.location.href = fallbackUrl;
     }
   };
