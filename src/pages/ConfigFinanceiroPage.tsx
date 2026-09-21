@@ -160,12 +160,15 @@ const ConfigFinanceiroPage = () => {
       if (error && (error as any).context) {
         try {
           const errJson = await (error as any).context.json();
-          errorMsg = errJson.error || errJson.message || errorMsg;
+          errorMsg = errJson.message || errJson.details?.message || errJson.details?.error_description || errJson.error || errJson.raw_response || errorMsg;
         } catch {}
+      } else if (data && !data.success) {
+        errorMsg = data.message || data.error || JSON.stringify(data.details || data);
       }
 
       if (error || !data?.success) {
-        throw new Error(data?.error || errorMsg || "Falha na vinculação do Mercado Pago");
+        console.error("[MercadoPago OAuth] Full rejection payload:", { data, error, errorMsg });
+        throw new Error(errorMsg || "Falha na vinculação do Mercado Pago");
       }
 
       showToast("Conta Mercado Pago vinculada com sucesso! ✓");

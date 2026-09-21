@@ -461,6 +461,10 @@ serve(async (req: Request): Promise<Response> => {
       const clientSecret = (Deno.env.get("MERCADOPAGO_CLIENT_SECRET") || Deno.env.get("MP_CLIENT_SECRET") || "").trim();
       const { code, redirect_uri, user_id, state } = body;
 
+      if (!clientSecret) {
+        console.error("[MP OAUTH TOKEN EXCHANGE] CRITICAL WARNING: MERCADOPAGO_CLIENT_SECRET is missing or empty in Edge Function secrets!");
+      }
+
       if (!code) {
         return new Response(
           JSON.stringify({ success: false, error: "Missing authorization code" }),
@@ -476,32 +480,64 @@ serve(async (req: Request): Promise<Response> => {
       if (redirect_uri) formParams.append("redirect_uri", redirect_uri);
       formParams.append("test_token", "true"); // OBRIGATÓRIO CONFORME DIRETRIZ TÉCNICA MP
 
-      console.log(`[MP OAUTH TOKEN EXCHANGE] Exchanging code for user_id=${user_id} with test_token=true`);
+      console.log(`[MP OAUTH TOKEN EXCHANGE] Requesting token exchange: client_id=${clientId}, redirect_uri=${redirect_uri}, has_secret=${!!clientSecret}, test_token=true`);
 
-      const mpTokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Accept": "application/json",
-        },
-        body: formParams.toString(),
-      });
+      let rawText = "";
+      let tokenData: any = null;
+      let mpStatus = 500;
 
-      const tokenData = await mpTokenRes.json();
-      console.log("[MP OAUTH TOKEN RESULT]:", mpTokenRes.status, tokenData);
+      try {
+        const mpTokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+          },
+          body: formParams.toString(),
+        });
 
-      if (!mpTokenRes.ok) {
+        mpStatus = mpTokenRes.status;
+        rawText = await mpTokenRes.text();
+
+        try {
+          tokenData = JSON.parse(rawText);
+        } catch {
+          tokenData = { raw: rawText };
+        }
+
+        console.log(`[MP OAUTH TOKEN RESULT] HTTP Status=${mpStatus}:`, rawText);
+
+        if (!mpTokenRes.ok) {
+          console.error("[MP OAUTH TOKEN ERROR REJECTION]:", mpStatus, rawText);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "MP OAuth Token Error",
+              status: mpStatus,
+              message: tokenData?.message || tokenData?.error_description || tokenData?.error || `Erro ${mpStatus} ao trocar código por token no Mercado Pago`,
+              details: tokenData,
+              raw_response: rawText,
+            }),
+            { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+          );
+        }
+      } catch (fetchErr: any) {
+        console.error("[MP OAUTH TOKEN FETCH EXCEPTION]:", fetchErr);
         return new Response(
-          JSON.stringify({ success: false, error: "MP OAuth Token Error", details: tokenData }),
+          JSON.stringify({
+            success: false,
+            error: "Failed to connect to Mercado Pago OAuth API",
+            message: fetchErr.message || String(fetchErr),
+          }),
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );
       }
 
-      if (user_id) {
+      if (user_id && tokenData) {
         try {
-          await supabaseAdmin.from("marketplace_accounts").upsert({
+          const { error: upsertErr } = await supabaseAdmin.from("marketplace_accounts").upsert({
             user_id,
-            mercado_pago_user_id: String(tokenData.user_id),
+            mercado_pago_user_id: String(tokenData.user_id || ""),
             status: "CONNECTED",
             ambiente: "sandbox",
             access_token_encrypted: tokenData.access_token,
@@ -511,13 +547,19 @@ serve(async (req: Request): Promise<Response> => {
             updated_at: new Date().toISOString()
           }, { onConflict: "user_id,ambiente" });
 
+          if (upsertErr) {
+            console.error("[payment-gateway] Error upserting marketplace_accounts:", upsertErr);
+          } else {
+            console.log(`[payment-gateway] ✅ Saved marketplace_account for user_id=${user_id}`);
+          }
+
           if (state) {
             await supabaseAdmin.from("marketplace_oauth_connections")
               .update({ authorization_status: "exchanged", updated_at: new Date().toISOString() })
               .eq("state_reference", state);
           }
         } catch (dbErr) {
-          console.error("[payment-gateway] Error persisting marketplace_account:", dbErr);
+          console.error("[payment-gateway] Exception persisting marketplace_account:", dbErr);
         }
       }
 
