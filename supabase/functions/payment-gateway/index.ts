@@ -417,7 +417,14 @@ serve(async (req: Request): Promise<Response> => {
     // ROUTE: OAUTH - Gerar URL de Autorização (com test_token=true)
     // ----------------------------------------------------------------
     if (rawAction === "get_oauth_url" || rawAction === "oauth_url" || rawAction === "get_auth_url" || rawAction === "oauth") {
-      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
+      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "").trim();
+      if (!clientId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "MERCADOPAGO_CLIENT_ID is not configured in environment secrets" }),
+          { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
       const state = body.state || crypto.randomUUID();
       const redirectUri = body.redirect_uri || `${body.origin || "https://app-git-main-ubtservicos-projects.vercel.app"}/app/config/financeiro`;
       const isTestToken = body.test_token !== false;
@@ -457,12 +464,20 @@ serve(async (req: Request): Promise<Response> => {
     // ROUTE: OAUTH - Troca de Authorization Code por Tokens (test_token=true)
     // ----------------------------------------------------------------
     if (rawAction === "exchange_oauth_code" || rawAction === "oauth_callback" || rawAction === "exchange_code") {
-      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "3679588597185605").trim();
+      const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "").trim();
       const clientSecret = (Deno.env.get("MERCADOPAGO_CLIENT_SECRET") || Deno.env.get("MP_CLIENT_SECRET") || "").trim();
       const { code, redirect_uri, user_id, state } = body;
 
-      if (!clientSecret) {
-        console.error("[MP OAUTH TOKEN EXCHANGE] CRITICAL WARNING: MERCADOPAGO_CLIENT_SECRET is missing or empty in Edge Function secrets!");
+      if (!clientId || !clientSecret) {
+        console.error("[MP OAUTH TOKEN EXCHANGE] CRITICAL: MERCADOPAGO_CLIENT_ID or MERCADOPAGO_CLIENT_SECRET is missing!");
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Missing credentials",
+            message: "MERCADOPAGO_CLIENT_ID e MERCADOPAGO_CLIENT_SECRET precisam estar configurados no Supabase Secrets.",
+          }),
+          { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
       }
 
       if (!code) {

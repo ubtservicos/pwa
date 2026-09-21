@@ -197,7 +197,14 @@ const ConfigFinanceiroPage = () => {
     }
     setIsConnectingMp(true);
     const redirectUri = `${window.location.origin}/app/config/financeiro`;
-    const clientId = import.meta.env.VITE_MP_CLIENT_ID || "3679588597185605";
+    const clientId = import.meta.env.VITE_MP_CLIENT_ID;
+
+    if (!clientId || !clientId.trim()) {
+      showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
+      setIsConnectingMp(false);
+      return;
+    }
+
     const state = crypto.randomUUID();
 
     try {
@@ -218,14 +225,14 @@ const ConfigFinanceiroPage = () => {
       if (error || !oauthUrl) {
         console.warn("[MercadoPago OAuth] Edge function returned error or older version deployed, applying client fallback URL:", error || data);
         // Fallback robusto direto para OAuth do Mercado Pago com test_token=true
-        oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+        oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
       }
 
       console.log("[MercadoPago OAuth] Redirecting to:", oauthUrl);
       window.location.href = oauthUrl;
     } catch (err: any) {
       console.warn("[MercadoPago OAuth] Exception calling Edge Function, redirecting via direct client URL:", err);
-      const fallbackUrl = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
+      const fallbackUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
       window.location.href = fallbackUrl;
     }
   };
