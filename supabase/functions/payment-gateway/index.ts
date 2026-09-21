@@ -249,85 +249,31 @@ async function persistSplitRecord({
 }
 
 // ============================================================
-// ENVIRONMENT RESOLVER & TOKEN SELECTOR
+// TOKEN & CREDENTIAL RESOLVER (CANONICAL LIVE FIRST)
 // ============================================================
 function resolvePaymentEnvironment({
-  body,
-  cardToken,
   sellerToken,
-  sellerAccountAmbiente,
 }: {
-  body: any;
+  body?: any;
   cardToken?: string;
   sellerToken?: string;
   sellerAccountAmbiente?: string;
 }): {
-  isSandbox: boolean;
   effectiveAuthToken: string;
-  rootAccessToken: string;
+  canonicalAccessToken: string;
 } {
-  const isExplicitTest =
-    body.is_test === true ||
-    body.isTest === true ||
-    body.environment === "sandbox" ||
-    body.test_mode === true ||
-    body.testMode === true;
+  const canonicalAccessToken = (
+    Deno.env.get("MP_ACCESS_TOKEN") ||
+    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+    ""
+  ).trim();
 
-  const isTestSeller =
-    sellerToken?.startsWith("TEST-") ||
-    sellerAccountAmbiente === "sandbox";
-
-  const isTestCardToken =
-    cardToken?.startsWith("TEST-") ||
-    (body.card_data?.number && String(body.card_data.number).replace(/\D/g, "").startsWith("5031")) ||
-    (body.cardNumber && String(body.cardNumber).replace(/\D/g, "").startsWith("5031"));
-
-  const isSandbox = Boolean(isExplicitTest || isTestSeller || isTestCardToken);
-
-  let rootAccessToken = "";
-  if (isSandbox) {
-    rootAccessToken = (
-      Deno.env.get("MERCADOPAGO_TEST_ACCESS_TOKEN") ||
-      Deno.env.get("MP_TEST_ACCESS_TOKEN") ||
-      Deno.env.get("MERCADOPAGO_SELLER_TEST_TOKEN") ||
-      (Deno.env.get("MP_ACCESS_TOKEN")?.startsWith("TEST-") ? Deno.env.get("MP_ACCESS_TOKEN") : "") ||
-      (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN")?.startsWith("TEST-") ? Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") : "") ||
-      ""
-    ).trim();
-  } else {
-    rootAccessToken = (
-      Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
-      Deno.env.get("MP_ACCESS_TOKEN") ||
-      ""
-    ).trim();
-  }
-
-  // Token de autorização: prioriza o Seller OAuth compatível com o ambiente
-  let effectiveAuthToken = (sellerToken || "").trim();
-
-  // Validação estrita de compatibilidade de ambiente
-  if (isSandbox) {
-    if (effectiveAuthToken && !effectiveAuthToken.startsWith("TEST-")) {
-      console.warn(`[resolvePaymentEnvironment] Seller token (${effectiveAuthToken.substring(0, 10)}...) não é TEST- em contexto Sandbox. Descartando seller token de produção para evitar 401.`);
-      effectiveAuthToken = "";
-    }
-    if (!effectiveAuthToken) {
-      effectiveAuthToken = rootAccessToken;
-    }
-  } else {
-    if (effectiveAuthToken && effectiveAuthToken.startsWith("TEST-")) {
-      console.warn(`[resolvePaymentEnvironment] Seller token é TEST- em contexto de Produção. Descartando para evitar conflito.`);
-      effectiveAuthToken = "";
-    }
-    if (!effectiveAuthToken) {
-      effectiveAuthToken = rootAccessToken;
-    }
-  }
+  // Prioriza o token do vendedor se vinculado via OAuth; caso contrário usa o token oficial da plataforma
+  const effectiveAuthToken = (sellerToken || "").trim() || canonicalAccessToken;
 
   return {
-    isSandbox,
     effectiveAuthToken,
-    rootAccessToken,
+    canonicalAccessToken,
   };
 }
 
@@ -349,7 +295,6 @@ async function createMercadoPagoPayment({
   externalReference,
   metadata,
   sellerAccessToken,
-  isSandbox = false,
 }: {
   transactionAmount:  number;
   description:        string;
@@ -365,24 +310,18 @@ async function createMercadoPagoPayment({
   externalReference?: string;
   metadata?:          Record<string, unknown>;
   sellerAccessToken?: string;
-  isSandbox?:         boolean;
 }): Promise<{ data: MercadoPagoPixResponse; rawText: string; httpStatus: number; ok: boolean }> {
-  const mpToken = (sellerAccessToken || "").trim();
+  const canonicalToken = (
+    Deno.env.get("MP_ACCESS_TOKEN") ||
+    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+    ""
+  ).trim();
+
+  const mpToken = (sellerAccessToken || "").trim() || canonicalToken;
 
   if (!mpToken) {
-    console.error(`[CRITICAL MP TOKEN ERROR] Token de acesso não disponível para o ambiente ${isSandbox ? "SANDBOX" : "PRODUÇÃO"}!`);
-    throw new Error(`Token de acesso do Mercado Pago não configurado para o ambiente ${isSandbox ? "SANDBOX" : "PRODUÇÃO"}.`);
-  }
-
-  // Blindagem de Segurança contra Erros 401 (Unauthorized use of live credentials)
-  if (isSandbox && mpToken.startsWith("APP_USR-")) {
-    console.error("[SECURITY GUARD] Bloqueio preventivo: tentativa de transação de teste com token LIVE (APP_USR-).");
-    throw new Error("Conflito Crítico de Ambiente: Não é permitido processar transações de teste com credenciais de produção (APP_USR-).");
-  }
-
-  if (!isSandbox && mpToken.startsWith("TEST-")) {
-    console.error("[SECURITY GUARD] Bloqueio preventivo: tentativa de transação de produção com token SANDBOX (TEST-).");
-    throw new Error("Conflito Crítico de Ambiente: Não é permitido processar transações de produção com credenciais de teste (TEST-).");
+    console.error("[CRITICAL MP TOKEN ERROR] MP_ACCESS_TOKEN / MERCADOPAGO_ACCESS_TOKEN não configurado no Supabase!");
+    throw new Error("Token de acesso do Mercado Pago (MP_ACCESS_TOKEN) não configurado no Supabase.");
   }
 
   // Unique idempotency key per attempt
@@ -390,17 +329,11 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
-  // Email do pagador: em Sandbox, forçar e-mail homologado oficial se não for @testuser.com
-  let safePayerEmail = (payerEmail || "").trim();
-  if (isSandbox) {
-    if (!safePayerEmail.includes("@testuser.com")) {
-      safePayerEmail = "TESTUSER367958859718560557@testuser.com";
-    }
-  }
+  const safePayerEmail = (payerEmail || "").trim() || "cliente@ubtservicos.com.br";
 
   const payerObj: Record<string, unknown> = {
     ...(payer || {}),
-    ...(safePayerEmail ? { email: safePayerEmail } : {}),
+    email: safePayerEmail,
   };
   if (payerFirstName && !payerObj.first_name) {
     payerObj.first_name = payerFirstName;
@@ -438,8 +371,8 @@ async function createMercadoPagoPayment({
   mpHeaders.set("Content-Type", "application/json");
   mpHeaders.set("X-Idempotency-Key", idempotencyKey);
 
-  console.log(`[MP FETCH] Target URL: ${MP_URL} (Ambiente: ${isSandbox ? "SANDBOX" : "PRODUÇÃO"})`);
-  console.log(`[MP FETCH] Authorization: Bearer ${mpToken.substring(0, 15)}... (Len: ${mpToken.length}) [${mpToken.startsWith("TEST-") ? "SANDBOX TOKEN" : "PROD TOKEN"}]`);
+  console.log(`[MP FETCH] Target URL: ${MP_URL}`);
+  console.log(`[MP FETCH] Authorization: Bearer ${mpToken.substring(0, 15)}... (Len: ${mpToken.length})`);
 
   const mpResponse = await fetch(MP_URL, {
     method: "POST",
@@ -758,15 +691,12 @@ serve(async (req: Request): Promise<Response> => {
         }
       }
 
-      // --- [1.2] Dynamic Environment Resolution (Sandbox vs Production) ---
-      const envRes = resolvePaymentEnvironment({
-        body,
-        cardToken,
+      // --- [1.2] Token Resolution (Seller OAuth or Official Platform MP_ACCESS_TOKEN) ---
+      const { effectiveAuthToken } = resolvePaymentEnvironment({
         sellerToken: resolvedSellerToken,
-        sellerAccountAmbiente: sellerAmbiente,
       });
 
-      console.log(`[payment-gateway] Resolved Payment Environment: isSandbox=${envRes.isSandbox}, AuthTokenPrefix=${envRes.effectiveAuthToken.substring(0, 10)}... (Length: ${envRes.effectiveAuthToken.length})`);
+      console.log(`[payment-gateway] Resolved Auth Token Prefix: ${effectiveAuthToken.substring(0, 10)}... (Length: ${effectiveAuthToken.length})`);
 
       // --- [1.3] Fetch live split rules from DB ---
       const { config: splitConfig, fromDb: splitFromDb } = await fetchSplitConfig();
@@ -825,7 +755,6 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           nominal_ledger:        nominalLedger,
           sum_nominal:           sumNominal,
           calculated_at:         new Date().toISOString(),
-          environment:           envRes.isSandbox ? "sandbox" : "production",
         },
       });
 
@@ -849,8 +778,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           installments,
           externalReference:  external_reference,
           metadata,
-          sellerAccessToken:  envRes.effectiveAuthToken,
-          isSandbox:          envRes.isSandbox,
+          sellerAccessToken:  effectiveAuthToken,
         });
         mpData = mpResult.data;
         mpStatus = mpResult.httpStatus;
@@ -860,7 +788,6 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           JSON.stringify({
             success: false,
             error: payEx.message || "Erro interno ao processar pagamento com o Mercado Pago",
-            is_sandbox: envRes.isSandbox,
           }),
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );

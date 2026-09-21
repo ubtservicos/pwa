@@ -799,14 +799,6 @@ const CompletedScreen = ({
         };
       }
 
-      const isHostPreview =
-        typeof window !== "undefined" &&
-        (window.location.hostname === "localhost" ||
-         window.location.hostname.includes("vercel.app") ||
-         window.location.hostname.includes("preview"));
-      const isTestCard = paymentType === "card" && cardClean.startsWith("5031");
-      const isTestEnvironment = isHostPreview || isTestCard;
-
       const payloadParaEdge = {
         action: "create_payment_intent",
         service_type: "mototaxi",
@@ -822,8 +814,6 @@ const CompletedScreen = ({
         payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
-        is_test: isTestEnvironment,
-        environment: isTestEnvironment ? "sandbox" : "production",
         // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
         token: cardToken,
         card_token: cardToken,
