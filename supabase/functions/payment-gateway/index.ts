@@ -517,15 +517,16 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      const formParams = new URLSearchParams();
-      formParams.append("client_id", clientId);
-      formParams.append("client_secret", clientSecret);
-      formParams.append("grant_type", "authorization_code");
-      formParams.append("code", code);
-      if (redirect_uri) formParams.append("redirect_uri", redirect_uri);
-      formParams.append("test_token", "true"); // OBRIGATÓRIO CONFORME DIRETRIZ TÉCNICA MP
+      const oauthRequestBody: Record<string, any> = {
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "authorization_code",
+        code: code,
+        ...(redirect_uri ? { redirect_uri } : {}),
+        test_token: "true",
+      };
 
-      console.log(`[MP OAUTH TOKEN EXCHANGE] Requesting token exchange: client_id=${clientId}, redirect_uri=${redirect_uri}, has_secret=${!!clientSecret}, test_token=true`);
+      console.log(`[MP OAUTH TOKEN EXCHANGE] Requesting token exchange with test_token=true: client_id=${clientId}, redirect_uri=${redirect_uri}, has_secret=${!!clientSecret}`);
 
       let rawText = "";
       let tokenData: any = null;
@@ -535,10 +536,10 @@ serve(async (req: Request): Promise<Response> => {
         const mpTokenRes = await fetch("https://api.mercadopago.com/oauth/token", {
           method: "POST",
           headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "application/json",
             "Accept": "application/json",
           },
-          body: formParams.toString(),
+          body: JSON.stringify(oauthRequestBody),
         });
 
         mpStatus = mpTokenRes.status;
