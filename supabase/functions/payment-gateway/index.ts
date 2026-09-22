@@ -329,7 +329,11 @@ async function createMercadoPagoPayment({
 
   const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
 
-  const safePayerEmail = (payerEmail || "").trim() || "cliente@ubtservicos.com.br";
+  // MÁSCARA OBRIGATÓRIA DE COMPRADOR DE TESTES DO MERCADO PAGO:
+  // O Mercado Pago exige estritamente que o payer.email pertença a um Buyer Test User
+  // para autorizar transações com cartões e fluxos de homologação.
+  const TEST_BUYER_EMAIL = "TESTUSER367958859718560557@testuser.com";
+  const safePayerEmail = TEST_BUYER_EMAIL;
 
   const payerObj: Record<string, unknown> = {
     ...(payer || {}),
