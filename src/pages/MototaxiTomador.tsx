@@ -691,7 +691,6 @@ const CompletedScreen = ({
   const tokenizeCard = async (cleanNum: string, name: string, expMonth: number, expYear: number, cvv: string): Promise<string> => {
     const mpPublicKey =
       import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
-      import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY ||
       import.meta.env.VITE_MP_PUBLIC_KEY;
 
     if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {

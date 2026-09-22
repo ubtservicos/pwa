@@ -76,8 +76,8 @@ export async function createPreference(
   prestadorId: string,
   paymentMethod: "pix" | "card" = "pix"
 ): Promise<PreferenceResponse> {
-  const accessToken = import.meta.env.VITE_MP_ACCESS_TOKEN;
-  const publicKey = import.meta.env.VITE_MP_PUBLIC_KEY;
+  const accessToken = import.meta.env.VITE_MERCADOPAGO_ACCESS_TOKEN || import.meta.env.VITE_MP_ACCESS_TOKEN;
+  const publicKey = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || import.meta.env.VITE_MP_PUBLIC_KEY;
   const split = calculateSplit(amount);
 
   // Fallback simulator if credentials are blank or mocked
