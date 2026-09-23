@@ -1,0 +1,11 @@
+- `[x]` Auditar o código existente de checkout, waitlist e KYC (PASS)
+- `[x]` Criar especificações e modelo de dados das novas tabelas de marketplace
+- `[x]` Desenhar fluxo de segurança OAuth contra CSRF e replay no sandbox (PASS)
+- `[x]` Criar arquivo de migração incremental 39_marketplace_tables.sql (PASS)
+- `[x]` Aplicar migração no banco Supabase DEV/HOMOLOG (PASS)
+- `[x]` Implementar componente interativo de Conta Mercado Pago em ConfigFinanceiroPage.tsx (PASS)
+- `[x]` Criar BottomSheet de instruções de cadastro e link oficial de onboarding (PASS)
+- `[x]` Implementar suíte de testes unitários MercadoPagoSandbox.test.ts (PASS)
+- `[x]` Executar build e passar nos 35 testes unitários (PASS)
+- `[x]` Consolidar as 58 perguntas comerciais e de compliance em UBT-PAY-005-MERCADO-PAGO-COMMERCIAL-QUESTIONS.md (PASS)
+- `[x]` Criar guias e relatórios de entrega de release (PASS)

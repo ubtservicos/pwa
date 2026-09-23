@@ -45,3 +45,4 @@ supabase/functions/.env.local
 supabase/.env
 supabase/.env.local
 
+scratch/
