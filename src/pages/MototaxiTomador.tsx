@@ -39,6 +39,8 @@ import { validateGeofence } from "@/services/GeofenceService";
 import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
+import CheckoutUniversal from "@/components/Payment/CheckoutUniversal";
+import type { PaymentResult } from "@/components/Payment/types";
 
 const UBATUBA_FALLBACK = { lat: -23.4336, lng: -45.0838 };
 
@@ -601,37 +603,6 @@ const CompletedScreen = ({
   const mm = String(Math.floor(pixSeconds / 60)).padStart(2, "0");
   const ss = String(pixSeconds % 60).padStart(2, "0");
 
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardHolder, setCardHolder] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-
-  const formatCardNumber = (v: string) => {
-    const clean = v.replace(/\D/g, "").slice(0, 16);
-    return clean.replace(/(\d{4})(?=\d)/g, "$1 ");
-  };
-
-  const formatCardExpiry = (v: string) => {
-    const clean = v.replace(/\D/g, "").slice(0, 4);
-    if (clean.length >= 3) {
-      return `${clean.slice(0, 2)}/${clean.slice(2)}`;
-    }
-    return clean;
-  };
-
-  const applyTestCard = (preset: "master" | "visa") => {
-    if (preset === "master") {
-      setCardNumber("4242 4242 4242 4242");
-      setCardHolder("Felipe Santander");
-      setCardExpiry("11/28");
-      setCardCvv("123");
-    } else {
-      setCardNumber("5031 7557 3450 1234");
-      setCardHolder("Silvina Luz");
-      setCardExpiry("05/29");
-      setCardCvv("789");
-    }
-  };
 
   // Broadcast & DB notify when selecting Pix Scanner, Cash, Card, etc.
   const handleSelectMethod = async (m: PaymentMethodOption) => {
@@ -687,103 +658,47 @@ const CompletedScreen = ({
     }
   };
 
-  // Helper para tokenizar cartão diretamente no Mercado Pago API
-  const tokenizeCard = async (cleanNum: string, name: string, expMonth: number, expYear: number, cvv: string): Promise<string> => {
-    const mpPublicKey = import.meta.env.VITE_MP_PUBLIC_KEY;
-
-    if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {
-      throw new Error("Chave pública do Mercado Pago (VITE_MP_PUBLIC_KEY) não está configurada no ambiente.");
+  // ─── Card payment callbacks (delegated to <CheckoutUniversal />) ───
+  const handleCardPaymentSuccess = async (result: PaymentResult) => {
+    if (result?.split?.statement) {
+      console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + result.split.statement);
     }
-
-    const cleanKey = mpPublicKey.trim();
-    const cleanCpf = (user?.cpf || "").replace(/\D/g, "");
-    const cardHolderName = (name || user?.name || "Cliente UBT").trim();
-    const payload: Record<string, unknown> = {
-      cardNumber: cleanNum,
-      card_number: cleanNum,
-      cardholder: {
-        name: cardHolderName,
-        ...(cleanCpf ? {
-          identification: {
-            type: "CPF",
-            number: cleanCpf,
-          }
-        } : {}),
-      },
-      cardExpirationMonth: expMonth,
-      card_expiration_month: expMonth,
-      expiration_month: expMonth,
-      cardExpirationYear: expYear,
-      card_expiration_year: expYear,
-      expiration_year: expYear,
-      securityCode: cvv || "123",
-      security_code: cvv || "123",
-    };
-
-    console.log("[MercadoPago Tokenize] Enviando payload para /v1/card_tokens:", {
-      ...payload,
-      cardNumber: `***${cleanNum.slice(-4)}`,
-      card_number: `***${cleanNum.slice(-4)}`,
-    });
-
-    const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    console.log("[MercadoPago Tokenize] Resposta MP:", res.status, data);
-
-    if (res.ok && data?.id) {
-      return data.id;
+    // Mark ride as paid in DB
+    if (rideId) {
+      try {
+        const { error: updateErr } = await supabase
+          .from("mototaxi_corridas")
+          .update({ status: "paid" })
+          .eq("id", rideId);
+        if (updateErr) {
+          console.error("Erro Supabase PATCH ao marcar paid:", updateErr.message, updateErr.details, updateErr.hint);
+        }
+      } catch (e: any) {
+        console.error("Erro ao atualizar status para paid:", e?.message || e);
+      }
     }
-
-    const errMessage =
-      data?.message ||
-      (Array.isArray(data?.cause) && data.cause[0]?.description) ||
-      data?.error ||
-      `Erro ${res.status} ao tokenizar cartão no Mercado Pago`;
-
-    console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
-    throw new Error(`Falha na tokenização do cartão: ${errMessage}`);
+    setConfirming(true);
+    setTimeout(onPay, 1500);
   };
 
-  // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
-  const handleProcessPayment = async (paymentType: "pix" | "card", targetMethod?: PaymentMethodOption) => {
+  const handleCardPaymentError = (errorMsg: string) => {
+    setPaymentError(errorMsg);
+    toast.error(`Falha no pagamento: ${errorMsg}`);
+  };
+
+  // Direct fetch to payment-gateway Edge Function — PIX ONLY
+  const handleProcessPayment = async (paymentType: "pix", targetMethod?: PaymentMethodOption) => {
     setIsLoading(true);
     setPaymentError(null);
     const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
     try {
-      const cardClean = cardNumber.replace(/\s+/g, "");
-      const [rawMonth, rawYear] = (cardExpiry || "").split("/");
-      const expMonth = parseInt(rawMonth || "12", 10);
-      const expYear = parseInt(rawYear ? (rawYear.length === 2 ? `20${rawYear}` : rawYear) : "2028", 10);
-
-      const paymentMethodId = paymentType === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
-      
-      let cardToken: string | undefined = undefined;
-      if (paymentType === "card") {
-        if (!cardClean || cardClean.length < 13) {
-          setIsLoading(false);
-          setPaymentError("Por favor, informe os dados completos do cartão.");
-          return;
-        }
-
-        const generatedToken = await tokenizeCard(cardClean, cardHolder, expMonth, expYear, cardCvv);
-        if (!generatedToken || typeof generatedToken !== "string" || generatedToken.length < 15) {
-          throw new Error("Token de cartão inválido ou vazio retornado pelo gateway.");
-        }
-        cardToken = generatedToken;
-      }
-
       const session = (await supabase.auth.getSession()).data.session;
       const userEmail = session?.user?.email || user?.email || "";
       const userCpf = (user?.cpf || (session?.user?.user_metadata as any)?.cpf || "").replace(/\D/g, "");
-      const cardHolderName = (cardHolder || user?.name || "").trim();
-      const nameParts = cardHolderName ? cardHolderName.split(" ") : [];
-      const firstName = nameParts[0] || (user?.name || "").split(" ")[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || (user?.name || "").split(" ").slice(1).join(" ") || "";
+      const userName = (user?.name || "").trim();
+      const nameParts = userName ? userName.split(" ") : [];
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
 
       const payerData: Record<string, unknown> = {};
       if (userEmail) payerData.email = userEmail;
@@ -810,21 +725,10 @@ const CompletedScreen = ({
         payer_last_name: lastName || undefined,
         payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-        payment_method_id: paymentMethodId,
-        // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
-        token: cardToken,
-        card_token: cardToken,
-        card_token_id: cardToken,
-        card_data: paymentType === "card" ? {
-          number: cardClean,
-          cardholder_name: cardHolderName || "Cliente UBT",
-          expiration_month: expMonth,
-          expiration_year: expYear,
-          security_code: cardCvv || "123",
-        } : undefined,
+        payment_method_id: "pix",
       };
 
-      console.log("PAYLOAD COMPLETO PARA EDGE (COM TOKEN):", payloadParaEdge);
+      console.log("PAYLOAD COMPLETO PARA EDGE (PIX):", payloadParaEdge);
 
       const { data, error: invokeError } = await supabase.functions.invoke("payment-gateway", {
         body: payloadParaEdge,
@@ -1143,91 +1047,17 @@ const CompletedScreen = ({
         </div>
       )}
 
-      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO */}
+      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO — Delegated to CheckoutUniversal */}
       {method === "card" && (
-        <div className="mt-4 rounded-2xl p-4 bg-white/5 border border-white/10 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-white/10">
-            <span className="font-sans text-[12px] font-semibold text-white/70">Cartão de Crédito</span>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => applyTestCard("master")}
-                className="px-2 py-0.5 rounded bg-emerald-500/20 text-[#0DB87E] text-[10px] font-mono hover:bg-emerald-500/30"
-              >
-                Teste Master
-              </button>
-              <button
-                type="button"
-                onClick={() => applyTestCard("visa")}
-                className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/30"
-              >
-                Teste Visa
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-sans text-[11px] text-white/60 mb-1">Número do Cartão</label>
-            <input
-              type="text"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-              placeholder="0000 0000 0000 0000"
-              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[14px] outline-none focus:border-[#0DB87E]"
-              maxLength={19}
-            />
-          </div>
-
-          <div>
-            <label className="block font-sans text-[11px] text-white/60 mb-1">Nome no Cartão</label>
-            <input
-              type="text"
-              value={cardHolder}
-              onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
-              placeholder="NOME COMO NO CARTÃO"
-              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="block font-sans text-[11px] text-white/60 mb-1">Validade (MM/AA)</label>
-              <input
-                type="text"
-                value={cardExpiry}
-                onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
-                placeholder="MM/AA"
-                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-                maxLength={5}
-              />
-            </div>
-            <div>
-              <label className="block font-sans text-[11px] text-white/60 mb-1">CVV</label>
-              <input
-                type="password"
-                value={cardCvv}
-                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="123"
-                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-                maxLength={4}
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => handleProcessPayment("card")}
-            className="mt-3 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center bg-[#0DB87E] active:scale-[0.98] transition-all"
-            style={{ opacity: isLoading ? 0.7 : 1 }}
-          >
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
-            ) : (
-              `Pagar com Cartão (${formatBRL(feeCalc.totalAmount)})`
-            )}
-          </button>
-        </div>
+        <CheckoutUniversal
+          amount={feeCalc.totalAmount}
+          providerId={prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0"}
+          providerName={prestadorInfo?.name || "Silvina Luz"}
+          serviceType="mototaxi"
+          serviceId={rideId}
+          onSuccess={handleCardPaymentSuccess}
+          onError={handleCardPaymentError}
+        />
       )}
 
       {/* METHOD CONTENT 4: EM DINHEIRO */}
