@@ -195,7 +195,7 @@ export default function CheckoutUniversal({
         payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
         description: `Serviço UBT ${serviceType} - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
-        token: cardToken,
+        cardToken: cardToken,
         card_token: cardToken,
         card_token_id: cardToken,
         card_data: {
