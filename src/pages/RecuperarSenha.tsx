@@ -5,6 +5,7 @@ import AuthTopBar from "@/components/auth/AuthTopBar";
 import FormField from "@/components/auth/FormField";
 import GhostButton from "@/components/auth/GhostButton";
 import PrimaryButton from "@/components/auth/PrimaryButton";
+import { supabase } from "@/lib/supabase";
 import { isValidEmail } from "@/utils/masks";
 
 const RecuperarSenha = () => {
@@ -14,16 +15,49 @@ const RecuperarSenha = () => {
   const [loading, setLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email) return setError("Informe seu e-mail");
     if (!isValidEmail(email)) return setError("E-mail inválido");
+    
     setError(undefined);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    const redirectTo = `${window.location.origin}/atualizar-senha`;
+
+    try {
+      console.log("[RecuperarSenha] [START] Preparando envio de recuperação de senha");
+      console.log("[RecuperarSenha] Email de destino:", email.trim());
+      console.log("[RecuperarSenha] URL de redirecionamento (redirectTo):", redirectTo);
+
+      console.log("[RecuperarSenha] [SUPABASE_CALL] Chamando supabase.auth.resetPasswordForEmail...");
+      const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo,
+      });
+
+      console.log("[RecuperarSenha] [SUPABASE_RESPONSE] Resposta recebida:", { data, error: resetError });
+
+      if (resetError) {
+        console.error("[RecuperarSenha] Erro retornado pelo Supabase:", resetError);
+        setError(resetError.message || "Erro ao solicitar recuperação de senha.");
+        return;
+      }
+
+      console.log("[RecuperarSenha] [SUCCESS] Link de recuperação enviado com sucesso.");
       setEnviado(true);
-    }, 1500);
+    } catch (err: any) {
+      console.error("[RecuperarSenha] [CATCH_ERROR] Exceção capturada no fluxo de recuperação:", err);
+      console.error("[RecuperarSenha] Detalhes do erro capturado (ex: verificação de 'startTime'):", {
+        name: err?.name,
+        message: err?.message,
+        stack: err?.stack,
+        raw: err,
+      });
+      setError(err?.message || "Ocorreu um erro inesperado ao tentar recuperar a senha.");
+    } finally {
+      console.log("[RecuperarSenha] [FINALLY] Finalizando submissão (loading = false)");
+      setLoading(false);
+    }
   };
 
   return (
