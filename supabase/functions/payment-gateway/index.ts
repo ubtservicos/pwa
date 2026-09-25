@@ -368,6 +368,22 @@ async function createMercadoPagoPayment({
     mpPayload.installments = Number(installments) || 1;
   }
 
+  // Validação preventiva: Pagamento com cartão EXIGE cardToken gerado no frontend
+  if (isCard && !cardToken) {
+    const cardErrorMsg = "Token de cartão ausente. O pagamento via cartão de crédito exige tokenização prévia no Mercado Pago antes da cobrança.";
+    console.error(`[PAYMENT-GATEWAY REJECTION] ${cardErrorMsg}`);
+    return {
+      data: {
+        error: "missing_card_token",
+        message: cardErrorMsg,
+        cause: [{ code: 4001, description: cardErrorMsg }]
+      },
+      rawText: JSON.stringify({ error: "missing_card_token", message: cardErrorMsg }),
+      httpStatus: 400,
+      ok: false,
+    };
+  }
+
   const MP_URL = "https://api.mercadopago.com/v1/payments";
 
   const mpHeaders = new Headers();
@@ -378,14 +394,40 @@ async function createMercadoPagoPayment({
   console.log(`[MP FETCH] Target URL: ${MP_URL}`);
   console.log(`[MP FETCH] Authorization: Bearer ${mpToken.substring(0, 15)}... (Len: ${mpToken.length})`);
 
-  const mpResponse = await fetch(MP_URL, {
-    method: "POST",
-    headers: mpHeaders,
-    body: JSON.stringify(mpPayload),
-  });
+  let mpResponse: Response;
+  let mpResponseBody = "";
 
-  const mpResponseBody = await mpResponse.text();
-  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout de resiliência
+
+    mpResponse = await fetch(MP_URL, {
+      method: "POST",
+      headers: mpHeaders,
+      body: JSON.stringify(mpPayload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    mpResponseBody = await mpResponse.text();
+  } catch (netErr: any) {
+    console.error("[MP NETWORK / TIMEOUT ERROR]:", netErr);
+    const isTimeout = netErr?.name === "AbortError";
+    const errorMsg = isTimeout
+      ? "Timeout de comunicação com o Mercado Pago (15 segundos excedidos)."
+      : (netErr?.message || "Falha de rede ao conectar com a API do Mercado Pago.");
+
+    return {
+      data: {
+        error: isTimeout ? "gateway_timeout" : "network_error",
+        message: errorMsg,
+        cause: [{ code: isTimeout ? 504 : 502, description: errorMsg }]
+      },
+      rawText: JSON.stringify({ error: isTimeout ? "gateway_timeout" : "network_error", message: errorMsg }),
+      httpStatus: isTimeout ? 504 : 502,
+      ok: false,
+    };
+  }
+
   if (!mpResponse.ok) {
     console.error(`[MP CRITICAL REJECTION - HTTP ${mpResponse.status}]`, mpResponseBody);
   }
@@ -393,8 +435,8 @@ async function createMercadoPagoPayment({
   let data: any;
   try {
     data = JSON.parse(mpResponseBody);
-  } catch (parseErr) {
-    data = { error: "Invalid JSON from MP", raw: mpResponseBody };
+  } catch (_parseErr) {
+    data = { error: "Invalid JSON from MP", message: mpResponseBody || "Resposta vazia do Mercado Pago", status: mpResponse.status };
   }
 
   return { data, rawText: mpResponseBody, httpStatus: mpResponse.status, ok: mpResponse.ok };
@@ -630,7 +672,14 @@ serve(async (req: Request): Promise<Response> => {
       const rawAmount = body.transaction_amount ?? body.amount ?? body.final_amount ?? body.total_amount ?? body.price ?? body.final_price;
       const transaction_amount = Math.max(0.01, Number(rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) ? Number(rawAmount) : 10.0));
       const rawServiceType = String(body.service_type || body.serviceType || "mototaxi").toLowerCase().trim();
-      const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
+      let service_type: ServiceType = "mototaxi";
+      if (rawServiceType === "diarista" || rawServiceType === "services") {
+        service_type = "diarista";
+      } else if (rawServiceType === "ambulante" || rawServiceType === "delivery") {
+        service_type = "ambulante";
+      } else if (rawServiceType === "coco") {
+        service_type = "coco" as any;
+      }
       const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
       const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
       const payer_email = String(body.payer_email || body.email || body.payerEmail || body.payer?.email || "").trim();
@@ -809,8 +858,8 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           : undefined,
       });
 
-      // --- [6] Handle MP API errors ---
-      if ((mpResult && !mpResult.ok) || mpStatus >= 400 || mpData?.error) {
+      // --- [6] Handle MP API errors & rejections cleanly ---
+      if ((mpResult && !mpResult.ok) || mpStatus >= 400 || mpData?.error || mpData?.status === "rejected" || (!mpData?.id && payment_method_id !== "pix")) {
         const rawRejection = mpResult?.rawText || JSON.stringify(mpData);
         console.error("[MP CRITICAL REJECTION]", rawRejection);
         return new Response(
