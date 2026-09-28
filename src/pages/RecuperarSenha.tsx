@@ -145,8 +145,12 @@ const RecuperarSenha = () => {
 
       if (updateError) {
         console.error("[RecuperarSenha] Erro ao salvar nova senha:", updateError);
-        setErrorGeral(updateError.message || "Erro ao atualizar senha.");
-        showToast(updateError.message || "Erro ao atualizar senha. ❌");
+        let errorMsg = updateError.message || "Erro ao atualizar senha.";
+        if (errorMsg.toLowerCase().includes("different from the old password")) {
+          errorMsg = "A nova senha não pode ser igual à sua senha atual. Por favor, escolha uma senha diferente.";
+        }
+        setErrorGeral(errorMsg);
+        showToast(errorMsg);
         return;
       }
 
@@ -159,8 +163,12 @@ const RecuperarSenha = () => {
       }, 1500);
     } catch (err: any) {
       console.error("[RecuperarSenha] [UPDATE_CATCH] Exceção capturada:", err);
-      setErrorGeral(err?.message || "Ocorreu um erro inesperado ao salvar a nova senha.");
-      showToast(err?.message || "Erro inesperado ao salvar nova senha. ❌");
+      let errorMsg = err?.message || "Ocorreu um erro inesperado ao salvar a nova senha.";
+      if (errorMsg.toLowerCase().includes("different from the old password")) {
+        errorMsg = "A nova senha não pode ser igual à sua senha atual. Por favor, escolha uma senha diferente.";
+      }
+      setErrorGeral(errorMsg);
+      showToast(errorMsg);
     } finally {
       setLoading(false);
     }
