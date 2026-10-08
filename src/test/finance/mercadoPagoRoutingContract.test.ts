@@ -46,6 +46,13 @@ describe("Mercado Pago routing contract", () => {
     expect(checkout).toContain("payerIdentity.email ? { payer_email: payerIdentity.email } : {}");
     expect(gateway).toContain("MP_TEST_PAYER_EMAIL");
     expect(gateway).toContain("MP_TEST_SELLER_EMAILS");
+    expect(gateway).toContain("MP_TEST_SELLER_USER_IDS");
     expect(gateway).toContain("return testBuyerEmail");
+  });
+
+  it("preserves Mercado Pago SDK errors instead of masking plain objects or arrays", () => {
+    expect(checkout).toContain("function checkoutErrorMessage");
+    expect(checkout).toContain("collectErrorParts");
+    expect(checkout).toContain('checkoutEnvironment() === "sandbox" ? "APRO" : ""');
   });
 });

@@ -44,6 +44,36 @@ declare global {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function collectErrorParts(value: unknown, depth = 0): string[] {
+  if (depth > 3 || value === null || value === undefined) return [];
+  if (value instanceof Error) return value.message ? [value.message] : [];
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (typeof value === "number") return [String(value)];
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectErrorParts(item, depth + 1));
+  }
+  if (typeof value !== "object") return [];
+
+  const record = value as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const key of ["message", "description", "error_description", "error"]) {
+    const item = record[key];
+    if (typeof item === "string" && item.trim()) parts.push(item.trim());
+  }
+  if (typeof record.code === "string" || typeof record.code === "number") {
+    parts.push(`código ${String(record.code)}`);
+  }
+  for (const key of ["cause", "causes", "details"]) {
+    parts.push(...collectErrorParts(record[key], depth + 1));
+  }
+  return parts;
+}
+
+function checkoutErrorMessage(error: unknown, fallback = "Erro no processamento do pagamento."): string {
+  const unique = [...new Set(collectErrorParts(error).map((part) => part.slice(0, 500)))];
+  return unique.join(": ") || fallback;
+}
+
 function checkoutEnvironment(): "sandbox" | "production" {
   const value = String(import.meta.env.VITE_MP_ENVIRONMENT || "sandbox").trim().toLowerCase();
   if (value !== "sandbox" && value !== "production") {
@@ -84,10 +114,15 @@ async function tokenizeCard(
   detectedBin: string,
   environment: "sandbox" | "production",
 ): Promise<{ token: string; paymentMethodId: string }> {
-  const cardToken = await mp.fields.createCardToken({
-    cardholderName,
-    ...(cpf ? { identificationType: "CPF", identificationNumber: cpf } : {}),
-  });
+  let cardToken: CardTokenResponse | undefined;
+  try {
+    cardToken = await mp.fields.createCardToken({
+      cardholderName,
+      ...(cpf ? { identificationType: "CPF", identificationNumber: cpf } : {}),
+    });
+  } catch (error) {
+    throw new Error(checkoutErrorMessage(error, "O Mercado Pago não conseguiu tokenizar o cartão."));
+  }
   if (!cardToken?.id) throw new Error("O Mercado Pago não retornou um CardToken válido.");
   if (typeof cardToken.live_mode === "boolean" && cardToken.live_mode !== (environment === "production")) {
     throw new Error("A Public Key do Mercado Pago pertence a outro ambiente.");
@@ -95,22 +130,24 @@ async function tokenizeCard(
 
   const bin = detectedBin || cardToken.first_six_digits || "";
   if (!/^\d{6,8}$/.test(bin)) throw new Error("Não foi possível identificar a bandeira do cartão.");
-  const methods = await mp.getPaymentMethods({ bin });
+  let methods: { results?: Array<{ id?: string }> };
+  try {
+    methods = await mp.getPaymentMethods({ bin });
+  } catch (error) {
+    throw new Error(checkoutErrorMessage(error, "O Mercado Pago não reconheceu o meio de pagamento."));
+  }
   const paymentMethodId = methods.results?.[0]?.id;
   if (!paymentMethodId) throw new Error("Meio de pagamento não reconhecido pelo Mercado Pago.");
   return { token: cardToken.id, paymentMethodId };
 }
 
 async function invokeErrorMessage(error: unknown): Promise<string> {
-  const fallback = error instanceof Error ? error.message : "Pagamento rejeitado pelo gateway";
+  const fallback = checkoutErrorMessage(error, "Pagamento rejeitado pelo gateway");
   const context = (error as { context?: Response } | null)?.context;
   if (!context || typeof context.clone !== "function") return fallback;
   try {
     const payload = await context.clone().json();
-    const details = Array.isArray(payload?.details)
-      ? payload.details.map((item: { description?: string }) => item.description).filter(Boolean).join("; ")
-      : "";
-    return [payload?.message || payload?.error, details].filter(Boolean).join(": ") || fallback;
+    return checkoutErrorMessage(payload, fallback);
   } catch {
     return fallback;
   }
@@ -126,7 +163,13 @@ export default function CheckoutUniversal({
   onSuccess,
   onError,
 }: CheckoutUniversalProps) {
-  const [cardHolder, setCardHolder] = useState("");
+  const [cardHolder, setCardHolder] = useState(() => {
+    try {
+      return checkoutEnvironment() === "sandbox" ? "APRO" : "";
+    } catch {
+      return "";
+    }
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [fieldsReady, setFieldsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -270,7 +313,7 @@ export default function CheckoutUniversal({
 
       onSuccess(data);
     } catch (caught: unknown) {
-      const message = caught instanceof Error ? caught.message : "Erro no processamento do pagamento.";
+      const message = checkoutErrorMessage(caught);
       console.error("[CheckoutUniversal] Falha na tentativa", { payment_attempt_id: paymentAttemptId, message });
       setError(message);
       onError(message);
@@ -305,10 +348,15 @@ export default function CheckoutUniversal({
           type="text"
           value={cardHolder}
           onChange={(event) => setCardHolder(event.target.value.toUpperCase())}
-          placeholder="NOME COMO NO CARTÃO"
+          placeholder={checkoutEnvironment() === "sandbox" ? "APRO" : "NOME COMO NO CARTÃO"}
           autoComplete="cc-name"
           className="w-full h-11 rounded-xl px-3 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
         />
+        {checkoutEnvironment() === "sandbox" && (
+          <p className="mt-1 text-[10px] text-amber-300/80">
+            Sandbox: use APRO para simular aprovação e CPF 12345678909.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">

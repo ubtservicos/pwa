@@ -362,7 +362,7 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
   const platformToken = platformAccessToken(environment);
   const { data: sellerAccount, error } = await supabaseAdmin
     .from("marketplace_accounts")
-    .select("id, access_token_encrypted, ambiente, status, token_expiration, token_metadata")
+    .select("id, mercado_pago_user_id, access_token_encrypted, ambiente, status, token_expiration, token_metadata")
     .eq("user_id", providerId)
     .eq("ambiente", environment)
     .eq("status", "CONNECTED")
@@ -377,6 +377,21 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
   if (!sellerAccount) {
     if (!platformToken) throw new HttpError(500, "missing_platform_token", "Access Token da plataforma não configurado.");
     return { mode: "platform_fallback", authToken: platformToken, marketplaceAccountId: null, fallbackReason: "seller_not_connected" };
+  }
+
+  const allowedSandboxSellers = (Deno.env.get("MP_TEST_SELLER_USER_IDS") || "")
+    .split(",")
+    .map((userId) => userId.trim())
+    .filter(Boolean);
+  if (
+    environment === "sandbox" && allowedSandboxSellers.length > 0 &&
+    !allowedSandboxSellers.includes(String(sellerAccount.mercado_pago_user_id || ""))
+  ) {
+    throw new HttpError(
+      409,
+      "seller_test_user_mismatch",
+      "A conta OAuth vinculada não é o Seller Test User autorizado para este Sandbox.",
+    );
   }
 
   if (sellerAccount.token_expiration && new Date(sellerAccount.token_expiration).getTime() <= Date.now()) {
@@ -707,6 +722,25 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
     throw new HttpError(409, "oauth_environment_mismatch", "O token OAuth retornado pertence a outro ambiente.");
   }
 
+  const oauthUserId = String(tokenData.user_id || "").trim();
+  const allowedSandboxSellers = (Deno.env.get("MP_TEST_SELLER_USER_IDS") || "")
+    .split(",")
+    .map((sellerId) => sellerId.trim())
+    .filter(Boolean);
+  if (environment === "sandbox" && allowedSandboxSellers.length > 0 && !allowedSandboxSellers.includes(oauthUserId)) {
+    await supabaseAdmin.from("marketplace_oauth_connections").update({
+      authorization_status: "failed",
+      error_code: "oauth_test_seller_mismatch",
+      error_message: "OAuth autorizado com uma conta diferente do Seller Test User configurado.",
+      updated_at: new Date().toISOString(),
+    }).eq("id", connection.id);
+    throw new HttpError(
+      409,
+      "oauth_test_seller_mismatch",
+      "Entre no Mercado Pago com o Seller Test User configurado antes de autorizar.",
+    );
+  }
+
   const now = new Date();
   const expiresIn = Number(tokenData.expires_in);
   const tokenMetadata = {
@@ -717,7 +751,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   };
   const { data: account, error: upsertError } = await supabaseAdmin.from("marketplace_accounts").upsert({
     user_id: userId,
-    mercado_pago_user_id: String(tokenData.user_id || ""),
+    mercado_pago_user_id: oauthUserId,
     status: "CONNECTED",
     ambiente: environment,
     oauth_status: "authorized",
@@ -913,6 +947,7 @@ serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json(req, { success: false, error: "method_not_allowed" }, 405);
 
+  let requestAuditContext: Record<string, unknown> = {};
   try {
     const userId = await authenticatedUserId(req);
     const body = await req.json().catch(() => {
@@ -921,6 +956,13 @@ serve(async (req: Request): Promise<Response> => {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new HttpError(400, "invalid_body", "Corpo da requisição inválido.");
     }
+
+    requestAuditContext = {
+      action: String(body.action || "create_payment_intent").slice(0, 80),
+      payment_attempt_id: String(body.payment_attempt_id || body.idempotency_key || body.external_reference || "").slice(0, 80),
+      service_id: String(body.service_id || body.serviceId || "").slice(0, 80),
+      provider_id: String(body.provider_id || body.providerId || "").slice(0, 80),
+    };
 
     const action = String(body.action || "create_payment_intent").trim().toLowerCase();
     if (["get_oauth_url", "oauth_url", "get_auth_url", "oauth"].includes(action)) {
@@ -939,6 +981,7 @@ serve(async (req: Request): Promise<Response> => {
       : new HttpError(500, "internal_error", "Erro interno ao processar a solicitação.");
     console.error("[payment-gateway] request failed", httpError.code, error instanceof Error ? error.message : error);
     await logAuditEvent("payment_gateway_error", "failed", {
+      ...requestAuditContext,
       code: httpError.code,
       http_status: httpError.status,
     }, error instanceof Error ? error.message : String(error));

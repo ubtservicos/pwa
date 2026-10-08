@@ -139,13 +139,14 @@ function writeConfiguration(app, state = {}) {
     values.VITE_MP_TEST_PAYER_EMAIL = state.buyer.email;
   }
   if (state.seller?.email) values.MP_TEST_SELLER_EMAILS = state.seller.email;
+  if (state.seller?.id) values.MP_TEST_SELLER_USER_IDS = String(state.seller.id);
   for (const [key, value] of Object.entries(values)) currentEnv.set(key, value);
   writeFileSync(envFile, serializeEnv(currentEnv), { encoding: "utf8", mode: 0o600 });
 
   const cloudKeys = [
     "MP_ENVIRONMENT", "APP_ENV", "MP_ACCESS_TOKEN_SANDBOX", "MP_ACCESS_TOKEN",
     "MERCADOPAGO_ACCESS_TOKEN", "MERCADOPAGO_CLIENT_ID", "MERCADOPAGO_CLIENT_SECRET",
-    "MP_TEST_PAYER_EMAIL", "MP_TEST_SELLER_EMAILS", "MP_TOKEN_ENCRYPTION_KEY",
+    "MP_TEST_PAYER_EMAIL", "MP_TEST_SELLER_EMAILS", "MP_TEST_SELLER_USER_IDS", "MP_TOKEN_ENCRYPTION_KEY",
     "MP_WEBHOOK_SECRET", "ALLOWED_ORIGINS", "MP_REDIRECT_URIS",
   ];
   const cloudEnv = new Map(cloudKeys.map((key) => [key, currentEnv.get(key)]));
