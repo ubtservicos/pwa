@@ -1,101 +1,121 @@
 /**
- * UBT-PAY-006: CheckoutUniversal
- *
- * Componente genérico de checkout que encapsula:
- *   1. Coleta dos dados do cartão (número, nome, validade, CVV)
- *   2. Tokenização direta via API REST do Mercado Pago (/v1/card_tokens)
- *   3. Invocação da Edge Function payment-gateway via Supabase Functions
- *
- * Totalmente agnóstico em relação ao serviço. O chamador (MototaxiTomador,
- * DeliveryTomador, etc.) passa apenas amount, providerId, serviceType e callbacks.
+ * UBT-PAY-006: checkout universal com tokenização PCI via MercadoPago.js Fields.
+ * Somente o CardToken deixa o navegador; PAN, validade e CVV nunca são enviados à UBT.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CreditCard } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { formatBRL } from "@/utils/ride";
 import type { CheckoutUniversalProps } from "./types";
 
-// ─── Helpers de formatação ────────────────────────────────────────────
-const formatCardNumber = (v: string) => {
-  const clean = v.replace(/\D/g, "").slice(0, 16);
-  return clean.replace(/(\d{4})(?=\d)/g, "$1 ");
-};
-
-const formatCardExpiry = (v: string) => {
-  const clean = v.replace(/\D/g, "").slice(0, 4);
-  if (clean.length >= 3) return `${clean.slice(0, 2)}/${clean.slice(2)}`;
-  return clean;
-};
-
-// ─── Tokenização via Mercado Pago REST API ────────────────────────────
-async function tokenizeCard(
-  cardNumber: string,
-  cardholderName: string,
-  expMonth: number,
-  expYear: number,
-  cvv: string,
-  cpf?: string,
-): Promise<string> {
-  const mpPublicKey = import.meta.env.VITE_MP_PUBLIC_KEY;
-
-  if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {
-    throw new Error("Chave pública do Mercado Pago (VITE_MP_PUBLIC_KEY) não está configurada no ambiente.");
-  }
-
-  const cleanKey = mpPublicKey.trim();
-  const cleanCpf = (cpf || "").replace(/\D/g, "");
-
-  const payload: Record<string, unknown> = {
-    cardNumber,
-    card_number: cardNumber,
-    cardholder: {
-      name: cardholderName,
-      ...(cleanCpf
-        ? { identification: { type: "CPF", number: cleanCpf } }
-        : {}),
-    },
-    cardExpirationMonth: expMonth,
-    card_expiration_month: expMonth,
-    expiration_month: expMonth,
-    cardExpirationYear: expYear,
-    card_expiration_year: expYear,
-    expiration_year: expYear,
-    securityCode: cvv || "123",
-    security_code: cvv || "123",
-  };
-
-  console.log("[CheckoutUniversal Tokenize] Enviando payload para /v1/card_tokens:", {
-    ...payload,
-    cardNumber: `***${cardNumber.slice(-4)}`,
-    card_number: `***${cardNumber.slice(-4)}`,
-  });
-
-  const res = await fetch(
-    `https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  const data = await res.json().catch(() => ({}));
-  console.log("[CheckoutUniversal Tokenize] Resposta MP:", res.status, data);
-
-  if (res.ok && data?.id) return data.id;
-
-  const errMessage =
-    data?.message ||
-    (Array.isArray(data?.cause) && data.cause[0]?.description) ||
-    data?.error ||
-    `Erro ${res.status} ao tokenizar cartão no Mercado Pago`;
-
-  console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
-  throw new Error(`Falha na tokenização do cartão: ${errMessage}`);
+interface MpField {
+  mount: (containerId: string) => MpField;
+  unmount: () => void;
+  on: (event: string, callback: (event: { bin?: string | null }) => void) => MpField;
 }
 
-// ─── Componente ───────────────────────────────────────────────────────
+interface CardTokenResponse {
+  id: string;
+  first_six_digits?: string;
+  live_mode?: boolean;
+}
+
+interface MercadoPagoInstance {
+  fields: {
+    create: (type: "cardNumber" | "expirationDate" | "securityCode", options: Record<string, unknown>) => MpField;
+    createCardToken: (input: {
+      cardholderName: string;
+      identificationType?: string;
+      identificationNumber?: string;
+    }) => Promise<CardTokenResponse | undefined>;
+  };
+  getPaymentMethods: (input: { bin: string }) => Promise<{ results?: Array<{ id?: string }> }>;
+}
+
+declare global {
+  interface Window {
+    MercadoPago?: new (
+      publicKey: string,
+      options?: { locale?: string; advancedFraudPrevention?: boolean },
+    ) => MercadoPagoInstance;
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function checkoutEnvironment(): "sandbox" | "production" {
+  const value = String(import.meta.env.VITE_MP_ENVIRONMENT || "sandbox").trim().toLowerCase();
+  if (value !== "sandbox" && value !== "production") {
+    throw new Error("VITE_MP_ENVIRONMENT deve ser 'sandbox' ou 'production'.");
+  }
+  return value;
+}
+
+function resolvePayerIdentity(
+  environment: "sandbox" | "production",
+  sessionEmail: string,
+  sessionCpf: string,
+): { email: string; cpf: string } {
+  if (environment === "sandbox") {
+    const email = String(import.meta.env.VITE_MP_TEST_PAYER_EMAIL || "").trim().toLowerCase();
+    if (email && (!EMAIL_RE.test(email) || !email.endsWith("@testuser.com"))) {
+      throw new Error(
+        "VITE_MP_TEST_PAYER_EMAIL deve conter um Buyer Test User válido quando configurado.",
+      );
+    }
+    return {
+      email,
+      cpf: String(import.meta.env.VITE_MP_TEST_PAYER_CPF || "12345678909").replace(/\D/g, ""),
+    };
+  }
+
+  const email = sessionEmail.trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.endsWith("@testuser.com")) {
+    throw new Error("O e-mail do pagador autenticado é inválido para produção.");
+  }
+  return { email, cpf: sessionCpf };
+}
+
+async function tokenizeCard(
+  mp: MercadoPagoInstance,
+  cardholderName: string,
+  cpf: string,
+  detectedBin: string,
+  environment: "sandbox" | "production",
+): Promise<{ token: string; paymentMethodId: string }> {
+  const cardToken = await mp.fields.createCardToken({
+    cardholderName,
+    ...(cpf ? { identificationType: "CPF", identificationNumber: cpf } : {}),
+  });
+  if (!cardToken?.id) throw new Error("O Mercado Pago não retornou um CardToken válido.");
+  if (typeof cardToken.live_mode === "boolean" && cardToken.live_mode !== (environment === "production")) {
+    throw new Error("A Public Key do Mercado Pago pertence a outro ambiente.");
+  }
+
+  const bin = detectedBin || cardToken.first_six_digits || "";
+  if (!/^\d{6,8}$/.test(bin)) throw new Error("Não foi possível identificar a bandeira do cartão.");
+  const methods = await mp.getPaymentMethods({ bin });
+  const paymentMethodId = methods.results?.[0]?.id;
+  if (!paymentMethodId) throw new Error("Meio de pagamento não reconhecido pelo Mercado Pago.");
+  return { token: cardToken.id, paymentMethodId };
+}
+
+async function invokeErrorMessage(error: unknown): Promise<string> {
+  const fallback = error instanceof Error ? error.message : "Pagamento rejeitado pelo gateway";
+  const context = (error as { context?: Response } | null)?.context;
+  if (!context || typeof context.clone !== "function") return fallback;
+  try {
+    const payload = await context.clone().json();
+    const details = Array.isArray(payload?.details)
+      ? payload.details.map((item: { description?: string }) => item.description).filter(Boolean).join("; ")
+      : "";
+    return [payload?.message || payload?.error, details].filter(Boolean).join(": ") || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function CheckoutUniversal({
   amount,
   providerId,
@@ -106,251 +126,226 @@ export default function CheckoutUniversal({
   onSuccess,
   onError,
 }: CheckoutUniversalProps) {
-  // Card form state
-  const [cardNumber, setCardNumber] = useState("");
   const [cardHolder, setCardHolder] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
-
-  // Process state
   const [isLoading, setIsLoading] = useState(false);
+  const [fieldsReady, setFieldsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mpRef = useRef<MercadoPagoInstance | null>(null);
+  const binRef = useRef("");
 
-  // ─── Test card presets (sandbox) ──────────────────────────────────
-  const applyTestCard = (preset: "master" | "visa") => {
-    if (preset === "master") {
-      setCardNumber("4242 4242 4242 4242");
-      setCardHolder("Felipe Santander");
-      setCardExpiry("11/28");
-      setCardCvv("123");
-    } else {
-      setCardNumber("5031 7557 3450 1234");
-      setCardHolder("Silvina Luz");
-      setCardExpiry("05/29");
-      setCardCvv("789");
+  useEffect(() => {
+    const publicKey = String(import.meta.env.VITE_MP_PUBLIC_KEY || "").trim();
+    if (!publicKey || !window.MercadoPago) {
+      setError(
+        !publicKey
+          ? "VITE_MP_PUBLIC_KEY não está configurada."
+          : "MercadoPago.js não pôde ser carregado.",
+      );
+      return;
     }
-  };
 
-  // ─── Submit handler ───────────────────────────────────────────────
+    const mp = new window.MercadoPago(publicKey, {
+      locale: "pt-BR",
+      advancedFraudPrevention: true,
+    });
+    mpRef.current = mp;
+    const fieldStyle = {
+      color: "#ffffff",
+      fontSize: "14px",
+      fontFamily: "DM Sans, sans-serif",
+      placeholderColor: "rgba(255,255,255,0.35)",
+      height: "44px",
+    };
+    const cardNumber = mp.fields.create("cardNumber", {
+      placeholder: "0000 0000 0000 0000",
+      style: fieldStyle,
+      ariaRequired: true,
+    }).mount("mp-card-number");
+    const expirationDate = mp.fields.create("expirationDate", {
+      placeholder: "MM/AA",
+      style: fieldStyle,
+      mode: "short",
+      ariaRequired: true,
+    }).mount("mp-expiration-date");
+    const securityCode = mp.fields.create("securityCode", {
+      placeholder: "CVV",
+      style: fieldStyle,
+      ariaRequired: true,
+    }).mount("mp-security-code");
+
+    cardNumber.on("binChange", ({ bin }) => {
+      binRef.current = bin || "";
+    });
+    cardNumber.on("ready", () => setFieldsReady(true));
+
+    return () => {
+      setFieldsReady(false);
+      mpRef.current = null;
+      for (const field of [cardNumber, expirationDate, securityCode]) {
+        try {
+          field.unmount();
+        } catch {
+          // MercadoPago.js may already have removed an iframe during navigation.
+        }
+      }
+    };
+  }, []);
+
   const handleSubmit = async () => {
     setIsLoading(true);
     setError(null);
+    const paymentAttemptId = crypto.randomUUID();
 
     try {
-      const cleanNum = cardNumber.replace(/\s+/g, "");
-      if (!cleanNum || cleanNum.length < 13) {
-        throw new Error("Por favor, informe os dados completos do cartão.");
-      }
+      const mp = mpRef.current;
+      if (!mp || !fieldsReady) throw new Error("Os campos seguros do Mercado Pago ainda não estão prontos.");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Valor de pagamento inválido.");
 
-      const [rawMonth, rawYear] = (cardExpiry || "").split("/");
-      const expMonth = parseInt(rawMonth || "12", 10);
-      const expYear = parseInt(
-        rawYear ? (rawYear.length === 2 ? `20${rawYear}` : rawYear) : "2028",
-        10,
-      );
-
-      // 1. Tokenização
-      const cardToken = await tokenizeCard(
-        cleanNum,
-        cardHolder || "Cliente UBT",
-        expMonth,
-        expYear,
-        cardCvv,
-      );
-
-      if (!cardToken || typeof cardToken !== "string" || cardToken.length < 15) {
-        throw new Error("Token de cartão inválido ou vazio retornado pelo gateway.");
-      }
-
-      // 2. Montar payload para Edge Function
       const session = (await supabase.auth.getSession()).data.session;
-      const userEmail = session?.user?.email || "";
-      const userCpf = ((session?.user?.user_metadata as Record<string, unknown>)?.cpf as string || "").replace(/\D/g, "");
-      const cardHolderName = (cardHolder || "").trim();
-      const nameParts = cardHolderName ? cardHolderName.split(" ") : [];
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
+      if (!session) throw new Error("Sua sessão expirou. Entre novamente antes de pagar.");
+      const userCpf = String(
+        (session.user.user_metadata as Record<string, unknown>)?.cpf || "",
+      ).replace(/\D/g, "");
+      const environment = checkoutEnvironment();
+      const payerIdentity = resolvePayerIdentity(environment, session.user.email || "", userCpf);
+      const cardholderName = cardHolder.trim();
+      if (!cardholderName) throw new Error("Informe o nome do titular do cartão.");
 
-      const paymentMethodId = cleanNum.startsWith("5") ? "master" : "visa";
+      const { token, paymentMethodId } = await tokenizeCard(
+        mp,
+        cardholderName,
+        payerIdentity.cpf,
+        binRef.current,
+        environment,
+      );
+      const nameParts = cardholderName.split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ");
+      const resolvedServiceId = serviceId || crypto.randomUUID();
       const finalAmount = Number(amount.toFixed(2));
 
-      const payerData: Record<string, unknown> = {};
-      if (userEmail) payerData.email = userEmail;
-      if (firstName) payerData.first_name = firstName;
-      if (lastName) payerData.last_name = lastName;
-      if (userCpf) payerData.identification = { type: "CPF", number: userCpf };
-
-      const payloadParaEdge = {
+      const payload = {
         action: "create_payment_intent",
+        payment_attempt_id: paymentAttemptId,
         service_type: serviceType,
-        service_id: serviceId || crypto.randomUUID(),
-        external_reference: serviceId || undefined,
+        service_id: resolvedServiceId,
         transaction_amount: finalAmount,
         provider_id: providerId,
         provider_name: providerName || undefined,
-        payer_email: userEmail || undefined,
-        payer: Object.keys(payerData).length > 0 ? payerData : undefined,
-        payer_first_name: firstName || undefined,
-        payer_last_name: lastName || undefined,
-        payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
-        description: `Serviço UBT ${serviceType} - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-        payment_method_id: paymentMethodId,
-        cardToken: cardToken,
-        card_token: cardToken,
-        card_token_id: cardToken,
-        card_data: {
-          number: cleanNum,
-          cardholder_name: cardHolderName || "Cliente UBT",
-          expiration_month: expMonth,
-          expiration_year: expYear,
-          security_code: cardCvv || "123",
+        ...(payerIdentity.email ? { payer_email: payerIdentity.email } : {}),
+        payer: {
+          ...(payerIdentity.email ? { email: payerIdentity.email } : {}),
+          ...(firstName ? { first_name: firstName } : {}),
+          ...(lastName ? { last_name: lastName } : {}),
+          ...(payerIdentity.cpf
+            ? { identification: { type: "CPF", number: payerIdentity.cpf } }
+            : {}),
         },
+        description: `Serviço UBT ${serviceType} - ${formatBRL(finalAmount)}`,
+        payment_method_id: paymentMethodId,
+        card_token: token,
         installments: 1,
         metadata: metadata || {},
       };
 
-      console.log("[CheckoutUniversal] PAYLOAD PARA EDGE:", payloadParaEdge);
+      console.info("[CheckoutUniversal] Enviando tentativa tokenizada", {
+        payment_attempt_id: paymentAttemptId,
+        service_type: serviceType,
+        service_id: resolvedServiceId,
+        provider_id: providerId,
+        amount: finalAmount,
+        environment,
+      });
 
-      // 3. Invocar Edge Function
-      const { data, error: invokeError } = await supabase.functions.invoke(
-        "payment-gateway",
-        { body: payloadParaEdge },
-      );
-
-      if (invokeError || !data || data.error || data.success === false) {
-        console.error("[CheckoutUniversal] GATEWAY ERROR:", data || invokeError);
-        const errMain = data?.error || invokeError?.message || "Pagamento rejeitado pelo gateway";
-        let errDetails = "";
-        if (data?.mp_error) {
-          errDetails = typeof data.mp_error === "object" ? JSON.stringify(data.mp_error) : String(data.mp_error);
-        } else if (data?.details) {
-          errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
-        } else if (data?.detail) {
-          errDetails = data.detail;
-        } else if (data?.message) {
-          errDetails = data.message;
-        }
-        throw new Error(errDetails ? `${errMain}: ${errDetails}` : errMain);
+      const { data, error: invokeError } = await supabase.functions.invoke("payment-gateway", {
+        body: payload,
+      });
+      if (invokeError) throw new Error(await invokeErrorMessage(invokeError));
+      if (!data || data.success === false || data.error) {
+        const details = Array.isArray(data?.details)
+          ? data.details.map((item: { description?: string }) => item.description).filter(Boolean).join("; ")
+          : "";
+        throw new Error([data?.message || data?.error || "Pagamento rejeitado", details].filter(Boolean).join(": "));
       }
 
-      if (data?.split?.statement) {
-        console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
-      }
-
-      // 4. Sucesso → callback
       onSuccess(data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erro no processamento do pagamento.";
-      console.error("[CheckoutUniversal] Payment failed:", err);
-      setError(msg);
-      onError(msg);
+    } catch (caught: unknown) {
+      const message = caught instanceof Error ? caught.message : "Erro no processamento do pagamento.";
+      console.error("[CheckoutUniversal] Falha na tentativa", { payment_attempt_id: paymentAttemptId, message });
+      setError(message);
+      onError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────
   return (
     <div className="mt-4 rounded-2xl p-4 bg-white/5 border border-white/10 space-y-3">
-      {/* Header */}
       <div className="flex items-center justify-between pb-2 border-b border-white/10">
         <span className="font-sans text-[12px] font-semibold text-white/70 flex items-center gap-1.5">
           <CreditCard size={14} />
           Cartão de Crédito
         </span>
-        <div className="flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => applyTestCard("master")}
-            className="px-2 py-0.5 rounded bg-emerald-500/20 text-[#0DB87E] text-[10px] font-mono hover:bg-emerald-500/30"
-          >
-            Teste Master
-          </button>
-          <button
-            type="button"
-            onClick={() => applyTestCard("visa")}
-            className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/30"
-          >
-            Teste Visa
-          </button>
-        </div>
+        <span className="text-[10px] text-white/40">Campos seguros Mercado Pago</span>
       </div>
 
-      {/* Card Number */}
       <div>
-        <label className="block font-sans text-[11px] text-white/60 mb-1">Número do Cartão</label>
-        <input
-          type="text"
-          value={cardNumber}
-          onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-          placeholder="0000 0000 0000 0000"
-          className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[14px] outline-none focus:border-[#0DB87E]"
-          maxLength={19}
-        />
+        <label className="block font-sans text-[11px] text-white/60 mb-1" htmlFor="mp-card-number">
+          Número do cartão
+        </label>
+        <div id="mp-card-number" className="w-full h-11 rounded-xl px-3 bg-black/30 border border-white/10" />
       </div>
 
-      {/* Cardholder Name */}
       <div>
-        <label className="block font-sans text-[11px] text-white/60 mb-1">Nome no Cartão</label>
+        <label className="block font-sans text-[11px] text-white/60 mb-1" htmlFor="cardholder-name">
+          Nome no cartão
+        </label>
         <input
+          id="cardholder-name"
           type="text"
           value={cardHolder}
-          onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+          onChange={(event) => setCardHolder(event.target.value.toUpperCase())}
           placeholder="NOME COMO NO CARTÃO"
-          className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
+          autoComplete="cc-name"
+          className="w-full h-11 rounded-xl px-3 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
         />
       </div>
 
-      {/* Expiry + CVV */}
       <div className="grid grid-cols-2 gap-2.5">
         <div>
-          <label className="block font-sans text-[11px] text-white/60 mb-1">Validade (MM/AA)</label>
-          <input
-            type="text"
-            value={cardExpiry}
-            onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
-            placeholder="MM/AA"
-            className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-            maxLength={5}
-          />
+          <label className="block font-sans text-[11px] text-white/60 mb-1" htmlFor="mp-expiration-date">
+            Validade
+          </label>
+          <div id="mp-expiration-date" className="w-full h-11 rounded-xl px-3 bg-black/30 border border-white/10" />
         </div>
         <div>
-          <label className="block font-sans text-[11px] text-white/60 mb-1">CVV</label>
-          <input
-            type="password"
-            value={cardCvv}
-            onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-            placeholder="123"
-            className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-            maxLength={4}
-          />
+          <label className="block font-sans text-[11px] text-white/60 mb-1" htmlFor="mp-security-code">
+            CVV
+          </label>
+          <div id="mp-security-code" className="w-full h-11 rounded-xl px-3 bg-black/30 border border-white/10" />
         </div>
       </div>
 
-      {/* Error display */}
       {error && (
         <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium flex items-center justify-between gap-2">
           <span>⚠️ {error}</span>
-          <button
-            type="button"
-            onClick={() => setError(null)}
-            className="text-red-400 hover:text-white text-xs px-1"
-          >
+          <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-white text-xs px-1">
             ✕
           </button>
         </div>
       )}
 
-      {/* Submit button */}
       <button
         type="button"
-        disabled={isLoading}
+        disabled={isLoading || !fieldsReady}
         onClick={handleSubmit}
-        className="mt-3 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center bg-[#0DB87E] active:scale-[0.98] transition-all"
-        style={{ opacity: isLoading ? 0.7 : 1 }}
+        className="mt-3 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center bg-[#0DB87E] active:scale-[0.98] transition-all disabled:cursor-not-allowed"
+        style={{ opacity: isLoading || !fieldsReady ? 0.7 : 1 }}
       >
         {isLoading ? (
           <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
+        ) : !fieldsReady ? (
+          "Carregando pagamento seguro..."
         ) : (
           `Pagar com Cartão (${formatBRL(amount)})`
         )}

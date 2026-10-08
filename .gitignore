@@ -25,6 +25,9 @@ dist-ssr
 
 .vercel
 .env*
+.mp_test_credentials.txt
+.mp_setup_summary.txt
+.supabase-secrets.sandbox.env
 
 # Playwright
 /test-results/

@@ -152,7 +152,6 @@ const ConfigFinanceiroPage = () => {
           code,
           state,
           redirect_uri: redirectUri,
-          user_id: user.uid,
         }
       });
 
@@ -161,7 +160,9 @@ const ConfigFinanceiroPage = () => {
         try {
           const errJson = await (error as any).context.json();
           errorMsg = errJson.message || errJson.details?.message || errJson.details?.error_description || errJson.error || errJson.raw_response || errorMsg;
-        } catch {}
+        } catch {
+          // Keep the original invoke error when the response body is unavailable.
+        }
       } else if (data && !data.success) {
         errorMsg = data.message || data.error || JSON.stringify(data.details || data);
       }
@@ -176,7 +177,7 @@ const ConfigFinanceiroPage = () => {
         status: "CONNECTED",
         connected_at: new Date().toISOString(),
         mercado_pago_user_id: String(data.user_id || ""),
-        ambiente: "sandbox",
+        ambiente: data.environment || "sandbox",
       });
 
       // Clear query params from browser URL without reloading
@@ -191,9 +192,6 @@ const ConfigFinanceiroPage = () => {
 
   // Trigger OAuth redirect
   const handleConnectMercadoPago = async () => {
-    console.log("Iniciando conexão Mercado Pago...");
-    console.log("Variáveis VITE disponíveis no frontend:", Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
-
     const currentUserId = user?.uid || (await supabase.auth.getUser()).data.user?.id;
     if (!currentUserId) {
       console.warn("[MercadoPago OAuth] Usuário não autenticado.");
@@ -203,61 +201,23 @@ const ConfigFinanceiroPage = () => {
 
     setIsConnectingMp(true);
     const redirectUri = `${window.location.origin}/app/config/financeiro`;
-    const state = crypto.randomUUID();
-
-    // Acesso direto e estático para substituição pelo compilador do Vite
-    const clientId =
-      import.meta.env.VITE_MP_CLIENT_ID ||
-      import.meta.env.VITE_MERCADOPAGO_CLIENT_ID ||
-      import.meta.env.VITE_MERCADO_PAGO_CLIENT_ID;
 
     try {
-      console.log("[MercadoPago OAuth] Requesting authorization URL from payment-gateway Edge Function...");
       const { data, error } = await supabase.functions.invoke("payment-gateway", {
         body: {
           action: "get_oauth_url",
-          user_id: currentUserId,
           redirect_uri: redirectUri,
-          origin: window.location.origin,
-          state,
-          test_token: true, // Garante geração de token de homologação
         }
       });
 
-      let oauthUrl = data?.oauth_url;
-
-      if (oauthUrl) {
-        console.log("[MercadoPago OAuth] Redirecting to backend-generated OAuth URL:", oauthUrl);
-        window.location.href = oauthUrl;
-        return;
+      if (error || !data?.oauth_url) {
+        throw new Error(data?.message || error?.message || "Não foi possível iniciar o OAuth do Mercado Pago.");
       }
-
-      console.warn("[MercadoPago OAuth] Edge function did not return oauth_url, checking client fallback:", error || data);
-
-      if (!clientId || !clientId.trim()) {
-        console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no bundle e Edge Function indisponível.");
-        showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
-        setIsConnectingMp(false);
-        return;
-      }
-
-      // Fallback direto no cliente com test_token=true
-      oauthUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
-      console.log("[MercadoPago OAuth] Redirecting to client fallback URL:", oauthUrl);
-      window.location.href = oauthUrl;
+      window.location.assign(data.oauth_url);
     } catch (err: any) {
-      console.warn("[MercadoPago OAuth] Exception calling Edge Function:", err);
-
-      if (!clientId || !clientId.trim()) {
-        console.error("[MercadoPago OAuth] VITE_MP_CLIENT_ID ausente no bundle e falha ao invocar backend.");
-        showToast("Erro de Configuração: VITE_MP_CLIENT_ID ausente");
-        setIsConnectingMp(false);
-        return;
-      }
-
-      const fallbackUrl = `https://auth.mercadopago.com/authorization?client_id=${encodeURIComponent(clientId.trim())}&response_type=code&platform_id=mp&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&test_token=true`;
-      console.log("[MercadoPago OAuth] Redirecting to fallback URL:", fallbackUrl);
-      window.location.href = fallbackUrl;
+      console.error("[MercadoPago OAuth] Falha ao iniciar vínculo:", err);
+      showToast("Erro ao iniciar vínculo: " + (err.message || err));
+      setIsConnectingMp(false);
     }
   };
 
