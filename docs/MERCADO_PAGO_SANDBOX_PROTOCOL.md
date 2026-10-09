@@ -86,7 +86,9 @@ Gere a chave de envelope uma vez e guarde-a como segredo:
 openssl rand -base64 32
 ```
 
-Aplicação, Public Key, Access Token, Client ID e Client Secret devem pertencer ao mesmo cadastro Marketplace. `MP_ENVIRONMENT` e `VITE_MP_ENVIRONMENT` devem ter o mesmo valor.
+Client ID, Client Secret e a credencial da plataforma devem pertencer ao mesmo cadastro Marketplace. `MP_ENVIRONMENT` e `VITE_MP_ENVIRONMENT` devem ter o mesmo valor.
+
+Para cartão na rota `seller_oauth_split`, o frontend deve chamar `get_checkout_config` antes de montar o MercadoPago.js Fields e tokenizar com a `public_key` devolvida no OAuth do Seller. A Edge usa o Access Token OAuth do mesmo Seller. Essa correspondência é obrigatória no Sandbox: tokenizar com a Public Key estática da plataforma e cobrar com o Access Token do Seller resulta em `2006 — Card Token not found`. Na rota `platform_fallback`, o frontend continua usando `VITE_MP_PUBLIC_KEY` da plataforma.
 
 ## 4. Vincular o Seller Test User por OAuth — teste real da rota principal
 

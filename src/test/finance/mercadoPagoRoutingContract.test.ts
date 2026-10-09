@@ -41,6 +41,14 @@ describe("Mercado Pago routing contract", () => {
     expect(checkout).toContain('mp.fields.create("securityCode"');
   });
 
+  it("tokenizes with the Public Key that matches the resolved payment route", () => {
+    expect(gateway).toContain('"get_checkout_config"');
+    expect(gateway).toContain("checkoutPublicKey");
+    expect(gateway).toContain("sellerAccount.token_metadata?.public_key");
+    expect(checkout).toContain('action: "get_checkout_config"');
+    expect(checkout).toContain("checkoutConfig.public_key || platformPublicKey");
+  });
+
   it("requires an explicit Buyer Test User in sandbox", () => {
     expect(checkout).toContain("VITE_MP_TEST_PAYER_EMAIL");
     expect(checkout).toContain("payerIdentity.email ? { payer_email: payerIdentity.email } : {}");

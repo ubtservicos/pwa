@@ -177,54 +177,75 @@ export default function CheckoutUniversal({
   const binRef = useRef("");
 
   useEffect(() => {
-    const publicKey = String(import.meta.env.VITE_MP_PUBLIC_KEY || "").trim();
-    if (!publicKey || !window.MercadoPago) {
-      setError(
-        !publicKey
-          ? "VITE_MP_PUBLIC_KEY não está configurada."
-          : "MercadoPago.js não pôde ser carregado.",
-      );
-      return;
-    }
+    let disposed = false;
+    const mountedFields: MpField[] = [];
+    setFieldsReady(false);
+    mpRef.current = null;
+    binRef.current = "";
 
-    const mp = new window.MercadoPago(publicKey, {
-      locale: "pt-BR",
-      advancedFraudPrevention: true,
-    });
-    mpRef.current = mp;
-    const fieldStyle = {
-      color: "#ffffff",
-      fontSize: "14px",
-      fontFamily: "DM Sans, sans-serif",
-      placeholderColor: "rgba(255,255,255,0.35)",
-      height: "44px",
+    const initializeFields = async () => {
+      const platformPublicKey = String(import.meta.env.VITE_MP_PUBLIC_KEY || "").trim();
+      if (!window.MercadoPago) throw new Error("MercadoPago.js não pôde ser carregado.");
+
+      const { data: checkoutConfig, error: configError } = await supabase.functions.invoke("payment-gateway", {
+        body: { action: "get_checkout_config", provider_id: providerId },
+      });
+      if (configError) throw new Error(await invokeErrorMessage(configError));
+      if (!checkoutConfig?.success) {
+        throw new Error(checkoutErrorMessage(checkoutConfig, "Não foi possível configurar o checkout."));
+      }
+
+      const publicKey = String(checkoutConfig.public_key || platformPublicKey).trim();
+      if (!publicKey) throw new Error("Public Key do Mercado Pago não está configurada para esta rota.");
+      if (disposed) return;
+
+      const mp = new window.MercadoPago(publicKey, {
+        locale: "pt-BR",
+        advancedFraudPrevention: true,
+      });
+      mpRef.current = mp;
+      const fieldStyle = {
+        color: "#ffffff",
+        fontSize: "14px",
+        fontFamily: "DM Sans, sans-serif",
+        placeholderColor: "rgba(255,255,255,0.35)",
+        height: "44px",
+      };
+      const cardNumber = mp.fields.create("cardNumber", {
+        placeholder: "0000 0000 0000 0000",
+        style: fieldStyle,
+        ariaRequired: true,
+      }).mount("mp-card-number");
+      const expirationDate = mp.fields.create("expirationDate", {
+        placeholder: "MM/AA",
+        style: fieldStyle,
+        mode: "short",
+        ariaRequired: true,
+      }).mount("mp-expiration-date");
+      const securityCode = mp.fields.create("securityCode", {
+        placeholder: "CVV",
+        style: fieldStyle,
+        ariaRequired: true,
+      }).mount("mp-security-code");
+      mountedFields.push(cardNumber, expirationDate, securityCode);
+
+      cardNumber.on("binChange", ({ bin }) => {
+        binRef.current = bin || "";
+      });
+      cardNumber.on("ready", () => {
+        if (!disposed) setFieldsReady(true);
+      });
     };
-    const cardNumber = mp.fields.create("cardNumber", {
-      placeholder: "0000 0000 0000 0000",
-      style: fieldStyle,
-      ariaRequired: true,
-    }).mount("mp-card-number");
-    const expirationDate = mp.fields.create("expirationDate", {
-      placeholder: "MM/AA",
-      style: fieldStyle,
-      mode: "short",
-      ariaRequired: true,
-    }).mount("mp-expiration-date");
-    const securityCode = mp.fields.create("securityCode", {
-      placeholder: "CVV",
-      style: fieldStyle,
-      ariaRequired: true,
-    }).mount("mp-security-code");
 
-    cardNumber.on("binChange", ({ bin }) => {
-      binRef.current = bin || "";
+    void initializeFields().catch((caught) => {
+      if (!disposed) setError(checkoutErrorMessage(caught, "Falha ao inicializar o checkout do Mercado Pago."));
     });
-    cardNumber.on("ready", () => setFieldsReady(true));
 
     return () => {
+      disposed = true;
       setFieldsReady(false);
       mpRef.current = null;
-      for (const field of [cardNumber, expirationDate, securityCode]) {
+      for (const field of mountedFields) {
         try {
           field.unmount();
         } catch {
@@ -232,7 +253,7 @@ export default function CheckoutUniversal({
         }
       }
     };
-  }, []);
+  }, [providerId]);
 
   const handleSubmit = async () => {
     setIsLoading(true);

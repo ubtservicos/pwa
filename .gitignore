@@ -27,6 +27,7 @@ dist-ssr
 .env*
 .mp_test_credentials.txt
 .mp_setup_summary.txt
+.mp_e2e_evidence.json
 .supabase-secrets.sandbox.env
 
 # Playwright

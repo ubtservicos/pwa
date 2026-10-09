@@ -31,6 +31,7 @@ interface SplitAmounts {
 interface RoutingDecision {
   mode: PaymentRoute;
   authToken: string;
+  checkoutPublicKey: string | null;
   marketplaceAccountId: string | null;
   fallbackReason: string | null;
 }
@@ -376,7 +377,13 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
 
   if (!sellerAccount) {
     if (!platformToken) throw new HttpError(500, "missing_platform_token", "Access Token da plataforma não configurado.");
-    return { mode: "platform_fallback", authToken: platformToken, marketplaceAccountId: null, fallbackReason: "seller_not_connected" };
+    return {
+      mode: "platform_fallback",
+      authToken: platformToken,
+      checkoutPublicKey: null,
+      marketplaceAccountId: null,
+      fallbackReason: "seller_not_connected",
+    };
   }
 
   const allowedSandboxSellers = (Deno.env.get("MP_TEST_SELLER_USER_IDS") || "")
@@ -396,7 +403,13 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
 
   if (sellerAccount.token_expiration && new Date(sellerAccount.token_expiration).getTime() <= Date.now()) {
     if (!platformToken) throw new HttpError(500, "missing_platform_token", "Access Token da plataforma não configurado.");
-    return { mode: "platform_fallback", authToken: platformToken, marketplaceAccountId: sellerAccount.id, fallbackReason: "seller_token_expired" };
+    return {
+      mode: "platform_fallback",
+      authToken: platformToken,
+      checkoutPublicKey: null,
+      marketplaceAccountId: sellerAccount.id,
+      fallbackReason: "seller_token_expired",
+    };
   }
 
   const liveMode = sellerAccount.token_metadata?.live_mode;
@@ -414,9 +427,30 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
   return {
     mode: "seller_oauth_split",
     authToken: sellerToken,
+    checkoutPublicKey: String(sellerAccount.token_metadata?.public_key || "").trim() || null,
     marketplaceAccountId: sellerAccount.id,
     fallbackReason: null,
   };
+}
+
+async function handleGetCheckoutConfig(req: Request, body: Record<string, any>): Promise<Response> {
+  const environment = paymentEnvironment();
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const route = await resolvePaymentRoute(providerId, environment);
+  if (route.mode === "seller_oauth_split" && !route.checkoutPublicKey) {
+    throw new HttpError(
+      409,
+      "seller_public_key_missing",
+      "A conta OAuth do Seller não possui Public Key para tokenizar o cartão.",
+    );
+  }
+  return json(req, {
+    success: true,
+    environment,
+    payment_route: route.mode,
+    public_key: route.checkoutPublicKey,
+    fallback_reason: route.fallbackReason,
+  });
 }
 
 function sanitizePayer(body: Record<string, any>, email: string): Record<string, unknown> {
@@ -663,7 +697,7 @@ async function handleGetOAuthUrl(req: Request, body: Record<string, any>, userId
   });
   return json(req, {
     success: true,
-    oauth_url: `https://auth.mercadopago.com.br/authorization?${params.toString()}`,
+    oauth_url: `https://auth.mercadopago.com/authorization?${params.toString()}`,
     state,
     environment: paymentEnvironment(),
   });
@@ -907,6 +941,15 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     if (error) console.error("[payment-gateway] ride status update failed", error.message);
   }
 
+  if (serviceType === "diarista" && mpStatus === "approved") {
+    const { error } = await supabaseAdmin.from("services_requests").update({
+      status: "paid",
+      payment_id: String(mpResult.data.id),
+      updated_at: new Date().toISOString(),
+    }).eq("id", serviceId);
+    if (error) console.error("[payment-gateway] service request status update failed", error.message);
+  }
+
   const txData = mpResult.data?.point_of_interaction?.transaction_data;
   const appliedApplicationFee = route.mode === "seller_oauth_split" ? split.application_fee : 0;
   return json(req, {
@@ -940,7 +983,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       accounting_platform_allocation: split.application_fee,
       config_source: splitConfigSource,
     },
-  }, 201);
+  }, 200);
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -970,6 +1013,9 @@ serve(async (req: Request): Promise<Response> => {
     }
     if (["exchange_oauth_code", "oauth_callback", "exchange_code"].includes(action)) {
       return await handleExchangeOAuthCode(req, body, userId);
+    }
+    if (["get_checkout_config", "checkout_config"].includes(action)) {
+      return await handleGetCheckoutConfig(req, body);
     }
     if (["create_payment_intent", "checkout"].includes(action)) {
       return await handlePayment(req, body, userId);
