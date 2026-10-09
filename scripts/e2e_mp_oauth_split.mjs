@@ -126,7 +126,9 @@ async function marketplaceAccount(admin) {
 
 async function authorizeSeller(oauthUrl, redirectUri, seller) {
   mkdirSync(artifactDir, { recursive: true });
-  const browser = await chromium.launch({ headless: process.env.MP_E2E_HEADED !== "1" });
+  // O login do MP recusa o Chromium headless antes de renderizar o formulário.
+  // O navegador continua totalmente automatizado; headless fica opt-in para CI compatível.
+  const browser = await chromium.launch({ headless: process.env.MP_E2E_HEADLESS === "1" });
   const context = await browser.newContext({ locale: "pt-BR" });
   const page = await context.newPage();
   try {
