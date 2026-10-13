@@ -25,6 +25,7 @@ import { formatTime, formatBRLNumber } from "@/utils/dateFilter";
 import { calcSplit, SPLIT_META } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
 
 const GREEN = "#0DB87E";
 
@@ -108,6 +109,15 @@ const TransacaoDetailPage = () => {
     const fetchTx = async () => {
       setLoading(true);
       try {
+        const paymentHistory = await fetchUserPaymentHistory();
+        const payment = paymentHistory.find((row) =>
+          row.payment_id === id || row.transaction_id === id || row.service_id === id
+        );
+        if (payment) {
+          setTx(paymentToTransaction(payment));
+          return;
+        }
+
         // Fetch and build the list of transactions
         // 1. Fetch orders (Ambulantes)
         const { data: pedidos, error: errPed } = await supabase
@@ -311,9 +321,15 @@ const TransacaoDetailPage = () => {
     { label: "Serviço", value: tx.description },
   ];
   if (tx.type === "entrada") {
-    infoGrid.push({ label: "Pagamento", value: "Pix" });
-    infoGrid.push({ label: "Duração", value: "~14 min" });
+    infoGrid.push({ label: "Pagamento", value: tx.paymentMethod?.toUpperCase() || "—" });
+    infoGrid.push({ label: "Duração", value: tx.durationMin ? `~${tx.durationMin} min` : "—" });
   }
+  if (tx.type === "saida") {
+    infoGrid.push({ label: "Pagamento", value: tx.paymentMethod?.toUpperCase() || "—" });
+  }
+  if (tx.transactionId) infoGrid.push({ label: "Rastreio", value: `#${tx.transactionId.slice(0, 8).toUpperCase()}` });
+  if (tx.origin) infoGrid.push({ label: "Origem", value: tx.origin });
+  if (tx.destination) infoGrid.push({ label: "Destino", value: tx.destination });
   if (tx.type === "split") {
     infoGrid.push({
       label: "Destinatário",
@@ -341,7 +357,17 @@ const TransacaoDetailPage = () => {
     });
   }
 
-  const splitDetail = tx.type === "entrada" ? calcSplit(tx.amount) : null;
+  const splitDetail = tx.splitAmounts
+    ? {
+        prestador: tx.splitAmounts.provider,
+        ubt: tx.splitAmounts.ubt,
+        padrinhoPrestador: tx.splitAmounts.godparent / 2,
+        padrinhoTomador: tx.splitAmounts.godparent / 2,
+        associacao: tx.splitAmounts.entity,
+        premioTrabalhador: tx.splitAmounts.prizeWorker,
+        premioConsumidor: tx.splitAmounts.prizeConsumer,
+      }
+    : tx.type === "entrada" ? calcSplit(tx.amount) : null;
 
   const onSendReport = () => {
     showToast("Relato enviado! Nossa equipe entrará em contato em até 24h.");

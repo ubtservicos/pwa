@@ -40,6 +40,7 @@ import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import CheckoutUniversal from "@/components/Payment/CheckoutUniversal";
 import type { PaymentResult } from "@/components/Payment/types";
+import { RidePaymentSummary } from "@/components/mototaxi/RidePaymentSummary";
 
 const UBATUBA_FALLBACK = { lat: -23.4336, lng: -45.0838 };
 
@@ -1113,9 +1114,17 @@ const CompletedScreen = ({
 /* -------------------- RATING Screen -------------------- */
 const RatingScreen = ({
   prestador,
+  rideId,
+  origin,
+  destination,
+  total,
   onSubmit,
 }: {
   prestador: { name: string };
+  rideId?: string | null;
+  origin?: string;
+  destination?: string;
+  total: number;
   onSubmit: () => void;
 }) => {
   const [rating, setRating] = useState(0);
@@ -1198,6 +1207,13 @@ const RatingScreen = ({
         onChange={(e) => setComment(e.target.value)}
         className="mt-1 w-full rounded-xl p-3 font-sans text-[14px] text-white outline-none resize-none"
         style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", height: 100 }}
+      />
+
+      <RidePaymentSummary
+        rideId={rideId}
+        origin={origin}
+        destination={destination}
+        total={total}
       />
 
       <button
@@ -1972,6 +1988,10 @@ const MototaxiTomadorPage = () => {
     return (
       <RatingScreen
         prestador={state.prestadorInfo}
+        rideId={state.rideId}
+        origin={state.origin?.address}
+        destination={state.destination?.address}
+        total={state.finalPrice || state.estimatedPrice}
         onSubmit={handleReset}
       />
     );

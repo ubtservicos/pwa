@@ -26,7 +26,8 @@ export function useRealtimeChannel(
   statusRef.current = onStatus;
 
   useEffect(() => {
-    const MAX_RETRIES = 10;
+    // One controlled retry; screens provide polling fallback when WSS is blocked.
+    const MAX_RETRIES = 1;
     let disposed = false;
     let generation = 0;
     let retries = 0;
@@ -96,9 +97,9 @@ export function useRealtimeChannel(
             return;
           }
 
-          console.warn(
-            `[useRealtimeChannel] ${channelName} ${status}. Attempt ${retries + 1}/${MAX_RETRIES}`
-          );
+          if (import.meta.env.DEV) {
+            console.debug(`[useRealtimeChannel] ${channelName} ${status}; retry ${retries + 1}/${MAX_RETRIES}`);
+          }
           statusRef.current?.("reconnecting");
 
           if (retries >= MAX_RETRIES) {

@@ -14,6 +14,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
 import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
+import { RidePaymentSummary } from "@/components/mototaxi/RidePaymentSummary";
 
 const ICONS = { User: UserIcon, Building2, Users, Gift, Star, Heart } as const;
 type IconKey = keyof typeof ICONS;
@@ -202,16 +203,6 @@ const PrestadorMototaxiActive = () => {
       }
     }
   };
-
-  useEffect(() => {
-    if (phase === "completed" && isPaymentConfirmed) {
-      const timer = setTimeout(() => {
-        sessionStorage.removeItem("ubt_active_ride");
-        navigate("/app/prestador/home");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [phase, isPaymentConfirmed, navigate]);
 
   // Carregar dados da corrida do banco
   useEffect(() => {
@@ -405,6 +396,7 @@ const PrestadorMototaxiActive = () => {
       navigate("/app/prestador/home");
     } else if (updated.status === 'paid') {
       setIsPaymentConfirmed(true);
+      navigate(`/app/prestador/mototaxi/avaliacao/${updated.id}`);
     }
     if (updated.payment_method) setPaymentMethodSelected(updated.payment_method);
   }, [navigate]);
@@ -425,13 +417,16 @@ const PrestadorMototaxiActive = () => {
         .select('status, payment_method')
         .eq('id', ride.id)
         .maybeSingle();
-      if (data?.status === 'paid') setIsPaymentConfirmed(true);
+      if (data?.status === 'paid') {
+        setIsPaymentConfirmed(true);
+        navigate(`/app/prestador/mototaxi/avaliacao/${ride.id}`);
+      }
       if (data?.payment_method) setPaymentMethodSelected(data.payment_method);
     };
     void checkPayment();
     const timer = window.setInterval(checkPayment, 5000);
     return () => window.clearInterval(timer);
-  }, [ride?.id, phase, isPaymentConfirmed]);
+  }, [ride?.id, phase, isPaymentConfirmed, navigate]);
 
   if (!ride) return null;
 
@@ -669,6 +664,12 @@ const PrestadorMototaxiActive = () => {
         </div>
 
         <div className="mt-5">
+          <RidePaymentSummary
+            rideId={ride.id}
+            origin={ride.origin}
+            destination={ride.destination}
+            total={ride.price || 0}
+          />
           <p className="font-sans text-[14px] font-semibold text-white">
             Como foi o cliente?
           </p>

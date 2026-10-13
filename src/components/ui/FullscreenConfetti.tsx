@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Confetti from "react-confetti";
 
 interface FullscreenConfettiProps {
@@ -19,7 +20,9 @@ export function FullscreenConfetti({ numberOfPieces = 250, recycle = false }: Fu
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <Confetti
       width={viewport.width}
       height={viewport.height}
@@ -32,8 +35,9 @@ export function FullscreenConfetti({ numberOfPieces = 250, recycle = false }: Fu
         width: "100vw",
         height: "100vh",
         pointerEvents: "none",
-        zIndex: 9999,
+        zIndex: 99999,
       }}
-    />
+    />,
+    document.body
   );
 }

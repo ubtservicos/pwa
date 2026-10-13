@@ -33,6 +33,7 @@ import {
   Periodo,
 } from "@/utils/dateFilter";
 import { supabase } from "@/lib/supabase";
+import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
 
 const GREEN = "#0DB87E";
 
@@ -198,6 +199,10 @@ const GerenciarPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user.isLoading && user.role === "tomador") setActiveTab("saida");
+  }, [user.isLoading, user.role]);
+
+  useEffect(() => {
     if (!user.uid) return;
 
     const fetchAllData = async () => {
@@ -219,7 +224,10 @@ const GerenciarPage = () => {
         const { data: rides, error: errRides } = await supabase
           .from('mototaxi_corridas')
           .select('*')
-          .eq('prestador_id', user.uid);
+          .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`);
+
+        // Ledger financeiro enriquecido por JOIN seguro no banco.
+        const paymentHistory = await fetchUserPaymentHistory();
 
         const list: Transaction[] = [];
 
@@ -276,40 +284,46 @@ const GerenciarPage = () => {
           });
         }
 
-        // Add mototaxi rides
+        // Add settled mototaxi payments for both payer and provider.
+        const paidServiceIds = new Set(paymentHistory.map((payment) => payment.service_id));
+        paymentHistory.forEach((payment) => {
+          const transaction = paymentToTransaction(payment);
+          list.push(transaction);
+
+          if (payment.participant_role === 'prestador') {
+            const splitDate = payment.paid_at;
+            list.push(
+              { id: `${payment.payment_id}-split-comunidade`, type: 'split', date: splitDate, description: 'Split UBT - Comunidade', amount: Number(payment.entity_amount), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-trabalhador`, type: 'split', date: splitDate, description: 'Split UBT - Prêmio Trabalhador', amount: Number(payment.prize_worker_amount), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-tomador`, type: 'split', date: splitDate, description: 'Split UBT - Prêmio Tomador', amount: Number(payment.prize_consumer_amount), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-padrinho`, type: 'split', date: splitDate, description: 'Split UBT - Padrinhos', amount: Number(payment.godparent_amount), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1, transactionId: payment.transaction_id, serviceId: payment.service_id }
+            );
+          }
+        });
+
+        // Keep unpaid/in-progress rides visible without duplicating ledger rows.
         if (rides && !errRides) {
-          rides.forEach(r => {
-            const statusMapped = r.status === 'completed' ? 'confirmed' : (r.status === 'cancelled' ? 'cancelled' : 'pending');
-            const isCompleted = r.status === 'completed';
+          rides.filter((r) => !paidServiceIds.has(r.id)).forEach(r => {
+            const statusMapped = r.status === 'completed' || r.status === 'paid' ? 'confirmed' : (r.status === 'cancelled' ? 'cancelled' : 'pending');
             const price = Number(r.final_price || r.estimated_price);
 
             list.push({
               id: r.id,
-              type: 'entrada',
+              type: r.tomador_id === user.uid ? 'saida' : 'entrada',
               date: r.created_at,
               description: r.type === 'entrega' ? 'Entrega Mototáxi UBT' : 'Corrida Mototáxi UBT',
               amount: price,
-              status: statusMapped
+              status: statusMapped,
+              serviceId: r.id,
+              serviceType: 'mototaxi',
+              origin: r.origin?.address,
+              destination: r.destination?.address,
+              paymentMethod: r.payment_method,
+              durationMin: r.duration_min,
+              distanceKm: Number(r.distance_km || 0)
             });
-
-            if (isCompleted) {
-              list.push(
-                { id: `${r.id}-split-comunidade`, type: 'split', date: r.created_at, description: 'Split UBT - Comunidade', amount: +(price * 0.02).toFixed(2), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 2 },
-                { id: `${r.id}-split-trabalhador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Trabalhador', amount: +(price * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 1.5 },
-                { id: `${r.id}-split-tomador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Tomador', amount: +(price * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 1.5 },
-                { id: `${r.id}-split-padrinho`, type: 'split', date: r.created_at, description: 'Split UBT - Padrinho/Madrinha', amount: +(price * 0.01).toFixed(2), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1 }
-              );
-            }
           });
         }
-
-        // Exits & Draw participations
-        list.push(
-          { id: 'saida-mock-1', type: 'saida', date: new Date().toISOString(), description: 'Saque PIX para Banco', amount: 150.00, status: 'confirmed' },
-          { id: 'saida-mock-2', type: 'saida', date: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), description: 'Pagamento de Taxa Mensal', amount: 45.00, status: 'confirmed' },
-          { id: 'sorteio-mock-1', type: 'sorteio', date: new Date().toISOString(), description: 'Ticket da Sorte - Prêmio Trabalhador (1/5)', amount: 0, status: 'confirmed', sorteioStatus: 'participando', sorteioData: '01/05/2025' },
-          { id: 'sorteio-mock-2', type: 'sorteio', date: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(), description: 'Ticket da Sorte - Prêmio Tomador (1/11)', amount: 0, status: 'confirmed', sorteioStatus: 'participando', sorteioData: '01/05/2025' }
-        );
 
         setDbTransactions(list);
       } catch (err) {
