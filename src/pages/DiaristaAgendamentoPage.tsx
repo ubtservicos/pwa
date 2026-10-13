@@ -99,43 +99,16 @@ const DiaristaAgendamentoPage = () => {
             metadata: securityMetadata
           }
         });
-        if (!checkError && checkData) {
+        if (!checkError && checkData?.success === true && checkData?.status === "approved") {
           console.log("Checkout processado via Edge Function com sucesso:", checkData);
           functionSuccess = true;
         }
       } catch (funcErr) {
-        console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
+        console.error("Falha ao confirmar pagamento na Edge Function:", funcErr);
       }
 
-      // Fallback local se a Edge Function falhar ou não estiver ativa (ex: local dev ou falta de rota)
       if (!functionSuccess) {
-        const transactionId = `mp_tx_${Math.random().toString(36).substring(2, 15)}`;
-        const providerAmount = Number((ag.valorTotal * 0.90).toFixed(2));
-        const ubtAmount = Number((ag.valorTotal * 0.04).toFixed(2));
-        const entityAmount = Number((ag.valorTotal * 0.02).toFixed(2));
-        const prizeWorkerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
-        const prizeConsumerAmount = Number((ag.valorTotal * 0.015).toFixed(2));
-        const godparentAmount = Number((ag.valorTotal * 0.01).toFixed(2));
-
-        const { error: splitError } = await supabase
-          .from("pagamentos_split")
-          .insert({
-            transaction_id: transactionId,
-            status: 'approved',
-            service_type: 'diarista',
-            service_id: ag.id,
-            total_amount: ag.valorTotal,
-            provider_amount: providerAmount,
-            ubt_amount: ubtAmount,
-            entity_amount: entityAmount,
-            prize_worker_amount: prizeWorkerAmount,
-            prize_consumer_amount: prizeConsumerAmount,
-            godparent_amount: godparentAmount
-          });
-
-        if (splitError) {
-          console.error("Erro ao registrar split no banco:", splitError.message);
-        }
+        throw new Error("Pagamento não confirmado pelo gateway. Nenhum lançamento foi criado.");
       }
 
       // 3. Atualizar status na tabela diarista_agendamentos
@@ -153,7 +126,7 @@ const DiaristaAgendamentoPage = () => {
     } catch (e) {
       console.error(e);
       setProcessingPayment(false);
-      setShowRating(true);
+      alert(e instanceof Error ? e.message : "Falha ao processar pagamento.");
     }
   };
 

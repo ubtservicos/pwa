@@ -32,7 +32,6 @@ import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
 import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { createPreference, calculateSplit } from "@/lib/mercadoPago";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { validateGeofence } from "@/services/GeofenceService";
@@ -663,20 +662,7 @@ const CompletedScreen = ({
     if (result?.split?.statement) {
       console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + result.split.statement);
     }
-    // Mark ride as paid in DB
-    if (rideId) {
-      try {
-        const { error: updateErr } = await supabase
-          .from("mototaxi_corridas")
-          .update({ status: "paid" })
-          .eq("id", rideId);
-        if (updateErr) {
-          console.error("Erro Supabase PATCH ao marcar paid:", updateErr.message, updateErr.details, updateErr.hint);
-        }
-      } catch (e: any) {
-        console.error("Erro ao atualizar status para paid:", e?.message || e);
-      }
-    }
+    // payment-gateway is the only authority allowed to mark the ride as paid.
     setConfirming(true);
     setTimeout(onPay, 1500);
   };
@@ -758,7 +744,10 @@ const CompletedScreen = ({
         console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
       }
 
-      if (data?.pix?.qr_code_base64 || data?.pix?.qr_code) {
+      if (data?.status === "approved") {
+        setConfirming(true);
+        setTimeout(onPay, 1500);
+      } else if (data?.pix?.qr_code_base64 || data?.pix?.qr_code) {
         if (data.pix.qr_code_base64) {
           setQrCodeBase64(data.pix.qr_code_base64);
         }
@@ -792,21 +781,7 @@ const CompletedScreen = ({
           }
         }
       } else {
-        if (rideId) {
-          try {
-            const { error: updateErr } = await supabase
-              .from("mototaxi_corridas")
-              .update({ status: "paid" })
-              .eq("id", rideId);
-            if (updateErr) {
-              console.error("Erro Supabase PATCH ao marcar paid:", updateErr.message, updateErr.details, updateErr.hint);
-            }
-          } catch (e: any) {
-            console.error("Erro ao atualizar status para paid:", e?.message || e);
-          }
-        }
-        setConfirming(true);
-        setTimeout(onPay, 1500);
+        throw new Error("Pagamento ainda não confirmado pelo Mercado Pago.");
       }
     } catch (err: any) {
       console.error("Payment failed:", err);
@@ -828,18 +803,15 @@ const CompletedScreen = ({
   };
 
   const handleConfirmManualPaid = async () => {
-    if (rideId) {
-      try {
-        const { error: updateErr } = await supabase
-          .from("mototaxi_corridas")
-          .update({ status: "paid" })
-          .eq("id", rideId);
-        if (updateErr) {
-          console.error("Erro Supabase PATCH manual paid:", updateErr.message, updateErr.details, updateErr.hint);
-        }
-      } catch (e: any) {
-        console.error("Erro ao atualizar status para paid:", e?.message || e);
-      }
+    if (!rideId) return;
+    const { data, error } = await supabase
+      .from("mototaxi_corridas")
+      .select("status")
+      .eq("id", rideId)
+      .maybeSingle();
+    if (error || data?.status !== "paid") {
+      toast.info("Pagamento ainda não confirmado pelo Mercado Pago. Aguarde alguns segundos.");
+      return;
     }
     setConfirming(true);
     setTimeout(onPay, 1500);
@@ -1237,9 +1209,6 @@ const MototaxiTomadorPage = () => {
   const { state, setState, resetRide } = useRide();
   const [center, setCenter] = useState(UBATUBA_FALLBACK);
   const [onlineDrivers, setOnlineDrivers] = useState<any[]>([]);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<string>("");
-  const [prefData, setPrefData] = useState<any>(null);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const initOnce = useRef(false);
   const msgChannelRef = useRef<any>(null);
@@ -1320,38 +1289,6 @@ const MototaxiTomadorPage = () => {
       return () => clearTimeout(timer);
     }
   }, [incomingMessage]);
-
-  // Monitor ride state transitions to "completed" to trigger the Mercado Pago Split simulated flow
-  useEffect(() => {
-    if (state.status === "completed" && !prefData && !isProcessingPayment) {
-      const runPaymentMock = async () => {
-        setIsProcessingPayment(true);
-        setPaymentStep("Conectando ao Sandbox do Mercado Pago...");
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setPaymentStep("Criando preferência de checkout com rateio de split...");
-        try {
-          const res = await createPreference(
-            state.finalPrice || state.estimatedPrice,
-            state.rideId || "mock-ride-id",
-            state.paymentMethod || "pix"
-          );
-          setPrefData(res);
-        } catch (err) {
-          console.error(err);
-        }
-        
-        setPaymentStep("Validando credenciais do Motor Financeiro...");
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        setPaymentStep("Finalizando integração de split...");
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        setIsProcessingPayment(false);
-      };
-      runPaymentMock();
-    }
-  }, [state.status, state.finalPrice, state.estimatedPrice, state.rideId, state.paymentMethod, prefData, isProcessingPayment]);
 
   // Geolocation init
   useEffect(() => {
@@ -1914,62 +1851,8 @@ const MototaxiTomadorPage = () => {
   };
 
   const handleReset = () => {
-    setPrefData(null);
-    setIsProcessingPayment(false);
-    setPaymentStep("");
     resetRide();
   };
-
-  // Processing Payment Fullscreen simulation overlay
-  if (isProcessingPayment && state.prestadorInfo) {
-    const price = state.finalPrice || state.estimatedPrice;
-    const split = calculateSplit(price);
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#09090B] p-6 text-white">
-        <div className="w-16 h-16 border-4 border-t-transparent border-[#00FF66] rounded-full animate-spin mb-6" />
-        
-        <h2 className="font-display text-[20px] font-bold text-center mb-2">Processando Pagamento</h2>
-        <p className="font-sans text-[14px] text-center text-[#A1A1AA] mb-8">{paymentStep}</p>
-        
-        {/* Animated values panel */}
-        <div className="w-full max-w-sm bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-2xl">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-sans text-[13px] text-[#A1A1AA]">Valor da Corrida:</span>
-            <span className="font-display text-[18px] font-bold text-[#00FF66]">{formatBRL(price)}</span>
-          </div>
-          
-          <div className="h-px bg-[#27272A] my-3" />
-          
-          <p className="font-sans text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider mb-3">Distribuição do Split UBT</p>
-          
-          <div className="flex flex-col gap-2.5">
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Prestador (90%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.prestador)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Plataforma UBT (4%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.ubt)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Prêmios & Sorteios (3%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.premios)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Fundo Comunidade (2%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.comunidade)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Associação / Padrinho (1%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.associacao)}</span>
-            </div>
-          </div>
-        </div>
-        
-        <p className="mt-8 font-sans text-[11px] text-[#A1A1AA]/60 text-center uppercase tracking-widest">Mercado Pago Sandbox Environment</p>
-      </div>
-    );
-  }
 
   // Completed and rating are full-screen
   if (state.status === "completed" && state.prestadorInfo) {

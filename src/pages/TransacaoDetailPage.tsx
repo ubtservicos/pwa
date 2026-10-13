@@ -219,14 +219,6 @@ const TransacaoDetailPage = () => {
           });
         }
 
-        // Exits & Draw participations
-        list.push(
-          { id: 'saida-mock-1', type: 'saida', date: new Date().toISOString(), description: 'Saque PIX para Banco', amount: 150.00, status: 'confirmed' },
-          { id: 'saida-mock-2', type: 'saida', date: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), description: 'Pagamento de Taxa Mensal', amount: 45.00, status: 'confirmed' },
-          { id: 'sorteio-mock-1', type: 'sorteio', date: new Date().toISOString(), description: 'Ticket da Sorte - Prêmio Trabalhador (1/5)', amount: 0, status: 'confirmed', sorteioStatus: 'participando', sorteioData: '01/05/2025' },
-          { id: 'sorteio-mock-2', type: 'sorteio', date: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(), description: 'Ticket da Sorte - Prêmio Tomador (1/11)', amount: 0, status: 'confirmed', sorteioStatus: 'participando', sorteioData: '01/05/2025' }
-        );
-
         const found = list.find((x) => x.id === id);
         if (found) {
           setTx(found);

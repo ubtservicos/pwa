@@ -479,6 +479,21 @@ const PrestadorMototaxiActive = () => {
     }
   };
 
+  const handleVerifyElectronicPayment = async () => {
+    if (!ride?.id) return;
+    const { data, error } = await supabase
+      .from('mototaxi_corridas')
+      .select('status')
+      .eq('id', ride.id)
+      .maybeSingle();
+    if (error || data?.status !== 'paid') {
+      alert('O Mercado Pago ainda não confirmou este pagamento.');
+      return;
+    }
+    setIsPaymentConfirmed(true);
+    navigate(`/app/prestador/mototaxi/avaliacao/${ride.id}`);
+  };
+
   const finalize = () => {
     sessionStorage.removeItem("ubt_active_ride");
     navigate("/app/prestador/home");
@@ -555,7 +570,7 @@ const PrestadorMototaxiActive = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmCashOrManualPaid}
+                  onClick={handleVerifyElectronicPayment}
                   className="mt-4 w-full h-11 rounded-xl bg-[#0DB87E] font-display font-semibold text-white active:scale-98 transition-all"
                 >
                   Confirmar que o Pix foi Pago

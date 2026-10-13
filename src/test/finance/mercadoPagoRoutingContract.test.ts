@@ -14,6 +14,10 @@ const mototaxiCheckout = readFileSync(
   resolve(process.cwd(), "src/pages/MototaxiTomador.tsx"),
   "utf8",
 );
+const webhook = readFileSync(
+  resolve(process.cwd(), "supabase/functions/payment-webhook/index.ts"),
+  "utf8",
+);
 
 describe("Mercado Pago routing contract", () => {
   it("only sends application_fee through the Seller OAuth route", () => {
@@ -79,5 +83,24 @@ describe("Mercado Pago routing contract", () => {
     expect(gateway).toContain('status: 204');
     expect(gateway).toContain('"Access-Control-Max-Age": "86400"');
     expect(gateway).toContain('"Access-Control-Allow-Methods": "POST, OPTIONS"');
+  });
+
+  it("fails closed when the production environment or Live token is absent", () => {
+    expect(gateway).toContain("MP_ENVIRONMENT must be explicitly set");
+    expect(gateway).toContain('if (scopedToken || environment === "production") return scopedToken');
+    expect(webhook).toContain("MP_ENVIRONMENT must be explicitly set");
+    expect(webhook).toContain('environment === "sandbox" ? Deno.env.get("MP_ACCESS_TOKEN")?.trim() : ""');
+  });
+
+  it("never requests a Mercado Pago test OAuth token in production", () => {
+    expect(gateway).toContain('...(environment === "sandbox" ? { test_token: true } : {})');
+    expect(gateway).not.toContain("test_token: false");
+    expect(gateway).toContain('paymentEnvironment() === "production" && parsed.protocol !== "https:"');
+  });
+
+  it("keeps asynchronous approvals server-authoritative", () => {
+    expect(webhook).toContain('.from("mototaxi_corridas")');
+    expect(webhook).toContain('status: "paid"');
+    expect(mototaxiCheckout).not.toMatch(/\.from\(["']mototaxi_corridas["']\)[\s\S]{0,300}status:\s*["']paid["']/);
   });
 });

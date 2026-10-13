@@ -326,17 +326,13 @@ const ConfigFinanceiroPage = () => {
     setCards(newCards);
     localStorage.setItem("ubt_cards_user", JSON.stringify(newCards));
     
-    // Simular o Token gerado do MP
-    const mockToken = `mp_tok_${Math.random().toString(36).substring(2, 15)}`;
-    localStorage.setItem(`card_token_${final}`, mockToken);
-
     setShowCardModal(false);
     setCardNumber("");
     setCardHolder("");
     setCardExpiry("");
     setCardCvv("");
     setCardCpfCnpj("");
-    showToast("Cartão adicionado via Mercado Pago! ✓");
+    showToast("Cartão salvo apenas como referência. Os dados serão solicitados no checkout seguro.");
   };
 
   const showPrestadorFinance =

@@ -79,11 +79,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function paymentEnvironment(): MpEnvironment {
-  const value = (Deno.env.get("MP_ENVIRONMENT") || Deno.env.get("APP_ENV") || "sandbox")
+  const value = (Deno.env.get("MP_ENVIRONMENT") || Deno.env.get("APP_ENV") || "")
     .trim()
     .toLowerCase();
   if (value !== "sandbox" && value !== "production") {
-    throw new Error("MP_ENVIRONMENT must be 'sandbox' or 'production'");
+    throw new Error("MP_ENVIRONMENT must be explicitly set to 'sandbox' or 'production'");
   }
   return value;
 }
@@ -92,8 +92,9 @@ function platformAccessToken(environment: MpEnvironment): string {
   const scopedName = environment === "sandbox"
     ? "MP_ACCESS_TOKEN_SANDBOX"
     : "MP_ACCESS_TOKEN_PRODUCTION";
+  const scopedToken = Deno.env.get(scopedName)?.trim() ?? "";
+  if (scopedToken || environment === "production") return scopedToken;
   return (
-    Deno.env.get(scopedName) ||
     Deno.env.get("MP_ACCESS_TOKEN") ||
     Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
     ""
@@ -673,6 +674,15 @@ function allowedRedirectUri(requested: unknown): string {
   if (!candidate || !allowed.includes(candidate)) {
     throw new HttpError(400, "invalid_redirect_uri", "redirect_uri não está na allowlist MP_REDIRECT_URIS.");
   }
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new HttpError(400, "invalid_redirect_uri", "redirect_uri inválida.");
+  }
+  if (paymentEnvironment() === "production" && parsed.protocol !== "https:") {
+    throw new HttpError(400, "insecure_redirect_uri", "OAuth em produção exige redirect_uri HTTPS.");
+  }
   return candidate;
 }
 
@@ -735,7 +745,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
-      test_token: environment === "sandbox" ? "true" : "false",
+      ...(environment === "sandbox" ? { test_token: true } : {}),
     }),
   });
   const tokenData = await tokenResponse.json().catch(() => ({}));

@@ -19,6 +19,7 @@ import {
 import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { getAppOrigin } from "@/lib/appUrl";
 import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
 import { maskCPF } from "@/utils/masks";
 
@@ -619,7 +620,7 @@ export default function AdminClienteDetailPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`https://ubt-homologacao.vercel.app/onboarding?token=${user.id}`}
+                      value={`${getAppOrigin()}/onboarding?token=${user.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -636,7 +637,7 @@ export default function AdminClienteDetailPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/onboarding?token=${user.id}`, "onboarding")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${user.id}`, "onboarding")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -675,7 +676,7 @@ export default function AdminClienteDetailPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`https://ubt-homologacao.vercel.app/cadastro?ref=${user.id}`}
+                      value={`${getAppOrigin()}/cadastro?ref=${user.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -692,7 +693,7 @@ export default function AdminClienteDetailPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/cadastro?ref=${user.id}`, "padrinho")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${user.id}`, "padrinho")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",

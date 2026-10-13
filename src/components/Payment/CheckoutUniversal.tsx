@@ -75,9 +75,9 @@ function checkoutErrorMessage(error: unknown, fallback = "Erro no processamento 
 }
 
 function checkoutEnvironment(): "sandbox" | "production" {
-  const value = String(import.meta.env.VITE_MP_ENVIRONMENT || "sandbox").trim().toLowerCase();
+  const value = String(import.meta.env.VITE_MP_ENVIRONMENT || "").trim().toLowerCase();
   if (value !== "sandbox" && value !== "production") {
-    throw new Error("VITE_MP_ENVIRONMENT deve ser 'sandbox' ou 'production'.");
+    throw new Error("VITE_MP_ENVIRONMENT deve ser configurado explicitamente como 'sandbox' ou 'production'.");
   }
   return value;
 }

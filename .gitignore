@@ -25,10 +25,12 @@ dist-ssr
 
 .vercel
 .env*
+!.env.example
 .mp_test_credentials.txt
 .mp_setup_summary.txt
 .mp_e2e_evidence.json
 .supabase-secrets.sandbox.env
+.supabase-secrets.production.env
 
 # Playwright
 /test-results/
@@ -38,6 +40,7 @@ dist-ssr
 /playwright/.auth/
 
 .env*
+!.env.example
 
 # ============================================================
 # Supabase Edge Functions — Secret Environment Files
@@ -50,3 +53,21 @@ supabase/.env
 supabase/.env.local
 
 scratch/
+
+# Local Supabase link metadata must never select a remote environment from Git.
+supabase/.temp/
+
+# Sandbox-only automation; retained locally when needed, never released.
+scripts/e2e_mp_oauth_split.mjs
+scripts/setup_mp_test_users.mjs
+scripts/test-payment-gateway.mjs
+
+# Local database diagnostics and one-off data repair/seed scripts
+/approve_felipe.cjs
+/approve_felipe.js
+/check_coco_db.cjs
+/get_all_products.cjs
+/seed_ceps.cjs
+/seed_diaristas_reais.sql
+/test.cjs
+/test2.cjs

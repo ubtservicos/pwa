@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/accordion";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { getAppOrigin } from "@/lib/appUrl";
 import { maskCPF } from "@/utils/masks";
 
 export interface WaitlistItem {
@@ -152,11 +153,11 @@ export default function AdminWaitlistPage() {
       
       // Log generated onboarding URLs
       approvedLeads.forEach(lead => {
-        console.log(`✅ Link de Onboarding Gerado: https://ubt-homologacao.vercel.app/onboarding?token=${lead.id}`);
+        console.log(`✅ Link de Onboarding Gerado: ${getAppOrigin()}/onboarding?token=${lead.id}`);
       });
       if (approvedLeads.length === 0 && leadIds.length > 0) {
         leadIds.forEach(id => {
-          console.log(`✅ Link de Onboarding Gerado: https://ubt-homologacao.vercel.app/onboarding?token=${id}`);
+          console.log(`✅ Link de Onboarding Gerado: ${getAppOrigin()}/onboarding?token=${id}`);
         });
       }
       
@@ -168,7 +169,10 @@ export default function AdminWaitlistPage() {
       for (const lead of approvedLeads) {
         successCount++;
         try {
-          const agentApiUrl = import.meta.env.VITE_WHATSAPP_AGENT_URL || "https://api.ubtsuperapp.com.br/mock-whatsapp-agent";
+          const agentApiUrl = String(import.meta.env.VITE_WHATSAPP_AGENT_URL || "").trim();
+          if (!agentApiUrl) {
+            throw new Error("VITE_WHATSAPP_AGENT_URL não configurada.");
+          }
           
           const payload = {
             event: "WAITLIST_APPROVED",
@@ -187,27 +191,22 @@ export default function AdminWaitlistPage() {
           let responseOk = false;
           let errorMsg = "";
 
-          if (agentApiUrl.includes("mock") || agentApiUrl.includes("api.ubtsuperapp.com.br")) {
-            // Simulate API roundtrip delay
-            await new Promise(resolve => setTimeout(resolve, 300));
-            responseOk = true; // Mock success
-          } else {
-            try {
-              const res = await fetch(agentApiUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": "Bearer sb_publishable_WpSlHCmKqb3WMbtT-wWU0w_drB6GksT"
-                },
-                body: JSON.stringify(payload)
-              });
-              responseOk = res.ok;
-              if (!res.ok) {
-                errorMsg = await res.text();
-              }
-            } catch (netErr: any) {
-              errorMsg = netErr.message || String(netErr);
+          try {
+            const publicApiKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+            const res = await fetch(agentApiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(publicApiKey ? { "Authorization": `Bearer ${publicApiKey}` } : {}),
+              },
+              body: JSON.stringify(payload)
+            });
+            responseOk = res.ok;
+            if (!res.ok) {
+              errorMsg = await res.text();
             }
+          } catch (netErr: any) {
+            errorMsg = netErr.message || String(netErr);
           }
 
           if (responseOk) {
@@ -988,7 +987,7 @@ export default function AdminWaitlistPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`https://ubt-homologacao.vercel.app/onboarding?token=${selectedLeadModal.id}`}
+                      value={`${getAppOrigin()}/onboarding?token=${selectedLeadModal.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -1005,7 +1004,7 @@ export default function AdminWaitlistPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/onboarding?token=${selectedLeadModal.id}`, "onboarding")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${selectedLeadModal.id}`, "onboarding")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1044,7 +1043,7 @@ export default function AdminWaitlistPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`https://ubt-homologacao.vercel.app/cadastro?ref=${selectedLeadModal.id}`}
+                      value={`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -1061,7 +1060,7 @@ export default function AdminWaitlistPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/cadastro?ref=${selectedLeadModal.id}`, "padrinho")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.id}`, "padrinho")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
