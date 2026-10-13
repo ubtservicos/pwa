@@ -18,6 +18,7 @@ export interface LatLngAddr {
 }
 
 export interface PrestadorInfo {
+  id: string;
   name: string;
   photo: string;
   plate: string;

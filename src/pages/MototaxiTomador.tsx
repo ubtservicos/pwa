@@ -692,6 +692,10 @@ const CompletedScreen = ({
     setPaymentError(null);
     const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
     try {
+      const providerId = String(prestadorInfo?.id || "").trim();
+      if (!providerId) {
+        throw new Error("O prestador desta corrida não foi identificado. Atualize a página antes de pagar.");
+      }
       const session = (await supabase.auth.getSession()).data.session;
       const userEmail = session?.user?.email || user?.email || "";
       const userCpf = (user?.cpf || (session?.user?.user_metadata as any)?.cpf || "").replace(/\D/g, "");
@@ -717,8 +721,8 @@ const CompletedScreen = ({
         service_id: rideId || crypto.randomUUID(),
         external_reference: rideId || undefined,
         transaction_amount: finalAmount,
-        provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
-        provider_name: prestadorInfo?.name || "Silvina Luz",
+        provider_id: providerId,
+        provider_name: prestadorInfo?.name || "Motorista UBT",
         payer_email: userEmail || undefined,
         payer: Object.keys(payerData).length > 0 ? payerData : undefined,
         payer_first_name: firstName || undefined,
@@ -1049,15 +1053,21 @@ const CompletedScreen = ({
 
       {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO — Delegated to CheckoutUniversal */}
       {method === "card" && (
-        <CheckoutUniversal
-          amount={feeCalc.totalAmount}
-          providerId={prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0"}
-          providerName={prestadorInfo?.name || "Silvina Luz"}
-          serviceType="mototaxi"
-          serviceId={rideId}
-          onSuccess={handleCardPaymentSuccess}
-          onError={handleCardPaymentError}
-        />
+        prestadorInfo?.id ? (
+          <CheckoutUniversal
+            amount={feeCalc.totalAmount}
+            providerId={prestadorInfo.id}
+            providerName={prestadorInfo.name || "Motorista UBT"}
+            serviceType="mototaxi"
+            serviceId={rideId}
+            onSuccess={handleCardPaymentSuccess}
+            onError={handleCardPaymentError}
+          />
+        ) : (
+          <div className="mt-4 p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium">
+            O prestador desta corrida não foi identificado. Atualize a página antes de pagar.
+          </div>
+        )
       )}
 
       {/* METHOD CONTENT 4: EM DINHEIRO */}
@@ -1473,6 +1483,7 @@ const MototaxiTomadorPage = () => {
               .single();
 
             prestadorInfo = {
+              id: dbRide.prestador_id,
               name: userData?.nome || 'Motorista UBT',
               photo: '',
               plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
@@ -1532,6 +1543,7 @@ const MototaxiTomadorPage = () => {
                     .single();
 
                   prestadorInfo = {
+                    id: dbRide.prestador_id,
                     name: userData?.nome || 'Motorista UBT',
                     photo: '',
                     plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),

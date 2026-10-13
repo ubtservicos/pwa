@@ -10,6 +10,10 @@ const checkout = readFileSync(
   resolve(process.cwd(), "src/components/Payment/CheckoutUniversal.tsx"),
   "utf8",
 );
+const mototaxiCheckout = readFileSync(
+  resolve(process.cwd(), "src/pages/MototaxiTomador.tsx"),
+  "utf8",
+);
 
 describe("Mercado Pago routing contract", () => {
   it("only sends application_fee through the Seller OAuth route", () => {
@@ -62,5 +66,11 @@ describe("Mercado Pago routing contract", () => {
     expect(checkout).toContain("function checkoutErrorMessage");
     expect(checkout).toContain("collectErrorParts");
     expect(checkout).toContain('checkoutEnvironment() === "sandbox" ? "APRO" : ""');
+  });
+
+  it("routes mototaxi payment to the provider persisted on the accepted ride", () => {
+    expect(mototaxiCheckout).toContain("id: dbRide.prestador_id");
+    expect(mototaxiCheckout).toContain("providerId={prestadorInfo.id}");
+    expect(mototaxiCheckout).not.toContain('prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0"');
   });
 });
