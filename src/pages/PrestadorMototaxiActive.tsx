@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Navigation, MapPin, CheckCircle2, Star, MessageSquare,
@@ -8,11 +8,12 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
-import Confetti from "react-confetti";
+import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { calcSplit, formatBRL, SPLIT_META } from "@/utils/ride";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
+import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
 
 const ICONS = { User: UserIcon, Building2, Users, Gift, Star, Heart } as const;
 type IconKey = keyof typeof ICONS;
@@ -395,73 +396,42 @@ const PrestadorMototaxiActive = () => {
     };
   }, [user.uid, myLocation]);
 
-  // Escutar cancelamento da corrida pelo passageiro
+  const handleRideUpdate = useCallback((payload: any) => {
+    const updated = payload.new;
+    if (!updated) return;
+    if (updated.status === 'cancelled') {
+      alert('A corrida foi cancelada pelo passageiro.');
+      sessionStorage.removeItem("ubt_active_ride");
+      navigate("/app/prestador/home");
+    } else if (updated.status === 'paid') {
+      setIsPaymentConfirmed(true);
+    }
+    if (updated.payment_method) setPaymentMethodSelected(updated.payment_method);
+  }, [navigate]);
+
+  useRealtimeChannel(
+    ride?.id ? `active_ride_${ride.id}` : null,
+    { event: 'UPDATE', table: 'mototaxi_corridas', filter: ride?.id ? `id=eq.${ride.id}` : undefined },
+    handleRideUpdate
+  );
+
+  // Polling leve garante convergência quando a rede/browser bloquear WebSocket.
   useEffect(() => {
-    if (!ride?.id) return;
-
-    let channel: any = null;
-
-    const setupRideChannel = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      channel = supabase
-        .channel(`active_ride_${ride.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${ride.id}` },
-          (payload: any) => {
-            if (payload.new) {
-              if (payload.new.status === 'cancelled') {
-                alert('A corrida foi cancelada pelo passageiro.');
-                sessionStorage.removeItem("ubt_active_ride");
-                navigate("/app/prestador/home");
-              } else if (payload.new.status === 'paid') {
-                setIsPaymentConfirmed(true);
-              }
-              if (payload.new.payment_method) {
-                setPaymentMethodSelected(payload.new.payment_method);
-              }
-            }
-          }
-        )
-        .subscribe();
+    if (!ride?.id || phase !== "completed" || isPaymentConfirmed) return;
+    const checkPayment = async () => {
+      if (document.hidden) return;
+      const { data } = await supabase
+        .from('mototaxi_corridas')
+        .select('status, payment_method')
+        .eq('id', ride.id)
+        .maybeSingle();
+      if (data?.status === 'paid') setIsPaymentConfirmed(true);
+      if (data?.payment_method) setPaymentMethodSelected(data.payment_method);
     };
-
-    setupRideChannel();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (channel) {
-          try { supabase.removeChannel(channel); } catch { /* noop */ }
-          channel = null;
-        }
-      } else if (document.visibilityState === "visible") {
-        setupRideChannel();
-      }
-    };
-
-    const handlePageHide = () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-        channel = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", setupRideChannel);
-
-    return () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", setupRideChannel);
-    };
-  }, [ride?.id, navigate]);
+    void checkPayment();
+    const timer = window.setInterval(checkPayment, 5000);
+    return () => window.clearInterval(timer);
+  }, [ride?.id, phase, isPaymentConfirmed]);
 
   if (!ride) return null;
 
@@ -530,7 +500,7 @@ const PrestadorMototaxiActive = () => {
         className="min-h-[100svh] overflow-y-auto text-zinc-100 relative overflow-hidden"
         style={{ background: "var(--prestador-bg)", padding: 24, paddingBottom: 96 }}
       >
-        {isPaymentConfirmed && <Confetti numberOfPieces={250} recycle={false} />}
+        {isPaymentConfirmed && <FullscreenConfetti numberOfPieces={250} />}
         <div className="text-center pt-4">
           <CheckCircle2 size={48} color="#0DB87E" className="mx-auto" />
           <h1 className="mt-3 font-display text-[22px] font-bold text-white">

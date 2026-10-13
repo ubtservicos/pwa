@@ -26,7 +26,7 @@ import {
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
 import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
-import Confetti from "react-confetti";
+import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
@@ -36,7 +36,6 @@ import { createPreference, calculateSplit } from "@/lib/mercadoPago";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { validateGeofence } from "@/services/GeofenceService";
-import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import CheckoutUniversal from "@/components/Payment/CheckoutUniversal";
@@ -1102,7 +1101,7 @@ const CompletedScreen = ({
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center relative overflow-hidden" style={{ background: "rgba(11,27,62,0.95)" }}>
-          <Confetti numberOfPieces={200} recycle={false} />
+          <FullscreenConfetti numberOfPieces={200} />
           <CheckCircle2 size={80} style={{ color: "#0DB87E", animation: "ubt-scale-in 400ms ease-out" }} />
           <p className="mt-4 font-display text-[20px] font-bold text-white">Pagamento confirmado!</p>
         </div>
@@ -1140,7 +1139,7 @@ const RatingScreen = ({
   if (done) {
     return (
       <div className="min-h-[100svh] bg-navy text-white flex flex-col items-center justify-center px-6 text-center relative overflow-hidden">
-        <Confetti numberOfPieces={250} recycle={false} />
+        <FullscreenConfetti numberOfPieces={250} />
         <Trophy size={64} style={{ color: "#F5A623" }} />
         <h2 className="mt-4 font-display text-[22px] font-bold">Obrigado!</h2>
         <p className="mt-2 font-sans text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
@@ -1859,23 +1858,8 @@ const MototaxiTomadorPage = () => {
       window.location.href = "/login";
       return;
     }
-    // Tenta chamar a Edge Function segura no backend
-    try {
-      const securityMetadata = collectPaymentMetadata();
-      await supabase.functions.invoke("checkout", {
-        body: {
-          service_type: "mototaxi",
-          service_id: state.rideId,
-          customer_id: user.uid,
-          provider_id: state.prestadorId || "",
-          amount: state.finalPrice || state.estimatedPrice,
-          payment_method: state.paymentMethod || "pix",
-          metadata: securityMetadata
-        }
-      });
-    } catch (funcErr) {
-      console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
-    }
+    // A confirmação financeira já foi persistida pelo fluxo de pagamento.
+    // Evita uma segunda escrita pela função legada `checkout` após o sucesso.
     setState({ status: "rating", paymentMethod: state.paymentMethod || "pix" });
   };
 
