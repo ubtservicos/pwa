@@ -73,4 +73,11 @@ describe("Mercado Pago routing contract", () => {
     expect(mototaxiCheckout).toContain("providerId={prestadorInfo.id}");
     expect(mototaxiCheckout).not.toContain('prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0"');
   });
+
+  it("answers CORS preflight before payment processing", () => {
+    expect(gateway).toContain('req.method === "OPTIONS"');
+    expect(gateway).toContain('status: 204');
+    expect(gateway).toContain('"Access-Control-Max-Age": "86400"');
+    expect(gateway).toContain('"Access-Control-Allow-Methods": "POST, OPTIONS"');
+  });
 });

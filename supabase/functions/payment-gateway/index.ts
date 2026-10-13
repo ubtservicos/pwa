@@ -110,12 +110,13 @@ function corsHeaders(req: Request): Record<string, string> {
     ? origin
     : paymentEnvironment() === "sandbox" && configured.length === 0
       ? "*"
-      : configured[0] || "null";
+      : "null";
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
@@ -987,7 +988,9 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
 }
 
 serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders(req) });
+  }
   if (req.method !== "POST") return json(req, { success: false, error: "method_not_allowed" }, 405);
 
   let requestAuditContext: Record<string, unknown> = {};
