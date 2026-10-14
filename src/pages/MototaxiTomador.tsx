@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
-import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
+import QuickStatusMessages, { type QuickMessageItem } from "@/components/mototaxi/QuickStatusMessages";
+import { useMototaxiQuickMessages, type MototaxiChatStatus } from "@/hooks/useMototaxiQuickMessages";
 import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
@@ -417,13 +418,21 @@ const AcceptedSheet = ({
   onCancel,
   onArrive,
   onSendMessage,
+  messages,
+  chatStatus,
+  isSendingMessage,
+  chatError,
 }: {
   prestador: { name?: string; plate?: string; rating?: number };
   durationMin: number;
   acceptedAt: number;
   onCancel: () => void;
   onArrive: () => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => void | Promise<void>;
+  messages: QuickMessageItem[];
+  chatStatus: MototaxiChatStatus;
+  isSendingMessage: boolean;
+  chatError: string | null;
 }) => {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -480,7 +489,15 @@ const AcceptedSheet = ({
         <div className="h-full" style={{ background: "#0DB87E", width: `${Math.min(100, (elapsed / ((durationMin || 5) * 60)) * 100)}%`, transition: "width 1s linear" }} />
       </div>
 
-      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
+      <QuickStatusMessages
+        role="tomador"
+        onSendMessage={onSendMessage}
+        messages={messages}
+        connectionStatus={chatStatus}
+        isSending={isSendingMessage}
+        error={chatError}
+        className="mt-4"
+      />
 
       {canCancelFree && (
         <button
@@ -500,10 +517,18 @@ const InProgressSheet = ({
   durationMin,
   onComplete,
   onSendMessage,
+  messages,
+  chatStatus,
+  isSendingMessage,
+  chatError,
 }: {
   durationMin: number;
   onComplete: () => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => void | Promise<void>;
+  messages: QuickMessageItem[];
+  chatStatus: MototaxiChatStatus;
+  isSendingMessage: boolean;
+  chatError: string | null;
 }) => {
   const [showEmergency, setShowEmergency] = useState(false);
 
@@ -521,7 +546,15 @@ const InProgressSheet = ({
         </span>
       </div>
 
-      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
+      <QuickStatusMessages
+        role="tomador"
+        onSendMessage={onSendMessage}
+        messages={messages}
+        connectionStatus={chatStatus}
+        isSending={isSendingMessage}
+        error={chatError}
+        className="mt-4"
+      />
 
       <button
         onClick={() => setShowEmergency(true)}
@@ -1211,77 +1244,9 @@ const MototaxiTomadorPage = () => {
   const [onlineDrivers, setOnlineDrivers] = useState<any[]>([]);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const initOnce = useRef(false);
-  const msgChannelRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!state.rideId) return;
-
-    let channel: any = null;
-
-    const setupMsgChannel = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      channel = supabase.channel(`ride_msg_${state.rideId}`);
-      channel
-        .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-          if (payload?.from === 'prestador') {
-            setState((prev) => ({
-              ...prev,
-              messages: [...(prev.messages || []), payload]
-            }));
-            if (payload?.text) {
-              setIncomingMessage({
-                text: payload.text,
-                sender: 'Motorista',
-              });
-            }
-          }
-        })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            msgChannelRef.current = channel;
-          }
-        });
-    };
-
-    setupMsgChannel();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (channel) {
-          try { supabase.removeChannel(channel); } catch { /* noop */ }
-          channel = null;
-          msgChannelRef.current = null;
-        }
-      } else if (document.visibilityState === "visible") {
-        setupMsgChannel();
-      }
-    };
-
-    const handlePageHide = () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-        channel = null;
-        msgChannelRef.current = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", setupMsgChannel);
-
-    return () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      msgChannelRef.current = null;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", setupMsgChannel);
-    };
-  }, [state.rideId]);
+  const mototaxiChat = useMototaxiQuickMessages(state.rideId, "tomador", (message) => {
+    setIncomingMessage({ text: message.text, sender: "Motorista" });
+  });
 
   useEffect(() => {
     if (incomingMessage) {
@@ -1816,37 +1781,12 @@ const MototaxiTomadorPage = () => {
     setState({ status: "rating", paymentMethod: state.paymentMethod || "pix" });
   };
 
-  const sendMessage = (text: string) => {
-    const newMsg = { text, from: "tomador" as const, ts: Date.now() };
-    setState((prev) => ({
-      ...prev,
-      messages: [...(prev.messages || []), newMsg],
-    }));
-    if (state.rideId) {
-      try {
-        if (msgChannelRef.current) {
-          msgChannelRef.current.send({
-            type: 'broadcast',
-            event: 'quick_message',
-            payload: newMsg
-          });
-        } else {
-          const channel = supabase
-            .channel(`ride_msg_${state.rideId}`)
-            .on('broadcast', { event: 'quick_message' }, () => {})
-            .subscribe((status) => {
-              if (status === 'SUBSCRIBED') {
-                channel.send({
-                  type: 'broadcast',
-                  event: 'quick_message',
-                  payload: newMsg
-                });
-              }
-            });
-        }
-      } catch (e) {
-        console.warn("Falha ao transmitir mensagem do tomador:", e);
-      }
+  const sendMessage = async (text: string) => {
+    try {
+      await mototaxiChat.sendMessage(text);
+    } catch (error) {
+      console.warn("Falha ao enviar mensagem do tomador:", error);
+      toast.error("Não foi possível enviar a mensagem.");
     }
   };
 
@@ -1975,6 +1915,10 @@ const MototaxiTomadorPage = () => {
           onCancel={handleCancel}
           onArrive={handleArrive}
           onSendMessage={sendMessage}
+          messages={mototaxiChat.messages}
+          chatStatus={mototaxiChat.status}
+          isSendingMessage={mototaxiChat.isSending}
+          chatError={mototaxiChat.error}
         />
       )}
 
@@ -1983,6 +1927,10 @@ const MototaxiTomadorPage = () => {
           durationMin={state.durationMin}
           onComplete={handleComplete}
           onSendMessage={sendMessage}
+          messages={mototaxiChat.messages}
+          chatStatus={mototaxiChat.status}
+          isSendingMessage={mototaxiChat.isSending}
+          chatError={mototaxiChat.error}
         />
       )}
 

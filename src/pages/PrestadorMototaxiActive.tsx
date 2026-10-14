@@ -14,6 +14,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
 import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
+import { useMototaxiQuickMessages } from "@/hooks/useMototaxiQuickMessages";
 import { RidePaymentSummary } from "@/components/mototaxi/RidePaymentSummary";
 
 const ICONS = { User: UserIcon, Building2, Users, Gift, Star, Heart } as const;
@@ -73,7 +74,9 @@ const PrestadorMototaxiActive = () => {
   const [pixQrBase64, setPixQrBase64] = useState<string>("");
   const [pixCopiaColaCode, setPixCopiaColaCode] = useState<string>("");
   const [isPixLoading, setIsPixLoading] = useState<boolean>(false);
-  const msgChannelRef = useRef<any>(null);
+  const mototaxiChat = useMototaxiQuickMessages(ride?.id, "prestador", (message) => {
+    setIncomingMessage({ text: message.text, sender: "Passageiro(a)" });
+  });
 
   useEffect(() => {
     if (!ride?.id) return;
@@ -87,15 +90,6 @@ const PrestadorMototaxiActive = () => {
       }
       channel = supabase
         .channel(`ride_msg_${ride.id}`)
-        .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-          console.log('Mensagem rápida recebida pelo prestador:', payload);
-          if (payload?.text && payload?.from === 'tomador') {
-            setIncomingMessage({
-              text: payload.text,
-              sender: 'Passageiro(a)',
-            });
-          }
-        })
         .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
           console.log('Método de pagamento selecionado pelo passageiro:', payload);
           if (payload?.method || payload?.dbMethod) {
@@ -123,11 +117,7 @@ const PrestadorMototaxiActive = () => {
             setPixCopiaColaCode(payload.qr_code);
           }
         })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            msgChannelRef.current = channel;
-          }
-        });
+        .subscribe();
     };
 
     setupMsgChannel();
@@ -137,7 +127,6 @@ const PrestadorMototaxiActive = () => {
         if (channel) {
           try { supabase.removeChannel(channel); } catch { /* noop */ }
           channel = null;
-          msgChannelRef.current = null;
         }
       } else if (document.visibilityState === "visible") {
         setupMsgChannel();
@@ -148,7 +137,6 @@ const PrestadorMototaxiActive = () => {
       if (channel) {
         try { supabase.removeChannel(channel); } catch { /* noop */ }
         channel = null;
-        msgChannelRef.current = null;
       }
     };
 
@@ -160,7 +148,6 @@ const PrestadorMototaxiActive = () => {
       if (channel) {
         try { supabase.removeChannel(channel); } catch { /* noop */ }
       }
-      msgChannelRef.current = null;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", setupMsgChannel);
@@ -175,32 +162,11 @@ const PrestadorMototaxiActive = () => {
   }, [incomingMessage]);
 
   const handleSendQuickMessage = async (text: string) => {
-    setLastSentPhrase(text);
-    if (ride?.id) {
-      try {
-        if (msgChannelRef.current) {
-          await msgChannelRef.current.send({
-            type: 'broadcast',
-            event: 'quick_message',
-            payload: { text, from: 'prestador', ts: Date.now() }
-          });
-        } else {
-          const channel = supabase
-            .channel(`ride_msg_${ride.id}`)
-            .on('broadcast', { event: 'quick_message' }, () => {})
-            .subscribe((status) => {
-              if (status === 'SUBSCRIBED') {
-                channel.send({
-                  type: 'broadcast',
-                  event: 'quick_message',
-                  payload: { text, from: 'prestador', ts: Date.now() }
-                });
-              }
-            });
-        }
-      } catch (e) {
-        console.warn("Falha ao transmitir mensagem do prestador:", e);
-      }
+    try {
+      await mototaxiChat.sendMessage(text);
+      setLastSentPhrase(text);
+    } catch (error) {
+      console.warn("Falha ao enviar mensagem do prestador:", error);
     }
   };
 
@@ -823,6 +789,10 @@ const PrestadorMototaxiActive = () => {
               role="prestador"
               onSendMessage={handleSendQuickMessage}
               lastSentPhrase={lastSentPhrase}
+              messages={mototaxiChat.messages}
+              connectionStatus={mototaxiChat.status}
+              isSending={mototaxiChat.isSending}
+              error={mototaxiChat.error}
               className="mt-3"
             />
 
@@ -857,6 +827,10 @@ const PrestadorMototaxiActive = () => {
               role="prestador"
               onSendMessage={handleSendQuickMessage}
               lastSentPhrase={lastSentPhrase}
+              messages={mototaxiChat.messages}
+              connectionStatus={mototaxiChat.status}
+              isSending={mototaxiChat.isSending}
+              error={mototaxiChat.error}
               className="mt-3"
             />
 
