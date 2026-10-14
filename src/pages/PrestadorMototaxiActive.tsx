@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Navigation, MapPin, CheckCircle2, Star, MessageSquare,
   User as UserIcon, Building2, Users, Gift, Heart,
-  Scan, Smartphone, CreditCard, Banknote, Copy, Check, QrCode,
+  Scan, CreditCard, Banknote, Copy, Check, QrCode,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
@@ -38,6 +38,10 @@ interface ActiveRide {
   originCoords?: { lat: number; lng: number };
   destinationCoords?: { lat: number; lng: number };
   paymentMethod?: string;
+  pixCopyPaste?: string;
+  pixQrCodeBase64?: string;
+  pixPaymentId?: string;
+  pixChargeStatus?: string;
   startTime?: number | string;
   created_at?: string;
 }
@@ -74,85 +78,11 @@ const PrestadorMototaxiActive = () => {
   const [pixQrBase64, setPixQrBase64] = useState<string>("");
   const [pixCopiaColaCode, setPixCopiaColaCode] = useState<string>("");
   const [isPixLoading, setIsPixLoading] = useState<boolean>(false);
+  const [pixError, setPixError] = useState<string | null>(null);
+  const paidNavigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mototaxiChat = useMototaxiQuickMessages(ride?.id, "prestador", (message) => {
     setIncomingMessage({ text: message.text, sender: "Passageiro(a)" });
   });
-
-  useEffect(() => {
-    if (!ride?.id) return;
-
-    let channel: any = null;
-
-    const setupMsgChannel = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      channel = supabase
-        .channel(`ride_msg_${ride.id}`)
-        .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
-          console.log('Método de pagamento selecionado pelo passageiro:', payload);
-          if (payload?.method || payload?.dbMethod) {
-            const chosen = payload.method || payload.dbMethod;
-            setPaymentMethodSelected(chosen);
-            if (chosen === "pix_scanner" && !payload?.qr_code_base64) {
-              setIsPixLoading(true);
-            }
-          }
-          if (payload?.qr_code_base64) {
-            setPixQrBase64(payload.qr_code_base64);
-            setIsPixLoading(false);
-          }
-          if (payload?.qr_code) {
-            setPixCopiaColaCode(payload.qr_code);
-          }
-        })
-        .on('broadcast', { event: 'pix_qr_ready' }, ({ payload }) => {
-          console.log('QR Code Pix dinâmico recebido da API:', payload);
-          if (payload?.qr_code_base64) {
-            setPixQrBase64(payload.qr_code_base64);
-            setIsPixLoading(false);
-          }
-          if (payload?.qr_code) {
-            setPixCopiaColaCode(payload.qr_code);
-          }
-        })
-        .subscribe();
-    };
-
-    setupMsgChannel();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (channel) {
-          try { supabase.removeChannel(channel); } catch { /* noop */ }
-          channel = null;
-        }
-      } else if (document.visibilityState === "visible") {
-        setupMsgChannel();
-      }
-    };
-
-    const handlePageHide = () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-        channel = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", setupMsgChannel);
-
-    return () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", setupMsgChannel);
-    };
-  }, [ride?.id]);
 
   useEffect(() => {
     if (incomingMessage) {
@@ -195,16 +125,22 @@ const PrestadorMototaxiActive = () => {
             destination: destObj?.address || 'Destino',
             distanceKm: Number(data.distance_km || 0),
             durationMin: data.duration_min || 0,
-            price: Number(data.estimated_price || 0),
+            price: Number(data.final_price || data.estimated_price || 0),
             originCoords: { lat: Number(originObj?.lat || UBATUBA.lat), lng: Number(originObj?.lng || UBATUBA.lng) },
             destinationCoords: { lat: Number(destObj?.lat || UBATUBA.lat), lng: Number(destObj?.lng || UBATUBA.lng) },
             paymentMethod: data.payment_method,
+            pixCopyPaste: data.pix_copy_paste || undefined,
+            pixQrCodeBase64: data.pix_qr_code_base64 || undefined,
+            pixPaymentId: data.pix_payment_id || undefined,
+            pixChargeStatus: data.pix_charge_status || undefined,
             startTime: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
             created_at: data.created_at,
           });
           if (data.payment_method) {
             setPaymentMethodSelected(data.payment_method);
           }
+          if (data.pix_copy_paste) setPixCopiaColaCode(data.pix_copy_paste);
+          if (data.pix_qr_code_base64) setPixQrBase64(data.pix_qr_code_base64);
           if (data.status === 'in_progress') {
             setPhase("in_progress");
           } else if (data.status === 'completed') {
@@ -353,6 +289,18 @@ const PrestadorMototaxiActive = () => {
     };
   }, [user.uid, myLocation]);
 
+  const transitionToPaid = useCallback((rideId: string) => {
+    setIsPaymentConfirmed(true);
+    if (paidNavigationTimerRef.current) return;
+    paidNavigationTimerRef.current = setTimeout(() => {
+      navigate(`/app/prestador/mototaxi/avaliacao/${rideId}`);
+    }, 1800);
+  }, [navigate]);
+
+  useEffect(() => () => {
+    if (paidNavigationTimerRef.current) clearTimeout(paidNavigationTimerRef.current);
+  }, []);
+
   const handleRideUpdate = useCallback((payload: any) => {
     const updated = payload.new;
     if (!updated) return;
@@ -361,11 +309,19 @@ const PrestadorMototaxiActive = () => {
       sessionStorage.removeItem("ubt_active_ride");
       navigate("/app/prestador/home");
     } else if (updated.status === 'paid') {
-      setIsPaymentConfirmed(true);
-      navigate(`/app/prestador/mototaxi/avaliacao/${updated.id}`);
+      transitionToPaid(updated.id);
     }
     if (updated.payment_method) setPaymentMethodSelected(updated.payment_method);
-  }, [navigate]);
+    if (updated.pix_copy_paste) {
+      setPixCopiaColaCode(updated.pix_copy_paste);
+      setIsPixLoading(false);
+      setPixError(null);
+    }
+    if (updated.pix_qr_code_base64) {
+      setPixQrBase64(updated.pix_qr_code_base64);
+      setIsPixLoading(false);
+    }
+  }, [navigate, transitionToPaid]);
 
   useRealtimeChannel(
     ride?.id ? `active_ride_${ride.id}` : null,
@@ -380,19 +336,20 @@ const PrestadorMototaxiActive = () => {
       if (document.hidden) return;
       const { data } = await supabase
         .from('mototaxi_corridas')
-        .select('status, payment_method')
+        .select('status, payment_method, pix_copy_paste, pix_qr_code_base64')
         .eq('id', ride.id)
         .maybeSingle();
       if (data?.status === 'paid') {
-        setIsPaymentConfirmed(true);
-        navigate(`/app/prestador/mototaxi/avaliacao/${ride.id}`);
+        transitionToPaid(ride.id);
       }
       if (data?.payment_method) setPaymentMethodSelected(data.payment_method);
+      if (data?.pix_copy_paste) setPixCopiaColaCode(data.pix_copy_paste);
+      if (data?.pix_qr_code_base64) setPixQrBase64(data.pix_qr_code_base64);
     };
     void checkPayment();
     const timer = window.setInterval(checkPayment, 5000);
     return () => window.clearInterval(timer);
-  }, [ride?.id, phase, isPaymentConfirmed, navigate]);
+  }, [ride?.id, phase, isPaymentConfirmed, transitionToPaid]);
 
   if (!ride) return null;
 
@@ -424,6 +381,50 @@ const PrestadorMototaxiActive = () => {
     }
   };
 
+  const generatePixCharge = async () => {
+    if (!ride?.id || !user.uid || isPixLoading) return;
+    setIsPixLoading(true);
+    setPixError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "create_mototaxi_pix_charge",
+          service_type: "mototaxi",
+          service_id: ride.id,
+          provider_id: user.uid,
+          payment_attempt_id: ride.id,
+          transaction_amount: Number(ride.price.toFixed(2)),
+          payment_method_id: "pix",
+          description: `Corrida UBT Mototáxi ${ride.id.slice(0, 8)}`,
+        },
+      });
+
+      if (error || !data || data.success === false || data.error) {
+        throw new Error(data?.message || data?.error || error?.message || "Não foi possível gerar a cobrança Pix.");
+      }
+
+      const copyPaste = String(data?.pix?.qr_code || "").trim();
+      if (!copyPaste) throw new Error("O Mercado Pago não devolveu o código Pix.");
+      setPaymentMethodSelected("pix");
+      setPixCopiaColaCode(copyPaste);
+      setPixQrBase64(String(data?.pix?.qr_code_base64 || ""));
+      setRide((current) => current ? {
+        ...current,
+        paymentMethod: "pix",
+        pixCopyPaste: copyPaste,
+        pixQrCodeBase64: String(data?.pix?.qr_code_base64 || ""),
+        pixPaymentId: String(data?.pix?.payment_id || data?.payment_id || ""),
+        pixChargeStatus: String(data?.pix?.status || data?.status || "pending"),
+      } : current);
+    } catch (error: any) {
+      const message = error?.message || "Erro ao gerar cobrança Pix.";
+      setPixError(message);
+      console.error("[PrestadorMototaxiActive] Falha ao gerar Pix:", error);
+    } finally {
+      setIsPixLoading(false);
+    }
+  };
+
   const handleConfirmCashOrManualPaid = async () => {
     if (!ride?.id) return;
     setIsConfirmingCash(true);
@@ -445,21 +446,6 @@ const PrestadorMototaxiActive = () => {
     }
   };
 
-  const handleVerifyElectronicPayment = async () => {
-    if (!ride?.id) return;
-    const { data, error } = await supabase
-      .from('mototaxi_corridas')
-      .select('status')
-      .eq('id', ride.id)
-      .maybeSingle();
-    if (error || data?.status !== 'paid') {
-      alert('O Mercado Pago ainda não confirmou este pagamento.');
-      return;
-    }
-    setIsPaymentConfirmed(true);
-    navigate(`/app/prestador/mototaxi/avaliacao/${ride.id}`);
-  };
-
   const finalize = () => {
     sessionStorage.removeItem("ubt_active_ride");
     navigate("/app/prestador/home");
@@ -469,8 +455,6 @@ const PrestadorMototaxiActive = () => {
   if (phase === "completed") {
     const youReceive = (ride.price || 0) * 0.9;
     const split = calcSplit(ride.price || 0);
-    const pixPayload = `00020126580014BR.GOV.BCB.PIX0136ubt.pagamentos@ubatuba.sp.gov.br520400005303986540${(ride.price || 0).toFixed(2)}5802BR5913UBT SERVICOS6007UBATUBA62070503***6304`;
-
     return (
       <div
         className="min-h-[100svh] overflow-y-auto text-zinc-100 relative overflow-hidden"
@@ -493,12 +477,12 @@ const PrestadorMototaxiActive = () => {
         {/* PAYMENT METHOD ACTIVE DISPLAY ON PRESTADOR */}
         {!isPaymentConfirmed && (
           <div className="mt-4">
-            {paymentMethodSelected === "pix_scanner" && (
+            {pixCopiaColaCode && (
               <div className="rounded-2xl p-5 bg-zinc-900/90 border border-[#0DB87E]/40 text-center flex flex-col items-center shadow-xl">
                 <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
                   <Scan size={24} className="text-[#0DB87E]" />
                 </div>
-                <h2 className="font-display text-[16px] font-bold text-white">Pix Scanner Solicitado</h2>
+                <h2 className="font-display text-[16px] font-bold text-white">Cobrança Pix gerada</h2>
                 <p className="font-sans text-[12px] text-white/70 mt-1 mb-3">
                   Apresente este QR Code para o passageiro ler no aplicativo do banco dele:
                 </p>
@@ -510,11 +494,15 @@ const PrestadorMototaxiActive = () => {
                   </div>
                 ) : pixQrBase64 ? (
                   <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
-                    <img src={`data:image/png;base64,${pixQrBase64}`} alt="QR Code Pix Dinâmico" className="w-[180px] h-[180px] object-contain mx-auto" />
+                    <img
+                      src={pixQrBase64.startsWith("data:image/") ? pixQrBase64 : `data:image/png;base64,${pixQrBase64}`}
+                      alt="QR Code Pix dinâmico para pagamento da corrida"
+                      className="w-[220px] h-[220px] object-contain mx-auto"
+                    />
                   </div>
                 ) : (
                   <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
-                    <QRCodeSVG value={pixCopiaColaCode || pixPayload} size={180} level="M" />
+                    <QRCodeSVG value={pixCopiaColaCode} size={180} level="M" />
                   </div>
                 )}
 
@@ -524,8 +512,7 @@ const PrestadorMototaxiActive = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const codeToCopy = pixCopiaColaCode || pixPayload;
-                    navigator.clipboard.writeText(codeToCopy);
+                    navigator.clipboard.writeText(pixCopiaColaCode);
                     setCopiedPix(true);
                     setTimeout(() => setCopiedPix(false), 3000);
                   }}
@@ -534,13 +521,31 @@ const PrestadorMototaxiActive = () => {
                   {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
                   {copiedPix ? "Código Pix Copiado!" : "Copiar Chave Copia e Cola"}
                 </button>
+                <div className="mt-4 flex items-center justify-center gap-2 text-amber-400 text-[12px]">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  Aguardando confirmação automática do Mercado Pago...
+                </div>
+              </div>
+            )}
+
+            {!pixCopiaColaCode && paymentMethodSelected !== "cash" && paymentMethodSelected !== "dinheiro" && (
+              <div className="rounded-2xl p-5 bg-zinc-900/90 border border-[#0DB87E]/30 text-center shadow-xl">
+                <div className="w-12 h-12 mx-auto rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-3">
+                  <QrCode size={24} className="text-[#0DB87E]" />
+                </div>
+                <h2 className="font-display text-[16px] font-bold text-white">Cobrança Pix presencial</h2>
+                <p className="font-sans text-[12px] text-white/65 mt-1 mb-4">
+                  Gere a cobrança e apresente o QR Code ao passageiro. O código também aparecerá automaticamente no celular dele.
+                </p>
                 <button
                   type="button"
-                  onClick={handleVerifyElectronicPayment}
-                  className="mt-4 w-full h-11 rounded-xl bg-[#0DB87E] font-display font-semibold text-white active:scale-98 transition-all"
+                  disabled={isPixLoading}
+                  onClick={generatePixCharge}
+                  className="w-full h-12 rounded-xl bg-[#0DB87E] disabled:opacity-60 font-display font-semibold text-white shadow-lg active:scale-98 transition-all"
                 >
-                  Confirmar que o Pix foi Pago
+                  {isPixLoading ? "Gerando cobrança..." : `Gerar Cobrança Pix (${formatBRL(ride.price || 0)})`}
                 </button>
+                {pixError && <p className="mt-3 text-[12px] text-red-300">{pixError}</p>}
               </div>
             )}
 
@@ -561,22 +566,6 @@ const PrestadorMototaxiActive = () => {
                 >
                   {isConfirmingCash ? "Confirmando..." : `Confirmar Recebimento em Dinheiro (${formatBRL(ride.price || 0)})`}
                 </button>
-              </div>
-            )}
-
-            {(paymentMethodSelected === "pix_checkout" || paymentMethodSelected === "pix") && (
-              <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
-                <div className="w-10 h-10 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center mb-2">
-                  <Smartphone size={20} className="text-blue-400" />
-                </div>
-                <p className="font-display text-[14px] font-bold text-white">Pix no Celular do Passageiro</p>
-                <p className="font-sans text-[12px] text-white/60 mt-1">
-                  O passageiro está efetuando o Pix direto no smartphone dele.
-                </p>
-                <div className="mt-3 flex items-center justify-center gap-2 text-amber-400 text-[12px]">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                  Aguardando confirmação do gateway...
-                </div>
               </div>
             )}
 
@@ -651,42 +640,44 @@ const PrestadorMototaxiActive = () => {
             destination={ride.destination}
             total={ride.price || 0}
           />
-          <p className="font-sans text-[14px] font-semibold text-white">
-            Como foi o cliente?
-          </p>
-          <div className="mt-2 flex items-center justify-center gap-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <button key={i} type="button" onClick={() => setRating(i)} aria-label={`Nota ${i}`}>
-                <Star
-                  size={32}
-                  fill={i <= rating ? "#F5A623" : "transparent"}
-                  color={i <= rating ? "#F5A623" : "#D8DBE5"}
-                />
-              </button>
-            ))}
+          {isPaymentConfirmed && (
+            <>
+              <p className="font-sans text-[14px] font-semibold text-white">Como foi o cliente?</p>
+              <div className="mt-2 flex items-center justify-center gap-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <button key={i} type="button" onClick={() => setRating(i)} aria-label={`Nota ${i}`}>
+                    <Star
+                      size={32}
+                      fill={i <= rating ? "#F5A623" : "transparent"}
+                      color={i <= rating ? "#F5A623" : "#D8DBE5"}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Comentário opcional..."
+                rows={4}
+                className="mt-4 w-full rounded-xl outline-none font-sans text-[14px] resize-none"
+                style={{
+                  background: "var(--prestador-card)",
+                  border: "1px solid var(--prestador-border)",
+                  padding: "12px 14px",
+                  color: "#FFFFFF",
+                  minHeight: 100,
+                }}
+              />
+            </>
+          )}
+        </div>
+
+        {isPaymentConfirmed && (
+          <div className="mt-5">
+            <PrimaryButtonLight onClick={finalize}>Enviar e voltar ao trabalho</PrimaryButtonLight>
           </div>
-
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Comentário opcional..."
-            rows={4}
-            className="mt-4 w-full rounded-xl outline-none font-sans text-[14px] resize-none"
-            style={{
-              background: "var(--prestador-card)",
-              border: "1px solid var(--prestador-border)",
-              padding: "12px 14px",
-              color: "#FFFFFF",
-              minHeight: 100,
-            }}
-          />
-        </div>
-
-        <div className="mt-5">
-          <PrimaryButtonLight onClick={finalize}>
-            Enviar e voltar ao trabalho
-          </PrimaryButtonLight>
-        </div>
+        )}
       </div>
     );
   }

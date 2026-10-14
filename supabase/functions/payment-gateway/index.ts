@@ -834,7 +834,9 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
 
 async function handlePayment(req: Request, body: Record<string, any>, customerId: string): Promise<Response> {
   const environment = paymentEnvironment();
-  const amount = validateAmount(body.transaction_amount ?? body.amount);
+  const action = String(body.action || "create_payment_intent").trim().toLowerCase();
+  const providerInitiatedMototaxiPix = action === "create_mototaxi_pix_charge";
+  let amount = validateAmount(body.transaction_amount ?? body.amount);
   const serviceType = normalizeServiceType(body.service_type ?? body.serviceType);
   const serviceId = assertUuid(body.service_id ?? body.serviceId, "service_id");
   const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
@@ -850,11 +852,64 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   if (paymentMethodId !== "pix" && !cardToken) {
     throw new HttpError(400, "missing_card_token", "Pagamento com cartão exige tokenização prévia.");
   }
+
+  let payerSource = body;
+  if (providerInitiatedMototaxiPix) {
+    if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
+      throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
+    }
+
+    const { data: ride, error: rideError } = await supabaseAdmin
+      .from("mototaxi_corridas")
+      .select("id, tomador_id, prestador_id, status, estimated_price, final_price")
+      .eq("id", serviceId)
+      .maybeSingle();
+    if (rideError) {
+      throw new HttpError(503, "ride_lookup_failed", "Não foi possível validar a corrida antes da cobrança.");
+    }
+    if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
+    if (ride.prestador_id !== customerId || providerId !== customerId) {
+      throw new HttpError(403, "provider_not_assigned", "Somente o prestador atribuído pode gerar esta cobrança Pix.");
+    }
+    if (ride.status !== "completed") {
+      throw new HttpError(409, "ride_not_ready_for_payment", "A corrida precisa estar concluída antes de gerar o Pix.");
+    }
+    if (!ride.tomador_id) {
+      throw new HttpError(409, "ride_payer_missing", "A corrida não possui um Tomador vinculado.");
+    }
+
+    const canonicalAmount = validateAmount(ride.final_price ?? ride.estimated_price);
+    if (Math.abs(canonicalAmount - amount) > 0.009) {
+      throw new HttpError(409, "ride_amount_mismatch", "O valor da cobrança diverge do valor registrado na corrida.");
+    }
+    amount = canonicalAmount;
+
+    const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
+      supabaseAdmin.auth.admin.getUserById(ride.tomador_id),
+      supabaseAdmin.from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
+    ]);
+    if (payerAuthError || !payerAuth.user?.email) {
+      if (environment === "production") {
+        throw new HttpError(409, "payer_identity_missing", "O Tomador não possui e-mail válido para o pagamento.");
+      }
+    }
+
+    const payerName = String(payerProfile?.nome || payerAuth.user?.user_metadata?.full_name || "").trim();
+    const [payerFirstName = "", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
+    const payerCpf = String(payerAuth.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+    payerSource = {
+      ...body,
+      payer_email: payerAuth.user?.email || body.payer_email,
+      payer_first_name: payerFirstName || undefined,
+      payer_last_name: payerLastParts.join(" ") || undefined,
+      payer_identification: payerCpf ? { type: "CPF", number: payerCpf } : undefined,
+    };
+  }
   const clientMetadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
   const metadataJson = JSON.stringify(clientMetadata);
   if (metadataJson.length > 4000) throw new HttpError(400, "metadata_too_large", "metadata excede 4 KB.");
-  const payerEmail = resolvePayerEmail(body, environment);
-  const payer = sanitizePayer(body, payerEmail);
+  const payerEmail = resolvePayerEmail(payerSource, environment);
+  const payer = sanitizePayer(payerSource, payerEmail);
   const route = await resolvePaymentRoute(providerId, environment);
   const { config, source: splitConfigSource } = await fetchSplitConfig();
   const split = calculateSplitAmounts(amount, config);
@@ -962,6 +1017,30 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   const txData = mpResult.data?.point_of_interaction?.transaction_data;
+  if (providerInitiatedMototaxiPix) {
+    const pixCopyPaste = String(txData?.qr_code || "").trim();
+    const pixQrCodeBase64 = String(txData?.qr_code_base64 || "").trim();
+    if (!pixCopyPaste) {
+      throw new HttpError(502, "pix_payload_missing", "O Mercado Pago não devolveu o código Pix da cobrança.");
+    }
+    const { error: chargePersistError } = await supabaseAdmin
+      .from("mototaxi_corridas")
+      .update({
+        payment_method: "pix",
+        pix_payment_id: String(mpResult.data.id),
+        pix_transaction_id: transactionId,
+        pix_copy_paste: pixCopyPaste,
+        pix_qr_code_base64: pixQrCodeBase64 || null,
+        pix_charge_status: mpStatus || "pending",
+        pix_charge_created_at: new Date().toISOString(),
+        pix_charge_expires_at: mpResult.data?.date_of_expiration || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", serviceId);
+    if (chargePersistError) {
+      throw new HttpError(503, "pix_charge_persist_failed", "A cobrança foi criada, mas não pôde ser sincronizada com a corrida.");
+    }
+  }
   const appliedApplicationFee = route.mode === "seller_oauth_split" ? split.application_fee : 0;
   return json(req, {
     success: true,
@@ -1030,7 +1109,7 @@ serve(async (req: Request): Promise<Response> => {
     if (["get_checkout_config", "checkout_config"].includes(action)) {
       return await handleGetCheckoutConfig(req, body);
     }
-    if (["create_payment_intent", "checkout"].includes(action)) {
+    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge"].includes(action)) {
       return await handlePayment(req, body, userId);
     }
     throw new HttpError(400, "unknown_action", `Ação não reconhecida: ${action}`);

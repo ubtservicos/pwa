@@ -285,6 +285,7 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
       .update({
         status: "paid",
         final_price: Number(split.total_amount),
+        pix_charge_status: "approved",
         updated_at: date_approved ?? new Date().toISOString(),
       })
       .eq("id", split.service_id);

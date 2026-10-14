@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -12,12 +12,10 @@ import {
   Star,
   Trophy,
   CheckCircle2,
-  QrCode,
   CreditCard,
   X,
   User,
   MessageSquare,
-  Scan,
   Smartphone,
   Banknote,
   Copy,
@@ -41,6 +39,7 @@ import { logSystem } from "@/services/LoggingService";
 import CheckoutUniversal from "@/components/Payment/CheckoutUniversal";
 import type { PaymentResult } from "@/components/Payment/types";
 import { RidePaymentSummary } from "@/components/mototaxi/RidePaymentSummary";
+import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
 
 const UBATUBA_FALLBACK = { lat: -23.4336, lng: -45.0838 };
 
@@ -590,7 +589,7 @@ const InProgressSheet = ({
   );
 };
 
-type PaymentMethodOption = "pix_scanner" | "pix_checkout" | "card" | "cash";
+type PaymentMethodOption = "pix_checkout" | "card" | "cash";
 
 const CompletedScreen = ({
   price,
@@ -607,16 +606,13 @@ const CompletedScreen = ({
   prestadorInfo?: any;
   onPay: () => void;
 }) => {
-  const user = useCurrentUser();
-  const [method, setMethod] = useState<PaymentMethodOption>("pix_checkout");
+  const [method, setMethod] = useState<PaymentMethodOption | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [pixSeconds, setPixSeconds] = useState(300);
-  const [isLoading, setIsLoading] = useState(false);
-  const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
   const [pixCopiaCola, setPixCopiaCola] = useState<string>("");
   const [copiedPix, setCopiedPix] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
+  const paidTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchGatewayFeeSettings().then(setFeeSettings);
@@ -625,27 +621,57 @@ const CompletedScreen = ({
   const rawBase = price > 0 ? price : 10.00;
   // Calculate fee mapping for split display
   const feeMethodType = (method === "card" ? "card" : "pix") as "pix" | "card";
-  const feeCalc = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
+  const calculatedFee = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
+  const feeCalc = method === "card"
+    ? calculatedFee
+    : { ...calculatedFee, feeAmount: 0, feePercentage: 0, totalAmount: rawBase };
+
+  const transitionToPaid = useCallback(() => {
+    setConfirming(true);
+    if (paidTimerRef.current) return;
+    paidTimerRef.current = setTimeout(onPay, 1800);
+  }, [onPay]);
+
+  const applyRidePaymentState = useCallback((dbRide: any) => {
+    if (!dbRide) return;
+    if (dbRide.pix_copy_paste) setPixCopiaCola(String(dbRide.pix_copy_paste));
+    if (dbRide.status === "paid") transitionToPaid();
+  }, [transitionToPaid]);
+
+  useRealtimeChannel(
+    rideId ? `tomador_payment_${rideId}` : null,
+    { event: "UPDATE", table: "mototaxi_corridas", filter: rideId ? `id=eq.${rideId}` : undefined },
+    (payload) => applyRidePaymentState(payload.new)
+  );
 
   useEffect(() => {
-    if (method !== "pix_checkout") return;
-    const id = setInterval(() => setPixSeconds((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(id);
-  }, [method]);
-  const mm = String(Math.floor(pixSeconds / 60)).padStart(2, "0");
-  const ss = String(pixSeconds % 60).padStart(2, "0");
+    if (!rideId) return;
+    const syncPayment = async () => {
+      if (document.hidden) return;
+      const { data } = await supabase
+        .from("mototaxi_corridas")
+        .select("status, pix_copy_paste")
+        .eq("id", rideId)
+        .maybeSingle();
+      applyRidePaymentState(data);
+    };
+    void syncPayment();
+    const timer = window.setInterval(syncPayment, 5000);
+    return () => window.clearInterval(timer);
+  }, [rideId, applyRidePaymentState]);
+
+  useEffect(() => () => {
+    if (paidTimerRef.current) clearTimeout(paidTimerRef.current);
+  }, []);
 
 
-  // Broadcast & DB notify when selecting Pix Scanner, Cash, Card, etc.
+  // Persist the selected method; Pix creation itself belongs to the provider.
   const handleSelectMethod = async (m: PaymentMethodOption) => {
     setMethod(m);
     setPaymentError(null);
-    setQrCodeBase64("");
-    setPixCopiaCola("");
 
     const methodMap: Record<PaymentMethodOption, string | null> = {
       cash: null,
-      pix_scanner: "pix",
       pix_checkout: "pix",
       card: "card",
     };
@@ -667,27 +693,11 @@ const CompletedScreen = ({
           console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
         }
 
-        const channel = supabase
-          .channel(`ride_msg_${rideId}`)
-          .on("broadcast", { event: "payment_method_selected" }, () => {})
-          .subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              channel.send({
-                type: "broadcast",
-                event: "payment_method_selected",
-                payload: { method: m, dbMethod, rideId, amount: feeCalc.totalAmount },
-              });
-            }
-          });
       } catch (e: any) {
         console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
     }
 
-    // Se for Pix (Scanner ou no Celular), aciona automaticamente a Edge Function para gerar o QR Code real transparente
-    if (m === "pix_scanner" || m === "pix_checkout") {
-      await handleProcessPayment("pix", m);
-    }
   };
 
   // ─── Card payment callbacks (delegated to <CheckoutUniversal />) ───
@@ -705,127 +715,6 @@ const CompletedScreen = ({
     toast.error(`Falha no pagamento: ${errorMsg}`);
   };
 
-  // Direct fetch to payment-gateway Edge Function — PIX ONLY
-  const handleProcessPayment = async (paymentType: "pix", targetMethod?: PaymentMethodOption) => {
-    setIsLoading(true);
-    setPaymentError(null);
-    const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
-    try {
-      const providerId = String(prestadorInfo?.id || "").trim();
-      if (!providerId) {
-        throw new Error("O prestador desta corrida não foi identificado. Atualize a página antes de pagar.");
-      }
-      const session = (await supabase.auth.getSession()).data.session;
-      const userEmail = session?.user?.email || user?.email || "";
-      const userCpf = (user?.cpf || (session?.user?.user_metadata as any)?.cpf || "").replace(/\D/g, "");
-      const userName = (user?.name || "").trim();
-      const nameParts = userName ? userName.split(" ") : [];
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
-
-      const payerData: Record<string, unknown> = {};
-      if (userEmail) payerData.email = userEmail;
-      if (firstName) payerData.first_name = firstName;
-      if (lastName) payerData.last_name = lastName;
-      if (userCpf) {
-        payerData.identification = {
-          type: "CPF",
-          number: userCpf,
-        };
-      }
-
-      const payloadParaEdge = {
-        action: "create_payment_intent",
-        service_type: "mototaxi",
-        service_id: rideId || crypto.randomUUID(),
-        external_reference: rideId || undefined,
-        transaction_amount: finalAmount,
-        provider_id: providerId,
-        provider_name: prestadorInfo?.name || "Motorista UBT",
-        payer_email: userEmail || undefined,
-        payer: Object.keys(payerData).length > 0 ? payerData : undefined,
-        payer_first_name: firstName || undefined,
-        payer_last_name: lastName || undefined,
-        payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
-        description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-        payment_method_id: "pix",
-      };
-
-      console.log("PAYLOAD COMPLETO PARA EDGE (PIX):", payloadParaEdge);
-
-      const { data, error: invokeError } = await supabase.functions.invoke("payment-gateway", {
-        body: payloadParaEdge,
-      });
-
-      if (invokeError || !data || data.error || data.success === false) {
-        console.error("[PAYMENT GATEWAY ERROR RESPONSE]:", data || invokeError);
-        const errMain = data?.error || invokeError?.message || "Pagamento rejeitado pelo gateway";
-        let errDetails = "";
-        if (data?.mp_error) {
-          errDetails = typeof data.mp_error === "object" ? JSON.stringify(data.mp_error) : String(data.mp_error);
-        } else if (data?.details) {
-          errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
-        } else if (data?.detail) {
-          errDetails = data.detail;
-        } else if (data?.message) {
-          errDetails = data.message;
-        }
-        throw new Error(errDetails ? `${errMain}: ${errDetails}` : errMain);
-      }
-
-      if (data?.split?.statement) {
-        console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
-      }
-
-      if (data?.status === "approved") {
-        setConfirming(true);
-        setTimeout(onPay, 1500);
-      } else if (data?.pix?.qr_code_base64 || data?.pix?.qr_code) {
-        if (data.pix.qr_code_base64) {
-          setQrCodeBase64(data.pix.qr_code_base64);
-        }
-        if (data.pix.qr_code) {
-          setPixCopiaCola(data.pix.qr_code);
-        }
-
-        // Se o método for Pix Scanner, transmite os dados do QR code gerado para a tela do motorista via Realtime
-        const currentMethod = targetMethod || method;
-        if (currentMethod === "pix_scanner" && rideId) {
-          try {
-            const channel = supabase
-              .channel(`ride_msg_${rideId}`)
-              .on("broadcast", { event: "pix_qr_ready" }, () => {})
-              .subscribe((status) => {
-                if (status === "SUBSCRIBED") {
-                  channel.send({
-                    type: "broadcast",
-                    event: "pix_qr_ready",
-                    payload: {
-                      rideId,
-                      qr_code_base64: data.pix.qr_code_base64,
-                      qr_code: data.pix.qr_code,
-                      amount: finalAmount,
-                    },
-                  });
-                }
-              });
-          } catch (bErr) {
-            console.warn("Aviso ao transmitir pix_qr_ready:", bErr);
-          }
-        }
-      } else {
-        throw new Error("Pagamento ainda não confirmado pelo Mercado Pago.");
-      }
-    } catch (err: any) {
-      console.error("Payment failed:", err);
-      const msg = err?.message || "Erro no processamento do pagamento.";
-      setPaymentError(msg);
-      toast.error(`Falha no pagamento: ${msg}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleCopyPix = () => {
     if (pixCopiaCola) {
       navigator.clipboard.writeText(pixCopiaCola);
@@ -833,21 +722,6 @@ const CompletedScreen = ({
       toast.success("Código Pix copiado com sucesso!");
       setTimeout(() => setCopiedPix(false), 3000);
     }
-  };
-
-  const handleConfirmManualPaid = async () => {
-    if (!rideId) return;
-    const { data, error } = await supabase
-      .from("mototaxi_corridas")
-      .select("status")
-      .eq("id", rideId)
-      .maybeSingle();
-    if (error || data?.status !== "paid") {
-      toast.info("Pagamento ainda não confirmado pelo Mercado Pago. Aguarde alguns segundos.");
-      return;
-    }
-    setConfirming(true);
-    setTimeout(onPay, 1500);
   };
 
   return (
@@ -897,26 +771,7 @@ const CompletedScreen = ({
         Escolha como deseja pagar
       </p>
 
-      {/* 3 DIRECT PAYMENT BUTTONS (Opção Em Dinheiro ocultada temporariamente para testes de Gateway) */}
-      <div className="mt-3 grid grid-cols-3 gap-2.5">
-        {/* 1. Pix Scanner */}
-        <button
-          type="button"
-          onClick={() => handleSelectMethod("pix_scanner")}
-          className="rounded-2xl p-3 flex flex-col items-start text-left transition-all active:scale-[0.98]"
-          style={{
-            background: method === "pix_scanner" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
-            border: method === "pix_scanner" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_scanner" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
-            <Scan size={18} className={method === "pix_scanner" ? "text-white" : "text-white/70"} />
-          </div>
-          <span className="font-display text-[12px] font-bold leading-tight">Pix Scanner</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">QR no motorista</span>
-        </button>
-
-        {/* 2. Pix Checkout */}
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
         <button
           type="button"
           onClick={() => handleSelectMethod("pix_checkout")}
@@ -929,11 +784,10 @@ const CompletedScreen = ({
           <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_checkout" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
             <Smartphone size={18} className={method === "pix_checkout" ? "text-white" : "text-white/70"} />
           </div>
-          <span className="font-display text-[12px] font-bold leading-tight">Pix Celular</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">Copia e Cola</span>
+          <span className="font-display text-[12px] font-bold leading-tight">Pix presencial</span>
+          <span className="font-sans text-[10px] text-white/50 mt-0.5">Cobrança do motorista</span>
         </button>
 
-        {/* 3. Cartão de Crédito */}
         <button
           type="button"
           onClick={() => handleSelectMethod("card")}
@@ -951,64 +805,27 @@ const CompletedScreen = ({
         </button>
       </div>
 
-      {/* METHOD CONTENT 1: PIX SCANNER */}
-      {method === "pix_scanner" && (
-        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center flex flex-col items-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center mb-3">
-            <Scan size={28} className="text-[#0DB87E]" />
-          </div>
-          <h3 className="font-display text-[16px] font-bold text-white">QR Code no celular do motorista</h3>
-          
-          {isLoading ? (
-            <div className="my-4 py-4 flex flex-col items-center justify-center">
-              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-2" />
-              <p className="font-sans text-[13px] text-white/70">Gerando cobrança Pix transparente no Mercado Pago...</p>
-            </div>
-          ) : (
-            <>
-              <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
-                O QR Code gerado pelo Mercado Pago já foi enviado para a tela do motorista. Abra o aplicativo do seu banco, escolha <strong>Pix &gt; Ler QR Code</strong> e aponte a câmera.
-              </p>
-              {pixCopiaCola && (
-                <button
-                  type="button"
-                  onClick={handleCopyPix}
-                  className="mt-3 w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-sans text-[12px] flex items-center justify-center gap-2 active:scale-98 transition-all"
-                >
-                  {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
-                  {copiedPix ? "Código Pix Copiado!" : "Ou copiar código Copia e Cola"}
-                </button>
-              )}
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={handleConfirmManualPaid}
-            className="mt-5 w-full h-12 rounded-xl font-display font-semibold text-white bg-[#0DB87E] active:scale-[0.98] transition-all"
-          >
-            Já realizei o Pix no QR Code
-          </button>
+      {!method && (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center">
+          <p className="font-sans text-[13px] text-white/70">
+            Selecione manualmente Pix presencial ou Cartão para continuar.
+          </p>
         </div>
       )}
 
-      {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR - COPIA E COLA APENAS, SEM QR CODE VISUAL) */}
       {method === "pix_checkout" && (
         <div className="mt-4 rounded-2xl p-5 flex flex-col items-center bg-white/5 border border-white/10">
           <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
             <Smartphone size={24} className="text-[#0DB87E]" />
           </div>
-          <h3 className="font-display text-[16px] font-bold text-white">Pix no Celular (Copia e Cola)</h3>
+          <h3 className="font-display text-[16px] font-bold text-white">Pix Cópia e Cola</h3>
           <p className="font-sans text-[12px] text-white/70 text-center mt-1 mb-3">
-            Copie o código abaixo e cole no aplicativo do seu banco:
+            {pixCopiaCola
+              ? "Cobrança gerada pelo mototaxista. Copie o código e cole no aplicativo do seu banco:"
+              : "Aguardando o mototaxista gerar a cobrança no celular dele..."}
           </p>
 
-          {isLoading ? (
-            <div className="w-full py-6 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10 my-2">
-              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
-              <p className="font-sans text-[12px] text-white/70 text-center px-2">Gerando chave Pix no Mercado Pago...</p>
-            </div>
-          ) : pixCopiaCola ? (
+          {pixCopiaCola ? (
             <div className="w-full space-y-3">
               <div className="relative">
                 <textarea
@@ -1028,31 +845,14 @@ const CompletedScreen = ({
                 {copiedPix ? <Check size={16} className="text-white" /> : <Copy size={16} />}
                 {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
               </button>
-
-              <p className="font-mono text-[12px] font-semibold text-center text-[#F5A623]">
-                Expira em {mm}:{ss}
-              </p>
+              <p className="text-[12px] text-center text-[#F5A623]">A confirmação acontece automaticamente após o pagamento.</p>
             </div>
           ) : (
-            <div className="w-full py-4 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10">
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={() => handleProcessPayment("pix", "pix_checkout")}
-                className="px-5 py-2.5 rounded-xl bg-[#0DB87E] text-white font-sans text-[13px] font-semibold active:scale-95 transition-all shadow-md"
-              >
-                Gerar Código Pix
-              </button>
+            <div className="w-full py-6 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10">
+              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
+              <p className="text-[12px] text-white/60">Sincronizando a cobrança em tempo real</p>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleConfirmManualPaid}
-            className="mt-4 w-full h-11 rounded-xl font-display font-semibold text-white/90 border border-white/20 hover:bg-white/10 active:scale-98 transition-all text-[13px]"
-          >
-            Já Paguei no meu Banco
-          </button>
         </div>
       )}
 
