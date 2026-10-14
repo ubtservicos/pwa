@@ -57,13 +57,25 @@ class HttpError extends Error {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim() ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-}
+// Do not throw during module evaluation. A top-level exception prevents the
+// worker from starting and Supabase can only return an opaque 503. Keeping the
+// client lazy lets the request boundary return a structured configuration error.
+const supabaseAdmin = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  : null;
 
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+function adminClient() {
+  if (!supabaseAdmin) {
+    throw new HttpError(
+      500,
+      "server_configuration_error",
+      "A função de pagamento está sem a configuração obrigatória do Supabase.",
+    );
+  }
+  return supabaseAdmin;
+}
 
 const REGULATORY_DEFAULTS: SplitConfig = {
   prestador_pct: 90,
@@ -107,9 +119,12 @@ function corsHeaders(req: Request): Record<string, string> {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const configuredEnvironment = (Deno.env.get("MP_ENVIRONMENT") || Deno.env.get("APP_ENV") || "")
+    .trim()
+    .toLowerCase();
   const allowOrigin = configured.includes(origin)
     ? origin
-    : paymentEnvironment() === "sandbox" && configured.length === 0
+    : configuredEnvironment === "sandbox" && configured.length === 0
       ? "*"
       : "null";
 
@@ -165,7 +180,7 @@ function calculateSplitAmounts(totalAmount: number, config: SplitConfig): SplitA
 }
 
 async function fetchSplitConfig(): Promise<{ config: SplitConfig; source: "database" | "defaults" }> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await adminClient()
     .from("split_config")
     .select("prestador_pct, ubt_pct, comunidade_pct, premio_trabalhador_pct, premio_consumidor_pct, padrinho_tomador_pct, padrinho_prestador_pct")
     .eq("id", 1)
@@ -199,7 +214,7 @@ async function logAuditEvent(
   errorDetails?: string,
 ): Promise<void> {
   try {
-    const { error } = await supabaseAdmin.from("financial_audit_logs").insert({
+    const { error } = await adminClient().from("financial_audit_logs").insert({
       transaction_type: transactionType,
       status,
       payload: payload ?? null,
@@ -216,7 +231,7 @@ async function authenticatedUserId(req: Request): Promise<string> {
   const jwt = authorization.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) throw new HttpError(401, "missing_authorization", "Autenticação obrigatória.");
 
-  const { data, error } = await supabaseAdmin.auth.getUser(jwt);
+  const { data, error } = await adminClient().auth.getUser(jwt);
   if (error || !data.user) {
     throw new HttpError(401, "invalid_authorization", "Sessão inválida ou expirada.");
   }
@@ -363,7 +378,7 @@ function resolvePayerEmail(body: Record<string, any>, environment: MpEnvironment
 
 async function resolvePaymentRoute(providerId: string, environment: MpEnvironment): Promise<RoutingDecision> {
   const platformToken = platformAccessToken(environment);
-  const { data: sellerAccount, error } = await supabaseAdmin
+  const { data: sellerAccount, error } = await adminClient()
     .from("marketplace_accounts")
     .select("id, mercado_pago_user_id, access_token_encrypted, ambiente, status, token_expiration, token_metadata")
     .eq("user_id", providerId)
@@ -597,13 +612,13 @@ async function reserveSplitRecord(input: {
     routing_reason: input.route.fallbackReason,
   };
 
-  const { error } = await supabaseAdmin.from("pagamentos_split").insert(record);
+  const { error } = await adminClient().from("pagamentos_split").insert(record);
   if (!error) return;
   if (error.code !== "23505") {
     throw new HttpError(503, "split_reservation_failed", "Não foi possível reservar o lançamento contábil.");
   }
 
-  const { data: existing, error: readError } = await supabaseAdmin
+  const { data: existing, error: readError } = await adminClient()
     .from("pagamentos_split")
     .select("idempotency_key, service_id, provider_id, total_amount")
     .eq("transaction_id", input.transactionId)
@@ -639,7 +654,7 @@ async function finalizeSplitRecord(input: {
     }
     : null;
 
-  const { error } = await supabaseAdmin
+  const { error } = await adminClient()
     .from("pagamentos_split")
     .update({
       status: ledgerStatus(mpStatus, rejected && !input.mpResult.outcomeUnknown),
@@ -692,7 +707,7 @@ async function handleGetOAuthUrl(req: Request, body: Record<string, any>, userId
 
   const redirectUri = allowedRedirectUri(body.redirect_uri);
   const state = crypto.randomUUID();
-  const { error } = await supabaseAdmin.from("marketplace_oauth_connections").insert({
+  const { error } = await adminClient().from("marketplace_oauth_connections").insert({
     user_id: userId,
     state_reference: state,
     authorization_status: "started",
@@ -725,7 +740,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   if (!code || code.length > 500) throw new HttpError(400, "invalid_oauth_code", "Authorization code inválido.");
   if (!UUID_RE.test(state)) throw new HttpError(400, "invalid_oauth_state", "OAuth state inválido.");
 
-  const { data: connection, error: stateError } = await supabaseAdmin
+  const { data: connection, error: stateError } = await adminClient()
     .from("marketplace_oauth_connections")
     .select("id, created_at")
     .eq("user_id", userId)
@@ -750,7 +765,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   });
   const tokenData = await tokenResponse.json().catch(() => ({}));
   if (!tokenResponse.ok || !tokenData?.access_token) {
-    await supabaseAdmin.from("marketplace_oauth_connections").update({
+    await adminClient().from("marketplace_oauth_connections").update({
       authorization_status: "failed",
       error_code: String(tokenData?.error || tokenResponse.status),
       error_message: String(tokenData?.message || tokenData?.error_description || "OAuth rejected").slice(0, 1000),
@@ -773,7 +788,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
     .map((sellerId) => sellerId.trim())
     .filter(Boolean);
   if (environment === "sandbox" && allowedSandboxSellers.length > 0 && !allowedSandboxSellers.includes(oauthUserId)) {
-    await supabaseAdmin.from("marketplace_oauth_connections").update({
+    await adminClient().from("marketplace_oauth_connections").update({
       authorization_status: "failed",
       error_code: "oauth_test_seller_mismatch",
       error_message: "OAuth autorizado com uma conta diferente do Seller Test User configurado.",
@@ -794,7 +809,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
     token_type: tokenData.token_type,
     public_key: tokenData.public_key,
   };
-  const { data: account, error: upsertError } = await supabaseAdmin.from("marketplace_accounts").upsert({
+  const { data: account, error: upsertError } = await adminClient().from("marketplace_accounts").upsert({
     user_id: userId,
     mercado_pago_user_id: oauthUserId,
     status: "CONNECTED",
@@ -813,7 +828,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   }, { onConflict: "user_id,ambiente" }).select("id").single();
   if (upsertError || !account) throw new HttpError(503, "oauth_account_persist_failed", "Não foi possível salvar a conta OAuth.");
 
-  await supabaseAdmin.from("marketplace_oauth_connections").update({
+  await adminClient().from("marketplace_oauth_connections").update({
     authorization_status: "exchanged",
     marketplace_account_id: account.id,
     connected_at: now.toISOString(),
@@ -859,7 +874,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
     }
 
-    const { data: ride, error: rideError } = await supabaseAdmin
+    const { data: ride, error: rideError } = await adminClient()
       .from("mototaxi_corridas")
       .select("id, tomador_id, prestador_id, status, estimated_price, final_price")
       .eq("id", serviceId)
@@ -885,8 +900,8 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     amount = canonicalAmount;
 
     const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
-      supabaseAdmin.auth.admin.getUserById(ride.tomador_id),
-      supabaseAdmin.from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
+      adminClient().auth.admin.getUserById(ride.tomador_id),
+      adminClient().from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
     ]);
     if (payerAuthError || !payerAuth.user?.email) {
       if (environment === "production") {
@@ -999,7 +1014,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   if (serviceType === "mototaxi" && mpStatus === "approved") {
-    const { error } = await supabaseAdmin.from("mototaxi_corridas").update({
+    const { error } = await adminClient().from("mototaxi_corridas").update({
       status: "paid",
       final_price: amount,
       updated_at: new Date().toISOString(),
@@ -1008,7 +1023,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   if (serviceType === "diarista" && mpStatus === "approved") {
-    const { error } = await supabaseAdmin.from("services_requests").update({
+    const { error } = await adminClient().from("services_requests").update({
       status: "paid",
       payment_id: String(mpResult.data.id),
       updated_at: new Date().toISOString(),
@@ -1023,7 +1038,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     if (!pixCopyPaste) {
       throw new HttpError(502, "pix_payload_missing", "O Mercado Pago não devolveu o código Pix da cobrança.");
     }
-    const { error: chargePersistError } = await supabaseAdmin
+    const { error: chargePersistError } = await adminClient()
       .from("mototaxi_corridas")
       .update({
         payment_method: "pix",
@@ -1038,7 +1053,25 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       })
       .eq("id", serviceId);
     if (chargePersistError) {
-      throw new HttpError(503, "pix_charge_persist_failed", "A cobrança foi criada, mas não pôde ser sincronizada com a corrida.");
+      const databaseDetails = {
+        code: chargePersistError.code,
+        message: chargePersistError.message,
+        details: chargePersistError.details,
+        hint: chargePersistError.hint,
+      };
+      console.error("[payment-gateway] Pix charge persistence failed", databaseDetails);
+      await logAuditEvent("pix_charge_persist_failed", "failed", {
+        transaction_id: transactionId,
+        service_id: serviceId,
+        payment_id: String(mpResult.data.id),
+        database_code: chargePersistError.code,
+      }, JSON.stringify(databaseDetails));
+      throw new HttpError(
+        500,
+        "pix_charge_persist_failed",
+        "A cobrança foi criada no Mercado Pago, mas o banco recusou a sincronização da corrida.",
+        environment === "sandbox" ? databaseDetails : { code: chargePersistError.code },
+      );
     }
   }
   const appliedApplicationFee = route.mode === "seller_oauth_split" ? split.application_fee : 0;

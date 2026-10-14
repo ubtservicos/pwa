@@ -400,7 +400,17 @@ const PrestadorMototaxiActive = () => {
       });
 
       if (error || !data || data.success === false || data.error) {
-        throw new Error(data?.message || data?.error || error?.message || "Não foi possível gerar a cobrança Pix.");
+        let errorPayload = data as { message?: string; error?: string; details?: { code?: string; message?: string } } | null;
+        const errorResponse = (error as { context?: Response } | null)?.context;
+        if (!errorPayload && errorResponse instanceof Response) {
+          errorPayload = await errorResponse.clone().json().catch(() => null);
+        }
+        const databaseReason = errorPayload?.details?.message || errorPayload?.details?.code;
+        const message = [
+          errorPayload?.message || errorPayload?.error || error?.message,
+          databaseReason,
+        ].filter(Boolean).join(" — ");
+        throw new Error(message || "Não foi possível gerar a cobrança Pix.");
       }
 
       const copyPaste = String(data?.pix?.qr_code || "").trim();
