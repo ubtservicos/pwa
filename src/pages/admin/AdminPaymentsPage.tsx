@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, CreditCard, ArrowRight, RefreshCw, QrCode } from "lucide-react";
+import { Search, CreditCard, ArrowRight, RefreshCw, QrCode, Banknote, CircleHelp } from "lucide-react";
 import { Card, PageTitle, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +18,34 @@ interface PaymentRecord {
   created_at: string;
 }
 
+type PaymentMethodKey = "pix" | "card" | "cash" | "unknown";
+
+const normalizePaymentMethod = (value: unknown): PaymentMethodKey => {
+  const method = String(value || "").trim().toLowerCase();
+  if (method.includes("pix")) return "pix";
+  if (["card", "cartao", "cartão", "credit_card", "credit", "master", "visa"].some((token) => method.includes(token))) return "card";
+  if (["cash", "dinheiro", "por_fora", "por fora", "outside", "manual"].some((token) => method.includes(token))) return "cash";
+  return "unknown";
+};
+
+const paymentMethodLabel = (method: PaymentMethodKey) => ({
+  pix: "Pix",
+  card: "Cartão",
+  cash: "Dinheiro / Por Fora",
+  unknown: "Não informado",
+}[method]);
+
+const PaymentMethodBadge = ({ method }: { method: string }) => {
+  const normalized = normalizePaymentMethod(method);
+  const iconClass = normalized === "pix" ? "text-emerald-400" : normalized === "card" ? "text-purple-400" : normalized === "cash" ? "text-amber-400" : "text-zinc-500";
+  const Icon = normalized === "pix" ? QrCode : normalized === "card" ? CreditCard : normalized === "cash" ? Banknote : CircleHelp;
+  return (
+    <span className="inline-flex items-center gap-1 font-semibold text-xs text-zinc-200">
+      <Icon size={13} className={iconClass} /> {paymentMethodLabel(normalized)}
+    </span>
+  );
+};
+
 const PAGE_SIZE = 10;
 
 export default function AdminPaymentsPage() {
@@ -28,18 +56,57 @@ export default function AdminPaymentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
   const [page, setPage] = useState(0);
 
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("pagamentos_split")
-        .select("id, transaction_id, service_type, service_id, total_amount, ubt_amount, provider_amount, status, created_at")
-        .order("created_at", { ascending: false });
+      const [splitResult, transactionResult] = await Promise.all([
+        supabase
+          .from("pagamentos_split")
+          .select("id, transaction_id, service_type, service_id, total_amount, ubt_amount, provider_amount, status, created_at")
+          .order("created_at", { ascending: false }),
+        supabase.from("payments").select("*"),
+      ]);
 
-      if (error) throw error;
+      if (splitResult.error) throw splitResult.error;
+      const data = splitResult.data;
       if (data) {
+        const transactionMethods = new Map<string, unknown>();
+        if (transactionResult.error) {
+          console.warn("Não foi possível enriquecer métodos pela tabela payments:", transactionResult.error.message);
+        } else {
+          (transactionResult.data || []).forEach((transaction: any) => {
+            const method = transaction.payment_method ?? transaction.payment_method_id ?? transaction.method;
+            const metadata = transaction.metadata && typeof transaction.metadata === "object" ? transaction.metadata : {};
+            [
+              transaction.service_id,
+              metadata.service_id,
+              transaction.transaction_id,
+              transaction.external_reference,
+              transaction.gateway_payment_id,
+            ].filter(Boolean).forEach((key) => transactionMethods.set(String(key), method));
+          });
+        }
+
+        const mototaxiIds = data
+          .filter((row) => (row.service_type || "mototaxi") === "mototaxi")
+          .map((row) => row.service_id)
+          .filter(Boolean);
+        const rideMethods = new Map<string, unknown>();
+        if (mototaxiIds.length > 0) {
+          const { data: rides, error: ridesError } = await supabase
+            .from("mototaxi_corridas")
+            .select("id, payment_method")
+            .in("id", mototaxiIds);
+          if (ridesError) {
+            console.warn("Não foi possível enriquecer métodos das corridas:", ridesError.message);
+          } else {
+            (rides || []).forEach((ride) => rideMethods.set(String(ride.id), ride.payment_method));
+          }
+        }
+
         const mapped: PaymentRecord[] = data.map((d) => ({
           id: d.id,
           transaction_id: d.transaction_id,
@@ -49,7 +116,12 @@ export default function AdminPaymentsPage() {
           provider_amount: Number(d.provider_amount),
           ubt_amount: Number(d.ubt_amount),
           status: d.status,
-          payment_method: "PIX",
+          payment_method: String(
+            transactionMethods.get(String(d.service_id))
+              ?? transactionMethods.get(String(d.transaction_id))
+              ?? rideMethods.get(String(d.service_id))
+              ?? "unknown"
+          ),
           created_at: d.created_at,
         }));
         setPayments(mapped);
@@ -79,10 +151,11 @@ export default function AdminPaymentsPage() {
         p.status === statusFilter;
 
       const matchService = serviceFilter === "all" || p.service_type === serviceFilter;
+      const matchPaymentMethod = paymentMethodFilter === "all" || normalizePaymentMethod(p.payment_method) === paymentMethodFilter;
 
-      return matchSearch && matchStatus && matchService;
+      return matchSearch && matchStatus && matchService && matchPaymentMethod;
     });
-  }, [payments, search, statusFilter, serviceFilter]);
+  }, [payments, search, statusFilter, serviceFilter, paymentMethodFilter]);
 
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -205,6 +278,21 @@ export default function AdminPaymentsPage() {
           <option value="diarista">Diaristas</option>
           <option value="ambulante">Ambulantes</option>
         </select>
+
+        <select
+          value={paymentMethodFilter}
+          onChange={(e) => {
+            setPaymentMethodFilter(e.target.value);
+            setPage(0);
+          }}
+          aria-label="Filtrar por método de pagamento"
+          className="h-10 bg-zinc-950/80 border border-zinc-700 text-zinc-200 rounded-xl px-3 text-sm focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
+        >
+          <option value="all">Todos os Métodos</option>
+          <option value="pix">Pix</option>
+          <option value="card">Cartão</option>
+          <option value="cash">Dinheiro / Por Fora</option>
+        </select>
       </Card>
 
       {/* Payments Table */}
@@ -253,9 +341,7 @@ export default function AdminPaymentsPage() {
                       <span className="capitalize font-medium text-zinc-200">{p.service_type}</span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center gap-1 font-semibold text-xs text-zinc-200">
-                        <QrCode size={13} className="text-emerald-400" /> {p.payment_method}
-                      </span>
+                      <PaymentMethodBadge method={p.payment_method} />
                     </td>
                     <td className="py-3.5 px-4 text-right font-bold text-white">
                       {formatBR(p.total_amount)}

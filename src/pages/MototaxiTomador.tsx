@@ -10,7 +10,6 @@ import {
   Package,
   ShieldAlert,
   Star,
-  Trophy,
   CheckCircle2,
   CreditCard,
   X,
@@ -29,7 +28,7 @@ import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
-import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, type AutocompleteSuggestion } from "@/lib/geoService";
+import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, reverseGeocode, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -954,14 +953,11 @@ const RatingScreen = ({
     return (
       <div className="min-h-[100svh] bg-navy text-white flex flex-col items-center justify-center px-6 text-center relative overflow-hidden">
         <FullscreenConfetti numberOfPieces={250} />
-        <Trophy size={64} style={{ color: "#F5A623" }} />
+        <CheckCircle2 size={64} style={{ color: "#0DB87E" }} />
         <h2 className="mt-4 font-display text-[22px] font-bold">Obrigado!</h2>
         <p className="mt-2 font-sans text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-          Você está no sorteio de R$ 10.000 em 01/05! 🎉
+          Avaliação enviada com sucesso.
         </p>
-        <span className="mt-3 px-3 py-1 rounded-full font-sans text-[12px] font-semibold" style={{ background: "rgba(245,166,35,0.12)", border: "1px solid #F5A623", color: "#F5A623" }}>
-          Sorteio: 01/05
-        </span>
         <button
           onClick={() => {
             onSubmit();
@@ -1061,11 +1057,12 @@ const MototaxiTomadorPage = () => {
     initOnce.current = true;
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCenter(c);
         if (!state.origin) {
-          setState({ origin: { ...c, address: "Sua localização atual" } });
+          const physicalAddress = await reverseGeocode(c.lat, c.lng);
+          setState({ origin: { ...c, address: physicalAddress } });
         }
       },
       () => {
