@@ -26,8 +26,45 @@ import { calcSplit, SPLIT_META } from "@/utils/ride";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
+import { reverseGeocode } from "@/lib/geoService";
 
 const GREEN = "#0DB87E";
+
+interface RideLocation {
+  address?: string;
+  lat?: number | string;
+  lng?: number | string;
+}
+
+const parseRideLocation = (value: unknown): RideLocation | null => {
+  if (!value) return null;
+  if (typeof value === "object") return value as RideLocation;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed as RideLocation : { address: value };
+  } catch {
+    return { address: value };
+  }
+};
+
+const isGenericOrigin = (value?: string | null) =>
+  !value || /^sua localiza[cç][aã]o atual$/i.test(value.trim());
+
+const calculateElapsedMinutes = (start?: string | null, end?: string | null) => {
+  if (!start || !end) return undefined;
+  const elapsedMs = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return undefined;
+  return Math.max(1, Math.round(elapsedMs / 60_000));
+};
+
+const formatElapsedMinutes = (minutes?: number) => {
+  if (!minutes) return "—";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return remaining ? `${hours}h ${remaining}min` : `${hours}h`;
+};
 
 const SPLIT_ICON_MAP: Record<string, LucideIcon> = {
   User,
@@ -114,7 +151,41 @@ const TransacaoDetailPage = () => {
           row.payment_id === id || row.transaction_id === id || row.service_id === id
         );
         if (payment) {
-          setTx(paymentToTransaction(payment));
+          let transaction = paymentToTransaction(payment);
+
+          if (payment.service_type === "mototaxi") {
+            const { data: ride, error: rideError } = await supabase
+              .from("mototaxi_corridas")
+              .select("origin, destination, accepted_at, created_at, updated_at")
+              .eq("id", payment.service_id)
+              .maybeSingle();
+
+            if (!rideError && ride) {
+              const storedOrigin = parseRideLocation(ride.origin);
+              const storedDestination = parseRideLocation(ride.destination);
+              let resolvedOrigin = storedOrigin?.address;
+
+              if (isGenericOrigin(resolvedOrigin)) {
+                const lat = Number(storedOrigin?.lat);
+                const lng = Number(storedOrigin?.lng);
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                  resolvedOrigin = await reverseGeocode(lat, lng);
+                }
+              }
+
+              transaction = {
+                ...transaction,
+                origin: !isGenericOrigin(resolvedOrigin) ? resolvedOrigin : "Origem não informada",
+                destination: storedDestination?.address || transaction.destination,
+                durationMin: calculateElapsedMinutes(
+                  ride.accepted_at || ride.created_at,
+                  ride.updated_at || payment.paid_at,
+                ),
+              };
+            }
+          }
+
+          setTx(transaction);
           return;
         }
 
@@ -314,10 +385,12 @@ const TransacaoDetailPage = () => {
   ];
   if (tx.type === "entrada") {
     infoGrid.push({ label: "Pagamento", value: tx.paymentMethod?.toUpperCase() || "—" });
-    infoGrid.push({ label: "Duração", value: tx.durationMin ? `~${tx.durationMin} min` : "—" });
   }
   if (tx.type === "saida") {
     infoGrid.push({ label: "Pagamento", value: tx.paymentMethod?.toUpperCase() || "—" });
+  }
+  if (tx.serviceType === "mototaxi" && (tx.type === "entrada" || tx.type === "saida")) {
+    infoGrid.push({ label: "Duração", value: formatElapsedMinutes(tx.durationMin) });
   }
   if (tx.transactionId) infoGrid.push({ label: "Rastreio", value: `#${tx.transactionId.slice(0, 8).toUpperCase()}` });
   if (tx.origin) infoGrid.push({ label: "Origem", value: tx.origin });
