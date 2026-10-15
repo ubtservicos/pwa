@@ -94,9 +94,7 @@ const AmbulantePedidoPage = () => {
     navigate(-1);
   };
 
-    const confirmarPagamento = async () => {
-    // Tenta chamar a Edge Function segura no backend
-    let functionSuccess = false;
+  const confirmarPagamento = async () => {
     try {
       const securityMetadata = collectPaymentMetadata();
       const { data: checkData, error: checkError } = await supabase.functions.invoke("checkout", {
@@ -110,20 +108,20 @@ const AmbulantePedidoPage = () => {
           metadata: securityMetadata
         }
       });
-      if (!checkError && checkData) {
-        console.log("Checkout processado via Edge Function com sucesso:", checkData);
-        functionSuccess = true;
+      if (checkError || checkData?.success !== true || checkData?.status !== "approved") {
+        throw new Error("Pagamento não confirmado pelo gateway. Nenhum lançamento foi criado.");
       }
-    } catch (funcErr) {
-      console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
-    }
 
-    updateRemote({ payment_method: paymentMethod, payment_status: "confirmed", status: "rating" });
-    setShowSuccess(true);
-    window.setTimeout(() => {
-      setShowSuccess(false);
-      setStatus("rating");
-    }, 1500);
+      await updateRemote({ payment_method: paymentMethod, payment_status: "confirmed", status: "rating" });
+      setShowSuccess(true);
+      window.setTimeout(() => {
+        setShowSuccess(false);
+        setStatus("rating");
+      }, 1500);
+    } catch (error) {
+      console.error("Falha ao confirmar pagamento ambulante:", error);
+      alert(error instanceof Error ? error.message : "Falha ao processar pagamento.");
+    }
   };
 
   const enviarAvaliacao = () => {

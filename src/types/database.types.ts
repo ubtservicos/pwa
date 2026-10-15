@@ -112,6 +112,32 @@ export interface Database {
           justificativa_rejeicao?: string | null;
         };
       };
+      mototaxi_mensagens: {
+        Row: {
+          id: string;
+          corrida_id: string;
+          sender_id: string;
+          sender_role: "tomador" | "prestador";
+          message_text: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          corrida_id: string;
+          sender_id?: string;
+          sender_role: "tomador" | "prestador";
+          message_text: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          corrida_id?: string;
+          sender_id?: string;
+          sender_role?: "tomador" | "prestador";
+          message_text?: string;
+          created_at?: string;
+        };
+      };
     };
   };
 }
@@ -176,6 +202,7 @@ export interface LatLngAddr {
 }
 
 export interface PrestadorInfo {
+  id: string;
   name: string;
   photo: string;
   plate: string;

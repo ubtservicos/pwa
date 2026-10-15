@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, x-signature, x-request-id",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, x-signature, x-request-id, x-qa-bypass-token, x-qa-force-status",
 };
 
 // ============================================================
@@ -15,6 +15,16 @@ const CORS_HEADERS = {
 // ============================================================
 const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+type MpEnvironment = "sandbox" | "production";
+
+function paymentEnvironment(): MpEnvironment {
+  const value = (Deno.env.get("MP_ENVIRONMENT") || "").trim().toLowerCase();
+  if (value !== "sandbox" && value !== "production") {
+    throw new Error("MP_ENVIRONMENT must be explicitly set to 'sandbox' or 'production'.");
+  }
+  return value;
+}
 
 const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
@@ -44,6 +54,7 @@ interface MercadoPagoPaymentDetail {
   external_reference?: string; // Maps back to pagamentos_split.transaction_id
   date_approved?: string | null;
   date_last_updated?: string | null;
+  live_mode?: boolean;
   payer?: { email?: string };
   point_of_interaction?: {
     transaction_data?: {
@@ -89,18 +100,113 @@ async function logAuditEvent({
 // MP PAYMENT VERIFIER — anti-spoofing canonical fetch
 // Never trust the webhook body alone; always verify via MP API.
 // ============================================================
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function tokenEncryptionKey(): Promise<CryptoKey | null> {
+  const encoded = Deno.env.get("MP_TOKEN_ENCRYPTION_KEY")?.trim();
+  if (!encoded) return null;
+  const bytes = base64ToBytes(encoded);
+  if (bytes.length !== 32) {
+    throw new Error("MP_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes.");
+  }
+  return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["decrypt"]);
+}
+
+async function decryptSellerToken(value: string, environment: MpEnvironment): Promise<string> {
+  if (value.startsWith("v1:")) {
+    const [, ivValue, cipherValue] = value.split(":");
+    const key = await tokenEncryptionKey();
+    if (!key || !ivValue || !cipherValue) {
+      throw new Error("Seller OAuth token cannot be decrypted by payment-webhook.");
+    }
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(ivValue) },
+      key,
+      base64ToBytes(cipherValue),
+    );
+    return new TextDecoder().decode(plain);
+  }
+  if (environment === "sandbox" && value.startsWith("plain:")) return value.slice(6);
+  if (environment === "sandbox") return value;
+  throw new Error("Unencrypted Seller OAuth token is forbidden in production.");
+}
+
+function platformAccessToken(environment: MpEnvironment): string {
+  const token = environment === "production"
+    ? Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")?.trim()
+    : (
+      Deno.env.get("MP_ACCESS_TOKEN_SANDBOX") ||
+      Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+      Deno.env.get("MP_ACCESS_TOKEN")
+    )?.trim();
+  if (!token) throw new Error(`Mercado Pago platform access token is not configured for ${environment}.`);
+  return token;
+}
+
+async function paymentVerificationCredential(
+  paymentId: string | number,
+  environment: MpEnvironment,
+): Promise<{ accessToken: string; route: "seller_oauth_split" | "platform_fallback" }> {
+  const { data: split, error: splitError } = await supabaseAdmin
+    .from("pagamentos_split")
+    .select("payment_route, marketplace_account_id, environment")
+    .eq("gateway_payment_id", String(paymentId))
+    .maybeSingle();
+
+  if (splitError) {
+    throw new Error(`Could not resolve payment route for ${paymentId}: ${splitError.message}`);
+  }
+  if (!split) {
+    throw new Error(`No pagamentos_split record found for Mercado Pago payment ${paymentId}.`);
+  }
+  if (String(split.environment) !== environment) {
+    throw new Error(`Payment ${paymentId} belongs to a different environment.`);
+  }
+
+  if (split.payment_route !== "seller_oauth_split") {
+    return { accessToken: platformAccessToken(environment), route: "platform_fallback" };
+  }
+  if (!split.marketplace_account_id) {
+    throw new Error(`Seller OAuth payment ${paymentId} has no marketplace_account_id.`);
+  }
+
+  const { data: account, error: accountError } = await supabaseAdmin
+    .from("marketplace_accounts")
+    .select("access_token_encrypted, ambiente, status, token_expiration")
+    .eq("id", split.marketplace_account_id)
+    .maybeSingle();
+  if (accountError || !account) {
+    throw new Error(`Marketplace account for payment ${paymentId} could not be loaded.`);
+  }
+  if (account.status !== "CONNECTED" || account.ambiente !== environment) {
+    throw new Error(`Marketplace account for payment ${paymentId} is not connected in ${environment}.`);
+  }
+  if (!account.access_token_encrypted) {
+    throw new Error(`Marketplace account for payment ${paymentId} has no OAuth access token.`);
+  }
+  if (account.token_expiration && new Date(account.token_expiration).getTime() <= Date.now()) {
+    throw new Error(`Marketplace OAuth token for payment ${paymentId} is expired.`);
+  }
+
+  const accessToken = (await decryptSellerToken(account.access_token_encrypted, environment)).trim();
+  if (!accessToken) throw new Error(`Marketplace OAuth token for payment ${paymentId} is empty.`);
+  return { accessToken, route: "seller_oauth_split" };
+}
+
 async function fetchMPPaymentStatus(
   paymentId: string | number
-): Promise<{ data: MercadoPagoPaymentDetail; httpStatus: number }> {
-  const mpAccessToken = Deno.env.get("MP_ACCESS_TOKEN_TEST");
-  if (!mpAccessToken) {
-    throw new Error("MP_ACCESS_TOKEN_TEST is not configured in Edge Function secrets.");
-  }
+): Promise<{ data: MercadoPagoPaymentDetail; httpStatus: number; credentialRoute: string }> {
+  const environment = paymentEnvironment();
+  const credential = await paymentVerificationCredential(paymentId, environment);
+  console.log(`[payment-webhook] Verifying payment ${paymentId} through route ${credential.route}.`);
 
   const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${mpAccessToken}`,
+      "Authorization": `Bearer ${credential.accessToken}`,
       "Content-Type": "application/json",
     },
   });
@@ -112,7 +218,7 @@ async function fetchMPPaymentStatus(
   } catch (parseErr) {
     throw new Error(`Invalid JSON from MP (Status ${response.status}): ${rawText}`);
   }
-  return { data, httpStatus: response.status };
+  return { data, httpStatus: response.status, credentialRoute: credential.route };
 }
 
 // ============================================================
@@ -127,7 +233,7 @@ async function claimWebhookEvent(eventId: string, paymentId: string): Promise<bo
     event_id: eventId,
     event_type: "payment",
     external_id: paymentId,
-    environment: "sandbox",
+    environment: paymentEnvironment(),
     processing_status: "processing",
     attempts: 1,
     payload_hash: await computeSha256(paymentId),
@@ -145,11 +251,13 @@ async function claimWebhookEvent(eventId: string, paymentId: string): Promise<bo
 
       if (
         existing &&
-        existing.processing_status === "processing" &&
-        (Date.now() - new Date(existing.created_at).getTime()) > 300_000
+        (existing.processing_status === "failed" ||
+          existing.processing_status === "retrying" ||
+          (existing.processing_status === "processing" &&
+            (Date.now() - new Date(existing.created_at).getTime()) > 300_000))
       ) {
-        // Stuck event — allow retry by resetting status
-        console.warn(`[payment-webhook] Stuck event ${eventId} detected (>5min in processing). Permitting retry.`);
+        // Failed or stuck event — allow MP's delivery retry to finish orchestration.
+        console.warn(`[payment-webhook] Retryable event ${eventId} detected. Permitting retry.`);
         await supabaseAdmin
           .from("marketplace_webhook_events")
           .update({ processing_status: "retrying", attempts: (existing.attempts || 1) + 1 })
@@ -201,7 +309,7 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
   // external_reference is the transaction_id in pagamentos_split
   const { data: splits, error: selectErr } = await supabaseAdmin
     .from("pagamentos_split")
-    .select("id, status, transaction_id")
+    .select("id, status, transaction_id, service_type, service_id, total_amount")
     .eq("transaction_id", external_reference)
     .limit(1);
 
@@ -221,33 +329,69 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
   }
 
   const split = splits[0];
+  if (!["pending", "approved"].includes(String(split.status))) {
+    throw new Error(
+      `Refusing to approve split ${split.id} from terminal local status ${split.status}. Manual reconciliation required.`,
+    );
+  }
 
   // --- Idempotency guard: skip if already approved/completed ---
-  if (split.status === "approved") {
+  const splitAlreadyApproved = split.status === "approved";
+  if (splitAlreadyApproved) {
     console.log(`[payment-webhook] pagamentos_split ${split.id} already approved — skipping update (idempotent).`);
     await logAuditEvent({
       transactionType: "order_fulfillment_skipped",
       status: "already_approved",
       payload: { split_id: split.id, mp_payment_id: mpId, external_reference },
     });
-    return;
   }
 
   // --- Atomic update: set status to 'approved' with timestamp ---
-  const { error: updateErr } = await supabaseAdmin
-    .from("pagamentos_split")
-    .update({
-      status: "approved",
-      updated_at: date_approved ?? new Date().toISOString(),
-    })
-    .eq("transaction_id", external_reference)
-    .eq("status", "pending"); // Extra safety: only update if still pending (prevents overwriting refunded states)
+  if (!splitAlreadyApproved) {
+    const { error: updateErr } = await supabaseAdmin
+      .from("pagamentos_split")
+      .update({
+        status: "approved",
+        updated_at: date_approved ?? new Date().toISOString(),
+      })
+      .eq("transaction_id", external_reference)
+      .eq("status", "pending"); // Extra safety: only update if still pending (prevents overwriting refunded states)
 
-  if (updateErr) {
-    throw new Error(`pagamentos_split update failed for ${external_reference}: ${updateErr.message}`);
+    if (updateErr) {
+      throw new Error(`pagamentos_split update failed for ${external_reference}: ${updateErr.message}`);
+    }
+
+    console.log(`[payment-webhook] ✅ pagamentos_split ${split.id} updated to approved via MP payment ${mpId}.`);
   }
 
-  console.log(`[payment-webhook] ✅ pagamentos_split ${split.id} updated to approved via MP payment ${mpId}.`);
+  // Keep operational state server-authoritative for asynchronous methods (for
+  // example Pix). The browser must never promote a service to paid itself.
+  if (split.service_type === "mototaxi") {
+    const { error: rideError } = await supabaseAdmin
+      .from("mototaxi_corridas")
+      .update({
+        status: "paid",
+        final_price: Number(split.total_amount),
+        pix_charge_status: "approved",
+        updated_at: date_approved ?? new Date().toISOString(),
+      })
+      .eq("id", split.service_id);
+    if (rideError) {
+      throw new Error(`mototaxi_corridas update failed for ${split.service_id}: ${rideError.message}`);
+    }
+  } else if (split.service_type === "diarista") {
+    const { error: requestError } = await supabaseAdmin
+      .from("services_requests")
+      .update({
+        status: "paid",
+        payment_id: String(mpId),
+        updated_at: date_approved ?? new Date().toISOString(),
+      })
+      .eq("id", split.service_id);
+    if (requestError) {
+      throw new Error(`services_requests update failed for ${split.service_id}: ${requestError.message}`);
+    }
+  }
 
   // --- Audit: order fulfilled ---
   await logAuditEvent({
@@ -264,7 +408,7 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
 }
 
 // ============================================================
-// SIGNATURE VALIDATION — HMAC-SHA256 (sandbox-tolerant)
+// SIGNATURE VALIDATION — HMAC-SHA256 (production fails closed)
 // ============================================================
 async function computeSha256(input: string): Promise<string> {
   const msgData = new TextEncoder().encode(input);
@@ -274,19 +418,61 @@ async function computeSha256(input: string): Promise<string> {
     .join("");
 }
 
+async function constantTimeSecretMatch(received: string, expected: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [receivedDigest, expectedDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(received)),
+    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
+  ]);
+  const receivedBytes = new Uint8Array(receivedDigest);
+  const expectedBytes = new Uint8Array(expectedDigest);
+  let mismatch = 0;
+  for (let index = 0; index < receivedBytes.length; index += 1) {
+    mismatch |= receivedBytes[index] ^ expectedBytes[index];
+  }
+  return mismatch === 0;
+}
+
 async function validateMPSignature(
   req: Request,
   rawBody: string
-): Promise<{ valid: boolean; warning?: string }> {
-  const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET");
+): Promise<{ valid: boolean; warning?: string; qaBypass?: boolean; qaForceApproved?: boolean }> {
+  const environment = paymentEnvironment();
+  const qaToken = req.headers.get("x-qa-bypass-token")?.trim() ?? "";
+  if (qaToken) {
+    if (environment !== "sandbox") {
+      return { valid: false, warning: "QA webhook bypass is forbidden outside sandbox." };
+    }
+    const expectedQaToken = Deno.env.get("MP_QA_WEBHOOK_BYPASS_TOKEN")?.trim() ?? "";
+    if (expectedQaToken.length < 32) {
+      return { valid: false, warning: "QA webhook bypass secret is not configured securely." };
+    }
+    if (!(await constantTimeSecretMatch(qaToken, expectedQaToken))) {
+      return { valid: false, warning: "Invalid QA webhook bypass token." };
+    }
+    const qaForceApproved = req.headers.get("x-qa-force-status")?.trim().toLowerCase() === "approved";
+    return {
+      valid: true,
+      warning: qaForceApproved
+        ? "Sandbox QA bypass accepted with forced approved status."
+        : "Sandbox QA signature bypass accepted without status override.",
+      qaBypass: true,
+      qaForceApproved,
+    };
+  }
+
+  const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET")?.trim();
   const xSignature   = req.headers.get("x-signature");
   const xRequestId   = req.headers.get("x-request-id");
 
   if (!webhookSecret) {
-    return { valid: true, warning: "MP_WEBHOOK_SECRET not configured — signature validation skipped (sandbox mode)." };
+    return {
+      valid: false,
+      warning: `MP_WEBHOOK_SECRET is required in ${environment}; use the explicit QA token for sandbox simulations.`,
+    };
   }
-  if (!xSignature) {
-    return { valid: false, warning: "Missing x-signature header from Mercado Pago." };
+  if (!xSignature || !xRequestId) {
+    return { valid: false, warning: "Missing x-signature or x-request-id header from Mercado Pago." };
   }
 
   // MP signature format: "ts=<timestamp>,v1=<hash>"
@@ -298,7 +484,18 @@ async function validateMPSignature(
     return { valid: false, warning: "Malformed x-signature header." };
   }
 
-  const manifest = `id:${xRequestId ?? ""};request-id:${xRequestId ?? ""};ts:${timestamp};`;
+  let dataId = "";
+  try {
+    const parsed = JSON.parse(rawBody) as MercadoPagoWebhookBody;
+    const queryDataId = new URL(req.url).searchParams.get("data.id");
+    dataId = String(queryDataId ?? parsed.data?.id ?? "").toLowerCase();
+  } catch {
+    return { valid: false, warning: "Invalid JSON body for signature validation." };
+  }
+  if (!dataId) {
+    return { valid: false, warning: "Missing data.id for signature validation." };
+  }
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${timestamp};`;
 
   const keyData  = new TextEncoder().encode(webhookSecret);
   const msgData  = new TextEncoder().encode(manifest);
@@ -310,7 +507,12 @@ async function validateMPSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  if (computedHash !== v1Hash) {
+  const expected = v1Hash.toLowerCase();
+  let mismatch = computedHash.length !== expected.length ? 1 : 0;
+  for (let index = 0; index < Math.min(computedHash.length, expected.length); index += 1) {
+    mismatch |= computedHash.charCodeAt(index) ^ expected.charCodeAt(index);
+  }
+  if (mismatch !== 0) {
     return { valid: false, warning: "Signature mismatch — potential spoofing attempt." };
   }
 
@@ -335,7 +537,12 @@ serve(async (req: Request): Promise<Response> => {
     const rawBody = await req.text();
 
     // --- [1] Signature Validation ---
-    const { valid: sigValid, warning: sigWarning } = await validateMPSignature(req, rawBody);
+    const {
+      valid: sigValid,
+      warning: sigWarning,
+      qaBypass = false,
+      qaForceApproved = false,
+    } = await validateMPSignature(req, rawBody);
     if (sigWarning) console.warn("[payment-webhook] Signature warning:", sigWarning);
 
     if (!sigValid) {
@@ -369,6 +576,20 @@ serve(async (req: Request): Promise<Response> => {
 
     const { type, action, data } = webhookBody;
 
+    if (qaBypass) {
+      await logAuditEvent({
+        transactionType: "webhook_qa_bypass",
+        status: "security_override",
+        payload: {
+          environment: paymentEnvironment(),
+          payment_id: data?.id ? String(data.id) : null,
+          force_approved: qaForceApproved,
+          timestamp: new Date().toISOString(),
+        },
+        errorDetails: "Sandbox-only QA bypass used; Mercado Pago payment existence is still verified server-side.",
+      });
+    }
+
     // --- [3] Log raw receipt for full lifecycle traceability ---
     await logAuditEvent({
       transactionType: "webhook_received",
@@ -400,7 +621,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // --- [6] Anti-spoofing: verify payment state directly with MP API ---
-    const { data: mpPayment, httpStatus: mpStatus } = await fetchMPPaymentStatus(paymentId);
+    const { data: mpPayment, httpStatus: mpStatus, credentialRoute } = await fetchMPPaymentStatus(paymentId);
 
     if (mpStatus >= 400 || mpPayment.error) {
       const errMsg = `MP verification failed for payment ${paymentId}: [${mpPayment.error ?? mpStatus}] ${mpPayment.message ?? ""}`;
@@ -418,7 +639,28 @@ serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    const verifiedStatus = mpPayment.status ?? "unknown";
+    const expectedLiveMode = paymentEnvironment() === "production";
+    if (typeof mpPayment.live_mode === "boolean" && mpPayment.live_mode !== expectedLiveMode) {
+      throw new Error(`Mercado Pago payment environment mismatch for payment ${paymentId}.`);
+    }
+
+    const actualStatus = mpPayment.status ?? "unknown";
+    if (
+      qaForceApproved &&
+      !["pending", "in_process", "approved"].includes(actualStatus)
+    ) {
+      throw new Error(
+        `QA approval refused for Mercado Pago payment ${paymentId} with terminal status ${actualStatus}.`,
+      );
+    }
+    const effectivePayment: MercadoPagoPaymentDetail = qaForceApproved
+      ? {
+        ...mpPayment,
+        status: "approved",
+        date_approved: mpPayment.date_approved ?? new Date().toISOString(),
+      }
+      : mpPayment;
+    const verifiedStatus = effectivePayment.status ?? "unknown";
 
     // --- [7] Persist verified payment status in audit log ---
     await logAuditEvent({
@@ -426,11 +668,14 @@ serve(async (req: Request): Promise<Response> => {
       status: verifiedStatus,
       payload: {
         payment_id: mpPayment.id,
-        status: mpPayment.status,
+        status: verifiedStatus,
+        actual_mp_status: actualStatus,
+        qa_simulated: qaForceApproved,
         status_detail: mpPayment.status_detail,
         transaction_amount: mpPayment.transaction_amount,
         description: mpPayment.description,
         payment_method_id: mpPayment.payment_method_id,
+        credential_route: credentialRoute,
         external_reference: mpPayment.external_reference,
         date_approved: mpPayment.date_approved,
         date_last_updated: mpPayment.date_last_updated,
@@ -440,7 +685,7 @@ serve(async (req: Request): Promise<Response> => {
 
     // --- [8] Orchestration: update operational DB if payment is approved ---
     if (verifiedStatus === "approved") {
-      await orchestrateApprovedPayment(mpPayment);
+      await orchestrateApprovedPayment(effectivePayment);
     } else {
       console.log(`[payment-webhook] Payment ${paymentId} status=${verifiedStatus} — no DB orchestration needed.`);
     }
@@ -455,6 +700,8 @@ serve(async (req: Request): Promise<Response> => {
         success: true,
         payment_id: mpPayment.id,
         verified_status: verifiedStatus,
+        actual_mp_status: actualStatus,
+        qa_simulated: qaForceApproved,
         verified_status_detail: mpPayment.status_detail,
         external_reference: mpPayment.external_reference ?? null,
       }),

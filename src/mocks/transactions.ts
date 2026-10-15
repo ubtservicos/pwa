@@ -17,6 +17,22 @@ export interface Transaction {
   sorteioData?: string;
   sorteioStatus?: "participando" | "ganhou" | "nao_ganhou";
   premio?: number;
+  transactionId?: string;
+  serviceId?: string;
+  serviceType?: string;
+  origin?: string;
+  destination?: string;
+  paymentMethod?: string;
+  durationMin?: number;
+  distanceKm?: number;
+  splitAmounts?: {
+    provider: number;
+    ubt: number;
+    entity: number;
+    prizeWorker: number;
+    prizeConsumer: number;
+    godparent: number;
+  };
 }
 
 const daysAgo = (n: number, hour = 14, min = 0) => {

@@ -182,8 +182,8 @@ export default function AdminPaymentDetailPage() {
   const getReceiptText = () => {
     if (!payment) return "";
     const appFee = payment.total_amount - payment.provider_amount;
-    const tomName = tomador?.name || "Felipe Santander";
-    const prestName = prestador?.name || "Silvina Luz";
+    const tomName = tomador?.name || "Tomador não identificado";
+    const prestName = prestador?.name || "Prestador não identificado";
 
     return `🧾 *RECIBO OFICIAL UBT — DETALHAMENTO DE PAGAMENTO*
 ----------------------------------------
@@ -275,7 +275,7 @@ _UBT - O Superapp do Trabalhador_`;
   const splitRows = [
     {
       index: 1,
-      name: `Prestador (${prestador?.name || "Silvina Luz"})`,
+      name: `Prestador (${prestador?.name || "não identificado"})`,
       targetId: prestador?.id || payment.service_id || "0a5edf64-7585-401f-b310-126529607da0",
       pct: 90.0,
       amount: payment.provider_amount,
@@ -518,11 +518,11 @@ _UBT - O Superapp do Trabalhador_`;
               </span>
               <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
                 <span className="text-zinc-400 print:text-zinc-600">Tomador (Cliente):</span>
-                <span className="font-semibold text-zinc-200 print:text-black">{tomador?.name || "Felipe Santander"}</span>
+                <span className="font-semibold text-zinc-200 print:text-black">{tomador?.name || "Tomador não identificado"}</span>
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
                 <span className="text-zinc-400 print:text-zinc-600">Prestador (Motorista):</span>
-                <span className="font-semibold text-emerald-400 print:text-black">{prestador?.name || "Silvina Luz"}</span>
+                <span className="font-semibold text-emerald-400 print:text-black">{prestador?.name || "Prestador não identificado"}</span>
               </div>
               <div className="flex justify-between items-center py-1.5">
                 <span className="text-zinc-400 print:text-zinc-600">Associação Vinculada:</span>

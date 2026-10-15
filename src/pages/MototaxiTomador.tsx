@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -10,14 +10,11 @@ import {
   Package,
   ShieldAlert,
   Star,
-  Trophy,
   CheckCircle2,
-  QrCode,
   CreditCard,
   X,
   User,
   MessageSquare,
-  Scan,
   Smartphone,
   Banknote,
   Copy,
@@ -25,20 +22,23 @@ import {
 } from "lucide-react";
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
-import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
-import Confetti from "react-confetti";
+import QuickStatusMessages, { type QuickMessageItem } from "@/components/mototaxi/QuickStatusMessages";
+import { useMototaxiQuickMessages, type MototaxiChatStatus } from "@/hooks/useMototaxiQuickMessages";
+import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
-import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, type AutocompleteSuggestion } from "@/lib/geoService";
+import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, reverseGeocode, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { createPreference, calculateSplit } from "@/lib/mercadoPago";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { validateGeofence } from "@/services/GeofenceService";
-import { collectPaymentMetadata } from "@/services/PaymentSecurityService";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
+import CheckoutUniversal from "@/components/Payment/CheckoutUniversal";
+import type { PaymentResult } from "@/components/Payment/types";
+import { RidePaymentSummary } from "@/components/mototaxi/RidePaymentSummary";
+import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
 
 const UBATUBA_FALLBACK = { lat: -23.4336, lng: -45.0838 };
 
@@ -416,13 +416,21 @@ const AcceptedSheet = ({
   onCancel,
   onArrive,
   onSendMessage,
+  messages,
+  chatStatus,
+  isSendingMessage,
+  chatError,
 }: {
   prestador: { name?: string; plate?: string; rating?: number };
   durationMin: number;
   acceptedAt: number;
   onCancel: () => void;
   onArrive: () => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => void | Promise<void>;
+  messages: QuickMessageItem[];
+  chatStatus: MototaxiChatStatus;
+  isSendingMessage: boolean;
+  chatError: string | null;
 }) => {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -479,7 +487,15 @@ const AcceptedSheet = ({
         <div className="h-full" style={{ background: "#0DB87E", width: `${Math.min(100, (elapsed / ((durationMin || 5) * 60)) * 100)}%`, transition: "width 1s linear" }} />
       </div>
 
-      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
+      <QuickStatusMessages
+        role="tomador"
+        onSendMessage={onSendMessage}
+        messages={messages}
+        connectionStatus={chatStatus}
+        isSending={isSendingMessage}
+        error={chatError}
+        className="mt-4"
+      />
 
       {canCancelFree && (
         <button
@@ -499,10 +515,18 @@ const InProgressSheet = ({
   durationMin,
   onComplete,
   onSendMessage,
+  messages,
+  chatStatus,
+  isSendingMessage,
+  chatError,
 }: {
   durationMin: number;
   onComplete: () => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => void | Promise<void>;
+  messages: QuickMessageItem[];
+  chatStatus: MototaxiChatStatus;
+  isSendingMessage: boolean;
+  chatError: string | null;
 }) => {
   const [showEmergency, setShowEmergency] = useState(false);
 
@@ -520,7 +544,15 @@ const InProgressSheet = ({
         </span>
       </div>
 
-      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
+      <QuickStatusMessages
+        role="tomador"
+        onSendMessage={onSendMessage}
+        messages={messages}
+        connectionStatus={chatStatus}
+        isSending={isSendingMessage}
+        error={chatError}
+        className="mt-4"
+      />
 
       <button
         onClick={() => setShowEmergency(true)}
@@ -556,7 +588,7 @@ const InProgressSheet = ({
   );
 };
 
-type PaymentMethodOption = "pix_scanner" | "pix_checkout" | "card" | "cash";
+type PaymentMethodOption = "pix_checkout" | "card" | "cash";
 
 const CompletedScreen = ({
   price,
@@ -573,16 +605,13 @@ const CompletedScreen = ({
   prestadorInfo?: any;
   onPay: () => void;
 }) => {
-  const user = useCurrentUser();
-  const [method, setMethod] = useState<PaymentMethodOption>("pix_checkout");
+  const [method, setMethod] = useState<PaymentMethodOption | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [pixSeconds, setPixSeconds] = useState(300);
-  const [isLoading, setIsLoading] = useState(false);
-  const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
   const [pixCopiaCola, setPixCopiaCola] = useState<string>("");
   const [copiedPix, setCopiedPix] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
+  const paidTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchGatewayFeeSettings().then(setFeeSettings);
@@ -591,58 +620,57 @@ const CompletedScreen = ({
   const rawBase = price > 0 ? price : 10.00;
   // Calculate fee mapping for split display
   const feeMethodType = (method === "card" ? "card" : "pix") as "pix" | "card";
-  const feeCalc = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
+  const calculatedFee = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
+  const feeCalc = method === "card"
+    ? calculatedFee
+    : { ...calculatedFee, feeAmount: 0, feePercentage: 0, totalAmount: rawBase };
+
+  const transitionToPaid = useCallback(() => {
+    setConfirming(true);
+    if (paidTimerRef.current) return;
+    paidTimerRef.current = setTimeout(onPay, 1800);
+  }, [onPay]);
+
+  const applyRidePaymentState = useCallback((dbRide: any) => {
+    if (!dbRide) return;
+    if (dbRide.pix_copy_paste) setPixCopiaCola(String(dbRide.pix_copy_paste));
+    if (dbRide.status === "paid") transitionToPaid();
+  }, [transitionToPaid]);
+
+  useRealtimeChannel(
+    rideId ? `tomador_payment_${rideId}` : null,
+    { event: "UPDATE", table: "mototaxi_corridas", filter: rideId ? `id=eq.${rideId}` : undefined },
+    (payload) => applyRidePaymentState(payload.new)
+  );
 
   useEffect(() => {
-    if (method !== "pix_checkout") return;
-    const id = setInterval(() => setPixSeconds((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(id);
-  }, [method]);
-  const mm = String(Math.floor(pixSeconds / 60)).padStart(2, "0");
-  const ss = String(pixSeconds % 60).padStart(2, "0");
+    if (!rideId) return;
+    const syncPayment = async () => {
+      if (document.hidden) return;
+      const { data } = await supabase
+        .from("mototaxi_corridas")
+        .select("status, pix_copy_paste")
+        .eq("id", rideId)
+        .maybeSingle();
+      applyRidePaymentState(data);
+    };
+    void syncPayment();
+    const timer = window.setInterval(syncPayment, 5000);
+    return () => window.clearInterval(timer);
+  }, [rideId, applyRidePaymentState]);
 
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardHolder, setCardHolder] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
+  useEffect(() => () => {
+    if (paidTimerRef.current) clearTimeout(paidTimerRef.current);
+  }, []);
 
-  const formatCardNumber = (v: string) => {
-    const clean = v.replace(/\D/g, "").slice(0, 16);
-    return clean.replace(/(\d{4})(?=\d)/g, "$1 ");
-  };
 
-  const formatCardExpiry = (v: string) => {
-    const clean = v.replace(/\D/g, "").slice(0, 4);
-    if (clean.length >= 3) {
-      return `${clean.slice(0, 2)}/${clean.slice(2)}`;
-    }
-    return clean;
-  };
-
-  const applyTestCard = (preset: "master" | "visa") => {
-    if (preset === "master") {
-      setCardNumber("4242 4242 4242 4242");
-      setCardHolder("Felipe Santander");
-      setCardExpiry("11/28");
-      setCardCvv("123");
-    } else {
-      setCardNumber("5031 7557 3450 1234");
-      setCardHolder("Silvina Luz");
-      setCardExpiry("05/29");
-      setCardCvv("789");
-    }
-  };
-
-  // Broadcast & DB notify when selecting Pix Scanner, Cash, Card, etc.
+  // Persist the selected method; Pix creation itself belongs to the provider.
   const handleSelectMethod = async (m: PaymentMethodOption) => {
     setMethod(m);
     setPaymentError(null);
-    setQrCodeBase64("");
-    setPixCopiaCola("");
 
     const methodMap: Record<PaymentMethodOption, string | null> = {
       cash: null,
-      pix_scanner: "pix",
       pix_checkout: "pix",
       card: "card",
     };
@@ -664,252 +692,26 @@ const CompletedScreen = ({
           console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
         }
 
-        const channel = supabase
-          .channel(`ride_msg_${rideId}`)
-          .on("broadcast", { event: "payment_method_selected" }, () => {})
-          .subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              channel.send({
-                type: "broadcast",
-                event: "payment_method_selected",
-                payload: { method: m, dbMethod, rideId, amount: feeCalc.totalAmount },
-              });
-            }
-          });
       } catch (e: any) {
         console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
     }
 
-    // Se for Pix (Scanner ou no Celular), aciona automaticamente a Edge Function para gerar o QR Code real transparente
-    if (m === "pix_scanner" || m === "pix_checkout") {
-      await handleProcessPayment("pix", m);
-    }
   };
 
-  // Helper para tokenizar cartão diretamente no Mercado Pago API
-  const tokenizeCard = async (cleanNum: string, name: string, expMonth: number, expYear: number, cvv: string): Promise<string> => {
-    const mpPublicKey =
-      import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
-      import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
-
-    if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {
-      throw new Error("Chave pública do Mercado Pago (VITE_MERCADOPAGO_PUBLIC_KEY) não está configurada no ambiente.");
+  // ─── Card payment callbacks (delegated to <CheckoutUniversal />) ───
+  const handleCardPaymentSuccess = async (result: PaymentResult) => {
+    if (result?.split?.statement) {
+      console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + result.split.statement);
     }
-
-    const cleanKey = mpPublicKey.trim();
-    const cleanCpf = (user?.cpf || "").replace(/\D/g, "");
-    const cardHolderName = (name || user?.name || "Cliente UBT").trim();
-    const payload: Record<string, unknown> = {
-      cardNumber: cleanNum,
-      card_number: cleanNum,
-      cardholder: {
-        name: cardHolderName,
-        ...(cleanCpf ? {
-          identification: {
-            type: "CPF",
-            number: cleanCpf,
-          }
-        } : {}),
-      },
-      cardExpirationMonth: expMonth,
-      card_expiration_month: expMonth,
-      expiration_month: expMonth,
-      cardExpirationYear: expYear,
-      card_expiration_year: expYear,
-      expiration_year: expYear,
-      securityCode: cvv || "123",
-      security_code: cvv || "123",
-    };
-
-    console.log("[MercadoPago Tokenize] Enviando payload para /v1/card_tokens:", {
-      ...payload,
-      cardNumber: `***${cleanNum.slice(-4)}`,
-      card_number: `***${cleanNum.slice(-4)}`,
-    });
-
-    const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    console.log("[MercadoPago Tokenize] Resposta MP:", res.status, data);
-
-    if (res.ok && data?.id) {
-      return data.id;
-    }
-
-    const errMessage =
-      data?.message ||
-      (Array.isArray(data?.cause) && data.cause[0]?.description) ||
-      data?.error ||
-      `Erro ${res.status} ao tokenizar cartão no Mercado Pago`;
-
-    console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
-    throw new Error(`Falha na tokenização do cartão: ${errMessage}`);
+    // payment-gateway is the only authority allowed to mark the ride as paid.
+    setConfirming(true);
+    setTimeout(onPay, 1500);
   };
 
-  // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
-  const handleProcessPayment = async (paymentType: "pix" | "card", targetMethod?: PaymentMethodOption) => {
-    setIsLoading(true);
-    setPaymentError(null);
-    const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
-    try {
-      const cardClean = cardNumber.replace(/\s+/g, "");
-      const [rawMonth, rawYear] = (cardExpiry || "").split("/");
-      const expMonth = parseInt(rawMonth || "12", 10);
-      const expYear = parseInt(rawYear ? (rawYear.length === 2 ? `20${rawYear}` : rawYear) : "2028", 10);
-
-      const paymentMethodId = paymentType === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
-      
-      let cardToken: string | undefined = undefined;
-      if (paymentType === "card") {
-        if (!cardClean || cardClean.length < 13) {
-          setIsLoading(false);
-          setPaymentError("Por favor, informe os dados completos do cartão.");
-          return;
-        }
-
-        const generatedToken = await tokenizeCard(cardClean, cardHolder, expMonth, expYear, cardCvv);
-        if (!generatedToken || typeof generatedToken !== "string" || generatedToken.length < 15) {
-          throw new Error("Token de cartão inválido ou vazio retornado pelo gateway.");
-        }
-        cardToken = generatedToken;
-      }
-
-      const session = (await supabase.auth.getSession()).data.session;
-      const userEmail = session?.user?.email || user?.email || "";
-      const userCpf = (user?.cpf || (session?.user?.user_metadata as any)?.cpf || "").replace(/\D/g, "");
-      const cardHolderName = (cardHolder || user?.name || "").trim();
-      const nameParts = cardHolderName ? cardHolderName.split(" ") : [];
-      const firstName = nameParts[0] || (user?.name || "").split(" ")[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || (user?.name || "").split(" ").slice(1).join(" ") || "";
-
-      const payerData: Record<string, unknown> = {};
-      if (userEmail) payerData.email = userEmail;
-      if (firstName) payerData.first_name = firstName;
-      if (lastName) payerData.last_name = lastName;
-      if (userCpf) {
-        payerData.identification = {
-          type: "CPF",
-          number: userCpf,
-        };
-      }
-
-      const payloadParaEdge = {
-        action: "create_payment_intent",
-        service_type: "mototaxi",
-        service_id: rideId || crypto.randomUUID(),
-        external_reference: rideId || undefined,
-        transaction_amount: finalAmount,
-        provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
-        provider_name: prestadorInfo?.name || "Silvina Luz",
-        payer_email: userEmail || undefined,
-        payer: Object.keys(payerData).length > 0 ? payerData : undefined,
-        payer_first_name: firstName || undefined,
-        payer_last_name: lastName || undefined,
-        payer_identification: userCpf ? { type: "CPF", number: userCpf } : undefined,
-        description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-        payment_method_id: paymentMethodId,
-        // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
-        token: cardToken,
-        card_token: cardToken,
-        card_token_id: cardToken,
-        card_data: paymentType === "card" ? {
-          number: cardClean,
-          cardholder_name: cardHolderName || "Cliente UBT",
-          expiration_month: expMonth,
-          expiration_year: expYear,
-          security_code: cardCvv || "123",
-        } : undefined,
-      };
-
-      console.log("PAYLOAD COMPLETO PARA EDGE (COM TOKEN):", payloadParaEdge);
-
-      const { data, error: invokeError } = await supabase.functions.invoke("payment-gateway", {
-        body: payloadParaEdge,
-      });
-
-      if (invokeError || !data || data.error || data.success === false) {
-        console.error("[PAYMENT GATEWAY ERROR RESPONSE]:", data || invokeError);
-        const errMain = data?.error || invokeError?.message || "Pagamento rejeitado pelo gateway";
-        let errDetails = "";
-        if (data?.mp_error) {
-          errDetails = typeof data.mp_error === "object" ? JSON.stringify(data.mp_error) : String(data.mp_error);
-        } else if (data?.details) {
-          errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
-        } else if (data?.detail) {
-          errDetails = data.detail;
-        } else if (data?.message) {
-          errDetails = data.message;
-        }
-        throw new Error(errDetails ? `${errMain}: ${errDetails}` : errMain);
-      }
-
-      if (data?.split?.statement) {
-        console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
-      }
-
-      if (data?.pix?.qr_code_base64 || data?.pix?.qr_code) {
-        if (data.pix.qr_code_base64) {
-          setQrCodeBase64(data.pix.qr_code_base64);
-        }
-        if (data.pix.qr_code) {
-          setPixCopiaCola(data.pix.qr_code);
-        }
-
-        // Se o método for Pix Scanner, transmite os dados do QR code gerado para a tela do motorista via Realtime
-        const currentMethod = targetMethod || method;
-        if (currentMethod === "pix_scanner" && rideId) {
-          try {
-            const channel = supabase
-              .channel(`ride_msg_${rideId}`)
-              .on("broadcast", { event: "pix_qr_ready" }, () => {})
-              .subscribe((status) => {
-                if (status === "SUBSCRIBED") {
-                  channel.send({
-                    type: "broadcast",
-                    event: "pix_qr_ready",
-                    payload: {
-                      rideId,
-                      qr_code_base64: data.pix.qr_code_base64,
-                      qr_code: data.pix.qr_code,
-                      amount: finalAmount,
-                    },
-                  });
-                }
-              });
-          } catch (bErr) {
-            console.warn("Aviso ao transmitir pix_qr_ready:", bErr);
-          }
-        }
-      } else {
-        if (rideId) {
-          try {
-            const { error: updateErr } = await supabase
-              .from("mototaxi_corridas")
-              .update({ status: "paid" })
-              .eq("id", rideId);
-            if (updateErr) {
-              console.error("Erro Supabase PATCH ao marcar paid:", updateErr.message, updateErr.details, updateErr.hint);
-            }
-          } catch (e: any) {
-            console.error("Erro ao atualizar status para paid:", e?.message || e);
-          }
-        }
-        setConfirming(true);
-        setTimeout(onPay, 1500);
-      }
-    } catch (err: any) {
-      console.error("Payment failed:", err);
-      const msg = err?.message || "Erro no processamento do pagamento.";
-      setPaymentError(msg);
-      toast.error(`Falha no pagamento: ${msg}`);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleCardPaymentError = (errorMsg: string) => {
+    setPaymentError(errorMsg);
+    toast.error(`Falha no pagamento: ${errorMsg}`);
   };
 
   const handleCopyPix = () => {
@@ -919,24 +721,6 @@ const CompletedScreen = ({
       toast.success("Código Pix copiado com sucesso!");
       setTimeout(() => setCopiedPix(false), 3000);
     }
-  };
-
-  const handleConfirmManualPaid = async () => {
-    if (rideId) {
-      try {
-        const { error: updateErr } = await supabase
-          .from("mototaxi_corridas")
-          .update({ status: "paid" })
-          .eq("id", rideId);
-        if (updateErr) {
-          console.error("Erro Supabase PATCH manual paid:", updateErr.message, updateErr.details, updateErr.hint);
-        }
-      } catch (e: any) {
-        console.error("Erro ao atualizar status para paid:", e?.message || e);
-      }
-    }
-    setConfirming(true);
-    setTimeout(onPay, 1500);
   };
 
   return (
@@ -986,26 +770,7 @@ const CompletedScreen = ({
         Escolha como deseja pagar
       </p>
 
-      {/* 3 DIRECT PAYMENT BUTTONS (Opção Em Dinheiro ocultada temporariamente para testes de Gateway) */}
-      <div className="mt-3 grid grid-cols-3 gap-2.5">
-        {/* 1. Pix Scanner */}
-        <button
-          type="button"
-          onClick={() => handleSelectMethod("pix_scanner")}
-          className="rounded-2xl p-3 flex flex-col items-start text-left transition-all active:scale-[0.98]"
-          style={{
-            background: method === "pix_scanner" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
-            border: method === "pix_scanner" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_scanner" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
-            <Scan size={18} className={method === "pix_scanner" ? "text-white" : "text-white/70"} />
-          </div>
-          <span className="font-display text-[12px] font-bold leading-tight">Pix Scanner</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">QR no motorista</span>
-        </button>
-
-        {/* 2. Pix Checkout */}
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
         <button
           type="button"
           onClick={() => handleSelectMethod("pix_checkout")}
@@ -1018,11 +783,10 @@ const CompletedScreen = ({
           <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_checkout" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
             <Smartphone size={18} className={method === "pix_checkout" ? "text-white" : "text-white/70"} />
           </div>
-          <span className="font-display text-[12px] font-bold leading-tight">Pix Celular</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">Copia e Cola</span>
+          <span className="font-display text-[12px] font-bold leading-tight">Pix presencial</span>
+          <span className="font-sans text-[10px] text-white/50 mt-0.5">Cobrança do motorista</span>
         </button>
 
-        {/* 3. Cartão de Crédito */}
         <button
           type="button"
           onClick={() => handleSelectMethod("card")}
@@ -1040,64 +804,27 @@ const CompletedScreen = ({
         </button>
       </div>
 
-      {/* METHOD CONTENT 1: PIX SCANNER */}
-      {method === "pix_scanner" && (
-        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center flex flex-col items-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center mb-3">
-            <Scan size={28} className="text-[#0DB87E]" />
-          </div>
-          <h3 className="font-display text-[16px] font-bold text-white">QR Code no celular do motorista</h3>
-          
-          {isLoading ? (
-            <div className="my-4 py-4 flex flex-col items-center justify-center">
-              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-2" />
-              <p className="font-sans text-[13px] text-white/70">Gerando cobrança Pix transparente no Mercado Pago...</p>
-            </div>
-          ) : (
-            <>
-              <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
-                O QR Code gerado pelo Mercado Pago já foi enviado para a tela do motorista. Abra o aplicativo do seu banco, escolha <strong>Pix &gt; Ler QR Code</strong> e aponte a câmera.
-              </p>
-              {pixCopiaCola && (
-                <button
-                  type="button"
-                  onClick={handleCopyPix}
-                  className="mt-3 w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-sans text-[12px] flex items-center justify-center gap-2 active:scale-98 transition-all"
-                >
-                  {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
-                  {copiedPix ? "Código Pix Copiado!" : "Ou copiar código Copia e Cola"}
-                </button>
-              )}
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={handleConfirmManualPaid}
-            className="mt-5 w-full h-12 rounded-xl font-display font-semibold text-white bg-[#0DB87E] active:scale-[0.98] transition-all"
-          >
-            Já realizei o Pix no QR Code
-          </button>
+      {!method && (
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center">
+          <p className="font-sans text-[13px] text-white/70">
+            Selecione manualmente Pix presencial ou Cartão para continuar.
+          </p>
         </div>
       )}
 
-      {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR - COPIA E COLA APENAS, SEM QR CODE VISUAL) */}
       {method === "pix_checkout" && (
         <div className="mt-4 rounded-2xl p-5 flex flex-col items-center bg-white/5 border border-white/10">
           <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
             <Smartphone size={24} className="text-[#0DB87E]" />
           </div>
-          <h3 className="font-display text-[16px] font-bold text-white">Pix no Celular (Copia e Cola)</h3>
+          <h3 className="font-display text-[16px] font-bold text-white">Pix Cópia e Cola</h3>
           <p className="font-sans text-[12px] text-white/70 text-center mt-1 mb-3">
-            Copie o código abaixo e cole no aplicativo do seu banco:
+            {pixCopiaCola
+              ? "Cobrança gerada pelo mototaxista. Copie o código e cole no aplicativo do seu banco:"
+              : "Aguardando o mototaxista gerar a cobrança no celular dele..."}
           </p>
 
-          {isLoading ? (
-            <div className="w-full py-6 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10 my-2">
-              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
-              <p className="font-sans text-[12px] text-white/70 text-center px-2">Gerando chave Pix no Mercado Pago...</p>
-            </div>
-          ) : pixCopiaCola ? (
+          {pixCopiaCola ? (
             <div className="w-full space-y-3">
               <div className="relative">
                 <textarea
@@ -1117,119 +844,34 @@ const CompletedScreen = ({
                 {copiedPix ? <Check size={16} className="text-white" /> : <Copy size={16} />}
                 {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
               </button>
-
-              <p className="font-mono text-[12px] font-semibold text-center text-[#F5A623]">
-                Expira em {mm}:{ss}
-              </p>
+              <p className="text-[12px] text-center text-[#F5A623]">A confirmação acontece automaticamente após o pagamento.</p>
             </div>
           ) : (
-            <div className="w-full py-4 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10">
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={() => handleProcessPayment("pix", "pix_checkout")}
-                className="px-5 py-2.5 rounded-xl bg-[#0DB87E] text-white font-sans text-[13px] font-semibold active:scale-95 transition-all shadow-md"
-              >
-                Gerar Código Pix
-              </button>
+            <div className="w-full py-6 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10">
+              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
+              <p className="text-[12px] text-white/60">Sincronizando a cobrança em tempo real</p>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleConfirmManualPaid}
-            className="mt-4 w-full h-11 rounded-xl font-display font-semibold text-white/90 border border-white/20 hover:bg-white/10 active:scale-98 transition-all text-[13px]"
-          >
-            Já Paguei no meu Banco
-          </button>
         </div>
       )}
 
-      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO */}
+      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO — Delegated to CheckoutUniversal */}
       {method === "card" && (
-        <div className="mt-4 rounded-2xl p-4 bg-white/5 border border-white/10 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-white/10">
-            <span className="font-sans text-[12px] font-semibold text-white/70">Cartão de Crédito</span>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => applyTestCard("master")}
-                className="px-2 py-0.5 rounded bg-emerald-500/20 text-[#0DB87E] text-[10px] font-mono hover:bg-emerald-500/30"
-              >
-                Teste Master
-              </button>
-              <button
-                type="button"
-                onClick={() => applyTestCard("visa")}
-                className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/30"
-              >
-                Teste Visa
-              </button>
-            </div>
+        prestadorInfo?.id ? (
+          <CheckoutUniversal
+            amount={feeCalc.totalAmount}
+            providerId={prestadorInfo.id}
+            providerName={prestadorInfo.name || "Motorista UBT"}
+            serviceType="mototaxi"
+            serviceId={rideId}
+            onSuccess={handleCardPaymentSuccess}
+            onError={handleCardPaymentError}
+          />
+        ) : (
+          <div className="mt-4 p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium">
+            O prestador desta corrida não foi identificado. Atualize a página antes de pagar.
           </div>
-
-          <div>
-            <label className="block font-sans text-[11px] text-white/60 mb-1">Número do Cartão</label>
-            <input
-              type="text"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-              placeholder="0000 0000 0000 0000"
-              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[14px] outline-none focus:border-[#0DB87E]"
-              maxLength={19}
-            />
-          </div>
-
-          <div>
-            <label className="block font-sans text-[11px] text-white/60 mb-1">Nome no Cartão</label>
-            <input
-              type="text"
-              value={cardHolder}
-              onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
-              placeholder="NOME COMO NO CARTÃO"
-              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="block font-sans text-[11px] text-white/60 mb-1">Validade (MM/AA)</label>
-              <input
-                type="text"
-                value={cardExpiry}
-                onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
-                placeholder="MM/AA"
-                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-                maxLength={5}
-              />
-            </div>
-            <div>
-              <label className="block font-sans text-[11px] text-white/60 mb-1">CVV</label>
-              <input
-                type="password"
-                value={cardCvv}
-                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="123"
-                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
-                maxLength={4}
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => handleProcessPayment("card")}
-            className="mt-3 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center bg-[#0DB87E] active:scale-[0.98] transition-all"
-            style={{ opacity: isLoading ? 0.7 : 1 }}
-          >
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
-            ) : (
-              `Pagar com Cartão (${formatBRL(feeCalc.totalAmount)})`
-            )}
-          </button>
-        </div>
+        )
       )}
 
       {/* METHOD CONTENT 4: EM DINHEIRO */}
@@ -1264,7 +906,7 @@ const CompletedScreen = ({
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center relative overflow-hidden" style={{ background: "rgba(11,27,62,0.95)" }}>
-          <Confetti numberOfPieces={200} recycle={false} />
+          <FullscreenConfetti numberOfPieces={200} />
           <CheckCircle2 size={80} style={{ color: "#0DB87E", animation: "ubt-scale-in 400ms ease-out" }} />
           <p className="mt-4 font-display text-[20px] font-bold text-white">Pagamento confirmado!</p>
         </div>
@@ -1276,9 +918,17 @@ const CompletedScreen = ({
 /* -------------------- RATING Screen -------------------- */
 const RatingScreen = ({
   prestador,
+  rideId,
+  origin,
+  destination,
+  total,
   onSubmit,
 }: {
   prestador: { name: string };
+  rideId?: string | null;
+  origin?: string;
+  destination?: string;
+  total: number;
   onSubmit: () => void;
 }) => {
   const [rating, setRating] = useState(0);
@@ -1302,15 +952,12 @@ const RatingScreen = ({
   if (done) {
     return (
       <div className="min-h-[100svh] bg-navy text-white flex flex-col items-center justify-center px-6 text-center relative overflow-hidden">
-        <Confetti numberOfPieces={250} recycle={false} />
-        <Trophy size={64} style={{ color: "#F5A623" }} />
+        <FullscreenConfetti numberOfPieces={250} />
+        <CheckCircle2 size={64} style={{ color: "#0DB87E" }} />
         <h2 className="mt-4 font-display text-[22px] font-bold">Obrigado!</h2>
         <p className="mt-2 font-sans text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-          Você está no sorteio de R$ 10.000 em 01/05! 🎉
+          Avaliação enviada com sucesso.
         </p>
-        <span className="mt-3 px-3 py-1 rounded-full font-sans text-[12px] font-semibold" style={{ background: "rgba(245,166,35,0.12)", border: "1px solid #F5A623", color: "#F5A623" }}>
-          Sorteio: 01/05
-        </span>
         <button
           onClick={() => {
             onSubmit();
@@ -1363,6 +1010,13 @@ const RatingScreen = ({
         style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", height: 100 }}
       />
 
+      <RidePaymentSummary
+        rideId={rideId}
+        origin={origin}
+        destination={destination}
+        total={total}
+      />
+
       <button
         disabled={rating === 0}
         onClick={() => setDone(true)}
@@ -1384,82 +1038,11 @@ const MototaxiTomadorPage = () => {
   const { state, setState, resetRide } = useRide();
   const [center, setCenter] = useState(UBATUBA_FALLBACK);
   const [onlineDrivers, setOnlineDrivers] = useState<any[]>([]);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [paymentStep, setPaymentStep] = useState<string>("");
-  const [prefData, setPrefData] = useState<any>(null);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const initOnce = useRef(false);
-  const msgChannelRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!state.rideId) return;
-
-    let channel: any = null;
-
-    const setupMsgChannel = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      channel = supabase.channel(`ride_msg_${state.rideId}`);
-      channel
-        .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-          if (payload?.from === 'prestador') {
-            setState((prev) => ({
-              ...prev,
-              messages: [...(prev.messages || []), payload]
-            }));
-            if (payload?.text) {
-              setIncomingMessage({
-                text: payload.text,
-                sender: 'Motorista',
-              });
-            }
-          }
-        })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            msgChannelRef.current = channel;
-          }
-        });
-    };
-
-    setupMsgChannel();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (channel) {
-          try { supabase.removeChannel(channel); } catch { /* noop */ }
-          channel = null;
-          msgChannelRef.current = null;
-        }
-      } else if (document.visibilityState === "visible") {
-        setupMsgChannel();
-      }
-    };
-
-    const handlePageHide = () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-        channel = null;
-        msgChannelRef.current = null;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("pageshow", setupMsgChannel);
-
-    return () => {
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch { /* noop */ }
-      }
-      msgChannelRef.current = null;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("pageshow", setupMsgChannel);
-    };
-  }, [state.rideId]);
+  const mototaxiChat = useMototaxiQuickMessages(state.rideId, "tomador", (message) => {
+    setIncomingMessage({ text: message.text, sender: "Motorista" });
+  });
 
   useEffect(() => {
     if (incomingMessage) {
@@ -1468,49 +1051,18 @@ const MototaxiTomadorPage = () => {
     }
   }, [incomingMessage]);
 
-  // Monitor ride state transitions to "completed" to trigger the Mercado Pago Split simulated flow
-  useEffect(() => {
-    if (state.status === "completed" && !prefData && !isProcessingPayment) {
-      const runPaymentMock = async () => {
-        setIsProcessingPayment(true);
-        setPaymentStep("Conectando ao Sandbox do Mercado Pago...");
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setPaymentStep("Criando preferência de checkout com rateio de split...");
-        try {
-          const res = await createPreference(
-            state.finalPrice || state.estimatedPrice,
-            state.rideId || "mock-ride-id",
-            state.paymentMethod || "pix"
-          );
-          setPrefData(res);
-        } catch (err) {
-          console.error(err);
-        }
-        
-        setPaymentStep("Validando credenciais do Motor Financeiro...");
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        setPaymentStep("Finalizando integração de split...");
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        setIsProcessingPayment(false);
-      };
-      runPaymentMock();
-    }
-  }, [state.status, state.finalPrice, state.estimatedPrice, state.rideId, state.paymentMethod, prefData, isProcessingPayment]);
-
   // Geolocation init
   useEffect(() => {
     if (initOnce.current) return;
     initOnce.current = true;
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCenter(c);
         if (!state.origin) {
-          setState({ origin: { ...c, address: "Sua localização atual" } });
+          const physicalAddress = await reverseGeocode(c.lat, c.lng);
+          setState({ origin: { ...c, address: physicalAddress } });
         }
       },
       () => {
@@ -1645,6 +1197,7 @@ const MototaxiTomadorPage = () => {
               .single();
 
             prestadorInfo = {
+              id: dbRide.prestador_id,
               name: userData?.nome || 'Motorista UBT',
               photo: '',
               plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
@@ -1704,6 +1257,7 @@ const MototaxiTomadorPage = () => {
                     .single();
 
                   prestadorInfo = {
+                    id: dbRide.prestador_id,
                     name: userData?.nome || 'Motorista UBT',
                     photo: '',
                     plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
@@ -2019,117 +1573,23 @@ const MototaxiTomadorPage = () => {
       window.location.href = "/login";
       return;
     }
-    // Tenta chamar a Edge Function segura no backend
-    try {
-      const securityMetadata = collectPaymentMetadata();
-      await supabase.functions.invoke("checkout", {
-        body: {
-          service_type: "mototaxi",
-          service_id: state.rideId,
-          customer_id: user.uid,
-          provider_id: state.prestadorId || "",
-          amount: state.finalPrice || state.estimatedPrice,
-          payment_method: state.paymentMethod || "pix",
-          metadata: securityMetadata
-        }
-      });
-    } catch (funcErr) {
-      console.warn("Falha ao chamar Edge Function, usando fallback local:", funcErr);
-    }
+    // A confirmação financeira já foi persistida pelo fluxo de pagamento.
+    // Evita uma segunda escrita pela função legada `checkout` após o sucesso.
     setState({ status: "rating", paymentMethod: state.paymentMethod || "pix" });
   };
 
-  const sendMessage = (text: string) => {
-    const newMsg = { text, from: "tomador" as const, ts: Date.now() };
-    setState((prev) => ({
-      ...prev,
-      messages: [...(prev.messages || []), newMsg],
-    }));
-    if (state.rideId) {
-      try {
-        if (msgChannelRef.current) {
-          msgChannelRef.current.send({
-            type: 'broadcast',
-            event: 'quick_message',
-            payload: newMsg
-          });
-        } else {
-          const channel = supabase
-            .channel(`ride_msg_${state.rideId}`)
-            .on('broadcast', { event: 'quick_message' }, () => {})
-            .subscribe((status) => {
-              if (status === 'SUBSCRIBED') {
-                channel.send({
-                  type: 'broadcast',
-                  event: 'quick_message',
-                  payload: newMsg
-                });
-              }
-            });
-        }
-      } catch (e) {
-        console.warn("Falha ao transmitir mensagem do tomador:", e);
-      }
+  const sendMessage = async (text: string) => {
+    try {
+      await mototaxiChat.sendMessage(text);
+    } catch (error) {
+      console.warn("Falha ao enviar mensagem do tomador:", error);
+      toast.error("Não foi possível enviar a mensagem.");
     }
   };
 
   const handleReset = () => {
-    setPrefData(null);
-    setIsProcessingPayment(false);
-    setPaymentStep("");
     resetRide();
   };
-
-  // Processing Payment Fullscreen simulation overlay
-  if (isProcessingPayment && state.prestadorInfo) {
-    const price = state.finalPrice || state.estimatedPrice;
-    const split = calculateSplit(price);
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#09090B] p-6 text-white">
-        <div className="w-16 h-16 border-4 border-t-transparent border-[#00FF66] rounded-full animate-spin mb-6" />
-        
-        <h2 className="font-display text-[20px] font-bold text-center mb-2">Processando Pagamento</h2>
-        <p className="font-sans text-[14px] text-center text-[#A1A1AA] mb-8">{paymentStep}</p>
-        
-        {/* Animated values panel */}
-        <div className="w-full max-w-sm bg-[#18181B] border border-[#27272A] rounded-2xl p-5 shadow-2xl">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-sans text-[13px] text-[#A1A1AA]">Valor da Corrida:</span>
-            <span className="font-display text-[18px] font-bold text-[#00FF66]">{formatBRL(price)}</span>
-          </div>
-          
-          <div className="h-px bg-[#27272A] my-3" />
-          
-          <p className="font-sans text-[11px] font-semibold text-[#A1A1AA] uppercase tracking-wider mb-3">Distribuição do Split UBT</p>
-          
-          <div className="flex flex-col gap-2.5">
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Prestador (90%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.prestador)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Plataforma UBT (4%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.ubt)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Prêmios & Sorteios (3%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.premios)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Fundo Comunidade (2%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.comunidade)}</span>
-            </div>
-            <div className="flex justify-between text-[13px]">
-              <span className="text-[#A1A1AA]">Associação / Padrinho (1%)</span>
-              <span className="font-semibold text-white">{formatBRL(split.associacao)}</span>
-            </div>
-          </div>
-        </div>
-        
-        <p className="mt-8 font-sans text-[11px] text-[#A1A1AA]/60 text-center uppercase tracking-widest">Mercado Pago Sandbox Environment</p>
-      </div>
-    );
-  }
 
   // Completed and rating are full-screen
   if (state.status === "completed" && state.prestadorInfo) {
@@ -2148,6 +1608,10 @@ const MototaxiTomadorPage = () => {
     return (
       <RatingScreen
         prestador={state.prestadorInfo}
+        rideId={state.rideId}
+        origin={state.origin?.address}
+        destination={state.destination?.address}
+        total={state.finalPrice || state.estimatedPrice}
         onSubmit={handleReset}
       />
     );
@@ -2248,6 +1712,10 @@ const MototaxiTomadorPage = () => {
           onCancel={handleCancel}
           onArrive={handleArrive}
           onSendMessage={sendMessage}
+          messages={mototaxiChat.messages}
+          chatStatus={mototaxiChat.status}
+          isSendingMessage={mototaxiChat.isSending}
+          chatError={mototaxiChat.error}
         />
       )}
 
@@ -2256,6 +1724,10 @@ const MototaxiTomadorPage = () => {
           durationMin={state.durationMin}
           onComplete={handleComplete}
           onSendMessage={sendMessage}
+          messages={mototaxiChat.messages}
+          chatStatus={mototaxiChat.status}
+          isSendingMessage={mototaxiChat.isSending}
+          chatError={mototaxiChat.error}
         />
       )}
 

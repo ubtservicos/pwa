@@ -163,7 +163,7 @@ export interface Nominal7WayLedger {
 
 export function buildNominal7WayLedger({
   totalAmount,
-  providerName = "Silvina (Prestadora)",
+  providerName = "Prestador UBT",
   providerId = "0a5edf64-7585-401f-b310-126529607da0",
   associationName,
   associationId,

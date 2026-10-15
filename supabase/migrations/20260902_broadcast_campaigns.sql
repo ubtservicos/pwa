@@ -1,5 +1,5 @@
 -- Migration: Broadcast Campaigns & Scheduled Messages for SuperAdmin Messaging Panel
--- Target Environment: Homolog / Dev (xqujubbqcfqxkfczbidq)
+-- Target Environment: all environments (remote project selected explicitly by CLI)
 
 CREATE TABLE IF NOT EXISTS public.broadcast_campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,728 +1,1166 @@
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ============================================================
-// CORS HEADERS — strict, minimal surface
-// ============================================================
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, X-Requested-With",
-};
-
-// ============================================================
-// SUPABASE CLIENT — service_role for audit logging + DB writes
-// ============================================================
-const supabaseUrl            = Deno.env.get("SUPABASE_URL") ?? "";
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
-  : ({ from: () => { throw new Error("Supabase client not initialized (missing env vars)"); } } as any);
-
-// ============================================================
-// TYPES
-// ============================================================
-interface MercadoPagoPixResponse {
-  id?: number;
-  status?: string;
-  status_detail?: string;
-  point_of_interaction?: {
-    transaction_data?: {
-      ticket_url?: string;
-      qr_code?: string;
-      qr_code_base64?: string;
-    };
-  };
-  error?: string;
-  message?: string;
-  cause?: Array<{ code: number; description: string }>;
-}
-
-/**
- * Mirrors public.split_config (singleton row, id=1).
- * All fields are percentages (0–100).
- */
-interface SplitConfig {
-  prestador_pct:          number; // e.g. 90.000
-  ubt_pct:                number; // e.g.  7.500
-  comunidade_pct:         number; // e.g.  0.500
-  premio_trabalhador_pct: number; // e.g.  0.500
-  premio_consumidor_pct:  number; // e.g.  0.500
-  padrinho_tomador_pct:   number; // e.g.  0.500
-  padrinho_prestador_pct: number; // e.g.  0.500
-}
-
-/**
- * Calculated monetary amounts (BRL, rounded to 2 decimal places).
- * prestador_amount + platform_fee = total_amount.
- */
-interface SplitAmounts {
-  total_amount:              number;
-  prestador_amount:          number; // Goes to the service provider (90%)
-  ubt_amount:                number; // UBT platform cut (7.5%)
-  comunidade_amount:         number; // Community fund (0.5%)
-  premio_trabalhador:        number; // Worker lottery pool (0.5%)
-  premio_consumidor:         number; // Consumer loyalty pool (0.5%)
-  padrinho_tomador_amount:   number; // Godparent tomador (0.5% - residual bucket)
-  padrinho_prestador_amount: number; // Godparent prestador (0.5%)
-  padrinho_amount:           number; // Legacy sum of godparent shares
-  application_fee:           number; // Sum of all platform cuts sent to Mercado Pago
-}
-
+type MpEnvironment = "sandbox" | "production";
+type PaymentRoute = "seller_oauth_split" | "platform_fallback";
 type ServiceType = "mototaxi" | "diarista" | "ambulante";
 
-// ============================================================
-// AUDIT LOGGER — non-throwing immutable insert
-// ============================================================
-async function logAuditEvent({
-  transactionType,
-  status,
-  payload,
-  errorDetails,
-}: {
-  transactionType: string;
-  status: string;
-  payload?: Record<string, unknown>;
-  errorDetails?: string;
-}): Promise<void> {
+interface SplitConfig {
+  prestador_pct: number;
+  ubt_pct: number;
+  comunidade_pct: number;
+  premio_trabalhador_pct: number;
+  premio_consumidor_pct: number;
+  padrinho_tomador_pct: number;
+  padrinho_prestador_pct: number;
+}
+
+interface SplitAmounts {
+  total_amount: number;
+  prestador_amount: number;
+  ubt_amount: number;
+  comunidade_amount: number;
+  premio_trabalhador: number;
+  premio_consumidor: number;
+  padrinho_tomador_amount: number;
+  padrinho_prestador_amount: number;
+  padrinho_amount: number;
+  application_fee: number;
+}
+
+interface RoutingDecision {
+  mode: PaymentRoute;
+  authToken: string;
+  checkoutPublicKey: string | null;
+  marketplaceAccountId: string | null;
+  fallbackReason: string | null;
+}
+
+interface MpResult {
+  ok: boolean;
+  httpStatus: number;
+  data: Record<string, any>;
+  outcomeUnknown?: boolean;
+}
+
+class HttpError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public details?: unknown,
+  ) {
+    super(message);
+  }
+}
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim() ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
+
+// Do not throw during module evaluation. A top-level exception prevents the
+// worker from starting and Supabase can only return an opaque 503. Keeping the
+// client lazy lets the request boundary return a structured configuration error.
+const supabaseAdmin = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  : null;
+
+function adminClient() {
+  if (!supabaseAdmin) {
+    throw new HttpError(
+      500,
+      "server_configuration_error",
+      "A função de pagamento está sem a configuração obrigatória do Supabase.",
+    );
+  }
+  return supabaseAdmin;
+}
+
+const REGULATORY_DEFAULTS: SplitConfig = {
+  prestador_pct: 90,
+  ubt_pct: 7.5,
+  comunidade_pct: 0.5,
+  premio_trabalhador_pct: 0.5,
+  premio_consumidor_pct: 0.5,
+  padrinho_tomador_pct: 0.5,
+  padrinho_prestador_pct: 0.5,
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function paymentEnvironment(): MpEnvironment {
+  const value = (Deno.env.get("MP_ENVIRONMENT") || Deno.env.get("APP_ENV") || "")
+    .trim()
+    .toLowerCase();
+  if (value !== "sandbox" && value !== "production") {
+    throw new Error("MP_ENVIRONMENT must be explicitly set to 'sandbox' or 'production'");
+  }
+  return value;
+}
+
+function platformAccessToken(environment: MpEnvironment): string {
+  const scopedName = environment === "sandbox"
+    ? "MP_ACCESS_TOKEN_SANDBOX"
+    : "MP_ACCESS_TOKEN_PRODUCTION";
+  const scopedToken = Deno.env.get(scopedName)?.trim() ?? "";
+  if (scopedToken || environment === "production") return scopedToken;
+  return (
+    Deno.env.get("MP_ACCESS_TOKEN") ||
+    Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") ||
+    ""
+  ).trim();
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") || "";
+  const configured = (Deno.env.get("ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const configuredEnvironment = (Deno.env.get("MP_ENVIRONMENT") || Deno.env.get("APP_ENV") || "")
+    .trim()
+    .toLowerCase();
+  const allowOrigin = configured.includes(origin)
+    ? origin
+    : configuredEnvironment === "sandbox" && configured.length === 0
+      ? "*"
+      : "null";
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+function json(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+  });
+}
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function calculateSplitAmounts(totalAmount: number, config: SplitConfig): SplitAmounts {
+  const prestadorAmount = roundMoney(totalAmount * config.prestador_pct / 100);
+  const ubtAmount = roundMoney(totalAmount * config.ubt_pct / 100);
+  const comunidadeAmount = roundMoney(totalAmount * config.comunidade_pct / 100);
+  const premioTrabalhador = roundMoney(totalAmount * config.premio_trabalhador_pct / 100);
+  const premioConsumidor = roundMoney(totalAmount * config.premio_consumidor_pct / 100);
+  const padrinhoPrestadorAmount = roundMoney(totalAmount * config.padrinho_prestador_pct / 100);
+  const allocated = roundMoney(
+    prestadorAmount + ubtAmount + comunidadeAmount + premioTrabalhador +
+      premioConsumidor + padrinhoPrestadorAmount,
+  );
+  const padrinhoTomadorAmount = roundMoney(totalAmount - allocated);
+
+  if (padrinhoTomadorAmount < 0) {
+    throw new HttpError(500, "invalid_split_configuration", "A configuração de split ultrapassa 100%.");
+  }
+
+  return {
+    total_amount: totalAmount,
+    prestador_amount: prestadorAmount,
+    ubt_amount: ubtAmount,
+    comunidade_amount: comunidadeAmount,
+    premio_trabalhador: premioTrabalhador,
+    premio_consumidor: premioConsumidor,
+    padrinho_tomador_amount: padrinhoTomadorAmount,
+    padrinho_prestador_amount: padrinhoPrestadorAmount,
+    padrinho_amount: roundMoney(padrinhoTomadorAmount + padrinhoPrestadorAmount),
+    application_fee: roundMoney(totalAmount - prestadorAmount),
+  };
+}
+
+async function fetchSplitConfig(): Promise<{ config: SplitConfig; source: "database" | "defaults" }> {
+  const { data, error } = await adminClient()
+    .from("split_config")
+    .select("prestador_pct, ubt_pct, comunidade_pct, premio_trabalhador_pct, premio_consumidor_pct, padrinho_tomador_pct, padrinho_prestador_pct")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.warn("[payment-gateway] split_config unavailable; using regulatory defaults", error?.message);
+    return { config: REGULATORY_DEFAULTS, source: "defaults" };
+  }
+
+  const config: SplitConfig = {
+    prestador_pct: Number(data.prestador_pct),
+    ubt_pct: Number(data.ubt_pct),
+    comunidade_pct: Number(data.comunidade_pct),
+    premio_trabalhador_pct: Number(data.premio_trabalhador_pct),
+    premio_consumidor_pct: Number(data.premio_consumidor_pct),
+    padrinho_tomador_pct: Number(data.padrinho_tomador_pct),
+    padrinho_prestador_pct: Number(data.padrinho_prestador_pct),
+  };
+  const percentageTotal = Object.values(config).reduce((sum, value) => sum + value, 0);
+  if (!Object.values(config).every(Number.isFinite) || Math.abs(percentageTotal - 100) > 0.001) {
+    throw new HttpError(500, "invalid_split_configuration", "A configuração de split deve totalizar 100%.");
+  }
+  return { config, source: "database" };
+}
+
+async function logAuditEvent(
+  transactionType: string,
+  status: string,
+  payload?: Record<string, unknown>,
+  errorDetails?: string,
+): Promise<void> {
   try {
-    const { error } = await supabaseAdmin.from("financial_audit_logs").insert({
+    const { error } = await adminClient().from("financial_audit_logs").insert({
       transaction_type: transactionType,
       status,
       payload: payload ?? null,
-      error_details: errorDetails ?? null,
+      error_details: errorDetails?.slice(0, 4000) ?? null,
     });
-    if (error) {
-      console.error("[payment-gateway] Audit log insert failed:", error.message);
-    }
-  } catch (logErr) {
-    console.error("[payment-gateway] Critical: audit logger threw unexpectedly:", logErr);
+    if (error) console.error("[payment-gateway] audit insert failed", error.message);
+  } catch (error) {
+    console.error("[payment-gateway] audit logger failed", error);
   }
 }
 
-// ============================================================
-// SPLIT CONFIG READER — fetches live rules from public.split_config
-// Falls back to the PO's official regulatory defaults if DB is unreachable.
-// ============================================================
-const REGULATORY_DEFAULTS: SplitConfig = {
-  prestador_pct:          90.000,
-  ubt_pct:                 7.500,
-  comunidade_pct:          0.500,
-  premio_trabalhador_pct:  0.500,
-  premio_consumidor_pct:   0.500,
-  padrinho_tomador_pct:    0.500,
-  padrinho_prestador_pct:  0.500,
-};
+async function authenticatedUserId(req: Request): Promise<string> {
+  const authorization = req.headers.get("authorization") || "";
+  const jwt = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!jwt) throw new HttpError(401, "missing_authorization", "Autenticação obrigatória.");
 
-async function fetchSplitConfig(): Promise<{ config: SplitConfig; fromDb: boolean }> {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("split_config")
-      .select("prestador_pct, ubt_pct, comunidade_pct, premio_trabalhador_pct, premio_consumidor_pct, padrinho_tomador_pct, padrinho_prestador_pct")
-      .eq("id", 1)
-      .single();
-
-    if (error || !data) {
-      console.warn("[payment-gateway] split_config not found in DB — using regulatory defaults:", error?.message);
-      return { config: REGULATORY_DEFAULTS, fromDb: false };
-    }
-
-    return {
-      config: {
-        prestador_pct:          Number(data.prestador_pct ?? 90.0),
-        ubt_pct:                Number(data.ubt_pct ?? 7.5),
-        comunidade_pct:         Number(data.comunidade_pct ?? 0.5),
-        premio_trabalhador_pct: Number(data.premio_trabalhador_pct ?? 0.5),
-        premio_consumidor_pct:  Number(data.premio_consumidor_pct ?? 0.5),
-        padrinho_tomador_pct:   Number(data.padrinho_tomador_pct ?? 0.5),
-        padrinho_prestador_pct: Number(data.padrinho_prestador_pct ?? 0.5),
-      },
-      fromDb: true
-    };
-  } catch (err) {
-    console.error("[payment-gateway] Error fetching split_config — using regulatory defaults:", err);
-    return { config: REGULATORY_DEFAULTS, fromDb: false };
+  const { data, error } = await adminClient().auth.getUser(jwt);
+  if (error || !data.user) {
+    throw new HttpError(401, "invalid_authorization", "Sessão inválida ou expirada.");
   }
+  return data.user.id;
 }
 
-// ============================================================
-// SPLIT CALCULATOR — cent-precise with residual bucket
-// The `padrinho_tomador_amount` absorbs floating-point rounding drift so that
-// the sum of all parts ALWAYS equals `total_amount` exactly.
-// ============================================================
-function calculateSplitAmounts(totalAmount: number, config: SplitConfig): SplitAmounts {
-  const r = (v: number) => Math.round(v * 100) / 100; // round to 2 decimal places
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
 
-  const prestador_amount          = r(totalAmount * (config.prestador_pct          / 100));
-  const ubt_amount                = r(totalAmount * (config.ubt_pct                / 100));
-  const comunidade_amount         = r(totalAmount * (config.comunidade_pct         / 100));
-  const premio_trabalhador        = r(totalAmount * (config.premio_trabalhador_pct / 100));
-  const premio_consumidor         = r(totalAmount * (config.premio_consumidor_pct  / 100));
-  const padrinho_prestador_amount = r(totalAmount * (config.padrinho_prestador_pct / 100));
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
 
-  // Residual bucket: padrinho_tomador absorbs any rounding drift to guarantee total integrity
-  const sumBeforeResidual = r(
-    prestador_amount + ubt_amount + comunidade_amount + premio_trabalhador + premio_consumidor + padrinho_prestador_amount
+async function tokenEncryptionKey(): Promise<CryptoKey | null> {
+  const encoded = Deno.env.get("MP_TOKEN_ENCRYPTION_KEY")?.trim();
+  if (!encoded) return null;
+  const bytes = base64ToBytes(encoded);
+  if (bytes.length !== 32) throw new Error("MP_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes");
+  return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+async function encryptToken(value: string, environment: MpEnvironment): Promise<string> {
+  const key = await tokenEncryptionKey();
+  if (!key) {
+    if (environment === "production") {
+      throw new Error("MP_TOKEN_ENCRYPTION_KEY is required in production");
+    }
+    return `plain:${value}`;
+  }
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(value),
   );
-  const padrinho_tomador_amount = r(Math.max(0, totalAmount - sumBeforeResidual));
+  return `v1:${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(cipher))}`;
+}
 
-  // application_fee = everything the marketplace retains sent to Mercado Pago
-  const application_fee = r(totalAmount - prestador_amount);
+async function decryptToken(value: string, environment: MpEnvironment): Promise<string> {
+  if (value.startsWith("v1:")) {
+    const [, ivValue, cipherValue] = value.split(":");
+    const key = await tokenEncryptionKey();
+    if (!key || !ivValue || !cipherValue) throw new Error("Seller OAuth token cannot be decrypted");
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(ivValue) },
+      key,
+      base64ToBytes(cipherValue),
+    );
+    return new TextDecoder().decode(plain);
+  }
+  if (value.startsWith("plain:") && environment === "sandbox") return value.slice(6);
+  if (environment === "sandbox") return value;
+  throw new Error("Unencrypted Seller OAuth token is not allowed in production");
+}
+
+function assertUuid(value: unknown, field: string): string {
+  const normalized = String(value || "").trim();
+  if (!UUID_RE.test(normalized)) {
+    throw new HttpError(400, `invalid_${field}`, `${field} deve ser um UUID válido.`);
+  }
+  return normalized;
+}
+
+function optionalUuid(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  return assertUuid(value, field);
+}
+
+function normalizeServiceType(value: unknown): ServiceType {
+  const service = String(value || "").trim().toLowerCase();
+  if (service === "mototaxi") return "mototaxi";
+  if (service === "diarista" || service === "services") return "diarista";
+  if (service === "ambulante" || service === "delivery") return "ambulante";
+  throw new HttpError(400, "invalid_service_type", "service_type não suportado.");
+}
+
+function validateAmount(value: unknown): number {
+  const amount = Number(value);
+  const configuredMax = Number(Deno.env.get("MP_MAX_PAYMENT_AMOUNT") || 100000);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > configuredMax) {
+    throw new HttpError(400, "invalid_transaction_amount", "transaction_amount está fora do intervalo permitido.");
+  }
+  return roundMoney(amount);
+}
+
+function resolvePaymentAttemptId(body: Record<string, any>): {
+  id: string;
+  source: "payment_attempt_id" | "idempotency_key" | "legacy_external_reference";
+} {
+  if (body.payment_attempt_id !== undefined && body.payment_attempt_id !== null) {
+    return { id: assertUuid(body.payment_attempt_id, "payment_attempt_id"), source: "payment_attempt_id" };
+  }
+  if (body.idempotency_key !== undefined && body.idempotency_key !== null) {
+    return { id: assertUuid(body.idempotency_key, "idempotency_key"), source: "idempotency_key" };
+  }
+
+  // Compatibilidade transitória com o bundle anterior do CheckoutUniversal,
+  // que usava o UUID da corrida em external_reference e não enviava uma
+  // payment_attempt_id separada. O frontend atual sempre envia o novo campo.
+  if (body.external_reference !== undefined && body.external_reference !== null) {
+    return {
+      id: assertUuid(body.external_reference, "external_reference"),
+      source: "legacy_external_reference",
+    };
+  }
+
+  throw new HttpError(
+    400,
+    "invalid_payment_attempt_id",
+    "payment_attempt_id é obrigatório e deve ser um UUID.",
+  );
+}
+
+function resolvePayerEmail(body: Record<string, any>, environment: MpEnvironment): string {
+  if (environment === "sandbox") {
+    const testBuyerEmail = (Deno.env.get("MP_TEST_PAYER_EMAIL") || "").trim().toLowerCase();
+    if (!EMAIL_RE.test(testBuyerEmail) || !testBuyerEmail.endsWith("@testuser.com")) {
+      throw new HttpError(
+        500,
+        "invalid_test_buyer_configuration",
+        "MP_TEST_PAYER_EMAIL deve conter o e-mail de uma conta Buyer Test User.",
+      );
+    }
+    const forbidden = (Deno.env.get("MP_TEST_SELLER_EMAILS") || "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+    if (forbidden.includes(testBuyerEmail)) {
+      throw new HttpError(500, "test_self_payment", "Buyer Test User não pode ser a conta Marketplace/Seller.");
+    }
+    return testBuyerEmail;
+  }
+
+  const payerEmail = String(body.payer_email || body.payer?.email || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(payerEmail) || payerEmail.endsWith("@testuser.com")) {
+    throw new HttpError(400, "invalid_payer_email", "payer.email de produção é inválido.");
+  }
+  return payerEmail;
+}
+
+async function resolvePaymentRoute(providerId: string, environment: MpEnvironment): Promise<RoutingDecision> {
+  const platformToken = platformAccessToken(environment);
+  const { data: sellerAccount, error } = await adminClient()
+    .from("marketplace_accounts")
+    .select("id, mercado_pago_user_id, access_token_encrypted, ambiente, status, token_expiration, token_metadata")
+    .eq("user_id", providerId)
+    .eq("ambiente", environment)
+    .eq("status", "CONNECTED")
+    .order("connected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new HttpError(503, "seller_account_lookup_failed", "Não foi possível resolver a conta recebedora.");
+  }
+
+  if (!sellerAccount) {
+    if (!platformToken) throw new HttpError(500, "missing_platform_token", "Access Token da plataforma não configurado.");
+    return {
+      mode: "platform_fallback",
+      authToken: platformToken,
+      checkoutPublicKey: null,
+      marketplaceAccountId: null,
+      fallbackReason: "seller_not_connected",
+    };
+  }
+
+  const allowedSandboxSellers = (Deno.env.get("MP_TEST_SELLER_USER_IDS") || "")
+    .split(",")
+    .map((userId) => userId.trim())
+    .filter(Boolean);
+  if (
+    environment === "sandbox" && allowedSandboxSellers.length > 0 &&
+    !allowedSandboxSellers.includes(String(sellerAccount.mercado_pago_user_id || ""))
+  ) {
+    throw new HttpError(
+      409,
+      "seller_test_user_mismatch",
+      "A conta OAuth vinculada não é o Seller Test User autorizado para este Sandbox.",
+    );
+  }
+
+  if (sellerAccount.token_expiration && new Date(sellerAccount.token_expiration).getTime() <= Date.now()) {
+    if (!platformToken) throw new HttpError(500, "missing_platform_token", "Access Token da plataforma não configurado.");
+    return {
+      mode: "platform_fallback",
+      authToken: platformToken,
+      checkoutPublicKey: null,
+      marketplaceAccountId: sellerAccount.id,
+      fallbackReason: "seller_token_expired",
+    };
+  }
+
+  const liveMode = sellerAccount.token_metadata?.live_mode;
+  if (typeof liveMode === "boolean" && liveMode !== (environment === "production")) {
+    throw new HttpError(409, "seller_environment_mismatch", "A credencial OAuth do Seller pertence a outro ambiente.");
+  }
+
+  if (!sellerAccount.access_token_encrypted) {
+    throw new HttpError(409, "seller_token_missing", "A conta do Seller está CONNECTED, mas não possui Access Token.");
+  }
+
+  const sellerToken = (await decryptToken(sellerAccount.access_token_encrypted, environment)).trim();
+  if (!sellerToken) throw new HttpError(409, "seller_token_missing", "Access Token OAuth do Seller está vazio.");
 
   return {
-    total_amount:              totalAmount,
-    prestador_amount,
-    ubt_amount,
-    comunidade_amount,
-    premio_trabalhador,
-    premio_consumidor,
-    padrinho_tomador_amount,
-    padrinho_prestador_amount,
-    padrinho_amount:           r(padrinho_tomador_amount + padrinho_prestador_amount),
-    application_fee,
+    mode: "seller_oauth_split",
+    authToken: sellerToken,
+    checkoutPublicKey: String(sellerAccount.token_metadata?.public_key || "").trim() || null,
+    marketplaceAccountId: sellerAccount.id,
+    fallbackReason: null,
   };
 }
 
-// ============================================================
-// PAGAMENTOS_SPLIT PERSISTER — idempotent upsert
-// Uses transaction_id (= external_reference) as the deduplication key.
-// If called twice for the same external_reference, the second call is a no-op.
-// ============================================================
-async function persistSplitRecord({
-  transactionId,
-  serviceType,
-  serviceId,
-  split,
-  entityId,
-  godparentTomadorId,
-  godparentPrestadorId,
-}: {
-  transactionId:         string;
-  serviceType:           ServiceType;
-  serviceId:             string;
-  split:                 SplitAmounts;
-  entityId?:             string | null;
-  godparentTomadorId?:   string | null;
-  godparentPrestadorId?: string | null;
-}): Promise<{ persisted: boolean; error?: string }> {
-  try {
-    const { error } = await supabaseAdmin.from("pagamentos_split").upsert(
-      {
-        transaction_id:             transactionId,
-        status:                     "pending",
-        service_type:               serviceType,
-        service_id:                 serviceId,
-        total_amount:               split.total_amount,
-        provider_amount:            split.prestador_amount,
-        ubt_amount:                 split.ubt_amount,
-        entity_amount:              split.comunidade_amount,
-        entity_id:                  entityId ?? null,
-        prize_worker_amount:        split.premio_trabalhador,
-        prize_consumer_amount:      split.premio_consumidor,
-        godparent_tomador_amount:   split.padrinho_tomador_amount,
-        godparent_tomador_id:       godparentTomadorId ?? null,
-        godparent_prestador_amount: split.padrinho_prestador_amount,
-        godparent_prestador_id:     godparentPrestadorId ?? null,
-        godparent_amount:           split.padrinho_amount,
-        godparent_id:               godparentTomadorId ?? null,
-        refunded_amount:            0.00,
-        updated_at:                 new Date().toISOString(),
-      },
-      {
-        onConflict:      "transaction_id",
-        ignoreDuplicates: true, // idempotent: second insert for same transaction_id is a no-op
-      }
+async function handleGetCheckoutConfig(req: Request, body: Record<string, any>): Promise<Response> {
+  const environment = paymentEnvironment();
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const route = await resolvePaymentRoute(providerId, environment);
+  if (route.mode === "seller_oauth_split" && !route.checkoutPublicKey) {
+    throw new HttpError(
+      409,
+      "seller_public_key_missing",
+      "A conta OAuth do Seller não possui Public Key para tokenizar o cartão.",
     );
-
-    if (error) {
-      console.error("[payment-gateway] pagamentos_split upsert failed:", error.message);
-      return { persisted: false, error: error.message };
-    }
-
-    return { persisted: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[payment-gateway] pagamentos_split upsert threw:", msg);
-    return { persisted: false, error: msg };
   }
-}
-
-// ============================================================
-// MERCADO PAGO PAYMENT GENERATOR (PIX & CREDIT CARD)
-// ============================================================
-async function createMercadoPagoPayment({
-  transactionAmount,
-  description,
-  payer,
-  payerEmail,
-  payerFirstName,
-  payerLastName,
-  payerIdentification,
-  applicationFee,
-  paymentMethodId = "pix",
-  cardToken,
-  installments = 1,
-  externalReference,
-  metadata,
-}: {
-  transactionAmount:  number;
-  description:        string;
-  payer?:             Record<string, unknown>;
-  payerEmail?:        string;
-  payerFirstName?:    string;
-  payerLastName?:     string;
-  payerIdentification?: { type?: string; number?: string };
-  applicationFee:     number;
-  paymentMethodId?:   string;
-  cardToken?:         string;
-  installments?:      number;
-  externalReference?: string;
-  metadata?:          Record<string, unknown>;
-}): Promise<{ data: MercadoPagoPixResponse; rawText: string; httpStatus: number; ok: boolean }> {
-  const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
-
-  if (!mpToken) {
-    console.error("[CRITICAL MP TOKEN ERROR] MERCADOPAGO_ACCESS_TOKEN não está presente no ambiente!");
-    throw new Error("MERCADOPAGO_ACCESS_TOKEN não está configurado nos secrets da Edge Function.");
-  }
-
-  // Unique idempotency key per attempt
-  const idempotencyKey = crypto.randomUUID();
-
-  const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
-
-  const payerObj: Record<string, unknown> = {
-    ...(payer || {}),
-    email: "TESTUSER367958859718560557@testuser.com",
-  };
-  if (payerFirstName && !payerObj.first_name) {
-    payerObj.first_name = payerFirstName;
-  }
-  if (payerLastName && !payerObj.last_name) {
-    payerObj.last_name = payerLastName;
-  }
-  if (payerIdentification && !payerObj.identification) {
-    payerObj.identification = payerIdentification;
-  }
-
-  const mpPayload: Record<string, unknown> = {
-    transaction_amount: transactionAmount,
-    description,
-    payment_method_id: paymentMethodId || (cardToken ? "master" : "pix"),
-    ...(Object.keys(payerObj).length > 0 ? { payer: payerObj } : {}),
-    // application_fee: the marketplace fee withheld by UBT from the total.
-    application_fee: applicationFee,
-    // external_reference is the key link between MP and our internal pagamentos_split table.
-    // Format convention: "<entity>_<uuid>_ts_<timestamp>" (e.g. "pedido_abc123_ts_1723000000000")
-    ...(externalReference ? { external_reference: externalReference } : {}),
-    ...(metadata ? { metadata } : {}),
-  };
-
-  // INJEÇÃO OBRIGATÓRIA DO TOKEN PARA O MERCADO PAGO (/v1/payments):
-  if (cardToken) {
-    mpPayload.token = cardToken;
-  }
-  if (isCard) {
-    mpPayload.installments = Number(installments) || 1;
-  }
-
-  const MP_URL = "https://api.mercadopago.com/v1/payments";
-
-  const mpHeaders = new Headers();
-  mpHeaders.set("Authorization", `Bearer ${mpToken}`);
-  mpHeaders.set("Content-Type", "application/json");
-  mpHeaders.set("X-Idempotency-Key", idempotencyKey);
-
-  console.log(`[MP FETCH] Target URL: ${MP_URL}`);
-  console.log(`[MP FETCH] Authorization header: Bearer ${mpToken.substring(0, 15)}... (Total Len: ${mpToken.length})`);
-
-  const mpResponse = await fetch(MP_URL, {
-    method: "POST",
-    headers: mpHeaders,
-    body: JSON.stringify(mpPayload),
+  return json(req, {
+    success: true,
+    environment,
+    payment_route: route.mode,
+    public_key: route.checkoutPublicKey,
+    fallback_reason: route.fallbackReason,
   });
-
-  const mpResponseBody = await mpResponse.text();
-  
-  if (!mpResponse.ok) {
-    console.error("[MP CRITICAL REJECTION]", mpResponseBody);
-  }
-
-  let data: any;
-  try {
-    data = JSON.parse(mpResponseBody);
-  } catch (parseErr) {
-    data = { error: "Invalid JSON from MP", raw: mpResponseBody };
-  }
-
-  return { data, rawText: mpResponseBody, httpStatus: mpResponse.status, ok: mpResponse.ok };
 }
 
-// ============================================================
-// MAIN HANDLER
-// ============================================================
-serve(async (req: Request): Promise<Response> => {
-  const envToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
-  console.log("[TOKEN CHECK INIT] MERCADOPAGO_ACCESS_TOKEN presente:", envToken ? `SIM (Tamanho: ${envToken.length}, Prefixo: ${envToken.substring(0, 15)}...)` : "NAO");
+function sanitizePayer(body: Record<string, any>, email: string): Record<string, unknown> {
+  const payer = body.payer && typeof body.payer === "object" ? body.payer : {};
+  const firstName = String(body.payer_first_name || payer.first_name || "").trim().slice(0, 60);
+  const lastName = String(body.payer_last_name || payer.last_name || "").trim().slice(0, 60);
+  const rawIdentification = body.payer_identification || payer.identification;
+  const identificationNumber = String(rawIdentification?.number || "").replace(/\D/g, "").slice(0, 20);
+  const identificationType = String(rawIdentification?.type || "CPF").trim().toUpperCase().slice(0, 10);
 
-  // 1. Intercept OPTIONS preflight immediately (first instruction)
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: CORS_HEADERS });
+  return {
+    email,
+    ...(firstName ? { first_name: firstName } : {}),
+    ...(lastName ? { last_name: lastName } : {}),
+    ...(identificationNumber
+      ? { identification: { type: identificationType, number: identificationNumber } }
+      : {}),
+  };
+}
+
+async function createMercadoPagoPayment(input: {
+  authToken: string;
+  idempotencyKey: string;
+  transactionAmount: number;
+  description: string;
+  paymentMethodId: string;
+  payer: Record<string, unknown>;
+  cardToken?: string;
+  installments: number;
+  externalReference: string;
+  metadata: Record<string, unknown>;
+  applicationFee?: number;
+}): Promise<MpResult> {
+  const isCard = Boolean(input.cardToken) || input.paymentMethodId !== "pix";
+  if (isCard && !input.cardToken) {
+    throw new HttpError(400, "missing_card_token", "Pagamento com cartão exige tokenização prévia.");
   }
 
-  // Only accept POST
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
-      status: 405,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  const payload: Record<string, unknown> = {
+    transaction_amount: input.transactionAmount,
+    description: input.description,
+    payment_method_id: input.paymentMethodId,
+    payer: input.payer,
+    external_reference: input.externalReference,
+    metadata: input.metadata,
+    ...(input.applicationFee !== undefined ? { application_fee: input.applicationFee } : {}),
+    ...(input.cardToken ? { token: input.cardToken } : {}),
+    ...(isCard ? { installments: input.installments } : {}),
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${input.authToken}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Idempotency-Key": input.idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let data: Record<string, any>;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      data = { error: "invalid_gateway_response", message: "Mercado Pago retornou uma resposta inválida." };
+    }
+    return { ok: response.ok, httpStatus: response.status, data };
+  } catch (error) {
+    const timeoutError = error instanceof DOMException && error.name === "AbortError";
+    return {
+      ok: false,
+      httpStatus: timeoutError ? 504 : 502,
+      outcomeUnknown: true,
+      data: {
+        error: timeoutError ? "gateway_timeout" : "gateway_network_error",
+        message: timeoutError
+          ? "Timeout ao comunicar com o Mercado Pago."
+          : "Falha de rede ao comunicar com o Mercado Pago.",
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function ledgerStatus(mpStatus: string | undefined, failure: boolean): string {
+  if (failure) return "rejected";
+  if (["approved", "in_mediation", "rejected", "refunded", "charged_back"].includes(mpStatus || "")) {
+    return mpStatus!;
+  }
+  return "pending";
+}
+
+async function reserveSplitRecord(input: {
+  transactionId: string;
+  idempotencyKey: string;
+  serviceType: ServiceType;
+  serviceId: string;
+  providerId: string;
+  split: SplitAmounts;
+  route: RoutingDecision;
+  environment: MpEnvironment;
+  entityId: string | null;
+  godparentTomadorId: string | null;
+  godparentPrestadorId: string | null;
+}): Promise<void> {
+  const record = {
+    transaction_id: input.transactionId,
+    idempotency_key: input.idempotencyKey,
+    status: "pending",
+    service_type: input.serviceType,
+    service_id: input.serviceId,
+    provider_id: input.providerId,
+    total_amount: input.split.total_amount,
+    provider_amount: input.split.prestador_amount,
+    ubt_amount: input.split.ubt_amount,
+    entity_amount: input.split.comunidade_amount,
+    entity_id: input.entityId,
+    prize_worker_amount: input.split.premio_trabalhador,
+    prize_consumer_amount: input.split.premio_consumidor,
+    godparent_tomador_amount: input.split.padrinho_tomador_amount,
+    godparent_tomador_id: input.godparentTomadorId,
+    godparent_prestador_amount: input.split.padrinho_prestador_amount,
+    godparent_prestador_id: input.godparentPrestadorId,
+    godparent_amount: input.split.padrinho_amount,
+    godparent_id: input.godparentTomadorId,
+    refunded_amount: 0,
+    payment_route: input.route.mode,
+    provider_payout_status: input.route.mode === "platform_fallback" ? "pending" : "not_required",
+    provider_payout_amount: input.split.prestador_amount,
+    application_fee_amount: input.route.mode === "seller_oauth_split" ? input.split.application_fee : 0,
+    platform_collected_amount: input.route.mode === "platform_fallback"
+      ? input.split.total_amount
+      : input.split.application_fee,
+    marketplace_account_id: input.route.marketplaceAccountId,
+    environment: input.environment,
+    routing_reason: input.route.fallbackReason,
+  };
+
+  const { error } = await adminClient().from("pagamentos_split").insert(record);
+  if (!error) return;
+  if (error.code !== "23505") {
+    throw new HttpError(503, "split_reservation_failed", "Não foi possível reservar o lançamento contábil.");
+  }
+
+  const { data: existing, error: readError } = await adminClient()
+    .from("pagamentos_split")
+    .select("idempotency_key, service_id, provider_id, total_amount")
+    .eq("transaction_id", input.transactionId)
+    .single();
+  if (
+    readError || !existing || existing.idempotency_key !== input.idempotencyKey ||
+    existing.service_id !== input.serviceId || existing.provider_id !== input.providerId ||
+    Number(existing.total_amount) !== input.split.total_amount
+  ) {
+    throw new HttpError(409, "idempotency_conflict", "A chave idempotente já foi usada com outro pagamento.");
+  }
+}
+
+async function finalizeSplitRecord(input: {
+  transactionId: string;
+  mpResult: MpResult;
+  route: RoutingDecision;
+}): Promise<boolean> {
+  const mpStatus = String(input.mpResult.data?.status || "");
+  const rejected = !input.mpResult.ok || mpStatus === "rejected";
+  const payoutStatus = input.route.mode === "seller_oauth_split"
+    ? "not_required"
+    : rejected && !input.mpResult.outcomeUnknown
+      ? "cancelled"
+      : "pending";
+  const lastError = rejected
+    ? {
+      error: input.mpResult.data?.error || "payment_rejected",
+      message: input.mpResult.data?.message || null,
+      cause: input.mpResult.data?.cause || null,
+      http_status: input.mpResult.httpStatus,
+      outcome_unknown: Boolean(input.mpResult.outcomeUnknown),
+    }
+    : null;
+
+  const { error } = await adminClient()
+    .from("pagamentos_split")
+    .update({
+      status: ledgerStatus(mpStatus, rejected && !input.mpResult.outcomeUnknown),
+      gateway_payment_id: input.mpResult.data?.id ? String(input.mpResult.data.id) : null,
+      gateway_status: mpStatus || (input.mpResult.outcomeUnknown ? "unknown" : "failed"),
+      gateway_status_detail: input.mpResult.data?.status_detail || null,
+      provider_payout_status: payoutStatus,
+      last_error: lastError,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("transaction_id", input.transactionId);
+  if (error) console.error("[payment-gateway] split finalization failed", error.message);
+  return !error;
+}
+
+function mpErrorDetails(data: Record<string, any>): Array<{ code?: string | number; description: string }> {
+  if (Array.isArray(data?.cause)) {
+    return data.cause.slice(0, 10).map((cause: any) => ({
+      code: cause?.code,
+      description: String(cause?.description || "Erro não detalhado").slice(0, 500),
+    }));
+  }
+  return [{ code: data?.error, description: String(data?.message || data?.error || "Pagamento rejeitado").slice(0, 500) }];
+}
+
+function allowedRedirectUri(requested: unknown): string {
+  const allowed = (Deno.env.get("MP_REDIRECT_URIS") || Deno.env.get("MP_REDIRECT_URI") || "")
+    .split(",")
+    .map((uri) => uri.trim())
+    .filter(Boolean);
+  const candidate = String(requested || allowed[0] || "").trim();
+  if (!candidate || !allowed.includes(candidate)) {
+    throw new HttpError(400, "invalid_redirect_uri", "redirect_uri não está na allowlist MP_REDIRECT_URIS.");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new HttpError(400, "invalid_redirect_uri", "redirect_uri inválida.");
+  }
+  if (paymentEnvironment() === "production" && parsed.protocol !== "https:") {
+    throw new HttpError(400, "insecure_redirect_uri", "OAuth em produção exige redirect_uri HTTPS.");
+  }
+  return candidate;
+}
+
+async function handleGetOAuthUrl(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
+  const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "").trim();
+  if (!clientId) throw new HttpError(500, "missing_client_id", "Client ID do Mercado Pago não configurado.");
+
+  const redirectUri = allowedRedirectUri(body.redirect_uri);
+  const state = crypto.randomUUID();
+  const { error } = await adminClient().from("marketplace_oauth_connections").insert({
+    user_id: userId,
+    state_reference: state,
+    authorization_status: "started",
+  });
+  if (error) throw new HttpError(503, "oauth_state_persist_failed", "Não foi possível iniciar o vínculo OAuth.");
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    platform_id: "mp",
+    state,
+    redirect_uri: redirectUri,
+  });
+  return json(req, {
+    success: true,
+    oauth_url: `https://auth.mercadopago.com/authorization?${params.toString()}`,
+    state,
+    environment: paymentEnvironment(),
+  });
+}
+
+async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
+  const environment = paymentEnvironment();
+  const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "").trim();
+  const clientSecret = (Deno.env.get("MERCADOPAGO_CLIENT_SECRET") || Deno.env.get("MP_CLIENT_SECRET") || "").trim();
+  const code = String(body.code || "").trim();
+  const state = String(body.state || "").trim();
+  const redirectUri = allowedRedirectUri(body.redirect_uri);
+  if (!clientId || !clientSecret) throw new HttpError(500, "missing_oauth_credentials", "Credenciais OAuth não configuradas.");
+  if (!code || code.length > 500) throw new HttpError(400, "invalid_oauth_code", "Authorization code inválido.");
+  if (!UUID_RE.test(state)) throw new HttpError(400, "invalid_oauth_state", "OAuth state inválido.");
+
+  const { data: connection, error: stateError } = await adminClient()
+    .from("marketplace_oauth_connections")
+    .select("id, created_at")
+    .eq("user_id", userId)
+    .eq("state_reference", state)
+    .eq("authorization_status", "started")
+    .maybeSingle();
+  if (stateError || !connection || Date.now() - new Date(connection.created_at).getTime() > 10 * 60 * 1000) {
+    throw new HttpError(400, "oauth_state_mismatch", "OAuth state ausente, expirado ou já utilizado.");
+  }
+
+  const tokenResponse = await fetch("https://api.mercadopago.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      ...(environment === "sandbox" ? { test_token: true } : {}),
+    }),
+  });
+  const tokenData = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenData?.access_token) {
+    await adminClient().from("marketplace_oauth_connections").update({
+      authorization_status: "failed",
+      error_code: String(tokenData?.error || tokenResponse.status),
+      error_message: String(tokenData?.message || tokenData?.error_description || "OAuth rejected").slice(0, 1000),
+      updated_at: new Date().toISOString(),
+    }).eq("id", connection.id);
+    throw new HttpError(400, "oauth_token_exchange_failed", "Mercado Pago recusou a troca do código OAuth.", {
+      status: tokenResponse.status,
+      error: tokenData?.error,
+      message: tokenData?.message || tokenData?.error_description,
     });
   }
 
-  // ---- Central try/catch — all errors MUST be caught and logged ----
-  try {
-    let body: any;
-    try {
-      body = await req.json();
-    } catch (parseErr) {
-      console.error("[payment-gateway] Failed to parse JSON body:", parseErr);
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body in request." }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
-    }
+  if (typeof tokenData.live_mode === "boolean" && tokenData.live_mode !== (environment === "production")) {
+    throw new HttpError(409, "oauth_environment_mismatch", "O token OAuth retornado pertence a outro ambiente.");
+  }
 
-    console.log("RAW REQ BODY:", JSON.stringify(body));
-
-    // Desempacota payload caso venha aninhado em body.body
-    if (body && typeof body === "object" && body.body && typeof body.body === "object") {
-      body = { ...body.body, ...body };
-    }
-
-    const rawAction = String(body.action || body.type || body.event || "create_payment_intent").toLowerCase().trim();
-    const action = rawAction.includes("checkout") ? "checkout" : "create_payment_intent";
-    console.log(`[payment-gateway] Handling action="${action}" (raw="${rawAction}")`);
-
-    // ----------------------------------------------------------------
-    // ROUTE: Payment Intent / Checkout (with Split)
-    // ----------------------------------------------------------------
-    if (action === "create_payment_intent" || action === "checkout") {
-      const rawAmount = body.transaction_amount ?? body.amount ?? body.final_amount ?? body.total_amount ?? body.price ?? body.final_price;
-      const transaction_amount = Math.max(0.01, Number(rawAmount !== undefined && rawAmount !== null && !isNaN(Number(rawAmount)) ? Number(rawAmount) : 10.0));
-      const rawServiceType = String(body.service_type || body.serviceType || "mototaxi").toLowerCase().trim();
-      const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
-      const service_id = String(body.service_id || body.serviceId || body.ride_id || body.rideId || body.order_id || body.orderId || crypto.randomUUID());
-      const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
-      const payer_email = String(body.payer_email || body.email || body.payerEmail || body.payer?.email || "").trim();
-      const payer_first_name = body.payer_first_name || body.payerFirstName || body.payer?.first_name || undefined;
-      const payer_last_name = body.payer_last_name || body.payerLastName || body.payer?.last_name || undefined;
-      const payer_identification = body.payer_identification || body.payerIdentification || body.payer?.identification || undefined;
-      const payer = body.payer && typeof body.payer === "object" ? body.payer : undefined;
-      
-      let payment_method_id = String(
-        body.payment_method_id ||
-        body.paymentMethodId ||
-        body.payment_method ||
-        body.paymentMethod ||
-        (body.token || body.card_token ? "master" : "pix")
-      ).toLowerCase().trim();
-
-      if (payment_method_id === "cartao" || payment_method_id === "cartão" || payment_method_id === "credit_card" || payment_method_id === "card") {
-        payment_method_id = "master";
-      }
-
-      const external_reference = body.external_reference || body.externalReference || body.service_id || service_id;
-      const entity_id = body.entity_id || body.entityId;
-      const godparent_id = body.godparent_id || body.godparentId;
-      const godparent_tomador_id = body.godparent_tomador_id || body.godparentTomadorId;
-      const godparent_prestador_id = body.godparent_prestador_id || body.godparentPrestadorId;
-      const provider_id = body.provider_id || body.providerId || "0a5edf64-7585-401f-b310-126529607da0";
-      const provider_name = body.provider_name || body.providerName || "Silvina Luz";
-      const metadata = body.metadata || {};
-      const cardToken =
-        body.token ||
-        body.card_token ||
-        body.card_token_id ||
-        body.cardToken ||
-        body.cardTokenId ||
-        body.card_data?.token ||
-        body.cardData?.token;
-
-      console.log(`[payment-gateway] Extracted cardToken:`, cardToken ? `${cardToken.slice(0, 8)}... (${cardToken.length} chars)` : "NONE");
-      const installments = Number(body.installments) || 1;
-
-      // --- [1] Fetch live split rules from DB ---
-      const { config: splitConfig, fromDb: splitFromDb } = await fetchSplitConfig();
-
-      // --- [2] Calculate split amounts ---
-      const split = calculateSplitAmounts(transaction_amount, splitConfig);
-
-      // --- [2.1] Resolve 7 nominal destinations ---
-      const resolvedProviderId = provider_id;
-      const resolvedProviderName = provider_name;
-      const resolvedAssocName = entity_id ? `Associação (${entity_id})` : "caixinha-mototaxista-sem-associação";
-      const resolvedGodparentPrestador = godparent_prestador_id || "ubt-fundo-reserva-prestador";
-      const resolvedGodparentTomador = godparent_tomador_id || godparent_id || "ubt-fundo-reserva-tomador";
-
-      const nominalLedger = [
-        { dest: 1, name: `Prestador (${resolvedProviderName})`, id: resolvedProviderId, pct: splitConfig.prestador_pct, amount: split.prestador_amount },
-        { dest: 2, name: "Plataforma UBT (Taxa da Casa)", id: "ubt-platform-treasury", pct: splitConfig.ubt_pct, amount: split.ubt_amount },
-        { dest: 3, name: `Padrinho Prestador (${resolvedGodparentPrestador})`, id: resolvedGodparentPrestador, pct: splitConfig.padrinho_prestador_pct, amount: split.padrinho_prestador_amount },
-        { dest: 4, name: `Padrinho Tomador (${resolvedGodparentTomador})`, id: resolvedGodparentTomador, pct: splitConfig.padrinho_tomador_pct, amount: split.padrinho_tomador_amount },
-        { dest: 5, name: `Associação Mototaxi (${resolvedAssocName})`, id: entity_id || "caixinha-mototaxista-sem-associação", pct: splitConfig.comunidade_pct, amount: split.comunidade_amount },
-        { dest: 6, name: "Fundo Prêmio-Trabalhador (premio-trabalhador-2026)", id: "premio-trabalhador-2026", pct: splitConfig.premio_trabalhador_pct, amount: split.premio_trabalhador },
-        { dest: 7, name: "Fundo Prêmio-Consumidor (premio-consumidor-2026)", id: "premio-consumidor-2026", pct: splitConfig.premio_consumidor_pct, amount: split.premio_consumidor },
-      ];
-
-      const sumNominal = nominalLedger.reduce((acc, curr) => acc + curr.amount, 0);
-
-      const nominalLogString = `
-========================================================================
-💰 EXTRATO NOMINAL DE REPASSE — MOTOR DE SPLIT UBT (7 VIAS)
-Total da Transação: R$ ${transaction_amount.toFixed(2)}
-------------------------------------------------------------------------
-1. Prestador (${resolvedProviderName}): R$ ${split.prestador_amount.toFixed(2)} (${splitConfig.prestador_pct.toFixed(1)}%)
-2. Plataforma UBT (Taxa da Casa): R$ ${split.ubt_amount.toFixed(2)} (${splitConfig.ubt_pct.toFixed(1)}%)
-3. Padrinho Prestador (${resolvedGodparentPrestador}): R$ ${split.padrinho_prestador_amount.toFixed(2)} (${splitConfig.padrinho_prestador_pct.toFixed(1)}%)
-4. Padrinho Tomador (${resolvedGodparentTomador}): R$ ${split.padrinho_tomador_amount.toFixed(2)} (${splitConfig.padrinho_tomador_pct.toFixed(1)}%)
-5. Associação (${resolvedAssocName}): R$ ${split.comunidade_amount.toFixed(2)} (${splitConfig.comunidade_pct.toFixed(1)}%)
-6. Prêmio Trabalhador (premio-trabalhador-2026): R$ ${split.premio_trabalhador.toFixed(2)} (${splitConfig.premio_trabalhador_pct.toFixed(1)}%)
-7. Prêmio Consumidor (premio-consumidor-2026): R$ ${split.premio_consumidor.toFixed(2)} (${splitConfig.premio_consumidor_pct.toFixed(1)}%)
-------------------------------------------------------------------------
-SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
-========================================================================`;
-
-      console.log(nominalLogString);
-
-      // --- [3] Audit: split_calculated (BEFORE calling MP — guarantees traceability even on MP failure) ---
-      await logAuditEvent({
-        transactionType: "split_calculated",
-        status: "pending",
-        payload: {
-          external_reference:    external_reference ?? null,
-          service_type,
-          service_id,
-          split_config_source:   splitFromDb ? "database" : "regulatory_defaults",
-          split_config:          splitConfig,
-          split_amounts:         split,
-          nominal_ledger:        nominalLedger,
-          sum_nominal:           sumNominal,
-          calculated_at:         new Date().toISOString(),
-        },
-      });
-
-      // --- [MOCK PIX IN TEST ENV] ---
-      const mpToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || Deno.env.get("MP_ACCESS_TOKEN") || "").trim();
-      let mpData: any;
-      let mpStatus: number = 200;
-      let mpResult: { data: any; rawText: string; httpStatus: number; ok: boolean } | null = null;
-
-      if (payment_method_id === "pix" && mpToken.startsWith("TEST-")) {
-        console.log("[payment-gateway] MOCKING PIX PAYMENT FOR SANDBOX");
-        mpStatus = 201;
-        mpData = {
-          id: 99999999999,
-          status: "pending",
-          status_detail: "pending_waiting_transfer",
-          point_of_interaction: {
-            transaction_data: {
-              qr_code: "00020101021243650016COM.MERCADOLIBRE02013063638f1192a-5fd1-4180-a180-8bcae3556bc35204000053039865802BR5925PAGAMENTO MOCK PIX SANDBOX6009SAO PAULO62070503***6304A1B2",
-              qr_code_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", // 1x1 transparent pixel base64
-              ticket_url: "https://sandbox.mercadopago.com.br/ticket/mock"
-            }
-          }
-        };
-      } else {
-        // --- [4] Call Mercado Pago with application_fee ---
-        mpResult = await createMercadoPagoPayment({
-          transactionAmount:  transaction_amount,
-          description,
-          payer,
-          payerEmail:         payer_email || undefined,
-          payerFirstName:     payer_first_name,
-          payerLastName:      payer_last_name,
-          payerIdentification: payer_identification,
-          applicationFee:     split.application_fee,
-          paymentMethodId:    payment_method_id,
-          cardToken,
-          installments,
-          externalReference:  external_reference,
-          metadata,
-        });
-        mpData = mpResult.data;
-        mpStatus = mpResult.httpStatus;
-
-        if (payment_method_id !== "pix" && mpToken.startsWith("TEST-") && (mpStatus >= 400 || mpData.error)) {
-          console.log("[payment-gateway] SANDBOX CARD FALLBACK: Approving test card transaction in sandbox environment");
-          mpStatus = 200;
-          mpData = {
-            id: Date.now(),
-            status: "approved",
-            status_detail: "accredited",
-            payment_method_id,
-            transaction_amount,
-          };
-        }
-      }
-
-      // --- [5] Audit: raw MP response ---
-      const auditStatus = mpData?.status ?? (mpStatus >= 400 ? "failed" : "unknown");
-      await logAuditEvent({
-        transactionType: "pix_intent",
-        status: auditStatus,
-        payload: mpData as Record<string, unknown>,
-        errorDetails: mpData?.error
-          ? `[${mpData.error}] ${mpData.message ?? ""} ${JSON.stringify(mpData.cause ?? [])}`
-          : undefined,
-      });
-
-      // --- [6] Handle MP API errors ---
-      if ((mpResult && !mpResult.ok) || mpStatus >= 400 || mpData?.error) {
-        const rawRejection = mpResult?.rawText || JSON.stringify(mpData);
-        console.error("[MP CRITICAL REJECTION]", rawRejection);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            mp_error: rawRejection,
-            error: "MP API Error",
-            message: mpData?.message || mpData?.error || "Erro ao processar pagamento",
-            details: mpData?.cause || mpData,
-            status: mpStatus,
-            mp_status: mpData?.status || mpStatus,
-            mp_status_detail: mpData?.status_detail,
-          }),
-          {
-            status: 400,
-            headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // --- [7] Persist split record in pagamentos_split (idempotent upsert) ---
-      const transactionId = external_reference ?? `mp_${mpData.id}`;
-      const { persisted: splitPersisted, error: splitError } = await persistSplitRecord({
-        transactionId,
-        serviceType: service_type as ServiceType,
-        serviceId:   service_id,
-        split,
-        entityId:    entity_id ?? null,
-        godparentTomadorId:   godparent_tomador_id ?? godparent_id ?? null,
-        godparentPrestadorId: godparent_prestador_id ?? null,
-      });
-
-      if (!splitPersisted) {
-        // Non-blocking: log the failure but do not abort the payment response
-        console.error("[payment-gateway] Split record persistence failed:", splitError);
-        await logAuditEvent({
-          transactionType: "split_persist_failed",
-          status: "error",
-          payload: { transaction_id: transactionId, mp_payment_id: mpData.id },
-          errorDetails: splitError,
-        });
-      } else {
-        // Audit: split successfully registered
-        await logAuditEvent({
-          transactionType: "split_registered",
-          status: "pending",
-          payload: {
-            transaction_id:   transactionId,
-            mp_payment_id:    mpData.id,
-            service_type,
-            service_id,
-            split_amounts:    split,
-            nominal_ledger:   nominalLedger,
-            sum_nominal:      sumNominal,
-            split_config_source: splitFromDb ? "database" : "regulatory_defaults",
-          },
-        });
-        console.log(`[payment-gateway] ✅ Split record created for transaction_id=${transactionId}`);
-      }
-
-      // --- [7.1] Update mototaxi_corridas status to paid if applicable ---
-      if (service_type === "mototaxi" && service_id) {
-        try {
-          await supabaseAdmin
-            .from("mototaxi_corridas")
-            .update({
-              status: "paid",
-              final_price: transaction_amount,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", service_id);
-          console.log(`[payment-gateway] ✅ mototaxi_corridas id=${service_id} updated to status=paid`);
-        } catch (corridaErr) {
-          console.error("[payment-gateway] Error updating mototaxi_corridas:", corridaErr);
-        }
-      }
-
-      // --- [8] Return structured PIX data ---
-      const txData = mpData.point_of_interaction?.transaction_data;
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          pix: {
-            payment_id:         mpData.id,
-            status:             mpData.status,
-            status_detail:      mpData.status_detail,
-            external_reference: external_reference ?? null,
-            ticket_url:         txData?.ticket_url    ?? null,
-            qr_code:            txData?.qr_code       ?? null,
-            qr_code_base64:     txData?.qr_code_base64 ?? null,
-          },
-          split: {
-            total_amount:              split.total_amount,
-            prestador_amount:          split.prestador_amount,
-            application_fee:           split.application_fee,
-            ubt_amount:                split.ubt_amount,
-            comunidade_amount:         split.comunidade_amount,
-            premio_trabalhador:        split.premio_trabalhador,
-            premio_consumidor:         split.premio_consumidor,
-            padrinho_tomador_amount:   split.padrinho_tomador_amount,
-            padrinho_prestador_amount: split.padrinho_prestador_amount,
-            padrinho_amount:           split.padrinho_amount,
-            config_source:             splitFromDb ? "database" : "regulatory_defaults",
-            nominal_ledger:            nominalLedger,
-            statement:                 nominalLogString,
-          },
-        }),
-        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
-    }
-
-    // --- Unrecognized action ---
-    return new Response(
-      JSON.stringify({ error: `Unknown action: ${action}` }),
-      { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-    );
-
-  } catch (error: any) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack   = error instanceof Error ? error.stack    : undefined;
-
-    console.error("[CRITICAL ERROR CATCH]", error);
-
-    try {
-      await logAuditEvent({
-        transactionType: "unknown",
-        status: "failed",
-        payload: { timestamp: new Date().toISOString() },
-        errorDetails: `${errorMessage}${errorStack ? `\n${errorStack}` : ""}`,
-      });
-    } catch {
-      // ignore audit failure on fatal catch
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: errorMessage || "Internal server error. Incident logged.",
-        message: errorMessage,
-        stack: errorStack,
-        details: error,
-      }),
-      { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+  const oauthUserId = String(tokenData.user_id || "").trim();
+  const allowedSandboxSellers = (Deno.env.get("MP_TEST_SELLER_USER_IDS") || "")
+    .split(",")
+    .map((sellerId) => sellerId.trim())
+    .filter(Boolean);
+  if (environment === "sandbox" && allowedSandboxSellers.length > 0 && !allowedSandboxSellers.includes(oauthUserId)) {
+    await adminClient().from("marketplace_oauth_connections").update({
+      authorization_status: "failed",
+      error_code: "oauth_test_seller_mismatch",
+      error_message: "OAuth autorizado com uma conta diferente do Seller Test User configurado.",
+      updated_at: new Date().toISOString(),
+    }).eq("id", connection.id);
+    throw new HttpError(
+      409,
+      "oauth_test_seller_mismatch",
+      "Entre no Mercado Pago com o Seller Test User configurado antes de autorizar.",
     );
   }
-});
 
+  const now = new Date();
+  const expiresIn = Number(tokenData.expires_in);
+  const tokenMetadata = {
+    live_mode: tokenData.live_mode,
+    scope: tokenData.scope,
+    token_type: tokenData.token_type,
+    public_key: tokenData.public_key,
+  };
+  const { data: account, error: upsertError } = await adminClient().from("marketplace_accounts").upsert({
+    user_id: userId,
+    mercado_pago_user_id: oauthUserId,
+    status: "CONNECTED",
+    ambiente: environment,
+    oauth_status: "authorized",
+    access_token_encrypted: await encryptToken(tokenData.access_token, environment),
+    refresh_token_encrypted: tokenData.refresh_token
+      ? await encryptToken(tokenData.refresh_token, environment)
+      : null,
+    token_expiration: Number.isFinite(expiresIn)
+      ? new Date(now.getTime() + expiresIn * 1000).toISOString()
+      : null,
+    token_metadata: tokenMetadata,
+    connected_at: now.toISOString(),
+    updated_at: now.toISOString(),
+  }, { onConflict: "user_id,ambiente" }).select("id").single();
+  if (upsertError || !account) throw new HttpError(503, "oauth_account_persist_failed", "Não foi possível salvar a conta OAuth.");
+
+  await adminClient().from("marketplace_oauth_connections").update({
+    authorization_status: "exchanged",
+    marketplace_account_id: account.id,
+    connected_at: now.toISOString(),
+    expires_at: Number.isFinite(expiresIn)
+      ? new Date(now.getTime() + expiresIn * 1000).toISOString()
+      : null,
+    updated_at: now.toISOString(),
+  }).eq("id", connection.id);
+
+  return json(req, {
+    success: true,
+    user_id: tokenData.user_id,
+    public_key: tokenData.public_key,
+    live_mode: tokenData.live_mode,
+    environment,
+  });
+}
+
+async function handlePayment(req: Request, body: Record<string, any>, customerId: string): Promise<Response> {
+  const environment = paymentEnvironment();
+  const action = String(body.action || "create_payment_intent").trim().toLowerCase();
+  const providerInitiatedMototaxiPix = action === "create_mototaxi_pix_charge";
+  let amount = validateAmount(body.transaction_amount ?? body.amount);
+  const serviceType = normalizeServiceType(body.service_type ?? body.serviceType);
+  const serviceId = assertUuid(body.service_id ?? body.serviceId, "service_id");
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const paymentAttempt = resolvePaymentAttemptId(body);
+  const paymentAttemptId = paymentAttempt.id;
+  const entityId = optionalUuid(body.entity_id ?? body.entityId, "entity_id");
+  const godparentTomadorId = optionalUuid(body.godparent_tomador_id ?? body.godparentTomadorId ?? body.godparent_id, "godparent_tomador_id");
+  const godparentPrestadorId = optionalUuid(body.godparent_prestador_id ?? body.godparentPrestadorId, "godparent_prestador_id");
+  const description = String(body.description || `Serviço UBT ${serviceType}`).trim().slice(0, 250);
+  const paymentMethodId = String(body.payment_method_id || (body.card_token ? "master" : "pix")).trim().toLowerCase();
+  const cardToken = String(body.card_token || body.token || "").trim() || undefined;
+  const installments = Math.min(24, Math.max(1, Number.parseInt(String(body.installments || 1), 10) || 1));
+  if (paymentMethodId !== "pix" && !cardToken) {
+    throw new HttpError(400, "missing_card_token", "Pagamento com cartão exige tokenização prévia.");
+  }
+
+  let payerSource = body;
+  if (providerInitiatedMototaxiPix) {
+    if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
+      throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
+    }
+
+    const { data: ride, error: rideError } = await adminClient()
+      .from("mototaxi_corridas")
+      .select("id, tomador_id, prestador_id, status, estimated_price, final_price")
+      .eq("id", serviceId)
+      .maybeSingle();
+    if (rideError) {
+      throw new HttpError(503, "ride_lookup_failed", "Não foi possível validar a corrida antes da cobrança.");
+    }
+    if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
+    if (ride.prestador_id !== customerId || providerId !== customerId) {
+      throw new HttpError(403, "provider_not_assigned", "Somente o prestador atribuído pode gerar esta cobrança Pix.");
+    }
+    if (ride.status !== "completed") {
+      throw new HttpError(409, "ride_not_ready_for_payment", "A corrida precisa estar concluída antes de gerar o Pix.");
+    }
+    if (!ride.tomador_id) {
+      throw new HttpError(409, "ride_payer_missing", "A corrida não possui um Tomador vinculado.");
+    }
+
+    const canonicalAmount = validateAmount(ride.final_price ?? ride.estimated_price);
+    if (Math.abs(canonicalAmount - amount) > 0.009) {
+      throw new HttpError(409, "ride_amount_mismatch", "O valor da cobrança diverge do valor registrado na corrida.");
+    }
+    amount = canonicalAmount;
+
+    const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
+      adminClient().auth.admin.getUserById(ride.tomador_id),
+      adminClient().from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
+    ]);
+    if (payerAuthError || !payerAuth.user?.email) {
+      if (environment === "production") {
+        throw new HttpError(409, "payer_identity_missing", "O Tomador não possui e-mail válido para o pagamento.");
+      }
+    }
+
+    const payerName = String(payerProfile?.nome || payerAuth.user?.user_metadata?.full_name || "").trim();
+    const [payerFirstName = "", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
+    const payerCpf = String(payerAuth.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+    payerSource = {
+      ...body,
+      payer_email: payerAuth.user?.email || body.payer_email,
+      payer_first_name: payerFirstName || undefined,
+      payer_last_name: payerLastParts.join(" ") || undefined,
+      payer_identification: payerCpf ? { type: "CPF", number: payerCpf } : undefined,
+    };
+  }
+  const clientMetadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
+  const metadataJson = JSON.stringify(clientMetadata);
+  if (metadataJson.length > 4000) throw new HttpError(400, "metadata_too_large", "metadata excede 4 KB.");
+  const payerEmail = resolvePayerEmail(payerSource, environment);
+  const payer = sanitizePayer(payerSource, payerEmail);
+  const route = await resolvePaymentRoute(providerId, environment);
+  const { config, source: splitConfigSource } = await fetchSplitConfig();
+  const split = calculateSplitAmounts(amount, config);
+  const transactionId = paymentAttemptId;
+  const idempotencyKey = paymentAttemptId;
+
+  await reserveSplitRecord({
+    transactionId,
+    idempotencyKey,
+    serviceType,
+    serviceId,
+    providerId,
+    split,
+    route,
+    environment,
+    entityId,
+    godparentTomadorId,
+    godparentPrestadorId,
+  });
+
+  await logAuditEvent("payment_routed", "pending", {
+    transaction_id: transactionId,
+    service_type: serviceType,
+    service_id: serviceId,
+    provider_id: providerId,
+    customer_id: customerId,
+    payment_attempt_source: paymentAttempt.source,
+    route: route.mode,
+    fallback_reason: route.fallbackReason,
+    environment,
+    split_config_source: splitConfigSource,
+    split_amounts: split,
+  });
+
+  const mpResult = await createMercadoPagoPayment({
+    authToken: route.authToken,
+    idempotencyKey,
+    transactionAmount: amount,
+    description,
+    paymentMethodId,
+    payer,
+    cardToken,
+    installments,
+    externalReference: transactionId,
+    metadata: {
+      ...clientMetadata,
+      ubt_service_type: serviceType,
+      ubt_service_id: serviceId,
+      ubt_provider_id: providerId,
+      ubt_payment_route: route.mode,
+    },
+    ...(route.mode === "seller_oauth_split" ? { applicationFee: split.application_fee } : {}),
+  });
+
+  const ledgerPersisted = await finalizeSplitRecord({ transactionId, mpResult, route });
+  const mpStatus = String(mpResult.data?.status || "");
+  const rejected = !mpResult.ok || mpStatus === "rejected" || !mpResult.data?.id;
+
+  await logAuditEvent("mercado_pago_payment", rejected ? "failed" : mpStatus || "unknown", {
+    transaction_id: transactionId,
+    payment_id: mpResult.data?.id || null,
+    gateway_status: mpStatus || null,
+    gateway_status_detail: mpResult.data?.status_detail || null,
+    http_status: mpResult.httpStatus,
+    route: route.mode,
+    outcome_unknown: Boolean(mpResult.outcomeUnknown),
+    ledger_persisted: ledgerPersisted,
+  }, rejected ? JSON.stringify(mpErrorDetails(mpResult.data)) : undefined);
+
+  if (rejected) {
+    const status = mpResult.outcomeUnknown
+      ? mpResult.httpStatus
+      : mpResult.httpStatus >= 500
+        ? 502
+        : 422;
+    return json(req, {
+      success: false,
+      error: mpResult.outcomeUnknown ? "payment_outcome_unknown" : "payment_rejected",
+      message: mpResult.outcomeUnknown
+        ? "Não foi possível confirmar o resultado. Consulte pela mesma payment_attempt_id antes de tentar novamente."
+        : String(mpResult.data?.message || mpResult.data?.error || "Pagamento rejeitado pelo Mercado Pago."),
+      details: mpErrorDetails(mpResult.data),
+      gateway_status: mpResult.httpStatus,
+      transaction_id: transactionId,
+      payment_route: route.mode,
+    }, status);
+  }
+
+  if (serviceType === "mototaxi" && mpStatus === "approved") {
+    const { error } = await adminClient().from("mototaxi_corridas").update({
+      status: "paid",
+      final_price: amount,
+      updated_at: new Date().toISOString(),
+    }).eq("id", serviceId);
+    if (error) console.error("[payment-gateway] ride status update failed", error.message);
+  }
+
+  if (serviceType === "diarista" && mpStatus === "approved") {
+    const { error } = await adminClient().from("services_requests").update({
+      status: "paid",
+      payment_id: String(mpResult.data.id),
+      updated_at: new Date().toISOString(),
+    }).eq("id", serviceId);
+    if (error) console.error("[payment-gateway] service request status update failed", error.message);
+  }
+
+  const txData = mpResult.data?.point_of_interaction?.transaction_data;
+  if (providerInitiatedMototaxiPix) {
+    const pixCopyPaste = String(txData?.qr_code || "").trim();
+    const pixQrCodeBase64 = String(txData?.qr_code_base64 || "").trim();
+    if (!pixCopyPaste) {
+      throw new HttpError(502, "pix_payload_missing", "O Mercado Pago não devolveu o código Pix da cobrança.");
+    }
+    const { error: chargePersistError } = await adminClient()
+      .from("mototaxi_corridas")
+      .update({
+        payment_method: "pix",
+        pix_payment_id: String(mpResult.data.id),
+        pix_transaction_id: transactionId,
+        pix_copy_paste: pixCopyPaste,
+        pix_qr_code_base64: pixQrCodeBase64 || null,
+        pix_charge_status: mpStatus || "pending",
+        pix_charge_created_at: new Date().toISOString(),
+        pix_charge_expires_at: mpResult.data?.date_of_expiration || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", serviceId);
+    if (chargePersistError) {
+      const databaseDetails = {
+        code: chargePersistError.code,
+        message: chargePersistError.message,
+        details: chargePersistError.details,
+        hint: chargePersistError.hint,
+      };
+      console.error("[payment-gateway] Pix charge persistence failed", databaseDetails);
+      await logAuditEvent("pix_charge_persist_failed", "failed", {
+        transaction_id: transactionId,
+        service_id: serviceId,
+        payment_id: String(mpResult.data.id),
+        database_code: chargePersistError.code,
+      }, JSON.stringify(databaseDetails));
+      throw new HttpError(
+        500,
+        "pix_charge_persist_failed",
+        "A cobrança foi criada no Mercado Pago, mas o banco recusou a sincronização da corrida.",
+        environment === "sandbox" ? databaseDetails : { code: chargePersistError.code },
+      );
+    }
+  }
+  const appliedApplicationFee = route.mode === "seller_oauth_split" ? split.application_fee : 0;
+  return json(req, {
+    success: true,
+    payment_id: mpResult.data.id,
+    status: mpStatus,
+    transaction_id: transactionId,
+    payment_route: route.mode,
+    fallback_reason: route.fallbackReason,
+    provider_payout_status: route.mode === "platform_fallback" ? "pending" : "not_required",
+    ledger_persisted: ledgerPersisted,
+    payment: {
+      id: mpResult.data.id,
+      status: mpStatus,
+      status_detail: mpResult.data.status_detail,
+      payment_method_id: mpResult.data.payment_method_id || paymentMethodId,
+      transaction_amount: mpResult.data.transaction_amount || amount,
+    },
+    pix: paymentMethodId === "pix" ? {
+      payment_id: mpResult.data.id,
+      status: mpStatus,
+      status_detail: mpResult.data.status_detail,
+      external_reference: transactionId,
+      ticket_url: txData?.ticket_url ?? null,
+      qr_code: txData?.qr_code ?? null,
+      qr_code_base64: txData?.qr_code_base64 ?? null,
+    } : null,
+    split: {
+      ...split,
+      application_fee: appliedApplicationFee,
+      accounting_platform_allocation: split.application_fee,
+      config_source: splitConfigSource,
+    },
+  }, 200);
+}
+
+serve(async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders(req) });
+  }
+  if (req.method !== "POST") return json(req, { success: false, error: "method_not_allowed" }, 405);
+
+  let requestAuditContext: Record<string, unknown> = {};
+  try {
+    const userId = await authenticatedUserId(req);
+    const body = await req.json().catch(() => {
+      throw new HttpError(400, "invalid_json", "Corpo JSON inválido.");
+    });
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new HttpError(400, "invalid_body", "Corpo da requisição inválido.");
+    }
+
+    requestAuditContext = {
+      action: String(body.action || "create_payment_intent").slice(0, 80),
+      payment_attempt_id: String(body.payment_attempt_id || body.idempotency_key || body.external_reference || "").slice(0, 80),
+      service_id: String(body.service_id || body.serviceId || "").slice(0, 80),
+      provider_id: String(body.provider_id || body.providerId || "").slice(0, 80),
+    };
+
+    const action = String(body.action || "create_payment_intent").trim().toLowerCase();
+    if (["get_oauth_url", "oauth_url", "get_auth_url", "oauth"].includes(action)) {
+      return await handleGetOAuthUrl(req, body, userId);
+    }
+    if (["exchange_oauth_code", "oauth_callback", "exchange_code"].includes(action)) {
+      return await handleExchangeOAuthCode(req, body, userId);
+    }
+    if (["get_checkout_config", "checkout_config"].includes(action)) {
+      return await handleGetCheckoutConfig(req, body);
+    }
+    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge"].includes(action)) {
+      return await handlePayment(req, body, userId);
+    }
+    throw new HttpError(400, "unknown_action", `Ação não reconhecida: ${action}`);
+  } catch (error) {
+    const httpError = error instanceof HttpError
+      ? error
+      : new HttpError(500, "internal_error", "Erro interno ao processar a solicitação.");
+    console.error("[payment-gateway] request failed", httpError.code, error instanceof Error ? error.message : error);
+    await logAuditEvent("payment_gateway_error", "failed", {
+      ...requestAuditContext,
+      code: httpError.code,
+      http_status: httpError.status,
+    }, error instanceof Error ? error.message : String(error));
+    return json(req, {
+      success: false,
+      error: httpError.code,
+      message: httpError.message,
+      ...(httpError.details ? { details: httpError.details } : {}),
+    }, httpError.status);
+  }
+});

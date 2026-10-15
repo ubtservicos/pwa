@@ -1,0 +1,109 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const gateway = readFileSync(
+  resolve(process.cwd(), "supabase/functions/payment-gateway/index.ts"),
+  "utf8",
+);
+const checkout = readFileSync(
+  resolve(process.cwd(), "src/components/Payment/CheckoutUniversal.tsx"),
+  "utf8",
+);
+const mototaxiCheckout = readFileSync(
+  resolve(process.cwd(), "src/pages/MototaxiTomador.tsx"),
+  "utf8",
+);
+const webhook = readFileSync(
+  resolve(process.cwd(), "supabase/functions/payment-webhook/index.ts"),
+  "utf8",
+);
+
+describe("Mercado Pago routing contract", () => {
+  it("only sends application_fee through the Seller OAuth route", () => {
+    expect(gateway).toContain('route.mode === "seller_oauth_split" ? { applicationFee: split.application_fee } : {}');
+    expect(gateway).toContain('mode: "platform_fallback"');
+    expect(gateway).toContain('provider_payout_status: input.route.mode === "platform_fallback" ? "pending" : "not_required"');
+  });
+
+  it("does not accept a Seller access token from the browser", () => {
+    expect(gateway).not.toMatch(/body\.(seller_access_token|sellerToken|provider_token)/);
+    expect(gateway).toContain('.from("marketplace_accounts")');
+  });
+
+  it("uses a stable payment attempt as MP idempotency key", () => {
+    expect(gateway).toContain("const paymentAttempt = resolvePaymentAttemptId(body)");
+    expect(gateway).toContain('"X-Idempotency-Key": input.idempotencyKey');
+    expect(checkout).toContain("payment_attempt_id: paymentAttemptId");
+  });
+
+  it("keeps the previous Vercel bundle compatible during rollout", () => {
+    expect(gateway).toContain('source: "legacy_external_reference"');
+    expect(gateway).toContain('assertUuid(body.external_reference, "external_reference")');
+  });
+
+  it("sends only the CardToken, never raw card data, to the Edge Function", () => {
+    expect(checkout).toContain("card_token: token");
+    expect(checkout).not.toMatch(/card_data|card_number|security_code/);
+    expect(checkout).toContain('mp.fields.create("cardNumber"');
+    expect(checkout).toContain('mp.fields.create("securityCode"');
+  });
+
+  it("tokenizes with the Public Key that matches the resolved payment route", () => {
+    expect(gateway).toContain('"get_checkout_config"');
+    expect(gateway).toContain("checkoutPublicKey");
+    expect(gateway).toContain("sellerAccount.token_metadata?.public_key");
+    expect(checkout).toContain('action: "get_checkout_config"');
+    expect(checkout).toContain("checkoutConfig.public_key || platformPublicKey");
+  });
+
+  it("requires an explicit Buyer Test User in sandbox", () => {
+    expect(checkout).toContain("VITE_MP_TEST_PAYER_EMAIL");
+    expect(checkout).toContain("payerIdentity.email ? { payer_email: payerIdentity.email } : {}");
+    expect(gateway).toContain("MP_TEST_PAYER_EMAIL");
+    expect(gateway).toContain("MP_TEST_SELLER_EMAILS");
+    expect(gateway).toContain("MP_TEST_SELLER_USER_IDS");
+    expect(gateway).toContain("return testBuyerEmail");
+  });
+
+  it("preserves Mercado Pago SDK errors instead of masking plain objects or arrays", () => {
+    expect(checkout).toContain("function checkoutErrorMessage");
+    expect(checkout).toContain("collectErrorParts");
+    expect(checkout).toContain('checkoutEnvironment() === "sandbox" ? "APRO" : ""');
+  });
+
+  it("routes mototaxi payment to the provider persisted on the accepted ride", () => {
+    expect(mototaxiCheckout).toContain("id: dbRide.prestador_id");
+    expect(mototaxiCheckout).toContain("providerId={prestadorInfo.id}");
+    expect(mototaxiCheckout).not.toContain('prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0"');
+  });
+
+  it("answers CORS preflight before payment processing", () => {
+    expect(gateway).toContain('req.method === "OPTIONS"');
+    expect(gateway).toContain('status: 204');
+    expect(gateway).toContain('"Access-Control-Max-Age": "86400"');
+    expect(gateway).toContain('"Access-Control-Allow-Methods": "POST, OPTIONS"');
+  });
+
+  it("fails closed when the production environment or Live token is absent", () => {
+    expect(gateway).toContain("MP_ENVIRONMENT must be explicitly set");
+    expect(gateway).toContain('if (scopedToken || environment === "production") return scopedToken');
+    expect(webhook).toContain("MP_ENVIRONMENT must be explicitly set");
+    expect(webhook).toContain('Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")?.trim()');
+    expect(webhook).toContain('if (!token) throw new Error');
+    expect(webhook).toContain('split.payment_route !== "seller_oauth_split"');
+    expect(webhook).toContain('decryptSellerToken(account.access_token_encrypted, environment)');
+  });
+
+  it("never requests a Mercado Pago test OAuth token in production", () => {
+    expect(gateway).toContain('...(environment === "sandbox" ? { test_token: true } : {})');
+    expect(gateway).not.toContain("test_token: false");
+    expect(gateway).toContain('paymentEnvironment() === "production" && parsed.protocol !== "https:"');
+  });
+
+  it("keeps asynchronous approvals server-authoritative", () => {
+    expect(webhook).toContain('.from("mototaxi_corridas")');
+    expect(webhook).toContain('status: "paid"');
+    expect(mototaxiCheckout).not.toMatch(/\.from\(["']mototaxi_corridas["']\)[\s\S]{0,300}status:\s*["']paid["']/);
+  });
+});

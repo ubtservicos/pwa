@@ -162,7 +162,7 @@ export default function JaSouFundadorModal({
 
   const getReferralUrl = () => {
     if (!founder) return "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://ubt-homologacao.vercel.app";
+    const origin = typeof window !== "undefined" ? window.location.origin : (import.meta.env.VITE_APP_URL || "");
     const refCode = founder.referral_code || generateReferralSlug(founder.nome, founder.id);
     return `${origin}/cadastro?ref=${refCode}`;
   };

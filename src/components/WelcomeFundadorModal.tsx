@@ -72,7 +72,7 @@ export default function WelcomeFundadorModal({
   };
 
   const displayName = userName ? userName.split(" ")[0] : "";
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://ubt-homologacao.vercel.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : (import.meta.env.VITE_APP_URL || "");
   const slug = referralCode || generateReferralSlug(userName, userId);
   const referralUrl = slug ? `${origin}/cadastro?ref=${slug}` : `${origin}/#cadastro-fundadores-cap`;
 

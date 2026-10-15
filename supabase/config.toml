@@ -2,7 +2,7 @@
 # Supabase Local Development Configuration
 # Generated for Supabase CLI v2.x
 # Project: UBT Serviços — ubtservicos/pwa
-# Project ID: xqujubbqcfqxkfczbidq
+# Remote project refs are intentionally not stored in Git. Always pass --project-ref.
 # =============================================================================
 
 # A string used to distinguish different Supabase projects on the same host.
@@ -213,3 +213,7 @@ enabled = true
 # Mercado Pago webhooks are server-to-server calls; JWT is not present.
 # Authentication is performed via HMAC-SHA256 signature validation inside the function.
 verify_jwt = false
+
+[functions.checkout]
+enabled = true
+verify_jwt = true

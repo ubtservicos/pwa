@@ -141,7 +141,7 @@ export default function AdminMototaxistasDashboardPage() {
       if (prestadorList.length > 0) {
         setCondutoresDestaque(prestadorList.map(p => ({
           id: p.id,
-          name: profileMap.get(p.user_id) || "Silvina Luz",
+          name: profileMap.get(p.user_id) || "Prestador não identificado",
           rides: p.plate ? `Placa ${p.plate}` : "Condutor Ativo",
           rating: "5.0 ★",
           status: p.is_online ? "Online" : "Disponível",

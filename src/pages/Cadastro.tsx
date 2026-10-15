@@ -263,7 +263,7 @@ const Cadastro = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/app/home` : "https://ubt-homologacao.vercel.app/app/home";
+      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/app/home` : `${import.meta.env.VITE_APP_URL || ""}/app/home`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
