@@ -89,7 +89,10 @@ describe("Mercado Pago routing contract", () => {
     expect(gateway).toContain("MP_ENVIRONMENT must be explicitly set");
     expect(gateway).toContain('if (scopedToken || environment === "production") return scopedToken');
     expect(webhook).toContain("MP_ENVIRONMENT must be explicitly set");
-    expect(webhook).toContain('environment === "sandbox" ? Deno.env.get("MP_ACCESS_TOKEN")?.trim() : ""');
+    expect(webhook).toContain('Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")?.trim()');
+    expect(webhook).toContain('if (!token) throw new Error');
+    expect(webhook).toContain('split.payment_route !== "seller_oauth_split"');
+    expect(webhook).toContain('decryptSellerToken(account.access_token_encrypted, environment)');
   });
 
   it("never requests a Mercado Pago test OAuth token in production", () => {

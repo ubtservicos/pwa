@@ -23,7 +23,7 @@ describe("Mototaxi provider-created Pix contract", () => {
     expect(gateway).toContain('action === "create_mototaxi_pix_charge"');
     expect(gateway).toContain('ride.prestador_id !== customerId || providerId !== customerId');
     expect(gateway).toContain("canonicalAmount");
-    expect(gateway).toContain("supabaseAdmin.auth.admin.getUserById(ride.tomador_id)");
+    expect(gateway).toMatch(/(?:supabaseAdmin|adminClient\(\))\.auth\.admin\.getUserById\(ride\.tomador_id\)/);
   });
 
   it("persists the Pix payload instead of relying on an ephemeral broadcast", () => {

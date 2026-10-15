@@ -7,7 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, x-signature, x-request-id",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, x-signature, x-request-id, x-qa-bypass-token, x-qa-force-status",
 };
 
 // ============================================================
@@ -100,26 +100,113 @@ async function logAuditEvent({
 // MP PAYMENT VERIFIER — anti-spoofing canonical fetch
 // Never trust the webhook body alone; always verify via MP API.
 // ============================================================
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function tokenEncryptionKey(): Promise<CryptoKey | null> {
+  const encoded = Deno.env.get("MP_TOKEN_ENCRYPTION_KEY")?.trim();
+  if (!encoded) return null;
+  const bytes = base64ToBytes(encoded);
+  if (bytes.length !== 32) {
+    throw new Error("MP_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes.");
+  }
+  return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["decrypt"]);
+}
+
+async function decryptSellerToken(value: string, environment: MpEnvironment): Promise<string> {
+  if (value.startsWith("v1:")) {
+    const [, ivValue, cipherValue] = value.split(":");
+    const key = await tokenEncryptionKey();
+    if (!key || !ivValue || !cipherValue) {
+      throw new Error("Seller OAuth token cannot be decrypted by payment-webhook.");
+    }
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(ivValue) },
+      key,
+      base64ToBytes(cipherValue),
+    );
+    return new TextDecoder().decode(plain);
+  }
+  if (environment === "sandbox" && value.startsWith("plain:")) return value.slice(6);
+  if (environment === "sandbox") return value;
+  throw new Error("Unencrypted Seller OAuth token is forbidden in production.");
+}
+
+function platformAccessToken(environment: MpEnvironment): string {
+  const token = environment === "production"
+    ? Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")?.trim()
+    : (
+      Deno.env.get("MP_ACCESS_TOKEN_SANDBOX") ||
+      Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
+      Deno.env.get("MP_ACCESS_TOKEN")
+    )?.trim();
+  if (!token) throw new Error(`Mercado Pago platform access token is not configured for ${environment}.`);
+  return token;
+}
+
+async function paymentVerificationCredential(
+  paymentId: string | number,
+  environment: MpEnvironment,
+): Promise<{ accessToken: string; route: "seller_oauth_split" | "platform_fallback" }> {
+  const { data: split, error: splitError } = await supabaseAdmin
+    .from("pagamentos_split")
+    .select("payment_route, marketplace_account_id, environment")
+    .eq("gateway_payment_id", String(paymentId))
+    .maybeSingle();
+
+  if (splitError) {
+    throw new Error(`Could not resolve payment route for ${paymentId}: ${splitError.message}`);
+  }
+  if (!split) {
+    throw new Error(`No pagamentos_split record found for Mercado Pago payment ${paymentId}.`);
+  }
+  if (String(split.environment) !== environment) {
+    throw new Error(`Payment ${paymentId} belongs to a different environment.`);
+  }
+
+  if (split.payment_route !== "seller_oauth_split") {
+    return { accessToken: platformAccessToken(environment), route: "platform_fallback" };
+  }
+  if (!split.marketplace_account_id) {
+    throw new Error(`Seller OAuth payment ${paymentId} has no marketplace_account_id.`);
+  }
+
+  const { data: account, error: accountError } = await supabaseAdmin
+    .from("marketplace_accounts")
+    .select("access_token_encrypted, ambiente, status, token_expiration")
+    .eq("id", split.marketplace_account_id)
+    .maybeSingle();
+  if (accountError || !account) {
+    throw new Error(`Marketplace account for payment ${paymentId} could not be loaded.`);
+  }
+  if (account.status !== "CONNECTED" || account.ambiente !== environment) {
+    throw new Error(`Marketplace account for payment ${paymentId} is not connected in ${environment}.`);
+  }
+  if (!account.access_token_encrypted) {
+    throw new Error(`Marketplace account for payment ${paymentId} has no OAuth access token.`);
+  }
+  if (account.token_expiration && new Date(account.token_expiration).getTime() <= Date.now()) {
+    throw new Error(`Marketplace OAuth token for payment ${paymentId} is expired.`);
+  }
+
+  const accessToken = (await decryptSellerToken(account.access_token_encrypted, environment)).trim();
+  if (!accessToken) throw new Error(`Marketplace OAuth token for payment ${paymentId} is empty.`);
+  return { accessToken, route: "seller_oauth_split" };
+}
+
 async function fetchMPPaymentStatus(
   paymentId: string | number
-): Promise<{ data: MercadoPagoPaymentDetail; httpStatus: number }> {
+): Promise<{ data: MercadoPagoPaymentDetail; httpStatus: number; credentialRoute: string }> {
   const environment = paymentEnvironment();
-  const scopedAccessToken = (
-    environment === "production"
-      ? Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")
-      : Deno.env.get("MP_ACCESS_TOKEN_SANDBOX") || Deno.env.get("MP_ACCESS_TOKEN_TEST")
-  )?.trim();
-  const mpAccessToken = scopedAccessToken || (
-    environment === "sandbox" ? Deno.env.get("MP_ACCESS_TOKEN")?.trim() : ""
-  );
-  if (!mpAccessToken) {
-    throw new Error(`Mercado Pago access token is not configured for ${environment}.`);
-  }
+  const credential = await paymentVerificationCredential(paymentId, environment);
+  console.log(`[payment-webhook] Verifying payment ${paymentId} through route ${credential.route}.`);
 
   const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${mpAccessToken}`,
+      "Authorization": `Bearer ${credential.accessToken}`,
       "Content-Type": "application/json",
     },
   });
@@ -131,7 +218,7 @@ async function fetchMPPaymentStatus(
   } catch (parseErr) {
     throw new Error(`Invalid JSON from MP (Status ${response.status}): ${rawText}`);
   }
-  return { data, httpStatus: response.status };
+  return { data, httpStatus: response.status, credentialRoute: credential.route };
 }
 
 // ============================================================
@@ -331,19 +418,58 @@ async function computeSha256(input: string): Promise<string> {
     .join("");
 }
 
+async function constantTimeSecretMatch(received: string, expected: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [receivedDigest, expectedDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(received)),
+    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
+  ]);
+  const receivedBytes = new Uint8Array(receivedDigest);
+  const expectedBytes = new Uint8Array(expectedDigest);
+  let mismatch = 0;
+  for (let index = 0; index < receivedBytes.length; index += 1) {
+    mismatch |= receivedBytes[index] ^ expectedBytes[index];
+  }
+  return mismatch === 0;
+}
+
 async function validateMPSignature(
   req: Request,
   rawBody: string
-): Promise<{ valid: boolean; warning?: string }> {
-  const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET");
+): Promise<{ valid: boolean; warning?: string; qaBypass?: boolean; qaForceApproved?: boolean }> {
+  const environment = paymentEnvironment();
+  const qaToken = req.headers.get("x-qa-bypass-token")?.trim() ?? "";
+  if (qaToken) {
+    if (environment !== "sandbox") {
+      return { valid: false, warning: "QA webhook bypass is forbidden outside sandbox." };
+    }
+    const expectedQaToken = Deno.env.get("MP_QA_WEBHOOK_BYPASS_TOKEN")?.trim() ?? "";
+    if (expectedQaToken.length < 32) {
+      return { valid: false, warning: "QA webhook bypass secret is not configured securely." };
+    }
+    if (!(await constantTimeSecretMatch(qaToken, expectedQaToken))) {
+      return { valid: false, warning: "Invalid QA webhook bypass token." };
+    }
+    const qaForceApproved = req.headers.get("x-qa-force-status")?.trim().toLowerCase() === "approved";
+    return {
+      valid: true,
+      warning: qaForceApproved
+        ? "Sandbox QA bypass accepted with forced approved status."
+        : "Sandbox QA signature bypass accepted without status override.",
+      qaBypass: true,
+      qaForceApproved,
+    };
+  }
+
+  const webhookSecret = Deno.env.get("MP_WEBHOOK_SECRET")?.trim();
   const xSignature   = req.headers.get("x-signature");
   const xRequestId   = req.headers.get("x-request-id");
 
   if (!webhookSecret) {
-    if (paymentEnvironment() === "production") {
-      return { valid: false, warning: "MP_WEBHOOK_SECRET is required in production." };
-    }
-    return { valid: true, warning: "MP_WEBHOOK_SECRET not configured — sandbox-only signature bypass." };
+    return {
+      valid: false,
+      warning: `MP_WEBHOOK_SECRET is required in ${environment}; use the explicit QA token for sandbox simulations.`,
+    };
   }
   if (!xSignature || !xRequestId) {
     return { valid: false, warning: "Missing x-signature or x-request-id header from Mercado Pago." };
@@ -411,7 +537,12 @@ serve(async (req: Request): Promise<Response> => {
     const rawBody = await req.text();
 
     // --- [1] Signature Validation ---
-    const { valid: sigValid, warning: sigWarning } = await validateMPSignature(req, rawBody);
+    const {
+      valid: sigValid,
+      warning: sigWarning,
+      qaBypass = false,
+      qaForceApproved = false,
+    } = await validateMPSignature(req, rawBody);
     if (sigWarning) console.warn("[payment-webhook] Signature warning:", sigWarning);
 
     if (!sigValid) {
@@ -445,6 +576,20 @@ serve(async (req: Request): Promise<Response> => {
 
     const { type, action, data } = webhookBody;
 
+    if (qaBypass) {
+      await logAuditEvent({
+        transactionType: "webhook_qa_bypass",
+        status: "security_override",
+        payload: {
+          environment: paymentEnvironment(),
+          payment_id: data?.id ? String(data.id) : null,
+          force_approved: qaForceApproved,
+          timestamp: new Date().toISOString(),
+        },
+        errorDetails: "Sandbox-only QA bypass used; Mercado Pago payment existence is still verified server-side.",
+      });
+    }
+
     // --- [3] Log raw receipt for full lifecycle traceability ---
     await logAuditEvent({
       transactionType: "webhook_received",
@@ -476,7 +621,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // --- [6] Anti-spoofing: verify payment state directly with MP API ---
-    const { data: mpPayment, httpStatus: mpStatus } = await fetchMPPaymentStatus(paymentId);
+    const { data: mpPayment, httpStatus: mpStatus, credentialRoute } = await fetchMPPaymentStatus(paymentId);
 
     if (mpStatus >= 400 || mpPayment.error) {
       const errMsg = `MP verification failed for payment ${paymentId}: [${mpPayment.error ?? mpStatus}] ${mpPayment.message ?? ""}`;
@@ -499,7 +644,23 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error(`Mercado Pago payment environment mismatch for payment ${paymentId}.`);
     }
 
-    const verifiedStatus = mpPayment.status ?? "unknown";
+    const actualStatus = mpPayment.status ?? "unknown";
+    if (
+      qaForceApproved &&
+      !["pending", "in_process", "approved"].includes(actualStatus)
+    ) {
+      throw new Error(
+        `QA approval refused for Mercado Pago payment ${paymentId} with terminal status ${actualStatus}.`,
+      );
+    }
+    const effectivePayment: MercadoPagoPaymentDetail = qaForceApproved
+      ? {
+        ...mpPayment,
+        status: "approved",
+        date_approved: mpPayment.date_approved ?? new Date().toISOString(),
+      }
+      : mpPayment;
+    const verifiedStatus = effectivePayment.status ?? "unknown";
 
     // --- [7] Persist verified payment status in audit log ---
     await logAuditEvent({
@@ -507,11 +668,14 @@ serve(async (req: Request): Promise<Response> => {
       status: verifiedStatus,
       payload: {
         payment_id: mpPayment.id,
-        status: mpPayment.status,
+        status: verifiedStatus,
+        actual_mp_status: actualStatus,
+        qa_simulated: qaForceApproved,
         status_detail: mpPayment.status_detail,
         transaction_amount: mpPayment.transaction_amount,
         description: mpPayment.description,
         payment_method_id: mpPayment.payment_method_id,
+        credential_route: credentialRoute,
         external_reference: mpPayment.external_reference,
         date_approved: mpPayment.date_approved,
         date_last_updated: mpPayment.date_last_updated,
@@ -521,7 +685,7 @@ serve(async (req: Request): Promise<Response> => {
 
     // --- [8] Orchestration: update operational DB if payment is approved ---
     if (verifiedStatus === "approved") {
-      await orchestrateApprovedPayment(mpPayment);
+      await orchestrateApprovedPayment(effectivePayment);
     } else {
       console.log(`[payment-webhook] Payment ${paymentId} status=${verifiedStatus} — no DB orchestration needed.`);
     }
@@ -536,6 +700,8 @@ serve(async (req: Request): Promise<Response> => {
         success: true,
         payment_id: mpPayment.id,
         verified_status: verifiedStatus,
+        actual_mp_status: actualStatus,
+        qa_simulated: qaForceApproved,
         verified_status_detail: mpPayment.status_detail,
         external_reference: mpPayment.external_reference ?? null,
       }),
