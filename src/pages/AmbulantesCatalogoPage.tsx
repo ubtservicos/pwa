@@ -321,15 +321,15 @@ export default function AmbulantesCatalogoPage() {
   }, [selectedCategoria]);
 
   return (
-    <div className="min-h-screen pb-28 text-white font-sans" style={{ background: "#0B1B3E" }}>
+    <div className="min-h-screen pb-28 text-white font-sans bg-black">
       {/* Toast Feedback */}
       {feedbackMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-200">
           <div
             className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold shadow-2xl backdrop-blur-md border ${
               feedbackMsg.type === "success"
-                ? "bg-emerald-950/90 text-emerald-300 border-emerald-500/30"
-                : "bg-red-950/90 text-red-300 border-red-500/30"
+                ? "bg-zinc-900 text-[#00FF66] border-[#00FF66]/40 shadow-[#00FF66]/10"
+                : "bg-zinc-900 text-red-400 border-red-500/40"
             }`}
           >
             {feedbackMsg.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
@@ -339,7 +339,7 @@ export default function AmbulantesCatalogoPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* NÍVEL 1: LISTA DAS 9 CATEGORIAS MACRO (ORDEM ALFABÉTICA)                 */}
+      {/* NÍVEL 1: LISTA DAS 9 CATEGORIAS MACRO (ORDEM ALFABÉTICA - GAMER/BETS)    */}
       {/* ========================================================================= */}
       {!selectedCategoria ? (
         <div className="max-w-2xl mx-auto px-4 pt-6">
@@ -348,21 +348,21 @@ export default function AmbulantesCatalogoPage() {
             <button
               type="button"
               onClick={() => navigate("/app/prestador/ambulantes/online")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300 hover:text-white bg-white/5 border border-white/10 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 transition cursor-pointer"
             >
               <ArrowLeft size={14} />
               Voltar ao Radar
             </button>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66] animate-pulse" />
-              <span className="text-xs font-semibold text-[#00FF66] uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66] shadow-[0_0_8px_#00FF66] animate-pulse" />
+              <span className="text-xs font-black text-[#00FF66] uppercase tracking-wider">
                 Gestão Diária
               </span>
             </div>
           </div>
 
           <div className="mb-6">
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-1.5 flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-white mb-1.5 flex items-center gap-2">
               <ShoppingBag className="text-[#00FF66]" size={24} />
               Meu Cardápio de Praia
             </h1>
@@ -371,29 +371,24 @@ export default function AmbulantesCatalogoPage() {
             </p>
           </div>
 
-          {/* Card Resumo do Carrinho */}
+          {/* Card Resumo do Carrinho - Gamer / Bets Style */}
           <div
-            className="p-4 rounded-2xl mb-6 relative overflow-hidden"
-            style={{
-              background: "linear-gradient(135deg, rgba(16,32,70,0.9) 0%, rgba(11,27,62,0.95) 100%)",
-              border: "1px solid rgba(0,255,102,0.25)",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.3)"
-            }}
+            className="p-5 rounded-2xl mb-6 relative overflow-hidden bg-zinc-900 border border-[#00FF66]/30 shadow-[0_4px_24px_rgba(0,255,102,0.08)]"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase font-bold text-zinc-400 tracking-wider mb-1">
+                <p className="text-xs uppercase font-extrabold text-zinc-400 tracking-wider mb-1">
                   Estoque Total Hoje
                 </p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold text-white">
+                  <span className="text-3xl font-black text-white">
                     {totalItensCarrinho}
                   </span>
                   <span className="text-sm text-zinc-400">
                     {totalItensCarrinho === 1 ? "item carregado" : "itens carregados"}
                   </span>
                 </div>
-                <p className="text-xs text-[#00FF66] mt-1 font-medium">
+                <p className="text-xs text-[#00FF66] mt-1 font-bold">
                   {categoriasComEstoque.size} de {CATEGORIAS_MACRO.length} categorias ativas
                 </p>
               </div>
@@ -401,7 +396,7 @@ export default function AmbulantesCatalogoPage() {
               <button
                 type="button"
                 onClick={() => navigate("/app/prestador/ambulantes/online")}
-                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-[#00FF66] text-[#0B1B3E] hover:bg-[#00FF66]/90 transition shadow-lg shadow-[#00FF66]/20 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl font-black text-xs bg-[#00FF66] text-black hover:bg-[#00FF66]/90 transition shadow-lg shadow-[#00FF66]/25 cursor-pointer uppercase tracking-wider"
               >
                 Ver no Radar
               </button>
@@ -411,10 +406,10 @@ export default function AmbulantesCatalogoPage() {
           {/* Grid das 9 Categorias Macro */}
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1 mb-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+              <span className="text-xs font-black uppercase tracking-wider text-zinc-400">
                 Categorias Oficiais ({CATEGORIAS_MACRO.length})
               </span>
-              <span className="text-xs text-zinc-500">Ordem Alfabética</span>
+              <span className="text-xs text-zinc-500 font-mono">Ordem Alfabética</span>
             </div>
 
             {CATEGORIAS_MACRO.map((cat, idx) => {
@@ -429,16 +424,16 @@ export default function AmbulantesCatalogoPage() {
                   }}
                   className={`group relative p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center gap-4 ${
                     hasEstoque
-                      ? "bg-[#102046] border-[#00FF66]/40 shadow-md shadow-[#00FF66]/5"
-                      : "bg-[#102046]/60 border-white/10 hover:border-white/20 hover:bg-[#102046]"
+                      ? "bg-zinc-900 border-[#00FF66]/50 shadow-[0_0_15px_rgba(0,255,102,0.08)]"
+                      : "bg-zinc-900/70 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
                   }`}
                 >
                   {/* Ícone Grande */}
                   <div
                     className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 transition-transform group-hover:scale-105 ${
                       hasEstoque
-                        ? "bg-[#00FF66]/15 border border-[#00FF66]/30"
-                        : "bg-white/5 border border-white/10"
+                        ? "bg-[#00FF66]/15 border border-[#00FF66]/40 text-[#00FF66]"
+                        : "bg-zinc-950 border border-zinc-800"
                     }`}
                   >
                     {cat.emoji}
@@ -447,10 +442,10 @@ export default function AmbulantesCatalogoPage() {
                   {/* Informações da Categoria */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-mono text-zinc-500 font-semibold">
+                      <span className="text-xs font-mono text-zinc-500 font-bold">
                         {String(idx + 1).padStart(2, "0")}.
                       </span>
-                      <h2 className="text-base font-bold text-white truncate group-hover:text-[#00FF66] transition-colors">
+                      <h2 className="text-base font-black text-white truncate group-hover:text-[#00FF66] transition-colors">
                         {cat.nome}
                       </h2>
                     </div>
@@ -461,12 +456,12 @@ export default function AmbulantesCatalogoPage() {
                     {/* Badge de Quantidade no Carrinho Hoje */}
                     <div>
                       {hasEstoque ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
                           <Check size={12} strokeWidth={3} />
                           {qtdHoje} {qtdHoje === 1 ? "unidade hoje" : "unidades hoje"}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] text-zinc-400 bg-white/5 border border-white/5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] text-zinc-500 bg-zinc-950 border border-zinc-800 font-mono">
                           0 no carrinho
                         </span>
                       )}
@@ -474,7 +469,7 @@ export default function AmbulantesCatalogoPage() {
                   </div>
 
                   {/* Seta de Drill-down */}
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-white group-hover:bg-[#00FF66] group-hover:text-[#0B1B3E] transition-all flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-black group-hover:bg-[#00FF66] group-hover:border-[#00FF66] transition-all flex-shrink-0">
                     <ChevronRight size={18} />
                   </div>
                 </div>
@@ -484,7 +479,7 @@ export default function AmbulantesCatalogoPage() {
         </div>
       ) : (
         /* ========================================================================= */
-        /* NÍVEL 2: PRODUTOS E GESTÃO DE ESTOQUE DIÁRIO DA CATEGORIA SELECIONADA     */
+        /* NÍVEL 2: PRODUTOS E GESTÃO DE ESTOQUE DIÁRIO (GAMER / BETS STYLE)        */
         /* ========================================================================= */
         <div className="max-w-2xl mx-auto px-4 pt-6">
           {/* Header Superior com Breadcrumb e Voltar */}
@@ -494,23 +489,23 @@ export default function AmbulantesCatalogoPage() {
               onClick={() => {
                 navigate("/app/prestador/ambulantes/cardapio");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300 hover:text-white bg-white/5 border border-white/10 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 transition cursor-pointer"
             >
               <ArrowLeft size={14} />
               Categorias Macro
             </button>
 
-            <span className="text-xs font-semibold text-zinc-400">
+            <span className="text-xs font-bold text-zinc-400">
               {produtosExibidos.length} {produtosExibidos.length === 1 ? "produto" : "produtos"}
             </span>
           </div>
 
           {/* Título da Categoria Macro Selecionada */}
-          <div className="p-4 rounded-2xl bg-[#102046] border border-white/10 mb-5">
+          <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 mb-5">
             <div className="flex items-center gap-3">
               <span className="text-3xl">{macroAtiva?.emoji || "📦"}</span>
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl font-bold text-white truncate">
+                <h1 className="text-xl font-black text-white truncate">
                   {selectedCategoria}
                 </h1>
                 <p className="text-xs text-zinc-400 line-clamp-1">
@@ -528,7 +523,7 @@ export default function AmbulantesCatalogoPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`Buscar produto ou sabor em ${selectedCategoria}...`}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#102046] border border-white/10 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00FF66] transition"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00FF66] transition"
             />
             {searchQuery && (
               <button
@@ -541,7 +536,7 @@ export default function AmbulantesCatalogoPage() {
             )}
           </div>
 
-          {/* Chips de Subcategoria (se houver mais de uma) */}
+          {/* Chips de Subcategoria */}
           {subcategoriasDisponiveis.length > 2 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 scrollbar-none">
               {subcategoriasDisponiveis.map((sub) => {
@@ -551,10 +546,10 @@ export default function AmbulantesCatalogoPage() {
                     key={sub}
                     type="button"
                     onClick={() => setSelectedSubcategoria(sub)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition cursor-pointer ${
+                    className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                       isSelected
-                        ? "bg-[#00FF66] text-[#0B1B3E] font-bold shadow-md shadow-[#00FF66]/20"
-                        : "bg-[#102046] text-zinc-300 border border-white/10 hover:border-white/20"
+                        ? "bg-[#00FF66] text-black shadow-md shadow-[#00FF66]/20"
+                        : "bg-zinc-900 text-zinc-300 border border-zinc-800 hover:border-zinc-700"
                     }`}
                   >
                     {sub}
@@ -566,8 +561,8 @@ export default function AmbulantesCatalogoPage() {
 
           {/* Lista de Produtos da Categoria */}
           {produtosExibidos.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-[#102046]/40 border border-dashed border-white/10 text-center my-6">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3 text-2xl">
+            <div className="p-8 rounded-2xl bg-zinc-900/50 border border-dashed border-zinc-800 text-center my-6">
+              <div className="w-12 h-12 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center mx-auto mb-3 text-2xl">
                 {macroAtiva?.emoji || "🔍"}
               </div>
               <h3 className="text-base font-bold text-white mb-1">
@@ -585,7 +580,7 @@ export default function AmbulantesCatalogoPage() {
                     setSearchQuery("");
                     setSelectedSubcategoria("Todas");
                   }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition cursor-pointer"
                 >
                   Limpar Filtros
                 </button>
@@ -613,13 +608,13 @@ export default function AmbulantesCatalogoPage() {
                     key={prod.id}
                     className={`p-4 rounded-2xl border transition-all ${
                       hasEstoque
-                        ? "bg-[#102046] border-[#00FF66]/40 shadow-sm"
-                        : "bg-[#102046]/60 border-white/10"
+                        ? "bg-zinc-900 border-[#00FF66]/50 shadow-[0_0_12px_rgba(0,255,102,0.06)]"
+                        : "bg-zinc-900/60 border-zinc-800"
                     }`}
                   >
                     <div className="flex gap-3.5 items-start">
                       {/* Foto / Thumbnail do Produto */}
-                      <div className="w-16 h-16 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                      <div className="w-16 h-16 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                         {imgResolved && !isBroken ? (
                           <img
                             src={imgResolved}
@@ -631,7 +626,7 @@ export default function AmbulantesCatalogoPage() {
                           <span className="text-2xl">{macroAtiva?.emoji || "📦"}</span>
                         )}
                         {isSaving && (
-                          <div className="absolute inset-0 bg-[#0B1B3E]/80 backdrop-blur-xs flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center">
                             <span className="w-4 h-4 border-2 border-[#00FF66] border-t-transparent rounded-full animate-spin" />
                           </div>
                         )}
@@ -640,22 +635,22 @@ export default function AmbulantesCatalogoPage() {
                       {/* Informações Textuais */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                          {/* Marca Parceira (se houver) */}
+                          {/* Marca Parceira */}
                           {prod.fornecedores_padrao?.nome_marca && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/20">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30 uppercase tracking-wider">
                               {prod.fornecedores_padrao.nome_marca}
                             </span>
                           )}
 
-                          {/* Subcategoria (se houver) */}
+                          {/* Subcategoria */}
                           {prod.subcategoria && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/5 text-zinc-400 border border-white/5">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-950 text-zinc-400 border border-zinc-800">
                               {prod.subcategoria}
                             </span>
                           )}
                         </div>
 
-                        <h3 className="text-sm font-bold text-white truncate mb-0.5">
+                        <h3 className="text-sm font-black text-white truncate mb-0.5">
                           {prod.nome_produto}
                         </h3>
 
@@ -666,10 +661,10 @@ export default function AmbulantesCatalogoPage() {
                         )}
 
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-extrabold text-[#00FF66]">
+                          <span className="text-xs font-black text-[#00FF66]">
                             R$ {(prod.preco_sugerido || 0).toFixed(2)}
                           </span>
-                          <span className="text-[11px] text-zinc-400">
+                          <span className="text-[11px] text-zinc-500">
                             (preço sugerido)
                           </span>
                         </div>
@@ -677,7 +672,7 @@ export default function AmbulantesCatalogoPage() {
                     </div>
 
                     {/* Controles de Estoque Diário e Disponibilidade */}
-                    <div className="mt-3.5 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+                    <div className="mt-3.5 pt-3 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
                       {/* Toggle Disponível no App */}
                       <div className="flex items-center gap-2">
                         <Switch
@@ -700,17 +695,17 @@ export default function AmbulantesCatalogoPage() {
                             updateItemEstoque(prod, Math.max(0, qtdAtual - 1), isDisponivel);
                           }}
                           disabled={qtdAtual <= 0}
-                          className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white transition cursor-pointer"
+                          className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white transition cursor-pointer"
                         >
                           <Minus size={14} />
                         </button>
 
                         {/* Visor Numérico de Quantidade */}
                         <div
-                          className={`min-w-10 h-8 px-2 rounded-lg flex items-center justify-center font-mono font-bold text-sm border ${
+                          className={`min-w-10 h-8 px-2 rounded-lg flex items-center justify-center font-mono font-black text-sm border ${
                             hasEstoque
                               ? "bg-[#00FF66]/15 text-[#00FF66] border-[#00FF66]/40"
-                              : "bg-white/5 text-zinc-400 border-white/10"
+                              : "bg-zinc-950 text-zinc-500 border-zinc-800"
                           }`}
                         >
                           {qtdAtual}
@@ -722,9 +717,9 @@ export default function AmbulantesCatalogoPage() {
                           onClick={() => {
                             updateItemEstoque(prod, qtdAtual + 1, isDisponivel);
                           }}
-                          className="w-8 h-8 rounded-lg bg-[#00FF66] text-[#0B1B3E] hover:bg-[#00FF66]/90 flex items-center justify-center font-bold transition cursor-pointer"
+                          className="w-8 h-8 rounded-lg bg-[#00FF66] text-black hover:bg-[#00FF66]/90 flex items-center justify-center font-black transition cursor-pointer shadow-sm shadow-[#00FF66]/30"
                         >
-                          <Plus size={14} strokeWidth={2.5} />
+                          <Plus size={14} strokeWidth={3} />
                         </button>
 
                         {/* Atalhos Rápidos de Lote (+5, +10) */}
@@ -733,7 +728,7 @@ export default function AmbulantesCatalogoPage() {
                           onClick={() => {
                             updateItemEstoque(prod, qtdAtual + 5, isDisponivel);
                           }}
-                          className="px-2 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-bold text-zinc-300 border border-white/10 transition cursor-pointer"
+                          className="px-2 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-black text-zinc-200 border border-zinc-700 transition cursor-pointer"
                           title="Adicionar 5 unidades"
                         >
                           +5
@@ -744,7 +739,7 @@ export default function AmbulantesCatalogoPage() {
                           onClick={() => {
                             updateItemEstoque(prod, qtdAtual + 10, isDisponivel);
                           }}
-                          className="px-2 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-bold text-zinc-300 border border-white/10 transition cursor-pointer"
+                          className="px-2 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-black text-zinc-200 border border-zinc-700 transition cursor-pointer"
                           title="Adicionar 10 unidades"
                         >
                           +10
@@ -774,13 +769,13 @@ export default function AmbulantesCatalogoPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* BARRA FIXA DE AÇÃO NO RODAPÉ                                             */}
+      {/* BARRA FIXA DE AÇÃO NO RODAPÉ - GAMER / BETS STYLE                        */}
       {/* ========================================================================= */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0B1B3E]/95 backdrop-blur-md border-t border-white/10 p-3.5">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800 p-3.5">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-zinc-400 font-medium">Carrinho hoje</p>
-            <p className="text-sm font-extrabold text-white">
+            <p className="text-sm font-black text-white">
               {totalItensCarrinho} {totalItensCarrinho === 1 ? "unidade" : "unidades"}
             </p>
           </div>
@@ -788,9 +783,9 @@ export default function AmbulantesCatalogoPage() {
           <button
             type="button"
             onClick={() => navigate("/app/prestador/ambulantes/online")}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-[#00FF66] text-[#0B1B3E] hover:bg-[#00FF66]/90 transition shadow-lg shadow-[#00FF66]/20 cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs bg-[#00FF66] text-black hover:bg-[#00FF66]/90 transition shadow-lg shadow-[#00FF66]/25 cursor-pointer uppercase tracking-wider"
           >
-            <Check size={16} strokeWidth={2.5} />
+            <Check size={16} strokeWidth={3} />
             Concluir e Voltar ao Radar
           </button>
         </div>

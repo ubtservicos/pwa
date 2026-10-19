@@ -113,8 +113,8 @@ const ConfigServicosPage = () => {
         <SettingsGroup>
           <SettingsRow
             icon={ShoppingBag}
-            label="Meus Documentos (Praia)"
-            subtitle="Alvará de ambulante, identificação e documentos"
+            label="Ambulantes"
+            subtitle="Documentação e alvará de praia"
             onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
           />
           <SettingsRow

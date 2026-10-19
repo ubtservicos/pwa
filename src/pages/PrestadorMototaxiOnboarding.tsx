@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, User as UserIcon, Hash, Upload, CheckCircle2, Bike, Package,
   User, Info, Loader2, AlertCircle, Clock, FileText, ExternalLink, ShieldCheck,
+  ChevronRight,
 } from "lucide-react";
 import FormFieldLight from "@/components/prestador/FormFieldLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
@@ -77,8 +78,8 @@ const UploadArea = ({
         onClick={() => inputRef.current?.click()}
         className="w-full rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-98"
         style={{
-          border: `2px dashed ${hasImage ? "#0DB87E" : "var(--prestador-border)"}`,
-          background: hasImage ? "rgba(13,184,126,0.05)" : "var(--prestador-card)",
+          border: `2px dashed ${hasImage ? "#00FF66" : "#27272a"}`,
+          background: hasImage ? "rgba(0,255,102,0.06)" : "#18181b",
           padding: "24px 16px",
         }}
       >
@@ -87,17 +88,17 @@ const UploadArea = ({
             <img
               src={preview!}
               alt={label}
-              className="rounded-lg border border-[#0DB87E]/30 shrink-0"
+              className="rounded-lg border border-[#00FF66]/30 shrink-0"
               style={{ width: 60, height: 60, objectFit: "cover" }}
             />
             <div className="text-left flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <CheckCircle2 size={16} color="#0DB87E" className="shrink-0" />
+                <CheckCircle2 size={16} color="#00FF66" className="shrink-0" />
                 <span className="font-sans text-[13px] font-semibold text-white truncate block">
                   {file ? file.name : `${label}`}
                 </span>
               </div>
-              <span className="font-sans text-[11px] block mt-0.5" style={{ color: "#0DB87E" }}>
+              <span className="font-sans text-[11px] block mt-0.5 text-[#00FF66]">
                 {file ? "Novo arquivo selecionado" : "Documento enviado (Clique para alterar)"}
               </span>
             </div>
@@ -284,44 +285,79 @@ const PrestadorMototaxiOnboarding = () => {
     const overall = existingKyc?.kyc_status;
     if (!url) {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/60">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono text-zinc-500 bg-zinc-950 border border-zinc-800">
           Não enviado
         </span>
       );
     }
     if (overall === "approved") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30">
-          Aprovado ✓
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
+          <CheckCircle2 size={12} strokeWidth={3} /> Aprovado
         </span>
       );
     }
     if (overall === "rejected") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E84040]/20 text-[#E84040] border border-[#E84040]/30">
-          Rejeitado ✕
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-red-500/15 text-red-400 border border-red-500/30">
+          <AlertCircle size={12} strokeWidth={3} /> Rejeitado
         </span>
       );
     }
     return (
-      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5A623]/20 text-[#F5A623] border border-[#F5A623]/30">
-        Em Análise ⏳
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+        <Clock size={12} strokeWidth={3} /> Em Análise
       </span>
     );
   };
 
   const docsList = [
-    { title: "CNH — Frente", url: existingKyc?.cnh_frente_url, tabTarget: "Docs Condutor" },
-    { title: "CNH — Verso", url: existingKyc?.cnh_verso_url, tabTarget: "Docs Condutor" },
-    { title: "Selfie com Documento", url: existingKyc?.selfie_url, tabTarget: "Docs Condutor" },
-    { title: "CRLV da Moto", url: existingKyc?.crlv_url, tabTarget: "Docs Veículo" },
-    { title: "Foto da Moto (Placa)", url: existingKyc?.moto_photo_url, tabTarget: "Docs Veículo" },
+    {
+      num: "01",
+      title: "CNH — Frente",
+      desc: "Foto frontal da Carteira Nacional de Habilitação (Cat. A) legível.",
+      emoji: "🪪",
+      url: existingKyc?.cnh_frente_url,
+      tabTarget: "Docs Condutor"
+    },
+    {
+      num: "02",
+      title: "CNH — Verso",
+      desc: "Foto do verso com QR Code e dados complementares.",
+      emoji: "🪪",
+      url: existingKyc?.cnh_verso_url,
+      tabTarget: "Docs Condutor"
+    },
+    {
+      num: "03",
+      title: "Selfie com Documento",
+      desc: "Foto segurando a CNH ao lado do rosto para validação biométrica.",
+      emoji: "🤳",
+      url: existingKyc?.selfie_url,
+      tabTarget: "Docs Condutor"
+    },
+    {
+      num: "04",
+      title: "CRLV da Moto",
+      desc: "Documento oficial do veículo em dia (exercício vigente).",
+      emoji: "🛵",
+      url: existingKyc?.crlv_url,
+      tabTarget: "Docs Veículo"
+    },
+    {
+      num: "05",
+      title: "Foto da Moto (Placa)",
+      desc: "Foto traseira da motocicleta com a placa nítida e visível.",
+      emoji: "📸",
+      url: existingKyc?.moto_photo_url,
+      tabTarget: "Docs Veículo"
+    },
   ];
 
   return (
     <div
-      className="min-h-[100svh] overflow-y-auto text-zinc-100"
-      style={{ background: "var(--prestador-bg)", padding: "24px", paddingBottom: "180px" }}
+      className="min-h-[100svh] overflow-y-auto text-zinc-100 bg-black font-sans"
+      style={{ padding: "24px", paddingBottom: "180px" }}
     >
       <TopBar />
 
@@ -334,12 +370,12 @@ const PrestadorMototaxiOnboarding = () => {
             style={{
               padding: "10px 18px",
               borderRadius: 999,
-              background: activeTab === t ? "#0DB87E" : "var(--prestador-card)",
-              color: activeTab === t ? "#09090B" : "#A1A1AA",
+              background: activeTab === t ? "#00FF66" : "#18181b",
+              color: activeTab === t ? "#000000" : "#A1A1AA",
               fontFamily: "DM Sans",
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: 13,
-              border: "none",
+              border: activeTab === t ? "none" : "1px solid #27272a",
               cursor: "pointer",
               whiteSpace: "nowrap",
             }}
@@ -354,90 +390,105 @@ const PrestadorMototaxiOnboarding = () => {
           <div className="space-y-4">
             {/* Status Card Geral */}
             <div
-              className="rounded-2xl p-5"
-              style={{
-                background: "var(--prestador-card)",
-                border: "1px solid var(--prestador-border)",
-              }}
+              className="rounded-2xl p-5 bg-zinc-900 border border-zinc-800 shadow-[0_4px_24px_rgba(0,0,0,0.4)]"
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="font-sans text-[12px] font-semibold text-white/60 uppercase tracking-wider">
+                <span className="font-sans text-[12px] font-bold text-zinc-400 uppercase tracking-wider">
                   Status Geral do Cadastro
                 </span>
                 {existingKyc?.kyc_status === "approved" ? (
-                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/40 flex items-center gap-1.5">
+                  <span className="px-3 py-1 rounded-full text-[12px] font-black bg-[#00FF66]/20 text-[#00FF66] border border-[#00FF66]/40 flex items-center gap-1.5">
                     <ShieldCheck size={14} /> Cadastro Aprovado
                   </span>
                 ) : existingKyc?.kyc_status === "rejected" ? (
-                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#E84040]/20 text-[#E84040] border border-[#E84040]/40 flex items-center gap-1.5">
+                  <span className="px-3 py-1 rounded-full text-[12px] font-black bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1.5">
                     <AlertCircle size={14} /> Documentação Rejeitada
                   </span>
                 ) : (
-                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#F5A623]/20 text-[#F5A623] border border-[#F5A623]/40 flex items-center gap-1.5">
+                  <span className="px-3 py-1 rounded-full text-[12px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1.5">
                     <Clock size={14} /> Em Análise pela Equipe
                   </span>
                 )}
               </div>
 
-              <h2 className="font-display text-[18px] font-bold text-white">
+              <h2 className="text-[18px] font-black text-white">
                 Documentos e Regras de Mototáxi
               </h2>
-              <p className="font-sans text-[13px] text-white/70 mt-1">
+              <p className="text-[13px] text-zinc-400 mt-1">
                 {existingKyc?.kyc_status === "approved"
-                  ? "Sua documentação está regularizada e você está habilitado para receber chamados."
+                  ? "Sua documentação está regularizada e você está habilitado para receber chamados de corrida e entrega."
                   : "Seus documentos estão em processo de validação pela equipe de operações da UBT."}
               </p>
             </div>
 
-            {/* Lista Detalhada de Documentos */}
-            <h3 className="font-display text-[15px] font-bold text-white mt-6 mb-3">
-              Documentos Enviados
-            </h3>
-            <div className="space-y-2.5">
-              {docsList.map((doc, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl p-3.5 flex items-center justify-between gap-3"
-                  style={{
-                    background: "var(--prestador-card)",
-                    border: "1px solid var(--prestador-border)",
-                  }}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {doc.url ? (
-                      <img
-                        src={doc.url}
-                        alt={doc.title}
-                        className="w-12 h-12 rounded-lg object-cover border border-[#0DB87E]/30 shrink-0"
-                      />
-                    ) : (
-                      <div
-                        className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: "rgba(255,255,255,0.05)" }}
-                      >
-                        <FileText size={20} color="#9399AD" />
+            {/* Lista de Documentos em Cards Modernos (Design System Unificado) */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between px-1 mb-1">
+                <span className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                  Documentação Obrigatória ({docsList.length})
+                </span>
+                <span className="text-xs text-zinc-500 font-mono">Processo KYC</span>
+              </div>
+
+              {docsList.map((doc) => {
+                const hasDoc = !!doc.url;
+
+                return (
+                  <div
+                    key={doc.title}
+                    onClick={() => setActiveTab(doc.tabTarget)}
+                    className={`group relative p-4 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center gap-4 ${
+                      hasDoc
+                        ? "bg-zinc-900 border-[#00FF66]/40 shadow-[0_0_15px_rgba(0,255,102,0.06)]"
+                        : "bg-zinc-900/70 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
+                    }`}
+                  >
+                    {/* Ícone Grande / Preview em destaque */}
+                    <div
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 transition-transform group-hover:scale-105 overflow-hidden relative ${
+                        hasDoc
+                          ? "bg-[#00FF66]/15 border border-[#00FF66]/40 text-[#00FF66]"
+                          : "bg-zinc-950 border border-zinc-800 text-zinc-400"
+                      }`}
+                    >
+                      {doc.url ? (
+                        <img
+                          src={doc.url}
+                          alt={doc.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{doc.emoji}</span>
+                      )}
+                    </div>
+
+                    {/* Informações do Documento */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-mono text-zinc-500 font-bold">
+                          {doc.num}.
+                        </span>
+                        <h2 className="text-base font-black text-white truncate group-hover:text-[#00FF66] transition-colors">
+                          {doc.title}
+                        </h2>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-sans text-[14px] font-semibold text-white truncate">
-                        {doc.title}
+                      <p className="text-xs text-zinc-400 line-clamp-1 mb-2">
+                        {doc.desc}
                       </p>
-                      <div className="mt-1 flex items-center gap-2">
+
+                      {/* Badge de Status */}
+                      <div>
                         {getDocStatusBadge(doc.url)}
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab(doc.tabTarget)}
-                    className="px-3 py-1.5 rounded-lg font-sans text-[12px] font-semibold text-white/80 shrink-0 transition-colors"
-                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
-                  >
-                    {doc.url ? "Alterar" : "Enviar"}
-                  </button>
-                </div>
-              ))}
+                    {/* Seta / Ação de Drill-down */}
+                    <div className="w-8 h-8 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-black group-hover:bg-[#00FF66] group-hover:border-[#00FF66] transition-all flex-shrink-0">
+                      <ChevronRight size={18} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="mt-6">

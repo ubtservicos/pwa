@@ -164,14 +164,14 @@ const ConfigIndexPage = () => {
               />
               <SettingsRow
                 icon={Bike}
-                label="Mototaxi"
-                subtitle="Corrida e KYC"
-                onClick={() => navigate("/app/config/servicos")}
+                label="Mototáxi"
+                subtitle="Documentos e status KYC"
+                onClick={() => navigate("/app/prestador/mototaxi/config")}
               />
               <SettingsRow
                 icon={ShoppingBag}
-                label="Meus Documentos (Praia)"
-                subtitle="Alvará de ambulante, identificação e dados"
+                label="Ambulantes"
+                subtitle="Documentação e alvará de praia"
                 onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
               />
               <SettingsRow

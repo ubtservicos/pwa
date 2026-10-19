@@ -556,21 +556,6 @@ const AmbulantesOnlinePage = () => {
           <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>Hoje: R$ 0,00</span>
           <span className="font-sans" style={{ fontSize: 12, color: "#A1A1AA" }}>0 pedidos</span>
         </div>
-
-        {isOnline && (
-          <button
-            type="button"
-            onClick={goOffline}
-            className="w-full font-sans"
-            style={{
-              marginTop: 12, minHeight: 44, borderRadius: 999,
-              border: "1px solid var(--prestador-border)", background: "rgba(255,255,255,0.05)",
-              color: "#A1A1AA", fontSize: 14, cursor: "pointer",
-            }}
-          >
-            Ir offline
-          </button>
-        )}
       </div>
 
       {/* Modal de novo pedido */}
