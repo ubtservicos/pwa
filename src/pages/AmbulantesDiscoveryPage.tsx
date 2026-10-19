@@ -1,465 +1,282 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, ShoppingBag, Star, X } from "lucide-react";
-import AmbulantesMap from "@/components/ambulantes/AmbulantesMap";
-import { MOCK_SESSIONS, MOCK_FALLBACK_SESSIONS, type AmbulanteSession, getCategoriaIcon } from "@/mocks/ambulantesSessions";
-import { findProduto, type CategoriaHint } from "@/mocks/ambulantesProdutos";
-import { haversineKm, formatDist } from "@/utils/geo";
+import {
+  ArrowLeft,
+  Search,
+  ShoppingBag,
+  MapPin,
+  ChevronRight,
+  Sparkles,
+  Compass,
+  Store,
+  Layers
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const FILTROS: Array<{ label: string; cat: CategoriaHint | "Todos" }> = [
-  { label: "Todos", cat: "Todos" },
-  { label: "🍢 Comida", cat: "Comida" },
-  { label: "🥥 Bebida", cat: "Bebida" },
-  { label: "🏄 Esporte", cat: "Esporte" },
-  { label: "🕶️ Acessório", cat: "Acessório" },
-];
+export const CATEGORIAS_MACRO = [
+  {
+    nome: "Açaí",
+    slug: "acai",
+    emoji: "🍧",
+    desc: "Tigelas, copos montados e barcas de praia",
+    badge: "Refrescante",
+    cor: "from-purple-900/40 to-purple-950/80",
+    borderCor: "hover:border-purple-500/50"
+  },
+  {
+    nome: "Bebidas",
+    slug: "bebidas",
+    emoji: "🥤",
+    desc: "Água de coco na fruta, refrigerantes, sucos e cervejas",
+    badge: "Geladas",
+    cor: "from-cyan-900/40 to-cyan-950/80",
+    borderCor: "hover:border-cyan-500/50"
+  },
+  {
+    nome: "Churrasco",
+    slug: "churrasco",
+    emoji: "🍢",
+    desc: "Espetinhos grelhados, queijo coalho e acompanhamentos",
+    badge: "Na Brasa",
+    cor: "from-orange-900/40 to-orange-950/80",
+    borderCor: "hover:border-orange-500/50"
+  },
+  {
+    nome: "Itens de Praia (Cadeiras, Mesas, Guarda-sóis)",
+    slug: "itens-de-praia",
+    emoji: "⛱️",
+    desc: "Aluguel e venda de cadeiras, barracas e esteiras",
+    badge: "Conforto",
+    cor: "from-sky-900/40 to-sky-950/80",
+    borderCor: "hover:border-sky-500/50"
+  },
+  {
+    nome: "Milho",
+    slug: "milho",
+    emoji: "🌽",
+    desc: "Milho verde cozido no prato ou palha, pamonha e curau",
+    badge: "Tradicional",
+    cor: "from-yellow-900/40 to-yellow-950/80",
+    borderCor: "hover:border-yellow-500/50"
+  },
+  {
+    nome: "Porções",
+    slug: "porcoes",
+    emoji: "🍤",
+    desc: "Iscas de peixe, camarão crocante, lula e batata frita",
+    badge: "Petiscos",
+    cor: "from-amber-900/40 to-amber-950/80",
+    borderCor: "hover:border-amber-500/50"
+  },
+  {
+    nome: "Sobremesas",
+    slug: "sobremesas",
+    emoji: "🍰",
+    desc: "Churros recheados, bolos de pote e doces artesanais",
+    badge: "Guloseimas",
+    cor: "from-pink-900/40 to-pink-950/80",
+    borderCor: "hover:border-pink-500/50"
+  },
+  {
+    nome: "Sorvete",
+    slug: "sorvete",
+    emoji: "🍦",
+    desc: "Picolés artesanais, paletas mexicanas e potes",
+    badge: "Artesanal",
+    cor: "from-emerald-900/40 to-emerald-950/80",
+    borderCor: "hover:border-emerald-500/50"
+  },
+  {
+    nome: "Vestuário",
+    slug: "vestuario",
+    emoji: "🩳",
+    desc: "Moda praia, cangas estampadas, biquínis e óculos",
+    badge: "Moda Praia",
+    cor: "from-indigo-900/40 to-indigo-950/80",
+    borderCor: "hover:border-indigo-500/50"
+  },
+] as const;
 
-const FALLBACK_CENTER = { lat: -23.432, lng: -45.083 };
-
-const AmbulantesDiscoveryPage = () => {
+export default function AmbulantesDiscoveryPage() {
   const navigate = useNavigate();
-  const [center, setCenter] = useState(FALLBACK_CENTER);
+
   const [busca, setBusca] = useState("");
-  const [filtroAtivo, setFiltroAtivo] = useState<typeof FILTROS[number]["cat"]>("Todos");
-  const [selected, setSelected] = useState<AmbulanteSession | null>(null);
-  const [sheetMode, setSheetMode] = useState<"lista" | "perfil">("lista");
+  const [userLocationName, setUserLocationName] = useState("Ubatuba, SP");
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [realSessions, setRealSessions] = useState<any[]>([]);
-
+  // Tenta obter geolocalização do cliente
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { timeout: 4000 }
+      (pos) => {
+        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setUserLocationName("Praia Grande, Ubatuba");
+      },
+      () => {
+        setUserLocationName("Ubatuba, SP");
+      },
+      { timeout: 5000 }
     );
   }, []);
 
-  useEffect(() => {
-    async function loadSessions() {
-      const { data, error } = await supabase
-        .from('ambulante_sessions')
-        .select(`
-          id, modalidade, lat, lng, is_online, rating, total_pedidos,
-          usuarios ( nome ),
-          ambulante_session_produtos (
-            preco, disponivel,
-            produtos ( id, nome, emoji, descricao, categoria )
-          )
-        `)
-        .eq('is_online', true);
-
-      if (error || !data) {
-        setRealSessions([]);
-        return;
-      }
-
-      const arr = data.map((s: any) => {
-        const produtosData: Record<string, any> = {};
-        if (s.ambulante_session_produtos) {
-          s.ambulante_session_produtos.forEach((sp: any) => {
-            if (sp.disponivel && sp.produtos) {
-              produtosData[sp.produtos.id] = {
-                nome: sp.produtos.nome,
-                emoji: sp.produtos.emoji,
-                preco: sp.preco || sp.produtos.preco,
-                descricao: sp.produtos.descricao,
-                disponivel: true,
-                categoria: sp.produtos.categoria
-              };
-            }
-          });
-        }
-        return {
-          sessionId: s.id,
-          prestadorId: s.id,
-          nome: s.usuarios?.nome || "Ambulante",
-          modalidade: s.modalidade || "local_fixo",
-          location: { lat: s.lat, lng: s.lng },
-          isOnline: s.is_online,
-          produtos: produtosData,
-          rating: s.rating,
-          totalPedidos: s.total_pedidos
-        };
-      });
-      setRealSessions(arr);
-    }
-    loadSessions();
-
-    const channel = supabase
-      .channel('public:ambulante_sessions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ambulante_sessions' }, () => {
-        loadSessions();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const sessionsToUse = realSessions;
-
-  // Flatten products and calculate distance
-  const allProducts = useMemo(() => {
-    const list: Array<{
-      id: string;
-      sessionId: string;
-      prestadorNome: string;
-      dist: number;
-      nome: string;
-      emoji: string;
-      preco: number;
-      foto?: string;
-      categoriaHint?: string;
-      sessionObj: any;
-    }> = [];
-
-    sessionsToUse.forEach((s) => {
-      const dist = haversineKm(center.lat, center.lng, s.location.lat, s.location.lng);
-      
-      // se vier como array (formato antigo MOCK_SESSIONS)
-      if (Array.isArray(s.produtos)) {
-        s.produtos.forEach((pid: string) => {
-          const pDef = findProduto(pid);
-          if (pDef) {
-            list.push({
-              id: `${s.sessionId}-${pid}`, sessionId: s.sessionId, prestadorNome: s.nome, dist,
-              nome: pDef.nome, emoji: pDef.emoji, preco: pDef.precoSugerido, categoriaHint: pDef.categoriaHint, sessionObj: s
-            });
-          }
-        });
-      } else {
-        // formato Firebase novo
-        Object.entries(s.produtos).forEach(([pid, pData]: [string, any]) => {
-          if (pData.disponivel) {
-            list.push({
-              id: `${s.sessionId}-${pid}`, sessionId: s.sessionId, prestadorNome: s.nome, dist,
-              nome: pData.nome, emoji: pData.emoji, preco: pData.preco, foto: pData.foto, categoriaHint: "Todos", sessionObj: s
-            });
-          }
-        });
-      }
-    });
-
-    return list.sort((a, b) => a.dist - b.dist);
-  }, [sessionsToUse, center]);
-
-  const filteredProducts = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return allProducts.filter((p) => {
-      if (filtroAtivo !== "Todos") {
-        // Simplificado, no firebase novo pode não ter categoriaHint precisa. Usaremos fallback ou "Todos"
-        if (p.categoriaHint && p.categoriaHint !== "Todos" && p.categoriaHint !== filtroAtivo) return false;
-      }
-      if (q) {
-        if (!p.nome.toLowerCase().includes(q) && !p.prestadorNome.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [allProducts, busca, filtroAtivo]);
-
-  const initials = (n: string) => n.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-
-  const openPerfil = (s: AmbulanteSession) => {
-    setSelected(s);
-    setSheetMode("perfil");
-  };
+  // Filtra as categorias caso o cliente digite na busca
+  const categoriasFiltradas = useMemo(() => {
+    if (!busca.trim()) return CATEGORIAS_MACRO;
+    const q = busca.toLowerCase();
+    return CATEGORIAS_MACRO.filter(
+      (c) =>
+        c.nome.toLowerCase().includes(q) ||
+        c.desc.toLowerCase().includes(q) ||
+        c.badge.toLowerCase().includes(q)
+    );
+  }, [busca]);
 
   return (
-    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "#09090B" }}>
-      {/* Map */}
-      <div className="absolute inset-0">
-        <AmbulantesMap center={center} sessions={sessionsToUse} onMarkerClick={openPerfil} selectedId={selected?.sessionId} />
-      </div>
+    <div className="min-h-screen bg-black text-white font-sans pb-28">
+      {/* ========================================================================= */}
+      {/* HEADER SUPERIOR DO TOMADOR                                               */}
+      {/* ========================================================================= */}
+      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/app/home")}
+            className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer active:scale-95"
+            aria-label="Voltar"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
+              <span>Praia & Ambulantes</span>
+              <span className="w-2 h-2 rounded-full bg-[#00FF66] shadow-[0_0_8px_#00FF66]" />
+            </h1>
+            <div className="flex items-center gap-1 text-xs text-zinc-400">
+              <MapPin size={12} className="text-[#00FF66]" />
+              <span className="truncate max-w-[180px]">{userLocationName}</span>
+            </div>
+          </div>
+        </div>
 
-      {/* Top back */}
-      <button
-        type="button"
-        onClick={() => navigate("/app/home")}
-        className="absolute top-4 left-4 z-10 flex items-center justify-center"
-        style={{
-          width: 40, height: 40, borderRadius: 999,
-          background: "rgba(24,24,27,0.90)", border: "1px solid #27272A",
-        }}
-        aria-label="Voltar"
-      >
-        <ArrowLeft size={18} color="#fff" />
-      </button>
+        <button
+          type="button"
+          onClick={() => navigate("/app/ambulantes/carrinho")}
+          className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer"
+          aria-label="Carrinho"
+        >
+          <ShoppingBag size={18} />
+        </button>
+      </header>
 
-      {/* Bottom sheet */}
-      <div
-        className="absolute left-0 right-0 bottom-0 z-10"
-        style={{
-          background: "#18181B",
-          borderTop: "1px solid #27272A",
-          borderRadius: "24px 24px 0 0",
-          padding: "10px 20px 96px",
-          maxHeight: sheetMode === "perfil" ? "70vh" : "55vh",
-          overflowY: "auto",
-          boxShadow: "0 -10px 40px rgba(0,0,0,0.50)",
-          zIndex: 1000,
-        }}
-      >
-        <div
-          style={{
-            width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.20)",
-            margin: "0 auto 12px",
-          }}
-        />
+      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
+        {/* ========================================================================= */}
+        {/* BARRA DE BUSCA GENEROSA                                                  */}
+        {/* ========================================================================= */}
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="O que você quer pedir na praia hoje? (ex: Sorvete, Água de coco...)"
+            className="w-full pl-10 pr-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00FF66] transition shadow-inner"
+          />
+          {busca && (
+            <button
+              type="button"
+              onClick={() => setBusca("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white font-bold"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
 
-        {sheetMode === "lista" && (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0 }}>
-                Ambulantes próximos
-              </h1>
-              <span
-                className="font-sans"
-                style={{
-                  fontSize: 11, fontWeight: 600, color: "#00FF66",
-                  background: "rgba(0,255,102,0.15)", border: "1px solid #00FF66",
-                  borderRadius: 999, padding: "4px 10px",
-                }}
-              >
-                {filteredProducts.length} itens
+        {/* ========================================================================= */}
+        {/* HERO BANNER: SHOPPING DA PRAIA                                           */}
+        {/* ========================================================================= */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 p-5 shadow-2xl">
+          <div className="flex items-start justify-between relative z-10">
+            <div className="max-w-[70%]">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30 mb-2">
+                <Sparkles size={11} /> Entrega na sua Cadeira
               </span>
-            </div>
-
-            {/* Busca */}
-            <div
-              className="mt-3 flex items-center gap-2.5"
-              style={{
-                background: "#09090B", border: "1px solid #27272A",
-                borderRadius: 12, height: 48, padding: "0 14px",
-              }}
-            >
-              <Search size={16} color="rgba(255,255,255,0.40)" />
-              <input
-                type="text"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar produto ou ambulante..."
-                className="flex-1 bg-transparent outline-none font-sans"
-                style={{ fontSize: 14, color: "#fff" }}
-              />
-            </div>
-
-            {/* Filtros */}
-            <div
-              className="mt-2.5 flex gap-2 overflow-x-auto pb-1"
-              style={{ scrollbarWidth: "none" as const }}
-            >
-              {FILTROS.map((f) => {
-                const active = filtroAtivo === f.cat;
-                return (
-                  <button
-                    key={f.label}
-                    type="button"
-                    onClick={() => setFiltroAtivo(f.cat)}
-                    className="font-sans flex-shrink-0"
-                    style={{
-                      background: active ? "#00FF66" : "rgba(255,255,255,0.06)",
-                      color: active ? "#09090B" : "rgba(255,255,255,0.55)",
-                      border: active ? "none" : "1px solid rgba(255,255,255,0.08)",
-                      fontSize: 12,
-                      fontWeight: active ? 600 : 400,
-                      borderRadius: 999,
-                      padding: "6px 14px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {f.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Lista de Produtos */}
-            <div className="mt-3" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {filteredProducts.length === 0 ? (
-                <div className="flex flex-col items-center text-center" style={{ padding: "32px 0" }}>
-                  <ShoppingBag size={40} color="rgba(255,255,255,0.20)" />
-                  <p className="font-display mt-3" style={{ fontSize: 16, fontWeight: 700, color: "#fff", margin: "12px 0 4px" }}>
-                    Nenhum produto próximo
-                  </p>
-                  <p className="font-sans" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", margin: 0 }}>
-                    Tente buscar por outro termo.
-                  </p>
-                </div>
-              ) : (
-                filteredProducts.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => openPerfil(p.sessionObj)}
-                    className="flex items-center gap-3 text-left w-full"
-                    style={{
-                      background: "#09090B",
-                      border: "1px solid #27272A",
-                      borderRadius: 14,
-                      padding: 14,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 44, height: 44, borderRadius: 12,
-                        background: "rgba(0,255,102,0.15)", flexShrink: 0,
-                        overflow: "hidden"
-                      }}
-                    >
-                      {p.foto ? (
-                        <img src={p.foto} alt={p.nome} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        <span style={{ fontSize: 22 }}>{p.emoji}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-sans truncate" style={{ fontSize: 15, fontWeight: 600, color: "#fff", margin: 0 }}>
-                        {p.nome}
-                      </p>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className="font-sans" style={{ fontSize: 13, color: "#00FF66", fontWeight: 600 }}>
-                          R$ {p.preco.toFixed(2)}
-                        </span>
-                        <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>•</span>
-                        <span className="font-sans truncate" style={{ fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
-                          {p.prestadorNome}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-sans flex-shrink-0" style={{ fontSize: 12, color: "rgba(255,255,255,0.40)" }}>
-                      {formatDist(p.dist)}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </>
-        )}
-
-        {sheetMode === "perfil" && selected && (() => {
-          const dist = haversineKm(center.lat, center.lng, selected.location.lat, selected.location.lng);
-          const cat = Array.isArray(selected.produtos) ? getCategoriaIcon(selected.produtos) : { emoji: "🛒", color: "#0DB87E" };
-          return (
-            <>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex items-center justify-center"
-                    style={{
-                      width: 52, height: 52, borderRadius: 999,
-                      background: cat.color, border: "2px solid white", fontSize: 22,
-                    }}
-                  >
-                    {cat.emoji}
-                  </div>
-                  <div>
-                    <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0 }}>
-                      {selected.nome}
-                    </h2>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <Star size={14} fill="#F5A623" stroke="#F5A623" />
-                      <span className="font-sans" style={{ fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-                        {(selected.rating ?? 5).toFixed(1)}
-                      </span>
-                      <span className="font-sans" style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                        ({selected.totalPedidos ?? 0} pedidos)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setSelected(null); setSheetMode("lista"); }}
-                  aria-label="Fechar"
-                  style={{
-                    width: 32, height: 32, borderRadius: 999,
-                    background: "rgba(255,255,255,0.08)", border: "none", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <X size={16} color="#fff" />
-                </button>
-              </div>
-
-              <div className="mt-3 flex items-center gap-2">
-                <span
-                  className="font-sans"
-                  style={{
-                    fontSize: 11, color: "rgba(255,255,255,0.70)",
-                    background: "rgba(255,255,255,0.08)",
-                    padding: "4px 10px", borderRadius: 999,
-                  }}
-                >
-                  {selected.modalidade === "both" ? "🛵 Delivery & 📍 Local Fixo" : selected.modalidade === "delivery" ? "🛵 Delivery" : "📍 Local Fixo"}
-                </span>
-                <span className="font-sans" style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-                  {formatDist(dist)}
-                </span>
-              </div>
-
-              <p
-                className="mt-4 font-sans uppercase"
-                style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.40)", letterSpacing: 1.5, margin: "16px 0 10px" }}
-              >
-                Produtos disponíveis
+              <h2 className="text-xl font-black text-white leading-tight">
+                Peça direto da areia
+              </h2>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                Descubra ambulantes credenciados com estoque diário e receba onde estiver.
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {(() => {
-                  if (Array.isArray(selected.produtos)) {
-                    return selected.produtos.slice(0, 6).map((pid: string) => {
-                      const prod = findProduto(pid);
-                      if (!prod) return null;
-                      return (
-                        <div key={pid} className="text-center" style={{ background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 8 }}>
-                          <div style={{ fontSize: 20 }}>{prod.emoji}</div>
-                          <p className="font-sans truncate" style={{ fontSize: 11, color: "#fff", marginTop: 2 }}>{prod.nome}</p>
-                        </div>
-                      );
-                    });
-                  } else {
-                    return Object.entries(selected.produtos).slice(0, 6).map(([pid, pData]: [string, any]) => {
-                      if (!pData.disponivel) return null;
-                      return (
-                        <div key={pid} className="text-center" style={{ background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 8 }}>
-                          {pData.foto ? (
-                            <img src={pData.foto} alt={pData.nome} style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", margin: "0 auto" }} />
-                          ) : (
-                            <div style={{ fontSize: 20 }}>{pData.emoji}</div>
-                          )}
-                          <p className="font-sans truncate" style={{ fontSize: 11, color: "#fff", marginTop: 2 }}>{pData.nome}</p>
-                        </div>
-                      );
-                    });
-                  }
-                })()}
-              </div>
+            </div>
+            <div className="w-14 h-14 rounded-2xl bg-[#00FF66]/10 border border-[#00FF66]/20 flex items-center justify-center text-3xl">
+              🏖️
+            </div>
+          </div>
+        </div>
 
+        {/* ========================================================================= */}
+        {/* MENU DE SHOPPING: BOXES DAS 9 MACRO CATEGORIAS (GRID GENEROSO)           */}
+        {/* ========================================================================= */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-sm font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Layers size={15} className="text-[#00FF66]" />
+              Categorias na Areia ({categoriasFiltradas.length})
+            </h3>
+            <span className="text-xs text-zinc-500 font-mono">Escolha para ver os ambulantes</span>
+          </div>
+
+          {categoriasFiltradas.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-zinc-900 border border-dashed border-zinc-800 text-center my-4">
+              <p className="text-sm font-bold text-white mb-1">Nenhuma categoria encontrada para "{busca}"</p>
+              <p className="text-xs text-zinc-400 mb-3">Tente buscar por termos mais genéricos como "sorvete", "bebidas" ou "açaí".</p>
               <button
                 type="button"
-                onClick={() => navigate(`/app/ambulantes/${selected.sessionId}`)}
-                className="font-display mt-4 w-full text-navy animate-pulse"
-                style={{
-                  background: "#00FF66",
-                  borderRadius: 12, padding: "14px 20px",
-                  border: "none", cursor: "pointer",
-                  fontSize: 15, fontWeight: 700,
-                }}
+                onClick={() => setBusca("")}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition cursor-pointer"
               >
-                Ver cardápio completo
+                Limpar busca
               </button>
-            </>
-          );
-        })()}
-      </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+              {categoriasFiltradas.map((cat) => (
+                <div
+                  key={cat.slug}
+                  onClick={() => navigate(`/app/ambulantes/categoria/${cat.slug}`)}
+                  className={`group relative p-4 rounded-2xl bg-gradient-to-b ${cat.cor} border border-zinc-800/90 ${cat.borderCor} hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[148px] shadow-lg shadow-black/40`}
+                >
+                  {/* Topo do Card: Emoji e Badge */}
+                  <div className="flex items-start justify-between">
+                    <span className="text-3xl filter drop-shadow-md group-hover:scale-110 transition-transform">
+                      {cat.emoji}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/60 border border-white/10 text-zinc-300">
+                      {cat.badge}
+                    </span>
+                  </div>
 
-      
+                  {/* Base do Card: Título e Descrição */}
+                  <div className="mt-3">
+                    <h4 className="text-sm font-black text-white group-hover:text-[#00FF66] transition-colors leading-tight line-clamp-1 mb-1">
+                      {cat.nome}
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                      {cat.desc}
+                    </p>
+                    <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-white/5">
+                      <span className="text-[10px] font-bold text-[#00FF66] flex items-center gap-0.5">
+                        Ver ambulantes
+                      </span>
+                      <ChevronRight size={13} className="text-zinc-500 group-hover:text-[#00FF66] group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
-};
-
-export default AmbulantesDiscoveryPage;
+}

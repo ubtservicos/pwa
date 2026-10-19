@@ -38,10 +38,11 @@ const AmbulanteCatalogPage = () => {
   useEffect(() => {
     if (!sessionId) return;
     async function load() {
+      // 1. Carrega dados cadastrais da sessão do ambulante
       const { data, error } = await supabase
         .from('ambulante_sessions')
         .select(`
-          id, modalidade, lat, lng, is_online, rating, total_pedidos,
+          id, modalidade, lat, lng, is_online, rating, total_pedidos, address,
           usuarios ( nome ),
           ambulante_session_produtos (
             preco, disponivel,
@@ -49,7 +50,7 @@ const AmbulanteCatalogPage = () => {
           )
         `)
         .eq('id', sessionId)
-        .single();
+        .maybeSingle();
         
       if (error || !data) {
         setSessionData(null);
@@ -67,14 +68,51 @@ const AmbulanteCatalogPage = () => {
         is_online: boolean;
         rating: number;
         total_pedidos: number;
+        address?: string;
         usuarios: { nome: string } | { nome: string }[] | null;
-        ambulante_session_produtos: SPType[];
+        ambulante_session_produtos?: SPType[];
       };
 
       const userName = Array.isArray(row.usuarios) ? row.usuarios[0]?.nome : row.usuarios?.nome;
-      
       const produtosData: Record<string, ProdutoData> = {};
-      if (row.ambulante_session_produtos) {
+
+      // 2. Consulta itens reais do estoque_ambulante
+      const { data: estoqueRows } = await supabase
+        .from('estoque_ambulante')
+        .select(`
+          id_produto_padrao,
+          preco_venda,
+          quantidade,
+          disponivel,
+          produtos_padrao (
+            id,
+            nome_produto,
+            descricao,
+            preco_sugerido,
+            imagem_url,
+            categoria
+          )
+        `)
+        .eq('id_ambulante', sessionId)
+        .gt('quantidade', 0)
+        .eq('disponivel', true);
+
+      if (estoqueRows && estoqueRows.length > 0) {
+        estoqueRows.forEach((item: any) => {
+          if (item.produtos_padrao) {
+            produtosData[item.id_produto_padrao] = {
+              nome: item.produtos_padrao.nome_produto,
+              emoji: "🏖️",
+              preco: Number(item.preco_venda) > 0 ? Number(item.preco_venda) : Number(item.produtos_padrao.preco_sugerido) || 0,
+              descricao: item.produtos_padrao.descricao || "",
+              disponivel: true,
+              categoria: item.produtos_padrao.categoria,
+              foto: item.produtos_padrao.imagem_url,
+            };
+          }
+        });
+      } else if (row.ambulante_session_produtos) {
+        // Fallback para tabela legada se houver
         row.ambulante_session_produtos.forEach((sp) => {
           if (sp.disponivel && sp.produtos) {
             produtosData[sp.produtos.id] = {
@@ -91,12 +129,12 @@ const AmbulanteCatalogPage = () => {
       
       setSessionData({
         sessionId: row.id,
-        nome: userName || "Ambulante",
+        nome: userName || "Ambulante Credenciado",
         modalidade: row.modalidade || "local_fixo",
-        location: { lat: row.lat, lng: row.lng },
+        location: { lat: row.lat || -23.4332, lng: row.lng || -45.0834, address: row.address },
         produtos: produtosData,
-        rating: row.rating,
-        totalPedidos: row.total_pedidos
+        rating: row.rating || 5.0,
+        totalPedidos: row.total_pedidos || 0
       });
       setLoading(false);
     }

@@ -22,6 +22,7 @@ const OfflineBanner = () => {
   );
 };
 import AmbulantesDiscoveryPage from "./pages/AmbulantesDiscoveryPage.tsx";
+import AmbulantesCategoriaAmbulantesPage from "./pages/AmbulantesCategoriaAmbulantesPage.tsx";
 import AmbulanteCatalogPage from "./pages/AmbulanteCatalogPage.tsx";
 import AmbulanteCarrinhoPage from "./pages/AmbulanteCarrinhoPage.tsx";
 import AmbulantePedidoPage from "./pages/AmbulantePedidoPage.tsx";
@@ -169,6 +170,7 @@ const App = () => (
                 <Route path="/app/prestador/mototaxi/active" element={<PrestadorMototaxiActive />} />
                 <Route path="/app/prestador/mototaxi/avaliacao/:id" element={<PrestadorMototaxiActive />} />
                 <Route path="/app/ambulantes" element={<AmbulantesDiscoveryPage />} />
+                <Route path="/app/ambulantes/categoria/:slug" element={<AmbulantesCategoriaAmbulantesPage />} />
                 <Route path="/app/ambulantes/carrinho" element={<AmbulanteCarrinhoPage />} />
                 <Route path="/app/ambulantes/pedido/:id" element={<AmbulantePedidoPage />} />
                 <Route path="/app/ambulantes/:sessionId" element={<AmbulanteCatalogPage />} />
