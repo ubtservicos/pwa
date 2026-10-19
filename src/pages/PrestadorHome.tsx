@@ -499,7 +499,7 @@ const PrestadorHome = () => {
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
                 <Bike size={24} color="#0DB87E" />
               </div>
-              <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/config")}>
+              <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/online")}>
                 <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Mototaxi</h3>
                 <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Corridas e Entregas</p>
               </div>

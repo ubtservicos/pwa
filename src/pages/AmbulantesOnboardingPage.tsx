@@ -186,12 +186,7 @@ export default function AmbulantesOnboardingPage() {
         /* noop */
       }
 
-      showToast("Cadastro de Ambulante realizado com sucesso!", "success");
-
-      // Transição direta para o CRUD diário de Cardápio
-      setTimeout(() => {
-        navigate("/app/prestador/ambulantes/cardapio/editar");
-      }, 1000);
+      showToast("Alterações salvas com sucesso!", "success");
     } catch (err: any) {
       console.error("Erro ao salvar cadastro de ambulante:", err);
       showToast("Erro ao salvar seus dados. Verifique sua conexão.", "error");
@@ -503,15 +498,12 @@ export default function AmbulantesOnboardingPage() {
             <button
               type="submit"
               disabled={submitting || uploadingDoc}
-              className="w-full bg-gradient-to-r from-[#0DB87E] to-[#00FF66] text-[#09090B] font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-[#0DB87E]/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full bg-[#00FF66] text-black font-extrabold py-3.5 px-4 rounded-xl shadow-lg shadow-[#00FF66]/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {submitting ? (
-                <span>Salvando Credenciamento...</span>
+                <span>Salvando alterações...</span>
               ) : (
-                <>
-                  <span>Concluir Onboarding & Ir para o Cardápio</span>
-                  <ChevronRight size={18} />
-                </>
+                <span>Salvar alterações</span>
               )}
             </button>
             <p className="text-[11px] text-center text-zinc-500 mt-2">
