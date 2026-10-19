@@ -74,7 +74,7 @@ export const MOTOTAXI_NAV_ITEMS = [
 
 export const AMBULANTES_NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/ambulantes/dashboard", roles: ["operator", "admin", "super_admin"] },
-  { icon: Utensils, label: "Cardápios Padrão", path: "/admin/ambulantes/cardapios", roles: ["operator", "admin", "super_admin"] },
+  { icon: Utensils, label: "Produtos", path: "/admin/ambulantes/produtos", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const NAV_ITEMS = [

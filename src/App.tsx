@@ -81,6 +81,7 @@ import AdminDiaristasMateriaisPage from "./pages/admin/AdminDiaristasMateriaisPa
 import AdminMototaxistasDashboardPage from "./pages/admin/AdminMototaxistasDashboardPage.tsx";
 import AdminAmbulantesDashboardPage from "./pages/admin/AdminAmbulantesDashboardPage.tsx";
 import AdminAmbulantesCardapiosPage from "./pages/admin/AdminAmbulantesCardapiosPage.tsx";
+import AdminAmbulantesProdutosPage from "./pages/admin/AdminAmbulantesProdutosPage.tsx";
 import AdminSorteioTrabPage from "./pages/admin/AdminSorteioTrabPage.tsx";
 import AdminSorteioConsPage from "./pages/admin/AdminSorteioConsPage.tsx";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage.tsx";
@@ -248,7 +249,9 @@ const App = () => (
               <Route path="/admin/diaristas/materiais" element={adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/ambulantes/dashboard" element={adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/ambulantes/cardapios" element={adminGuard(<AdminAmbulantesCardapiosPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/produtos" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/produtos/:categoriaSlug" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/cardapios" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/associacao/dashboard" element={adminGuard(<AssociacaoDashboard />, ["operator", "admin", "super_admin", "associacao", "associacao_lider"])} />
               <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["admin", "super_admin", "superadmin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
