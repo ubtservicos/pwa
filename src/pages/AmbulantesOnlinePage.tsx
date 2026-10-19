@@ -495,7 +495,7 @@ const AmbulantesOnlinePage = () => {
             </p>
             <button
               type="button"
-              onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
+              onClick={() => navigate("/app/prestador/ambulantes/cardapio/editar")}
               className="font-sans"
               style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
             >
