@@ -113,9 +113,15 @@ const ConfigServicosPage = () => {
         <SettingsGroup>
           <SettingsRow
             icon={ShoppingBag}
-            label="Ambulantes"
-            subtitle="Configure seu cardápio e comece a vender"
+            label="Meus Documentos (Praia)"
+            subtitle="Alvará de ambulante, identificação e documentos"
             onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
+          />
+          <SettingsRow
+            icon={ShoppingBag}
+            label="Cardápio & Estoque Diário"
+            subtitle="Definir quantidades do carrinho na praia"
+            onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
             isLast
           />
         </SettingsGroup>

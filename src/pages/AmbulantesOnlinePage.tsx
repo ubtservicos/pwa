@@ -4,13 +4,22 @@ import { ChevronLeft, MapPin, X } from "lucide-react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
 import BottomSheet from "@/components/settings/BottomSheet";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { CATALOGO_PADRAO } from "@/mocks/ambulantesProdutos";
 import { supabase } from "@/lib/supabase";
+
+function resolveImageUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  const { data } = supabase.storage.from("catalogo-ambulantes").getPublicUrl(url);
+  return data?.publicUrl || url;
+}
 
 interface SessionProduto {
   nome: string;
   emoji: string;
   preco: number;
+  quantidade?: number;
   disponivel: boolean;
   descricao?: string;
   variosValores?: boolean;
@@ -67,56 +76,38 @@ const AmbulantesOnlinePage = () => {
           }
         }
 
-        // 2. Carrega produtos reais do estoque do ambulante
+        // 2. Carrega produtos reais do estoque do ambulante (apenas itens com quantidade > 0)
         const mapped: Record<string, SessionProduto> = {};
 
-        const { data: estoqueData } = await supabase
+        const { data: estoqueData, error: estoqueErr } = await supabase
           .from('estoque_ambulante')
-          .select('id_produto_padrao, preco_venda, quantidade, disponivel, produtos_padrao(nome_produto, imagem_url, categoria, descricao)')
+          .select('id_produto_padrao, preco_venda, quantidade, disponivel, produtos_padrao(nome_produto, imagem_url, categoria, subcategoria, descricao)')
           .eq('id_ambulante', user.uid)
-          .eq('disponivel', true);
+          .gt('quantidade', 0);
+
+        if (estoqueErr) {
+          console.warn("Aviso ao carregar estoque_ambulante:", estoqueErr);
+        }
 
         if (estoqueData && estoqueData.length > 0) {
           estoqueData.forEach((item: any) => {
             const prod = item.produtos_padrao;
-            if (prod && item.quantidade > 0) {
+            if (prod && Number(item.quantidade) > 0) {
               mapped[item.id_produto_padrao] = {
                 nome: prod.nome_produto,
                 emoji: "🍦",
-                preco: Number(item.preco_venda),
-                disponivel: true,
+                preco: Number(item.preco_venda || 0),
+                quantidade: Number(item.quantidade),
+                disponivel: item.disponivel !== false,
                 descricao: prod.descricao || "",
-                foto: prod.imagem_url || undefined,
+                foto: prod.imagem_url ? resolveImageUrl(prod.imagem_url) : undefined,
                 variosValores: false,
               };
             }
           });
         }
 
-        // Se ainda não houver produtos do novo catálogo, consulta a tabela de sessões legada
-        if (Object.keys(mapped).length === 0) {
-          const { data: legacyProducts } = await supabase
-            .from('ambulante_session_produtos')
-            .select('preco, disponivel, produto_id, produtos(nome, emoji, descricao)')
-            .eq('session_id', user.uid);
-
-          if (legacyProducts) {
-            legacyProducts.forEach((item: any) => {
-              const prod = item.produtos;
-              if (prod) {
-                mapped[item.produto_id] = {
-                  nome: prod.nome,
-                  emoji: prod.emoji || "🍽️",
-                  preco: Number(item.preco),
-                  disponivel: !!item.disponivel,
-                  descricao: prod.descricao || "",
-                  variosValores: false,
-                };
-              }
-            });
-          }
-        }
-
+        // Sem produtos mockados ou fallback estático: exibe apenas o estoque real
         setProdutos(mapped);
       } catch (err) {
         console.error("Erro ao carregar sessão/produtos do Supabase:", err);
@@ -297,10 +288,11 @@ const AmbulantesOnlinePage = () => {
 
   const toggleProdDisponivel = (prodId: string, value: boolean) => {
     setProdutos((p) => ({ ...p, [prodId]: { ...p[prodId], disponivel: value } }));
-    supabase.from('ambulante_session_produtos')
+    if (!user.uid) return;
+    supabase.from('estoque_ambulante')
       .update({ disponivel: value })
-      .eq('session_id', user.uid)
-      .eq('produto_id', prodId)
+      .eq('id_ambulante', user.uid)
+      .eq('id_produto_padrao', prodId)
       .then(({ error }) => {
         if (error) console.error("Erro ao atualizar disponibilidade no Supabase:", error);
       });
@@ -489,7 +481,7 @@ const AmbulantesOnlinePage = () => {
             </p>
             <button
               type="button"
-              onClick={() => navigate("/app/prestador/ambulantes/cardapio/editar")}
+              onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
               className="font-sans"
               style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
             >
@@ -497,17 +489,40 @@ const AmbulantesOnlinePage = () => {
             </button>
           </div>
           {Object.keys(produtos).length === 0 ? (
-            <p className="font-sans" style={{ fontSize: 13, color: "#5B6178" }}>Nenhum produto cadastrado.</p>
+            <div className="py-4 text-center">
+              <p className="font-sans" style={{ fontSize: 13, color: "#9399AD", margin: "0 0 10px" }}>
+                Seu carrinho está vazio hoje. Edite seu cardápio.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
+                className="font-sans inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                style={{
+                  background: "rgba(0,255,102,0.12)",
+                  color: "#00FF66",
+                  border: "1px solid rgba(0,255,102,0.30)",
+                }}
+              >
+                + Adicionar Produtos
+              </button>
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {Object.entries(produtos).map(([id, p]) => (
                 <div key={id} className="flex items-center gap-2">
                   {p.foto ? (
-                    <img src={p.foto} alt={p.nome} style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }} />
+                    <img src={p.foto} alt={p.nome} style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
                   ) : (
                     <span style={{ fontSize: 16 }}>{p.emoji}</span>
                   )}
-                  <span className="font-sans flex-1" style={{ fontSize: 13, color: "#FFFFFF" }}>{p.nome}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-sans truncate block" style={{ fontSize: 13, color: "#FFFFFF" }}>{p.nome}</span>
+                    {p.quantidade !== undefined && (
+                      <span className="font-sans text-[11px] text-[#9399AD] block">
+                        {p.quantidade} un em estoque
+                      </span>
+                    )}
+                  </div>
                   <span className="font-sans" style={{ fontSize: 13, color: "#00FF66", fontWeight: 600 }}>
                     {p.variosValores ? "Diversos valores" : `R$ ${p.preco.toFixed(2)}`}
                   </span>

@@ -170,8 +170,8 @@ const ConfigIndexPage = () => {
               />
               <SettingsRow
                 icon={ShoppingBag}
-                label="Ambulantes"
-                subtitle="Cardápio e vendas"
+                label="Meus Documentos (Praia)"
+                subtitle="Alvará de ambulante, identificação e dados"
                 onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
               />
               <SettingsRow
