@@ -1,26 +1,23 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Search,
   Plus,
   Minus,
-  Check,
   Sparkles,
-  ShoppingBag,
   Store,
   ChevronRight,
-  Filter,
   CheckCircle2,
   AlertCircle,
   UploadCloud,
   Trash2,
   Edit3,
-  Layers,
   PackageCheck,
   PackagePlus,
   X,
-  Tag
+  Layers,
+  ImageOff
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -29,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 interface Fornecedor {
   id: string;
   nome_marca: string;
-  logo_url?: string;
+  logo_url?: string | null;
   ativo: boolean;
   total_produtos?: number;
 }
@@ -38,14 +35,16 @@ interface ProdutoPadrao {
   id: string;
   id_fornecedor?: string | null;
   nome_produto: string;
-  descricao?: string;
+  descricao?: string | null;
   preco_sugerido: number;
-  imagem_url?: string;
+  imagem_url?: string | null;
   categoria: string;
   ativo: boolean;
   fornecedores_padrao?: {
+    id?: string;
     nome_marca: string;
-  };
+    logo_url?: string | null;
+  } | null;
 }
 
 interface ItemEstoque {
@@ -58,27 +57,55 @@ interface ItemEstoque {
 
 type TabMode = "facilitado" | "livre";
 
+// Gera slug amigável para URLs
+export function slugify(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]+/g, "")
+    .replace(/--+/g, "-");
+}
+
+// Resolução de imagem de storage ou URL pública
+function resolveImageUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  const { data } = supabase.storage.from("catalogo-ambulantes").getPublicUrl(url);
+  return data?.publicUrl || url;
+}
+
 export default function AmbulantesCatalogoPage() {
   const navigate = useNavigate();
+  const { marcaSlug } = useParams<{ marcaSlug?: string }>();
   const user = useCurrentUser();
 
   // Modo ativo: Facilitado (Marcas Parceiras) vs Livre (Produtos Próprios)
   const [activeTab, setActiveTab] = useState<TabMode>("facilitado");
 
-  // Navigation state para o fluxo facilitado
+  // Marca ativa derivada da rota ou da lista
   const [selectedBrand, setSelectedBrand] = useState<Fornecedor | null>(null);
   const [isOnline, setIsOnline] = useState(false);
 
-  // Dados do backend
+  // Dados reais do banco de dados
   const [brands, setBrands] = useState<Fornecedor[]>([]);
   const [products, setProducts] = useState<ProdutoPadrao[]>([]);
   const [customProducts, setCustomProducts] = useState<ProdutoPadrao[]>([]);
   const [estoque, setEstoque] = useState<Record<string, ItemEstoque>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // Filtros do fluxo facilitado
+  // Registro de imagens com falha de carregamento (evita ícones quebrados)
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+
+  // Filtros da marca ativa
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Todas");
 
@@ -100,9 +127,35 @@ export default function AmbulantesCatalogoPage() {
     loadSessionStatus();
   }, [user.uid]);
 
+  // Sincroniza marca ativa a partir do parâmetro de rota :marcaSlug
+  useEffect(() => {
+    if (!marcaSlug || brands.length === 0) {
+      if (!marcaSlug) {
+        setSelectedBrand(null);
+        setProducts([]);
+      }
+      return;
+    }
+
+    const matched = brands.find(
+      (b) => slugify(b.nome_marca) === marcaSlug.toLowerCase() || b.id === marcaSlug
+    );
+
+    if (matched) {
+      setSelectedBrand(matched);
+      loadBrandProducts(matched.id);
+    } else {
+      setSelectedBrand(null);
+    }
+  }, [marcaSlug, brands]);
+
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setFeedbackMsg({ text, type });
     setTimeout(() => setFeedbackMsg(null), 3500);
+  };
+
+  const markImageAsBroken = (id: string) => {
+    setBrokenImages((prev) => ({ ...prev, [id]: true }));
   };
 
   async function loadSessionStatus() {
@@ -121,42 +174,31 @@ export default function AmbulantesCatalogoPage() {
     }
   }
 
+  // Carrega lista oficial de marcas da tabela fornecedores_padrao e estoque do prestador
   async function loadData() {
     try {
       setLoading(true);
 
-      // 1. Carregar fornecedores parceiros cadastrados pela UBT
+      // 1. SELECT real na tabela fornecedores_padrao
       const { data: fornecedoresData, error: fError } = await supabase
         .from("fornecedores_padrao")
-        .select("*")
+        .select("id, nome_marca, logo_url, ativo")
         .eq("ativo", true)
         .order("nome_marca");
 
       if (fError) throw fError;
 
-      // 2. Carregar produtos padrão de marcas
-      const { data: produtosData, error: pError } = await supabase
-        .from("produtos_padrao")
-        .select("*, fornecedores_padrao(nome_marca)")
-        .not("id_fornecedor", "is", null)
-        .eq("ativo", true)
-        .order("nome_produto");
-
-      if (pError) throw pError;
-
-      // Contagem de produtos padrão por marca
-      const brandList = (fornecedoresData || []).map((b) => {
-        const count = (produtosData || []).filter((p) => p.id_fornecedor === b.id).length;
-        return { ...b, total_produtos: count };
-      });
+      const brandList = (fornecedoresData || []).map((b) => ({
+        ...b,
+        total_produtos: 0,
+      }));
       setBrands(brandList);
-      setProducts(produtosData || []);
 
-      // 3. Carregar estoque do ambulante autenticado
+      // 2. Carregar estoque existente do ambulante
       if (user.uid) {
         const { data: estoqueData, error: eError } = await supabase
           .from("estoque_ambulante")
-          .select("*")
+          .select("id, id_produto_padrao, preco_venda, quantidade, disponivel")
           .eq("id_ambulante", user.uid);
 
         if (!eError && estoqueData) {
@@ -172,7 +214,7 @@ export default function AmbulantesCatalogoPage() {
           });
           setEstoque(map);
 
-          // 4. Carregar produtos próprios (criados pelo usuário no fluxo livre)
+          // 3. Carregar produtos próprios (sem fornecedor vinculado)
           const customIds = estoqueData.map((e) => e.id_produto_padrao);
           if (customIds.length > 0) {
             const { data: customData } = await supabase
@@ -186,12 +228,43 @@ export default function AmbulantesCatalogoPage() {
         }
       }
     } catch (err: any) {
-      console.error("Erro ao carregar catálogo de ambulantes:", err);
+      console.error("Erro ao carregar dados do catálogo:", err);
       showToast("Falha ao carregar catálogo. Tente novamente.", "error");
     } finally {
       setLoading(false);
     }
   }
+
+  // SELECT real na tabela produtos_padrao filtrando pelo id_fornecedor da marca
+  async function loadBrandProducts(fornecedorId: string) {
+    try {
+      setLoadingProducts(true);
+      const { data: produtosData, error: pError } = await supabase
+        .from("produtos_padrao")
+        .select("*, fornecedores_padrao(id, nome_marca, logo_url)")
+        .eq("id_fornecedor", fornecedorId)
+        .eq("ativo", true)
+        .order("nome_produto");
+
+      if (pError) throw pError;
+      setProducts(produtosData || []);
+    } catch (err: any) {
+      console.error("Erro ao carregar produtos da marca:", err);
+      showToast("Falha ao carregar produtos desta marca.", "error");
+    } finally {
+      setLoadingProducts(false);
+    }
+  }
+
+  // Navega para a URL com o slug da marca
+  const handleSelectBrand = (brand: Fornecedor) => {
+    const slug = slugify(brand.nome_marca) || brand.id;
+    navigate(`/app/prestador/ambulantes/cardapio/editar/${slug}`);
+  };
+
+  const handleClearSelectedBrand = () => {
+    navigate("/app/prestador/ambulantes/cardapio/editar");
+  };
 
   // Atualiza quantidade ou preço no estoque do ambulante
   const handleUpdateEstoque = async (
@@ -216,7 +289,7 @@ export default function AmbulantesCatalogoPage() {
     const quantidade = newQtd !== undefined ? Math.max(0, newQtd) : current.quantidade;
     const disponivel = newDisponivel !== undefined ? newDisponivel : current.disponivel;
 
-    // Atualização otimista
+    // Atualização otimista imediata
     setEstoque((prev) => ({
       ...prev,
       [produto.id]: {
@@ -261,7 +334,7 @@ export default function AmbulantesCatalogoPage() {
         }));
       }
     } catch (err: any) {
-      console.error("Erro ao salvar no estoque:", err);
+      console.error("Erro ao sincronizar estoque:", err);
       showToast("Erro ao sincronizar estoque.", "error");
     } finally {
       setSavingId(null);
@@ -357,7 +430,6 @@ export default function AmbulantesCatalogoPage() {
       let prodId = editingCustomProduct?.id;
 
       if (!prodId) {
-        // Criação de novo produto sem fornecedor vinculado (Fluxo Livre)
         const { data: newProd, error: createError } = await supabase
           .from("produtos_padrao")
           .insert({
@@ -377,7 +449,6 @@ export default function AmbulantesCatalogoPage() {
 
         setCustomProducts((prev) => [newProd, ...prev]);
       } else {
-        // Atualização de produto próprio existente
         const { error: updateError } = await supabase
           .from("produtos_padrao")
           .update({
@@ -408,7 +479,6 @@ export default function AmbulantesCatalogoPage() {
         );
       }
 
-      // Atualiza ou insere o item no estoque diário do prestador
       await handleUpdateEstoque(
         {
           id: prodId,
@@ -437,9 +507,7 @@ export default function AmbulantesCatalogoPage() {
     if (!confirm("Tem certeza que deseja remover este produto do seu cardápio?")) return;
 
     try {
-      // 1. Remove do estoque
       await supabase.from("estoque_ambulante").delete().eq("id_produto_padrao", prodId).eq("id_ambulante", user.uid);
-      // 2. Remove da lista local
       setCustomProducts((prev) => prev.filter((p) => p.id !== prodId));
       setEstoque((prev) => {
         const next = { ...prev };
@@ -452,28 +520,22 @@ export default function AmbulantesCatalogoPage() {
     }
   };
 
-  // Filtragem de produtos padrão (Fluxo Facilitado)
-  const filteredProducts = products.filter((p) => {
-    const matchesBrand = !selectedBrand || p.id_fornecedor === selectedBrand.id;
-    const matchesCategory = selectedCategory === "Todas" || p.categoria === selectedCategory;
-    const matchesSearch =
-      searchQuery === "" ||
-      p.nome_produto.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.descricao && p.descricao.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filtragem de produtos padrão da marca ativa
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesCategory = selectedCategory === "Todas" || p.categoria === selectedCategory;
+      const matchesSearch =
+        searchQuery === "" ||
+        p.nome_produto.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.descricao && p.descricao.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesBrand && matchesCategory && matchesSearch;
-  });
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategory, searchQuery]);
 
-  const categoriesList = [
-    "Todas",
-    ...Array.from(
-      new Set(
-        products
-          .filter((p) => !selectedBrand || p.id_fornecedor === selectedBrand.id)
-          .map((p) => p.categoria)
-      )
-    ),
-  ];
+  const categoriesList = useMemo(() => {
+    return ["Todas", ...Array.from(new Set(products.map((p) => p.categoria).filter(Boolean)))];
+  }, [products]);
 
   // Total de itens cadastrados no estoque com quantidade > 0
   const totalItensAtivos = Object.values(estoque).filter((i) => i.disponivel && i.quantidade > 0).length;
@@ -483,7 +545,7 @@ export default function AmbulantesCatalogoPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-zinc-100 font-sans pb-40">
+    <div className="min-h-screen bg-[#09090B] text-zinc-100 font-sans pb-60">
       {/* Toast Feedback */}
       {feedbackMsg && (
         <div
@@ -505,9 +567,9 @@ export default function AmbulantesCatalogoPage() {
             type="button"
             onClick={() => {
               if (selectedBrand) {
-                setSelectedBrand(null);
+                handleClearSelectedBrand();
               } else {
-                navigate(-1);
+                navigate("/app/prestador/ambulantes/online");
               }
             }}
             className="w-9 h-9 rounded-xl bg-[#18181B] border border-[#27272A] flex items-center justify-center text-zinc-300 active:scale-95 transition-all"
@@ -521,7 +583,7 @@ export default function AmbulantesCatalogoPage() {
             </h1>
             <p className="text-xs text-zinc-400">
               {activeTab === "facilitado"
-                ? selectedBrand ? selectedBrand.nome_marca : "Catálogo de Marcas"
+                ? selectedBrand ? selectedBrand.nome_marca : "Catálogo de Marcas Parceiras"
                 : "Seus Produtos Próprios"}
             </p>
           </div>
@@ -551,9 +613,11 @@ export default function AmbulantesCatalogoPage() {
             type="button"
             onClick={() => {
               setActiveTab("facilitado");
-              setSelectedBrand(null);
+              if (!selectedBrand && marcaSlug) {
+                handleClearSelectedBrand();
+              }
             }}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "facilitado"
                 ? "bg-[#0DB87E] text-[#09090B] shadow-md shadow-[#0DB87E]/20"
                 : "text-zinc-400 hover:text-white"
@@ -566,7 +630,7 @@ export default function AmbulantesCatalogoPage() {
           <button
             type="button"
             onClick={() => setActiveTab("livre")}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "livre"
                 ? "bg-[#0DB87E] text-[#09090B] shadow-md shadow-[#0DB87E]/20"
                 : "text-zinc-400 hover:text-white"
@@ -597,173 +661,217 @@ export default function AmbulantesCatalogoPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {brands.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setSelectedBrand(b)}
-                      className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] hover:border-[#0DB87E] flex items-center justify-between text-left transition-all active:scale-[0.99] group cursor-pointer shadow-lg shadow-black/40"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                          {b.logo_url ? (
-                            <img src={b.logo_url} alt={b.nome_marca} className="w-full h-full object-contain p-1" />
-                          ) : (
-                            <span className="text-2xl">🍦</span>
-                          )}
+                  {brands.map((b) => {
+                    const resolvedLogo = resolveImageUrl(b.logo_url);
+                    const isBroken = brokenImages[b.id];
+
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => handleSelectBrand(b)}
+                        className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] hover:border-[#0DB87E] flex items-center justify-between text-left transition-all active:scale-[0.99] group cursor-pointer shadow-lg shadow-black/40"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
+                            {resolvedLogo && !isBroken ? (
+                              <img
+                                src={resolvedLogo}
+                                alt={b.nome_marca}
+                                onError={() => markImageAsBroken(b.id)}
+                                className="w-full h-full object-contain p-1"
+                              />
+                            ) : (
+                              <span className="w-full h-full flex items-center justify-center bg-[#0DB87E]/10 text-[#00FF66] font-extrabold text-sm font-display">
+                                {b.nome_marca ? b.nome_marca.slice(0, 2).toUpperCase() : "UBT"}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-white group-hover:text-[#00FF66] transition-colors">
+                              {b.nome_marca}
+                            </p>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Catálogo Oficial da Marca →
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-white group-hover:text-[#00FF66] transition-colors">
-                            {b.nome_marca}
-                          </p>
-                          <p className="text-xs text-zinc-400 mt-0.5">
-                            {b.total_produtos || 0} produtos no catálogo oficial
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight size={18} className="text-zinc-500 group-hover:text-[#00FF66] transition-colors shrink-0" />
-                    </button>
-                  ))}
+                        <ChevronRight size={18} className="text-zinc-500 group-hover:text-[#00FF66] transition-colors shrink-0" />
+                      </button>
+                    );
+                  })}
 
                   {brands.length === 0 && !loading && (
                     <div className="col-span-full p-8 text-center bg-[#18181B] rounded-2xl border border-[#27272A]">
                       <Store size={32} className="text-zinc-600 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-white">Nenhuma marca parceira ativa no momento.</p>
-                      <p className="text-xs text-zinc-400 mt-1">Cadastre seus itens na aba "Produtos Próprios".</p>
+                      <p className="text-sm font-semibold text-white">Nenhuma marca parceira cadastrada ainda.</p>
+                      <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
+                        As marcas adicionadas no painel administrativo aparecerão aqui automaticamente para abastecimento diário.
+                      </p>
                     </div>
                   )}
                 </div>
               </>
             ) : (
               <>
-                {/* Cabeçalho da Marca Selecionada */}
+                {/* Cabeçalho da Marca Selecionada com Slug */}
                 <div className="flex items-center justify-between p-3.5 bg-[#18181B] border border-[#27272A] rounded-2xl">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-[#09090B] border border-[#27272A] flex items-center justify-center overflow-hidden shrink-0">
-                      {selectedBrand.logo_url ? (
-                        <img src={selectedBrand.logo_url} alt={selectedBrand.nome_marca} className="w-full h-full object-contain p-1" />
+                      {resolveImageUrl(selectedBrand.logo_url) && !brokenImages[selectedBrand.id] ? (
+                        <img
+                          src={resolveImageUrl(selectedBrand.logo_url)}
+                          alt={selectedBrand.nome_marca}
+                          onError={() => markImageAsBroken(selectedBrand.id)}
+                          className="w-full h-full object-contain p-1"
+                        />
                       ) : (
-                        <span className="text-xl">🍦</span>
+                        <span className="w-full h-full flex items-center justify-center bg-[#0DB87E]/10 text-[#00FF66] font-extrabold text-xs">
+                          {selectedBrand.nome_marca.slice(0, 2).toUpperCase()}
+                        </span>
                       )}
                     </div>
                     <div>
                       <p className="text-sm font-bold text-white">{selectedBrand.nome_marca}</p>
-                      <p className="text-xs text-zinc-400">Preencha o estoque diário dos sabores</p>
+                      <p className="text-xs text-zinc-400">Preencha as quantidades retiradas na fábrica</p>
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedBrand(null)}
-                    className="text-xs text-[#00FF66] hover:underline font-semibold"
+                    onClick={handleClearSelectedBrand}
+                    className="text-xs text-[#00FF66] hover:underline font-semibold cursor-pointer"
                   >
                     Trocar marca
                   </button>
                 </div>
 
                 {/* Filtro por Categoria */}
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {categoriesList.map((cat) => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                        selectedCategory === cat
-                          ? "bg-[#0DB87E] text-[#09090B]"
-                          : "bg-[#18181B] text-zinc-400 hover:text-white border border-[#27272A]"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+                {categoriesList.length > 2 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    {categoriesList.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                          selectedCategory === cat
+                            ? "bg-[#0DB87E] text-[#09090B]"
+                            : "bg-[#18181B] text-zinc-400 hover:text-white border border-[#27272A]"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                {/* Busca */}
+                {/* Campo de Busca */}
                 <div className="relative">
                   <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={`Buscar em ${selectedBrand.nome_marca}...`}
+                    placeholder={`Buscar sabores em ${selectedBrand.nome_marca}...`}
                     className="w-full bg-[#18181B] border border-[#27272A] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
                   />
                 </div>
 
                 {/* Grade de Produtos da Marca */}
-                <div className="space-y-3">
-                  {filteredProducts.map((p) => {
-                    const est = estoque[p.id] || {
-                      id_produto_padrao: p.id,
-                      preco_venda: Number(p.preco_sugerido),
-                      quantidade: 0,
-                      disponivel: true,
-                    };
+                {loadingProducts ? (
+                  <div className="p-8 text-center text-xs text-zinc-500">
+                    Carregando cardápio de {selectedBrand.nome_marca}...
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredProducts.map((p) => {
+                      const est = estoque[p.id] || {
+                        id_produto_padrao: p.id,
+                        preco_venda: Number(p.preco_sugerido),
+                        quantidade: 0,
+                        disponivel: true,
+                      };
 
-                    const hasStock = est.quantidade > 0 && est.disponivel;
+                      const hasStock = est.quantidade > 0 && est.disponivel;
+                      const prodImg = resolveImageUrl(p.imagem_url);
+                      const isImgBroken = brokenImages[p.id];
 
-                    return (
-                      <div
-                        key={p.id}
-                        className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                          hasStock
-                            ? "bg-[#18181B] border-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
-                            : "bg-[#18181B]/70 border-[#27272A]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-14 h-14 rounded-xl bg-[#09090B] border border-[#27272A] overflow-hidden flex items-center justify-center shrink-0">
-                            {p.imagem_url ? (
-                              <img src={p.imagem_url} alt={p.nome_produto} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-2xl">🍦</span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                                {p.categoria}
-                              </span>
-                              {hasStock && (
-                                <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#0DB87E]/20 text-[#00FF66] border border-[#0DB87E]/30">
-                                  {est.quantidade} un.
-                                </span>
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                            hasStock
+                              ? "bg-[#18181B] border-[#0DB87E]/50 shadow-md shadow-[#0DB87E]/5"
+                              : "bg-[#18181B]/70 border-[#27272A]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-14 h-14 rounded-xl bg-[#09090B] border border-[#27272A] overflow-hidden flex items-center justify-center shrink-0">
+                              {prodImg && !isImgBroken ? (
+                                <img
+                                  src={prodImg}
+                                  alt={p.nome_produto}
+                                  onError={() => markImageAsBroken(p.id)}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-2xl">🍦</span>
                               )}
                             </div>
-                            <p className="text-xs font-bold text-white truncate mt-1">{p.nome_produto}</p>
-                            <p className="text-[11px] text-zinc-400 mt-0.5">
-                              Sugerido: <span className="text-zinc-300 font-semibold">R$ {Number(p.preco_sugerido).toFixed(2)}</span>
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                                  {p.categoria || "Geral"}
+                                </span>
+                                {hasStock && (
+                                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#0DB87E]/20 text-[#00FF66] border border-[#0DB87E]/30">
+                                    {est.quantidade} un.
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs font-bold text-white truncate mt-1">{p.nome_produto}</p>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                Sugerido: <span className="text-zinc-300 font-semibold">R$ {Number(p.preco_sugerido).toFixed(2)}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Stepper Rápido de Quantidade Diária */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateEstoque(p, est.preco_venda, Math.max(0, est.quantidade - 1), est.disponivel)}
+                              disabled={est.quantidade <= 0 || savingId === p.id}
+                              className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-300 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                            >
+                              <Minus size={14} />
+                            </button>
+
+                            <span className={`w-8 text-center text-xs font-bold ${hasStock ? "text-[#00FF66]" : "text-zinc-400"}`}>
+                              {est.quantidade}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateEstoque(p, est.preco_venda, est.quantidade + 1, true)}
+                              disabled={savingId === p.id}
+                              className="w-8 h-8 rounded-lg bg-[#0DB87E]/20 border border-[#0DB87E]/40 text-[#00FF66] flex items-center justify-center active:scale-95 cursor-pointer hover:bg-[#0DB87E]/30"
+                            >
+                              <Plus size={14} />
+                            </button>
                           </div>
                         </div>
+                      );
+                    })}
 
-                        {/* Stepper Rápido de Quantidade Diária */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateEstoque(p, est.preco_venda, Math.max(0, est.quantidade - 1), est.disponivel)}
-                            disabled={est.quantidade <= 0}
-                            className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-300 active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                          >
-                            <Minus size={14} />
-                          </button>
-
-                          <span className={`w-8 text-center text-xs font-bold ${hasStock ? "text-[#00FF66]" : "text-zinc-400"}`}>
-                            {est.quantidade}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateEstoque(p, est.preco_venda, est.quantidade + 1, true)}
-                            className="w-8 h-8 rounded-lg bg-[#0DB87E]/20 border border-[#0DB87E]/40 text-[#00FF66] flex items-center justify-center active:scale-95 cursor-pointer hover:bg-[#0DB87E]/30"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
+                    {filteredProducts.length === 0 && (
+                      <div className="p-8 text-center bg-[#18181B] rounded-2xl border border-[#27272A]">
+                        <p className="text-sm font-semibold text-white">Nenhum produto cadastrado para esta marca.</p>
+                        <p className="text-xs text-zinc-400 mt-1">Cadastre produtos pelo painel de administração.</p>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -801,6 +909,8 @@ export default function AmbulantesCatalogoPage() {
                 const est = estoque[p.id];
                 const qtd = est?.quantidade ?? 0;
                 const preco = est?.preco_venda ?? p.preco_sugerido;
+                const prodImg = resolveImageUrl(p.imagem_url);
+                const isImgBroken = brokenImages[p.id];
 
                 return (
                   <div
@@ -809,8 +919,13 @@ export default function AmbulantesCatalogoPage() {
                   >
                     <div className="flex items-center gap-3.5 flex-1 min-w-0">
                       <div className="w-14 h-14 rounded-xl bg-[#09090B] border border-[#27272A] overflow-hidden flex items-center justify-center shrink-0">
-                        {p.imagem_url ? (
-                          <img src={p.imagem_url} alt={p.nome_produto} className="w-full h-full object-cover" />
+                        {prodImg && !isImgBroken ? (
+                          <img
+                            src={prodImg}
+                            alt={p.nome_produto}
+                            onError={() => markImageAsBroken(p.id)}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <span className="text-2xl">🍽️</span>
                         )}
@@ -838,7 +953,7 @@ export default function AmbulantesCatalogoPage() {
                       <button
                         type="button"
                         onClick={() => openEditModal(p)}
-                        className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-300 hover:text-white"
+                        className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-300 hover:text-white cursor-pointer"
                         title="Editar produto"
                       >
                         <Edit3 size={14} />
@@ -846,7 +961,7 @@ export default function AmbulantesCatalogoPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteCustomProduct(p.id)}
-                        className="w-8 h-8 rounded-lg bg-red-950/40 border border-red-900/50 flex items-center justify-center text-red-400 hover:text-red-300"
+                        className="w-8 h-8 rounded-lg bg-red-950/40 border border-red-900/50 flex items-center justify-center text-red-400 hover:text-red-300 cursor-pointer"
                         title="Excluir produto"
                       >
                         <Trash2 size={14} />
@@ -866,7 +981,7 @@ export default function AmbulantesCatalogoPage() {
                   <button
                     type="button"
                     onClick={openCreateModal}
-                    className="mt-2 py-2 px-4 rounded-xl bg-[#0DB87E] text-[#09090B] text-xs font-bold inline-flex items-center gap-1.5"
+                    className="mt-2 py-2 px-4 rounded-xl bg-[#0DB87E] text-[#09090B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus size={15} />
                     <span>Cadastrar Primeiro Produto Próprio</span>
@@ -880,22 +995,23 @@ export default function AmbulantesCatalogoPage() {
 
       {/* ========================================================================= */}
       {/* BARRA FIXA INFERIOR DE RESUMO & CONEXÃO NA PRAIA                          */}
+      {/* Posicionada a bottom-16 (64px) para flutuar acima da barra BottomNavLight */}
       {/* ========================================================================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-[#09090B]/95 backdrop-blur-md border-t border-[#27272A] p-4">
+      <footer className="fixed bottom-16 left-0 right-0 z-40 bg-[#09090B]/95 backdrop-blur-md border-t border-[#27272A] p-3.5 shadow-2xl shadow-black">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs text-zinc-400">Total em estoque hoje</p>
+            <p className="text-[11px] text-zinc-400">Total em estoque hoje</p>
             <p className="text-sm font-bold text-white">
-              <span className="text-[#00FF66] font-extrabold">{totalItensAtivos}</span> itens distintos ({totalUnidades} un.)
+              <span className="text-[#00FF66] font-extrabold">{totalItensAtivos}</span> itens ({totalUnidades} un.)
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => navigate("/app/prestador/ambulantes/online")}
-            className="py-3 px-5 rounded-xl bg-gradient-to-r from-[#0DB87E] to-[#00FF66] text-[#09090B] text-sm font-bold shadow-lg shadow-[#0DB87E]/20 hover:opacity-95 active:scale-95 flex items-center gap-2 cursor-pointer"
+            className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#0DB87E] to-[#00FF66] text-[#09090B] text-xs font-bold shadow-lg shadow-[#0DB87E]/20 hover:opacity-95 active:scale-95 flex items-center gap-2 cursor-pointer"
           >
-            <PackageCheck size={18} />
+            <PackageCheck size={16} />
             <span>Ir para a Praia (Online)</span>
           </button>
         </div>
@@ -915,7 +1031,7 @@ export default function AmbulantesCatalogoPage() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-400 hover:text-white"
+                className="w-8 h-8 rounded-lg bg-[#09090B] border border-[#27272A] flex items-center justify-center text-zinc-400 hover:text-white cursor-pointer"
               >
                 <X size={16} />
               </button>

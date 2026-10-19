@@ -44,7 +44,6 @@ const AmbulantesOnlinePage = () => {
   const [allOrders, setAllOrders] = useState<Pedido[]>([]);
   const [showQueueModal, setShowQueueModal] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(120);
-  const demoTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!user.uid) return;
@@ -68,40 +67,60 @@ const AmbulantesOnlinePage = () => {
           }
         }
 
-        // 2. Carrega produtos da sessão
-        const { data: productsData, error: productsErr } = await supabase
-          .from('ambulante_session_produtos')
-          .select('preco, disponivel, produto_id, produtos(nome, emoji, descricao)')
-          .eq('session_id', user.uid);
+        // 2. Carrega produtos reais do estoque do ambulante
+        const mapped: Record<string, SessionProduto> = {};
 
-        if (productsErr) throw productsErr;
+        const { data: estoqueData } = await supabase
+          .from('estoque_ambulante')
+          .select('id_produto_padrao, preco_venda, quantidade, disponivel, produtos_padrao(nome_produto, imagem_url, categoria, descricao)')
+          .eq('id_ambulante', user.uid)
+          .eq('disponivel', true);
 
-        if (productsData) {
-          const mapped: Record<string, SessionProduto> = {};
-          productsData.forEach((item: any) => {
-            const prod = item.produtos;
-            if (prod) {
-              mapped[item.produto_id] = {
-                nome: prod.nome,
-                emoji: prod.emoji || "🍽️",
-                preco: Number(item.preco),
-                disponivel: !!item.disponivel,
+        if (estoqueData && estoqueData.length > 0) {
+          estoqueData.forEach((item: any) => {
+            const prod = item.produtos_padrao;
+            if (prod && item.quantidade > 0) {
+              mapped[item.id_produto_padrao] = {
+                nome: prod.nome_produto,
+                emoji: "🍦",
+                preco: Number(item.preco_venda),
+                disponivel: true,
                 descricao: prod.descricao || "",
-                variosValores: false
+                foto: prod.imagem_url || undefined,
+                variosValores: false,
               };
             }
           });
-          setProdutos(mapped);
         }
+
+        // Se ainda não houver produtos do novo catálogo, consulta a tabela de sessões legada
+        if (Object.keys(mapped).length === 0) {
+          const { data: legacyProducts } = await supabase
+            .from('ambulante_session_produtos')
+            .select('preco, disponivel, produto_id, produtos(nome, emoji, descricao)')
+            .eq('session_id', user.uid);
+
+          if (legacyProducts) {
+            legacyProducts.forEach((item: any) => {
+              const prod = item.produtos;
+              if (prod) {
+                mapped[item.produto_id] = {
+                  nome: prod.nome,
+                  emoji: prod.emoji || "🍽️",
+                  preco: Number(item.preco),
+                  disponivel: !!item.disponivel,
+                  descricao: prod.descricao || "",
+                  variosValores: false,
+                };
+              }
+            });
+          }
+        }
+
+        setProdutos(mapped);
       } catch (err) {
         console.error("Erro ao carregar sessão/produtos do Supabase:", err);
-        // Fallback local caso dê algum erro
-        const defaults: Record<string, SessionProduto> = {};
-        ["milho", "churrasco", "amendoim"].forEach((id) => {
-          const p = CATALOGO_PADRAO.find((x) => x.id === id);
-          if (p) defaults[id] = { nome: p.nome, emoji: p.emoji, preco: p.precoSugerido, disponivel: true, descricao: p.descricao };
-        });
-        setProdutos(defaults);
+        setProdutos({});
       }
     };
 
@@ -206,31 +225,6 @@ const AmbulantesOnlinePage = () => {
       supabase.removeChannel(channel);
     };
   }, [isOnline, user.uid]);
-
-  // Demo: simulate an incoming pedido shortly after going online (so the prototype surfaces the modal)
-  useEffect(() => {
-    if (!isOnline || activeOrder) return;
-    demoTimerRef.current = window.setTimeout(() => {
-      const itens = Object.entries(produtos).slice(0, 2).map(([prodId, p]) => ({
-        prodId, nome: p.nome, emoji: p.emoji, qty: 1, precoUnit: p.preco, subtotal: p.preco,
-      }));
-      if (itens.length === 0) return;
-      const total = itens.reduce((a, i) => a + i.subtotal, 0);
-      setActiveOrder({
-        id: `demo-${Date.now()}`,
-        itens, total, modalidade: "local_fixo",
-      });
-      setShowOrderModal(true);
-      if (typeof navigator !== "undefined" && (navigator as any).userActivation?.hasBeenActive && "vibrate" in navigator) {
-        try {
-          (navigator as Navigator).vibrate?.([200, 100, 200]);
-        } catch {}
-      }
-    }, 10000);
-    return () => {
-      if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current);
-    };
-  }, [isOnline, produtos, activeOrder]);
 
   // Countdown for modal
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, Component, ErrorInfo } from 'react';
+import React, { useEffect, useRef, useState, Component, ErrorInfo } from 'react';
 import {
   APIProvider,
   Map as GoogleMap,
@@ -33,6 +33,9 @@ interface MapErrorBoundaryState {
 }
 
 class MapErrorBoundary extends Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+  private errorListener?: (event: ErrorEvent) => void;
+  private rejectionListener?: (event: PromiseRejectionEvent) => void;
+
   constructor(props: MapErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
@@ -44,6 +47,47 @@ class MapErrorBoundary extends Component<MapErrorBoundaryProps, MapErrorBoundary
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.warn('[UBTMap] Google Maps Error caught by Boundary:', error, errorInfo);
+  }
+
+  componentDidMount() {
+    this.errorListener = (event: ErrorEvent) => {
+      const msg = event.message || (event.error && event.error.message) || '';
+      if (msg.includes('getRootNode') || msg.includes('google') || msg.includes('AdvancedMarker')) {
+        console.warn('[UBTMap] Suppressed async Google Maps error:', msg);
+        try {
+          event.preventDefault();
+          event.stopPropagation();
+        } catch {
+          /* noop */
+        }
+        this.setState({ hasError: true });
+      }
+    };
+
+    this.rejectionListener = (event: PromiseRejectionEvent) => {
+      const reason = String(event.reason?.message || event.reason || '');
+      if (reason.includes('getRootNode') || reason.includes('google') || reason.includes('AdvancedMarker')) {
+        console.warn('[UBTMap] Suppressed async Google Maps unhandled rejection:', reason);
+        try {
+          event.preventDefault();
+        } catch {
+          /* noop */
+        }
+        this.setState({ hasError: true });
+      }
+    };
+
+    window.addEventListener('error', this.errorListener);
+    window.addEventListener('unhandledrejection', this.rejectionListener);
+  }
+
+  componentWillUnmount() {
+    if (this.errorListener) {
+      window.removeEventListener('error', this.errorListener);
+    }
+    if (this.rejectionListener) {
+      window.removeEventListener('unhandledrejection', this.rejectionListener);
+    }
   }
 
   render() {
@@ -81,6 +125,26 @@ function TacticalMapFallback({ style }: { style?: React.CSSProperties }) {
       </div>
     </div>
   );
+}
+
+// Renderizador seguro de filhos que só monta quando a instância do Google Map está ativa
+function SafeMapChildren({ children }: { children: React.ReactNode }) {
+  const map = useMap();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!map) {
+      setReady(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setReady(true);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [map]);
+
+  if (!map || !ready) return null;
+  return <>{children}</>;
 }
 
 // Componente para desenhar Polyline no Google Map
@@ -210,8 +274,10 @@ export function UBTMap({
             strictBounds: false,
           }}
         >
-          {onClick && <MapClickHandler onClick={onClick} />}
-          {children}
+          <SafeMapChildren>
+            {onClick && <MapClickHandler onClick={onClick} />}
+            {children}
+          </SafeMapChildren>
         </GoogleMap>
       </APIProvider>
     </MapErrorBoundary>

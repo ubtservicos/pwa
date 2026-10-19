@@ -173,7 +173,9 @@ const App = () => (
                 <Route path="/app/ambulantes/:sessionId" element={<AmbulanteCatalogPage />} />
                 <Route path="/app/prestador/ambulantes/onboarding" element={<AmbulantesOnboardingPage />} />
                 <Route path="/app/prestador/ambulantes/cardapio/editar" element={<AmbulantesCatalogoPage />} />
+                <Route path="/app/prestador/ambulantes/cardapio/editar/:marcaSlug" element={<AmbulantesCatalogoPage />} />
                 <Route path="/app/prestador/ambulantes/catalogo" element={<AmbulantesCatalogoPage />} />
+                <Route path="/app/prestador/ambulantes/catalogo/:marcaSlug" element={<AmbulantesCatalogoPage />} />
                 <Route path="/app/prestador/ambulantes/online" element={<AmbulantesOnlinePage />} />
                 <Route path="/app/prestador/ambulantes/pedido/:id" element={<AmbulantesGerenciarPedidoPage />} />
                 <Route path="/app/diaristas" element={<DiaristasBuscaPage />} />
