@@ -41,7 +41,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { maskPhone, maskCPF, maskCNPJ, generateReferralSlug } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
-import JaSouFundadorModal from "@/components/JaSouFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
 
 interface FaqItemProps {
@@ -539,7 +538,6 @@ export default function Index() {
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [showGenericGuide, setShowGenericGuide] = useState(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
-  const [isJaSouFundadorOpen, setIsJaSouFundadorOpen] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
 
   const handlePwaInstallClick = async () => {
@@ -1155,7 +1153,7 @@ export default function Index() {
           
           <button 
             type="button"
-            onClick={() => setIsJaSouFundadorOpen(true)}
+            onClick={() => navigate("/sou-fundador")}
             className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
           >
             Já sou Fundador
@@ -1236,7 +1234,7 @@ export default function Index() {
           </button>
 
           <button 
-            onClick={() => { setIsMobileMenuOpen(false); setIsJaSouFundadorOpen(true); }}
+            onClick={() => { setIsMobileMenuOpen(false); navigate("/sou-fundador"); }}
             className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white/90 font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
           >
             Já sou Fundador
@@ -1295,7 +1293,7 @@ export default function Index() {
             {/* Botão secundário: Já sou Fundador */}
             <button
               type="button"
-              onClick={() => setIsJaSouFundadorOpen(true)}
+              onClick={() => navigate("/sou-fundador")}
               className="w-full h-13 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/90 hover:text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-sm cursor-pointer"
             >
               <Users className="w-4 h-4 text-green" />
@@ -2545,7 +2543,7 @@ export default function Index() {
               {/* Botão Secundário: Já sou Fundador */}
               <button
                 type="button"
-                onClick={() => setIsJaSouFundadorOpen(true)}
+                onClick={() => navigate("/sou-fundador")}
                 className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
               >
                 <Users className="w-3.5 h-3.5 text-green" />
@@ -3005,12 +3003,6 @@ export default function Index() {
         }}
       />
 
-      {/* Modal Já Sou Fundador (Consulta e Apadrinhamento) */}
-      <JaSouFundadorModal
-        isOpen={isJaSouFundadorOpen}
-        onClose={() => setIsJaSouFundadorOpen(false)}
-        onRegisterClick={scrollToCta}
-      />
 
       {/* Modal Guia de Instalação no iOS Safari */}
       <IosInstallModal
