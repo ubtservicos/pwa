@@ -17,7 +17,8 @@ import {
   ShieldCheck,
   XCircle,
   Copy,
-  Check
+  Check,
+  Loader2
 } from "lucide-react";
 import { Card, PageTitle, Pill, GhostButton } from "@/components/admin/ui";
 import {
@@ -58,6 +59,8 @@ export interface WaitlistItem {
   cep_moradia?: string | null;
   bairro_moradia?: string | null;
   bairro_trabalho?: string | null;
+  referral_code?: string | null;
+  user_id?: string | null;
 }
 
 interface WaitlistStats {
@@ -103,12 +106,128 @@ export default function AdminWaitlistPage() {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedPerfil, setSelectedPerfil] = useState("Todos");
-  const [selectedStatus, setSelectedStatus] = useState("Todos");
+  const [selectedStatus, setSelectedStatus] = useState("pendentes");
   const [selectedCidade, setSelectedCidade] = useState("Todas");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLeadModal, setSelectedLeadModal] = useState<WaitlistItem | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+
+  // Estados para edição do código de indicação (Vanity Slug) no modal de detalhes
+  const [customSlug, setCustomSlug] = useState("");
+  const [isSavingSlug, setIsSavingSlug] = useState(false);
+  const [slugStatus, setSlugStatus] = useState<"idle" | "saved">("idle");
+  const [slugError, setSlugError] = useState("");
+
+  useEffect(() => {
+    if (selectedLeadModal) {
+      setCustomSlug(selectedLeadModal.referral_code || "");
+      setSlugStatus("idle");
+      setSlugError("");
+    }
+  }, [selectedLeadModal?.id, selectedLeadModal?.referral_code]);
+
+  const handleSaveReferralSlug = async () => {
+    if (!selectedLeadModal) return;
+    const cleanSlug = customSlug.trim().toLowerCase();
+
+    if (!cleanSlug) {
+      setSlugError("Informe o código de indicação desejado.");
+      return;
+    }
+
+    if (cleanSlug.length < 3 || cleanSlug.length > 30) {
+      setSlugError("O código deve ter entre 3 e 30 caracteres.");
+      return;
+    }
+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanSlug)) {
+      setSlugError("Use apenas letras minúsculas, números e hífens.");
+      return;
+    }
+
+    setIsSavingSlug(true);
+    setSlugError("");
+
+    try {
+      // 1. Validação de unicidade contra usuarios
+      let usersCheck = supabase
+        .from("usuarios")
+        .select("id, email")
+        .ilike("referral_code", cleanSlug);
+
+      if (selectedLeadModal.user_id) {
+        usersCheck = usersCheck.neq("id", selectedLeadModal.user_id);
+      }
+
+      const { data: existingUser, error: errUserCheck } = await usersCheck.maybeSingle();
+      if (errUserCheck && errUserCheck.code !== "PGRST116") throw errUserCheck;
+
+      if (existingUser) {
+        const isSameEmail = selectedLeadModal.email && 
+          existingUser.email?.toLowerCase() === selectedLeadModal.email.toLowerCase();
+
+        if (!isSameEmail) {
+          setSlugError("Este código já está em uso por outro usuário.");
+          setIsSavingSlug(false);
+          return;
+        }
+      }
+
+      // 2. Validação de unicidade contra outros registros da waitlist
+      const { data: existingWl, error: errWlCheck } = await supabase
+        .from("waitlist")
+        .select("id")
+        .ilike("referral_code", cleanSlug)
+        .neq("id", selectedLeadModal.id)
+        .maybeSingle();
+
+      if (errWlCheck && errWlCheck.code !== "PGRST116") throw errWlCheck;
+
+      if (existingWl) {
+        setSlugError("Este código já está em uso na lista de espera.");
+        setIsSavingSlug(false);
+        return;
+      }
+
+      // 3. Persistência direta em public.waitlist (usando lead.id atual)
+      const { error: updWlErr } = await supabase
+        .from("waitlist")
+        .update({ referral_code: cleanSlug })
+        .eq("id", selectedLeadModal.id);
+
+      if (updWlErr) throw updWlErr;
+
+      // 4. Persistência em public.usuarios se o e-mail ou user_id já existir
+      if (selectedLeadModal.user_id) {
+        await supabase
+          .from("usuarios")
+          .update({ referral_code: cleanSlug })
+          .eq("id", selectedLeadModal.user_id);
+      }
+      if (selectedLeadModal.email) {
+        await supabase
+          .from("usuarios")
+          .update({ referral_code: cleanSlug })
+          .ilike("email", selectedLeadModal.email.trim().toLowerCase());
+      }
+
+      // 5. Atualização reativa dos estados locais
+      setSelectedLeadModal((prev) => (prev ? { ...prev, referral_code: cleanSlug } : null));
+      setLeads((prev) =>
+        prev.map((l) => (l.id === selectedLeadModal.id ? { ...l, referral_code: cleanSlug } : l))
+      );
+
+      setSlugStatus("saved");
+      toast.show("Código de indicação atualizado com sucesso! ✓");
+      setTimeout(() => setSlugStatus("idle"), 3000);
+    } catch (err: any) {
+      console.error("Erro ao salvar código de indicação:", err);
+      setSlugError(err.message || "Erro ao salvar código de indicação.");
+    } finally {
+      setIsSavingSlug(false);
+    }
+  };
 
   const handleCopyLink = async (text: string, type: string) => {
     try {
@@ -292,7 +411,11 @@ export default function AdminWaitlistPage() {
         query = query.cs("perfil", [selectedPerfil]);
       }
 
-      if (selectedStatus !== "Todos") {
+      if (selectedStatus === "pendentes") {
+        query = query.neq("status", "approved").neq("status", "aprovado");
+      } else if (selectedStatus === "approved" || selectedStatus === "aprovado") {
+        query = query.in("status", ["approved", "aprovado"]);
+      } else if (selectedStatus !== "Todos") {
         query = query.eq("status", selectedStatus);
       }
 
@@ -459,12 +582,13 @@ export default function AdminWaitlistPage() {
               className="bg-zinc-950 text-zinc-200 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
-              <option value="Todos">Todos</option>
+              <option value="pendentes">Pendentes (Não-Aprovados)</option>
               <option value="novo">Novo</option>
               <option value="contatado">Contatado</option>
               <option value="rejeitado">Rejeitado</option>
               <option value="arquivado">Arquivado</option>
-              <option value="approved">Aprovado</option>
+              <option value="approved">Aprovados</option>
+              <option value="Todos">Todos os Status</option>
             </select>
           </div>
 
@@ -1034,6 +1158,75 @@ export default function AdminWaitlistPage() {
                   </div>
                 </div>
 
+                {/* Código de Indicação Personalizado (Vanity Slug) */}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                    Código de Indicação Personalizado (Vanity Slug):
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="text"
+                      placeholder="ex: pousada-brisa"
+                      value={customSlug}
+                      onChange={(e) => {
+                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                        setCustomSlug(val);
+                        setSlugStatus("idle");
+                        setSlugError("");
+                      }}
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: slugError ? "1px solid #E84040" : "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingSlug || !customSlug.trim()}
+                      onClick={handleSaveReferralSlug}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: slugStatus === "saved" ? "rgba(13,184,126,0.15)" : "#0DB87E",
+                        color: slugStatus === "saved" ? "#0DB87E" : "#0E0F12",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: isSavingSlug || !customSlug.trim() ? "not-allowed" : "pointer",
+                        opacity: isSavingSlug || !customSlug.trim() ? 0.6 : 1,
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {isSavingSlug ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" /> Salvando...
+                        </>
+                      ) : slugStatus === "saved" ? (
+                        <>
+                          <Check size={13} color="#0DB87E" /> Salvo!
+                        </>
+                      ) : (
+                        "Salvar Slug"
+                      )}
+                    </button>
+                  </div>
+                  {slugError && (
+                    <div style={{ fontSize: 11, color: "#E84040", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span>⚠</span> {slugError}
+                    </div>
+                  )}
+                </div>
+
                 {/* Link Padrinho/Madrinha */}
                 <div>
                   <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
@@ -1043,7 +1236,7 @@ export default function AdminWaitlistPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.id}`}
+                      value={`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.referral_code || selectedLeadModal.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -1060,7 +1253,7 @@ export default function AdminWaitlistPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.id}`, "padrinho")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.referral_code || selectedLeadModal.id}`, "padrinho")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
