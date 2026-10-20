@@ -15,6 +15,7 @@ import {
   Building2,
   Waves,
   Home,
+  Loader2,
 } from "lucide-react";
 import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -43,6 +44,7 @@ interface DetailUser {
   bairro_moradia?: string;
   bairro_trabalho?: string;
   praias_frequenta?: string;
+  referral_code?: string;
   createdAt: string;
   kycStatus?: "approved" | "pending" | "rejected";
   services?: string[];
@@ -87,6 +89,12 @@ export default function AdminClienteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
+  // Estados para Código de Indicação Personalizado (Vanity Slug)
+  const [customRefCode, setCustomRefCode] = useState<string>("");
+  const [isSavingRefCode, setIsSavingRefCode] = useState(false);
+  const [refCodeStatus, setRefCodeStatus] = useState<"idle" | "saved">("idle");
+  const [refCodeError, setRefCodeError] = useState("");
+
   const handleCopyLink = async (text: string, type: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -96,6 +104,96 @@ export default function AdminClienteDetailPage() {
     } catch (err) {
       console.error("Erro ao copiar link:", err);
       toast.show("Erro ao copiar link.");
+    }
+  };
+
+  const handleSaveReferralCode = async () => {
+    if (!id) return;
+    const cleanCode = customRefCode.trim().toLowerCase();
+
+    if (!cleanCode) {
+      setRefCodeError("Informe um código de indicação.");
+      return;
+    }
+
+    if (cleanCode.length < 3 || cleanCode.length > 40) {
+      setRefCodeError("O código deve ter entre 3 e 40 caracteres.");
+      return;
+    }
+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanCode)) {
+      setRefCodeError("Use apenas letras minúsculas, números e hífens.");
+      return;
+    }
+
+    setIsSavingRefCode(true);
+    setRefCodeError("");
+
+    try {
+      // 1. Tentar chamar a RPC set_user_referral_code
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("set_user_referral_code", {
+        p_user_id: id,
+        p_code: cleanCode,
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (rpcRes.success === false) {
+          setRefCodeError(rpcRes.error || "Código de indicação indisponível.");
+          setIsSavingRefCode(false);
+          return;
+        }
+      } else {
+        // Fallback: validação direta no banco
+        const { data: existingUser } = await supabase
+          .from("usuarios")
+          .select("id")
+          .ilike("referral_code", cleanCode)
+          .neq("id", id)
+          .maybeSingle();
+
+        if (existingUser) {
+          setRefCodeError("Este código já está em uso por outro usuário.");
+          setIsSavingRefCode(false);
+          return;
+        }
+
+        const { data: existingWl } = await supabase
+          .from("waitlist")
+          .select("id")
+          .ilike("referral_code", cleanCode)
+          .neq("id", id)
+          .maybeSingle();
+
+        if (existingWl) {
+          setRefCodeError("Este código já está em uso na lista de espera.");
+          setIsSavingRefCode(false);
+          return;
+        }
+
+        const { error: updErr } = await supabase
+          .from("usuarios")
+          .update({ referral_code: cleanCode })
+          .eq("id", id);
+
+        if (updErr) throw updErr;
+
+        if (dbWaitlist?.id) {
+          await supabase
+            .from("waitlist")
+            .update({ referral_code: cleanCode })
+            .eq("id", dbWaitlist.id);
+        }
+      }
+
+      setDbUser((prev: any) => (prev ? { ...prev, referral_code: cleanCode } : prev));
+      setRefCodeStatus("saved");
+      toast.show("Código de indicação atualizado com sucesso! ✓");
+      setTimeout(() => setRefCodeStatus("idle"), 3000);
+    } catch (err: any) {
+      console.error("Erro ao salvar código de indicação:", err);
+      setRefCodeError(err.message || "Erro ao salvar código.");
+    } finally {
+      setIsSavingRefCode(false);
     }
   };
 
@@ -206,7 +304,10 @@ export default function AdminClienteDetailPage() {
       setDiarista(diaristaData);
       setAssociacaoNome(assocName);
       setDbOrders(dbPedidos || []);
-
+      const initialRef = userData?.referral_code || waitlistRow?.referral_code || profileData?.referral_code || "";
+      if (initialRef) {
+        setCustomRefCode(initialRef);
+      }
     } catch (err) {
       console.error("Erro ao carregar detalhes do usuário:", err);
       toast.show("Erro ao carregar detalhes do usuário.");
@@ -294,6 +395,8 @@ export default function AdminClienteDetailPage() {
     const bairroTrabalho = dbProfile?.bairro_trabalho || dbUser?.bairro_trabalho || dbWaitlist?.bairro_trabalho || null;
     const praiasFrequenta = dbProfile?.praias_frequenta || dbUser?.praias_frequenta || extractPraias(dbWaitlist?.observacoes) || null;
 
+    const currentRefCode = dbUser?.referral_code || dbWaitlist?.referral_code || dbProfile?.referral_code || "";
+
     const detailUser: DetailUser = {
       id: dbUser.id,
       name,
@@ -304,6 +407,7 @@ export default function AdminClienteDetailPage() {
       bairro_moradia: bairroMoradia,
       bairro_trabalho: bairroTrabalho,
       praias_frequenta: praiasFrequenta,
+      referral_code: currentRefCode,
       createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
       kycStatus,
       services,
@@ -667,6 +771,76 @@ export default function AdminClienteDetailPage() {
                   </div>
                 </div>
 
+                {/* Código de Indicação Personalizado (Vanity Slug) */}
+                <div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Código de Indicação Personalizado:</span>
+                    <span style={{ fontSize: 10, color: "var(--admin-muted)", fontWeight: 400 }}>Apenas letras minúsculas, números e hífens</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="text"
+                      placeholder="ex: pousada-brisa"
+                      value={customRefCode}
+                      onChange={(e) => {
+                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                        setCustomRefCode(val);
+                        setRefCodeStatus("idle");
+                        setRefCodeError("");
+                      }}
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: refCodeError ? "1px solid #E84040" : "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingRefCode || !customRefCode.trim()}
+                      onClick={handleSaveReferralCode}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: refCodeStatus === "saved" ? "rgba(13,184,126,0.15)" : "#0DB87E",
+                        color: refCodeStatus === "saved" ? "#0DB87E" : "#0E0F12",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: isSavingRefCode || !customRefCode.trim() ? "not-allowed" : "pointer",
+                        opacity: isSavingRefCode || !customRefCode.trim() ? 0.6 : 1,
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {isSavingRefCode ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" /> Salvando...
+                        </>
+                      ) : refCodeStatus === "saved" ? (
+                        <>
+                          <Check size={13} color="#0DB87E" /> Salvo!
+                        </>
+                      ) : (
+                        "Salvar Slug"
+                      )}
+                    </button>
+                  </div>
+                  {refCodeError && (
+                    <div style={{ fontSize: 11, color: "#E84040", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                      <span>⚠</span> {refCodeError}
+                    </div>
+                  )}
+                </div>
+
                 {/* Link Padrinho/Madrinha */}
                 <div>
                   <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
@@ -676,7 +850,7 @@ export default function AdminClienteDetailPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`${getAppOrigin()}/cadastro?ref=${user.id}`}
+                      value={`${getAppOrigin()}/cadastro?ref=${user.referral_code || user.id}`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -693,7 +867,7 @@ export default function AdminClienteDetailPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${user.id}`, "padrinho")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${user.referral_code || user.id}`, "padrinho")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
