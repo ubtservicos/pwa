@@ -17,6 +17,7 @@ export interface Database {
           praias_frequenta: string[] | null;
           praias_atende: string[] | null;
           cnpj: string | null;
+          referral_code: string | null;
         };
         Insert: {
           id: string;
@@ -33,6 +34,7 @@ export interface Database {
           praias_frequenta?: string[] | null;
           praias_atende?: string[] | null;
           cnpj?: string | null;
+          referral_code?: string | null;
         };
         Update: {
           id?: string;
@@ -49,6 +51,7 @@ export interface Database {
           praias_frequenta?: string[] | null;
           praias_atende?: string[] | null;
           cnpj?: string | null;
+          referral_code?: string | null;
         };
       };
       user_consents: {

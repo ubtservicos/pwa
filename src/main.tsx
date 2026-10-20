@@ -33,19 +33,9 @@ try {
 }
 */
 
-// Dynamically configure Title for Environment if needed
-try {
-  const isProd = 
-    window.location.hostname === "ubt.app.br" ||
-    (import.meta.env.VITE_APP_ENV === "production" && 
-     !window.location.hostname.includes("homolog") && 
-     !window.location.hostname.includes("localhost"));
-  
-  if (!isProd && typeof document !== "undefined") {
-    document.title = "UBT Homolog — O Superapp do Trabalhador";
-  }
-} catch (e) {
-  console.debug("[PWA] Environment title configuration bypassed:", e);
+// Configure Title strictly fixed across all environments and hostnames
+if (typeof document !== "undefined") {
+  document.title = "UBT Serviços — O Superapp da Praia";
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
