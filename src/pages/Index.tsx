@@ -23,7 +23,12 @@ import {
   Menu,
   UserPlus,
   Loader2,
-  Copy
+  Copy,
+  User,
+  Building2,
+  Lock,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { trackEvent } from "@/services/AnalyticsService";
@@ -34,7 +39,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { maskPhone, maskCPF, generateReferralSlug } from "@/utils/masks";
+import { maskPhone, maskCPF, maskCNPJ, generateReferralSlug } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import JaSouFundadorModal from "@/components/JaSouFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
@@ -345,87 +350,163 @@ const PRAIAS_LIST = [
 ];
 
 const waitlistSchema = z.object({
-  nome: z.string().min(3, "Mínimo 3 caracteres"),
-  cpf: z
-    .string()
-    .min(14, "Informe o CPF completo")
-    .refine((val) => val.replace(/\D/g, "").length === 11, "CPF deve ter 11 dígitos"),
+  tipoPessoa: z.enum(["PF", "PJ"]).default("PF"),
+
+  // Campos PF
+  nome: z.string().optional(),
+  cpf: z.string().optional(),
+  perfil: z.string().optional(),
+
+  // Campos PJ
+  nome_empresa: z.string().optional(),
+  cnpj: z.string().optional(),
+  responsavel_legal: z.string().optional(),
+  cpf_responsavel: z.string().optional(),
+  regiao_atuacao_pj: z.string().optional(),
+
+  // Campos Comuns
+  telefone: z.string().min(10, "Informe um WhatsApp válido"),
   email: z.string().email("E-mail inválido"),
-  telefone: z.string().min(10, "Telefone incompleto"),
-  perfil: z.array(z.string()).min(1, "Selecione ao menos um perfil"),
-  possuiContaMercadoPago: z.boolean().optional().nullable(),
-  regiao_atuacao: z.array(z.string()).optional().default([]),
+  senha: z.string().min(8, "A senha deve ter no mínimo 8 caracteres"),
+  confirmarSenha: z.string().min(1, "Confirme sua senha"),
+  possuiContaMercadoPago: z.boolean({ required_error: "Informe se possui conta no Mercado Pago" }),
+
+  // Condicionais PF
+  regiao_atuacao_pf: z.array(z.string()).optional().default([]),
   praias: z.array(z.string()).optional().default([]),
   bairros: z.array(z.string()).optional().default([]),
   bairro_trabalho: z.string().optional().default(""),
+
   acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
 }).superRefine((data, ctx) => {
-  const p = data.perfil || [];
+  // 1. Validação de Senha
+  if (data.senha !== data.confirmarSenha) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "As senhas não coincidem",
+      path: ["confirmarSenha"],
+    });
+  }
 
-  // Exigir Mercado Pago APENAS para perfis profissionais/comerciais/associações
-  const PRO_PERFIS = ["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "tomador"];
-  const requiresMercadoPago = p.some(prof => PRO_PERFIS.includes(prof));
-
-  if (requiresMercadoPago) {
-    if (data.possuiContaMercadoPago === undefined || data.possuiContaMercadoPago === null) {
+  // 2. Validação se PF
+  if (data.tipoPessoa === "PF") {
+    if (!data.nome || data.nome.trim().length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Por favor, responda se possui conta no Mercado Pago",
-        path: ["possuiContaMercadoPago"],
+        message: "Informe seu nome completo (mínimo 3 caracteres)",
+        path: ["nome"],
       });
+    }
+
+    const cleanCpf = (data.cpf || "").replace(/\D/g, "");
+    if (cleanCpf.length !== 11) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CPF deve ter 11 dígitos",
+        path: ["cpf"],
+      });
+    }
+
+    if (!data.perfil) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione seu perfil",
+        path: ["perfil"],
+      });
+    } else {
+      if ((data.perfil === "mototaxista" || data.perfil === "diarista") && (!data.regiao_atuacao_pf || data.regiao_atuacao_pf.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione pelo menos uma região de atuação",
+          path: ["regiao_atuacao_pf"],
+        });
+      }
+
+      if (data.perfil === "ambulante" && (!data.praias || data.praias.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione pelo menos uma praia de atuação",
+          path: ["praias"],
+        });
+      }
+
+      if (data.perfil === "morador") {
+        if (!data.bairros || data.bairros.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione o bairro de residência",
+            path: ["bairros"],
+          });
+        }
+        if (!data.praias || data.praias.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione pelo menos uma praia que costuma frequentar",
+            path: ["praias"],
+          });
+        }
+      }
+
+      if (data.perfil === "turista") {
+        if (!data.bairros || data.bairros.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione o bairro de hospedagem",
+            path: ["bairros"],
+          });
+        }
+        if (!data.praias || data.praias.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione pelo menos uma praia que costuma frequentar",
+            path: ["praias"],
+          });
+        }
+      }
     }
   }
 
-  if (p.includes("associacao") || p.includes("mototaxista") || p.includes("diarista")) {
-    if (!data.regiao_atuacao || data.regiao_atuacao.length === 0) {
+  // 3. Validação se PJ
+  if (data.tipoPessoa === "PJ") {
+    if (!data.nome_empresa || data.nome_empresa.trim().length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos uma região de atuação",
-        path: ["regiao_atuacao"],
+        message: "Informe o nome da Associação ou Empresa",
+        path: ["nome_empresa"],
       });
     }
-  }
 
-  if (p.includes("ambulante")) {
-    if (!data.praias || data.praias.length === 0) {
+    const cleanCnpj = (data.cnpj || "").replace(/\D/g, "");
+    if (cleanCnpj.length !== 14) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos uma praia de atuação",
-        path: ["praias"],
+        message: "CNPJ deve conter 14 dígitos",
+        path: ["cnpj"],
       });
     }
-  }
 
-  if (p.includes("morador")) {
-    if (!data.bairros || data.bairros.length === 0) {
+    if (!data.responsavel_legal || data.responsavel_legal.trim().length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione o bairro de residência",
-        path: ["bairros"],
+        message: "Informe o nome do responsável legal",
+        path: ["responsavel_legal"],
       });
     }
-    if (!data.praias || data.praias.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos uma praia que costuma frequentar",
-        path: ["praias"],
-      });
-    }
-  }
 
-  if (p.includes("turista")) {
-    if (!data.bairros || data.bairros.length === 0) {
+    const cleanCpfResp = (data.cpf_responsavel || "").replace(/\D/g, "");
+    if (cleanCpfResp.length !== 11) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione o bairro que costuma se hospedar",
-        path: ["bairros"],
+        message: "CPF do responsável deve ter 11 dígitos",
+        path: ["cpf_responsavel"],
       });
     }
-    if (!data.praias || data.praias.length === 0) {
+
+    if (!data.regiao_atuacao_pj) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos uma praia que costuma frequentar",
-        path: ["praias"],
+        message: "Selecione a região de atuação",
+        path: ["regiao_atuacao_pj"],
       });
     }
   }
@@ -475,6 +556,8 @@ export default function Index() {
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
   const [searchPraiaQuery, setSearchPraiaQuery] = useState("");
   const [searchBairroQuery, setSearchBairroQuery] = useState("");
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
 
   const {
     register,
@@ -487,12 +570,21 @@ export default function Index() {
     resolver: zodResolver(waitlistSchema),
     mode: "onChange",
     defaultValues: {
+      tipoPessoa: "PF",
       nome: "",
       cpf: "",
+      perfil: "",
+      nome_empresa: "",
+      cnpj: "",
+      responsavel_legal: "",
+      cpf_responsavel: "",
+      regiao_atuacao_pj: "",
       telefone: "",
       email: "",
-      perfil: [],
-      regiao_atuacao: [],
+      senha: "",
+      confirmarSenha: "",
+      possuiContaMercadoPago: undefined as unknown as boolean,
+      regiao_atuacao_pf: [],
       praias: [],
       bairros: [],
       bairro_trabalho: "",
@@ -500,9 +592,11 @@ export default function Index() {
     },
   });
 
-  const perfil = watch("perfil");
+  const tipoPessoa = watch("tipoPessoa") || "PF";
+  const perfil = watch("perfil") || "";
   const selectedBairros = watch("bairros") || [];
   const selectedPraias = watch("praias") || [];
+  const selectedRegiaoPf = watch("regiao_atuacao_pf") || [];
   const filteredPraias = PRAIAS_LIST.filter((p) =>
     p.toLowerCase().includes(searchPraiaQuery.toLowerCase())
   );
@@ -720,7 +814,7 @@ export default function Index() {
       "Novo padrinho registrado (+0,5% de repasse)",
       "Coleta finalizada em Toninhas",
       "Prêmio Consumidor acumulado: R$ 421.00",
-      "Split financeiro: 2% transferido para Associação"
+      "Split financeiro: 0,5% transferido para Associação"
     ];
     const verticals = ["Mototáxi", "Diaristas", "Côco & Cia", "Ambulantes", "Financeiro"];
     const badges = ["Ativo", "Sucesso", "Reciclagem", "Indicação", "Split"];
@@ -771,20 +865,86 @@ export default function Index() {
     setSubmitError("");
 
     try {
-      // 1. Criar cliente Supabase estritamente anônimo para evitar conflitos de tokens JWT expirados/corrompidos no localStorage mobile
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-      
-      const publicClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false
+      const isPF = values.tipoPessoa === "PF";
+      const cleanCpf = isPF && values.cpf ? values.cpf.replace(/\D/g, "") : null;
+      const cleanCnpj = !isPF && values.cnpj ? values.cnpj.replace(/\D/g, "") : null;
+      const cleanCpfResp = !isPF && values.cpf_responsavel ? values.cpf_responsavel.replace(/\D/g, "") : null;
+      const nomeFinal = (isPF ? values.nome : values.nome_empresa)?.trim() || "";
+      const perfilArray = isPF ? (values.perfil ? [values.perfil] : ["morador"]) : ["associacao"];
+      const userRole = isPF ? (values.perfil || "morador") : "associacao";
+      const regiao = isPF 
+        ? (values.regiao_atuacao_pf && values.regiao_atuacao_pf.length > 0 ? values.regiao_atuacao_pf.join(", ") : null) 
+        : (values.regiao_atuacao_pj || null);
+
+      // 1. Registro real no Supabase Auth para habilitar login imediato e fluxo nativo de recuperação de senha
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: values.email.trim().toLowerCase(),
+        password: values.senha,
+        options: {
+          data: {
+            nome: nomeFinal,
+            tipo_pessoa: values.tipoPessoa,
+            cpf: cleanCpf,
+            cnpj: cleanCnpj,
+            telefone: values.telefone.trim(),
+            perfil: perfilArray,
+            role: userRole,
+            responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+            cpf_responsavel: cleanCpfResp,
+            regiao_atuacao: regiao,
+          }
         }
       });
 
-      const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      if (authError) {
+        console.error("[Waitlist] Erro no Supabase Auth SignUp:", authError);
+        const authMsg = authError.message?.toLowerCase() || "";
+        if (
+          authMsg.includes("already registered") || 
+          authMsg.includes("already exists") || 
+          authMsg.includes("user already exists")
+        ) {
+          setSubmitError("Este e-mail já está cadastrado. Você pode redefinir sua senha na tela de login.");
+          setIsSubmitting(false);
+          return;
+        }
+        throw authError;
+      }
 
+      if (authData?.user && authData.user.identities && authData.user.identities.length === 0) {
+        setSubmitError("Este e-mail já está cadastrado. Você pode redefinir sua senha na tela de login.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const userId = authData?.user?.id || null;
+
+      // 2. Sincronizar dados na tabela usuarios se o user_id foi gerado
+      if (userId) {
+        try {
+          await supabase.from("usuarios").upsert({
+            id: userId,
+            nome: nomeFinal,
+            role: userRole,
+            cpf: cleanCpf,
+            cnpj: cleanCnpj,
+            telefone: values.telefone.trim(),
+            status: "pendente",
+            tipo_pessoa: values.tipoPessoa,
+            responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+            cpf_responsavel: cleanCpfResp,
+            regiao_atuacao: regiao,
+            bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
+            bairro_trabalho: isPF && values.bairro_trabalho ? values.bairro_trabalho.trim() : null,
+            praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
+          } as any);
+        } catch (syncErr) {
+          console.warn("[Waitlist] Aviso não-bloqueante na sincronização com public.usuarios:", syncErr);
+        }
+      }
+
+      // 3. Montar dados para inserção na fila de espera (waitlist)
+      const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
       const ua = navigator.userAgent;
       const lang = navigator.language || "pt-BR";
       const screenRes = `${window.screen.width}x${window.screen.height}`;
@@ -793,11 +953,12 @@ export default function Index() {
       const parsedUA = parseUserAgent(ua);
 
       const obsParts: string[] = [];
+      obsParts.push(`Tipo: ${values.tipoPessoa}`);
       if (values.possuiContaMercadoPago !== undefined && values.possuiContaMercadoPago !== null) {
         obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
       }
-      if (values.regiao_atuacao && values.regiao_atuacao.length > 0) {
-        obsParts.push(`Região: ${values.regiao_atuacao.join(", ")}`);
+      if (regiao) {
+        obsParts.push(`Região: ${regiao}`);
       }
       if (values.praias && values.praias.length > 0) {
         obsParts.push(`Praias: ${values.praias.join(", ")}`);
@@ -807,19 +968,19 @@ export default function Index() {
       }
       const obsText = obsParts.join(" | ");
 
-      const cleanCpf = values.cpf ? values.cpf.replace(/\D/g, "") : null;
-      const perfilArray = Array.isArray(values.perfil)
-        ? values.perfil.filter(Boolean)
-        : (values.perfil ? [String(values.perfil)] : ["morador"]);
-
-      // 2. Montar Payload estrito alinhado com a tabela public.waitlist
       const payload = {
-        nome: values.nome.trim(),
+        user_id: userId,
+        tipo_pessoa: values.tipoPessoa,
+        nome: nomeFinal,
         cpf: cleanCpf,
+        cnpj: cleanCnpj,
+        razao_social: !isPF ? values.nome_empresa?.trim() : null,
+        responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+        cpf_responsavel: cleanCpfResp,
         email: values.email.trim().toLowerCase(),
         telefone: values.telefone.trim(),
         cidade: "Ubatuba",
-        perfil: perfilArray, // PostgreSQL ARRAY text[]
+        perfil: perfilArray,
         consentimento_lgpd: true,
         status: "novo",
         created_at_local: createdLocal,
@@ -829,65 +990,61 @@ export default function Index() {
         device_type: parsedUA.device_type,
         browser: parsedUA.browser,
         os: parsedUA.os,
-        bairro_moradia: values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-        bairro_trabalho: values.bairro_trabalho && values.bairro_trabalho.trim().length > 0 ? values.bairro_trabalho.trim() : (values.regiao_atuacao && values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null),
-        praias_frequenta: values.praias && values.praias.length > 0 ? values.praias.join(", ") : null,
+        regiao_atuacao: regiao,
+        bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
+        bairro_hospedagem: isPF && values.perfil === "turista" && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
+        bairro_trabalho: isPF && values.bairro_trabalho && values.bairro_trabalho.trim().length > 0 ? values.bairro_trabalho.trim() : null,
+        praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias.join(", ") : null,
         possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
         observacoes: obsText || null
       };
 
-      console.log("[Waitlist] Enviando cadastro com cliente público anon:", payload);
+      console.log("[Waitlist] Enviando cadastro para public.waitlist:", payload);
 
-      // 3. Execução direta do INSERT com retorno do ID
-      const { data: insertData, error: insertError } = await publicClient
+      const { data: insertData, error: insertError } = await supabase
         .from("waitlist")
-        .insert(payload)
+        .insert(payload as any)
         .select();
 
       if (insertError) {
         console.error("[Waitlist] Erro no Supabase Insert:", insertError);
-        
-        // Tratamento de duplicação (Unique constraint em email ou telefone)
         if (
           insertError.code === "23505" || 
           insertError.message?.toLowerCase().includes("unique") || 
           insertError.message?.toLowerCase().includes("duplicate") ||
           insertError.details?.toLowerCase().includes("already exists")
         ) {
-          setSubmitError("Este e-mail ou telefone já está cadastrado na nossa fila de fundadores!");
+          setSubmitError("Este e-mail, telefone ou documento já está cadastrado na nossa fila de fundadores!");
           setIsSubmitting(false);
           return;
         }
-
         throw insertError;
       }
 
       console.log("[Waitlist] Cadastro realizado com sucesso:", insertData);
 
       const insertedRow = insertData && insertData[0] ? insertData[0] : null;
-      const refCode = insertedRow?.referral_code || generateReferralSlug(values.nome.trim(), insertedRow?.id);
+      const refCode = insertedRow?.referral_code || generateReferralSlug(nomeFinal, insertedRow?.id || userId || undefined);
 
       setSubmitSuccess(true);
       setRegisteredUser({
-        id: insertedRow?.id,
-        nome: values.nome.trim(),
+        id: insertedRow?.id || userId || undefined,
+        nome: nomeFinal,
         email: values.email.trim(),
         referral_code: refCode,
       });
       setShowWelcomeModal(true);
-      trackEvent("landing_waitlist_success", "marketing", { perfil: values.perfil });
+      trackEvent("landing_waitlist_success", "marketing", { perfil: perfilArray, tipo_pessoa: values.tipoPessoa });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
 
     } catch (err: any) {
       console.error("[Waitlist] Falha ao registrar:", err);
-      
       const errorMsg = err?.message || "Erro de conexão";
       const errorDetails = err?.details ? ` (${err.details})` : "";
       const errorHint = err?.hint ? ` - Dica: ${err.hint}` : "";
       
       setSubmitError(`Falha no envio: ${errorMsg}${errorDetails}${errorHint}`);
       
-      // Traz a mensagem de erro para visualização imediata no mobile
       const formTop = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
       if (formTop) {
         formTop.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1351,17 +1508,18 @@ export default function Index() {
                 <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Programa Padrinho / Madrinha
                 </span>
+                <span className="text-2xl font-display font-bold text-yellow-400">0,5%</span>
               </div>
               <h3 className="font-display font-bold text-2xl text-white mb-4">
                 Indique e participe do crescimento da sua comunidade.
               </h3>
               <p className="text-xs text-zinc-300 leading-relaxed font-sans mb-8">
-                Cada usuário possui um link exclusivo. Compartilhe pelo WhatsApp, QR Code ou redes sociais. Sempre que um prestador indicado por você realizar vendas pela plataforma, você participa do crescimento dele conforme as regras da UBT.
+                Cada usuário possui um link exclusivo. Compartilhe pelo WhatsApp, QR Code ou redes sociais. Sempre que um prestador indicado por você realizar vendas pela plataforma, você recebe 0,5% das vendas revertidos para você como bônus vitalício de indicação.
               </p>
             </div>
-            <p className="text-[10px] text-yellow-400/90 leading-relaxed font-sans p-4 rounded-xl bg-white/5 border border-[#0d5236]/30">
-              O valor das vendas poderá ser destinado ao padrinho/madrinha, conforme a configuração vigente da plataforma e o regulamento aplicável.
-            </p>
+            <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
+              <Users className="w-4 h-4 text-yellow-400" /> 0,5% das vendas revertidos para o padrinho ou madrinha.
+            </div>
           </div>
 
           {/* Card 2: Prêmio Trabalhador */}
@@ -1422,7 +1580,7 @@ export default function Index() {
               </p>
             </div>
             <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Users className="w-4 h-4 text-yellow-400" /> 2% das vendas revertidos.
+              <Users className="w-4 h-4 text-yellow-400" /> 0,5% das vendas revertidos.
             </div>
           </div>
 
@@ -1595,7 +1753,7 @@ export default function Index() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-6 p-2 md:p-8" noValidate>
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <h3 className="font-display font-bold text-2xl text-white mb-2 mt-[16px]">Cadastro de Fundador</h3>
                 <p className="text-xs text-white/50 font-sans">Preencha as informações abaixo para garantir seus benefícios de pioneiro.</p>
               </div>
@@ -1606,271 +1764,232 @@ export default function Index() {
                 </div>
               )}
 
-              {/* 1. Nome completo e CPF */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="waitlist-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                    Nome Completo <span className="text-red-500">*</span>
-                  </label>
-                  <input 
-                    id="waitlist-input-nome"
-                    type="text" 
-                    placeholder="Ex: Carlos da Silva" 
-                    {...register("nome")}
-                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
-                      errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                    } outline-none text-white text-base transition-all`}
-                  />
-                  {errors.nome && (
-                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.nome.message}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="waitlist-input-cpf" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                    CPF <span className="text-red-500">*</span>
-                  </label>
-                  <input 
-                    id="waitlist-input-cpf"
-                    type="text" 
-                    placeholder="000.000.000-00" 
-                    {...register("cpf", {
-                      onChange: (e) => {
-                        setValue("cpf", maskCPF(e.target.value), { shouldValidate: true });
-                      }
-                    })}
-                    maxLength={14}
-                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
-                      errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                    } outline-none text-white text-base transition-all`}
-                  />
-                  {errors.cpf && (
-                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.cpf.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {/* 2. WhatsApp */}
-                <div>
-                  <label htmlFor="waitlist-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                    WhatsApp <span className="text-red-500">*</span>
-                  </label>
-                  <input 
-                    id="waitlist-input-telefone"
-                    type="tel" 
-                    placeholder="Ex: (12) 99999-9999" 
-                    {...register("telefone", {
-                      onChange: (e) => {
-                        setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
-                      }
-                    })}
-                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
-                      errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                    } outline-none text-white text-base transition-all`}
-                  />
-                  {errors.telefone && (
-                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.telefone.message}
-                    </p>
-                  )}
-                </div>
-                {/* 3. E-mail */}
-                <div>
-                  <label htmlFor="waitlist-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                    E-mail <span className="text-red-500">*</span>
-                  </label>
-                  <input 
-                    id="waitlist-input-email"
-                    type="email" 
-                    placeholder="Ex: carlos@email.com" 
-                    {...register("email")}
-                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
-                      errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                    } outline-none text-white text-base transition-all`}
-                  />
-                  {errors.email && (
-                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.email.message}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* 4. Seu perfil */}
-              <div id="waitlist-input-perfil">
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
-                  Seu Perfil <span className="text-red-500">*</span>
+              {/* BIFURCAÇÃO (O 'Y' do Cadastro): PF vs PJ */}
+              <div className="flex flex-col gap-2">
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
+                  Tipo de Cadastro <span className="text-red-500">*</span>
                 </label>
-                <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-white/5 border ${
-                  errors.perfil ? "border-red-500/70" : "border-white/10"
-                }`}>
-                  {([
-                    { id: "associacao", label: "Associação de Trabalhadores" },
-                    { id: "mototaxista", label: "Mototaxista" },
-                    { id: "diarista", label: "Diarista" },
-                    { id: "ambulante", label: "Ambulante" },
-                    { id: "cocoecia", label: "Côco & Cia (Ecologia)" },
-                    { id: "morador", label: "Morador" },
-                    { id: "turista", label: "Turista / Visitante" }
-                  ] as const).map((perf) => {
-                    const checked = perfil?.includes(perf.id);
-                    return (
-                      <label 
-                        key={perf.id} 
-                        className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer select-none transition-all ${
-                          checked 
-                            ? "bg-green/10 border-green text-green" 
-                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                        }`}
-                      >
-                        <input 
-                          type="checkbox" 
-                          value={perf.id}
-                          checked={checked}
-                          onChange={() => {
-                            const next = checked
-                              ? perfil.filter(p => p !== perf.id)
-                              : [...perfil, perf.id];
-                            setValue("perfil", next, { shouldValidate: true });
-                          }}
-                          className="h-5 w-5 accent-green shrink-0 cursor-pointer"
-                        />
-                        <span className="text-sm font-sans font-medium">{perf.label}</span>
-                      </label>
-                    );
-                  })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-white/5 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("tipoPessoa", "PF", { shouldValidate: true });
+                    }}
+                    className={`flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                      tipoPessoa === "PF"
+                        ? "bg-green text-navy shadow-lg shadow-green/20"
+                        : "bg-transparent text-white/60 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Comprador / Vendedor (PF)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValue("tipoPessoa", "PJ", { shouldValidate: true });
+                    }}
+                    className={`flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+                      tipoPessoa === "PJ"
+                        ? "bg-green text-navy shadow-lg shadow-green/20"
+                        : "bg-transparent text-white/60 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Associação / CNPJ (PJ)</span>
+                  </button>
                 </div>
-                {errors.perfil && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.perfil.message}
-                  </p>
-                )}
               </div>
 
-              {/* 5. ÁREA CONDICIONAL DE ENDEREÇO */}
-              {(perfil?.includes("associacao") || perfil?.includes("mototaxista") || perfil?.includes("diarista")) && (
-                <div className="w-full" id="waitlist-input-regiao_atuacao">
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
-                    Região de atuação <span className="text-red-500">*</span>
-                  </label>
-                  <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-white/5 border ${
-                    errors.regiao_atuacao ? "border-red-500/70" : "border-white/10"
-                  }`}>
-                    {["Sul", "Norte", "Centro", "Oeste"].map((reg) => {
-                      const selectedRegions = watch("regiao_atuacao") || [];
-                      const checked = selectedRegions.includes(reg);
-                      return (
-                        <label 
-                          key={reg} 
-                          className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-                            checked 
-                              ? "bg-green/10 border-green text-green" 
-                              : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                          }`}
-                        >
-                          <input 
-                            type="checkbox" 
-                            checked={checked}
-                            onChange={() => {
-                              const next = checked
-                                ? selectedRegions.filter(r => r !== reg)
-                                : [...selectedRegions, reg];
-                              setValue("regiao_atuacao", next, { shouldValidate: true });
-                            }}
-                            className="h-5 w-5 accent-green shrink-0 cursor-pointer"
-                          />
-                          <span className="text-sm font-sans font-medium">{reg}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {errors.regiao_atuacao && (
-                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.regiao_atuacao.message}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {(perfil?.includes("morador") || perfil?.includes("turista") || perfil?.includes("ambulante")) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Bairros Column (Residência ou Hospedagem) */}
-                  {(perfil?.includes("morador") || perfil?.includes("turista")) && (
-                    <div className="w-full" id="waitlist-input-bairros">
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        {perfil?.includes("morador") ? "Bairro de residência" : "Bairro que costuma se hospedar"} <span className="text-red-500">*</span>
+              {/* ========================================================================= */}
+              {/* FLUXO PESSOA FÍSICA (PF) */}
+              {/* ========================================================================= */}
+              {tipoPessoa === "PF" && (
+                <>
+                  {/* Nome Completo e CPF */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="waitlist-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Nome Completo <span className="text-red-500">*</span>
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setIsBairroModalOpen(true)}
-                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
-                          errors.bairros ? "border-red-500/70" : "border-white/10"
-                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center`}
-                      >
-                        <span>
-                          {selectedBairros.length > 0
-                            ? selectedBairros.join(", ")
-                            : "Selecione o bairro..."}
-                        </span>
-                        <ChevronDown className="w-5 h-5 text-white/40" />
-                      </button>
-                      {errors.bairros && (
+                      <input 
+                        id="waitlist-input-nome"
+                        type="text" 
+                        placeholder="Ex: Carlos da Silva" 
+                        {...register("nome")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.nome && (
                         <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                          <span>⚠</span> {errors.bairros.message}
+                          <span>⚠</span> {errors.nome.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-cpf" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        CPF <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-cpf"
+                        type="text" 
+                        placeholder="000.000.000-00" 
+                        {...register("cpf", {
+                          onChange: (e) => {
+                            setValue("cpf", maskCPF(e.target.value), { shouldValidate: true });
+                          }
+                        })}
+                        maxLength={14}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.cpf && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.cpf.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* WhatsApp e E-mail */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="waitlist-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        WhatsApp <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-telefone"
+                        type="tel" 
+                        placeholder="Ex: (12) 99999-9999" 
+                        {...register("telefone", {
+                          onChange: (e) => {
+                            setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
+                          }
+                        })}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.telefone && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.telefone.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        E-mail <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-email"
+                        type="email" 
+                        placeholder="Ex: carlos@email.com" 
+                        {...register("email")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.email && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.email.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown de Perfil PF (Ambulante, Mototaxista, Diarista, Morador, Turista/Visitante — Sem Côco & Cia) */}
+                  <div id="waitlist-input-perfil">
+                    <label htmlFor="waitlist-select-perfil" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                      Seu Perfil <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="waitlist-select-perfil"
+                        {...register("perfil")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-[#132348] border ${
+                          errors.perfil ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer`}
+                      >
+                        <option value="" className="bg-[#0B1B3E] text-white/50">Selecione seu perfil...</option>
+                        <option value="ambulante" className="bg-[#0B1B3E] text-white">Ambulante</option>
+                        <option value="mototaxista" className="bg-[#0B1B3E] text-white">Mototaxista</option>
+                        <option value="diarista" className="bg-[#0B1B3E] text-white">Diarista</option>
+                        <option value="morador" className="bg-[#0B1B3E] text-white">Morador</option>
+                        <option value="turista" className="bg-[#0B1B3E] text-white">Turista / Visitante</option>
+                      </select>
+                      <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    {errors.perfil && (
+                      <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                        <span>⚠</span> {errors.perfil.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Condicionais PF: Mototaxista / Diarista -> Área de Atuação */}
+                  {(perfil === "mototaxista" || perfil === "diarista") && (
+                    <div className="w-full" id="waitlist-input-regiao_atuacao_pf">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Área de Atuação <span className="text-red-500">*</span>
+                      </label>
+                      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-2xl bg-white/5 border ${
+                        errors.regiao_atuacao_pf ? "border-red-500/70" : "border-white/10"
+                      }`}>
+                        {["Sul", "Centro", "Norte", "Oeste"].map((reg) => {
+                          const checked = selectedRegiaoPf.includes(reg);
+                          return (
+                            <button
+                              key={reg}
+                              type="button"
+                              onClick={() => {
+                                const next = checked
+                                  ? selectedRegiaoPf.filter((r) => r !== reg)
+                                  : [...selectedRegiaoPf, reg];
+                                setValue("regiao_atuacao_pf", next, { shouldValidate: true });
+                              }}
+                              className={`flex items-center justify-center p-3.5 rounded-xl border text-sm font-sans font-medium transition-all cursor-pointer ${
+                                checked
+                                  ? "bg-green/10 border-green text-green"
+                                  : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                              }`}
+                            >
+                              <span>{reg}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {errors.regiao_atuacao_pf && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.regiao_atuacao_pf.message}
                         </p>
                       )}
                     </div>
                   )}
 
-                  {/* Bairro de Trabalho (Condicional: Morador) */}
-                  {perfil?.includes("morador") && (
-                    <div className="w-full" id="waitlist-input-bairro-trabalho">
+                  {/* Condicionais PF: Ambulante -> Praias de Atuação */}
+                  {perfil === "ambulante" && (
+                    <div className="w-full" id="waitlist-input-praias">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        Bairro de Trabalho
-                      </label>
-                      <div className="relative">
-                        <select
-                          {...register("bairro_trabalho")}
-                          className="w-full px-6 py-5 rounded-2xl bg-[#132348] border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer"
-                        >
-                          <option value="" className="bg-[#0B1B3E] text-white/50">
-                            Selecione o bairro de trabalho...
-                          </option>
-                          {BAIRROS_LIST.map((b) => (
-                            <option key={b} value={b} className="bg-[#0B1B3E] text-white">
-                              {b}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Praias Column */}
-                  {(perfil?.includes("ambulante") || perfil?.includes("morador") || perfil?.includes("turista")) && (
-                    <div className={`w-full ${perfil?.includes("morador") ? "md:col-span-2" : ""}`} id="waitlist-input-praias">
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        {perfil?.includes("ambulante") ? "Praias de atuação" : "Praias que costuma frequentar"} <span className="text-red-500">*</span>
+                        Praias de Atuação <span className="text-red-500">*</span>
                       </label>
                       <button
                         type="button"
                         onClick={() => setIsPraiaModalOpen(true)}
                         className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
                           errors.praias ? "border-red-500/70" : "border-white/10"
-                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center`}
+                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
                       >
-                        <span>
+                        <span className="truncate">
                           {selectedPraias.length > 0
                             ? selectedPraias.join(", ")
-                            : "Selecione a(s) praia(s)..."}
+                            : "Selecione a(s) praia(s) onde atua..."}
                         </span>
-                        <ChevronDown className="w-5 h-5 text-white/40" />
+                        <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
                       </button>
                       {errors.praias && (
                         <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
@@ -1879,46 +1998,419 @@ export default function Index() {
                       )}
                     </div>
                   )}
-                </div>
+
+                  {/* Condicionais PF: Morador -> Bairro Residência, Bairro Trabalho, Praias que frequenta */}
+                  {perfil === "morador" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="w-full" id="waitlist-input-bairros">
+                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                          Bairro Residência <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsBairroModalOpen(true)}
+                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                            errors.bairros ? "border-red-500/70" : "border-white/10"
+                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                        >
+                          <span className="truncate">
+                            {selectedBairros.length > 0
+                              ? selectedBairros.join(", ")
+                              : "Selecione seu bairro de residência..."}
+                          </span>
+                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                        </button>
+                        {errors.bairros && (
+                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                            <span>⚠</span> {errors.bairros.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="w-full" id="waitlist-input-bairro-trabalho">
+                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                          Bairro Trabalho
+                        </label>
+                        <div className="relative">
+                          <select
+                            {...register("bairro_trabalho")}
+                            className="w-full px-6 py-5 rounded-2xl bg-[#132348] border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer"
+                          >
+                            <option value="" className="bg-[#0B1B3E] text-white/50">
+                              Selecione o bairro de trabalho (opcional)...
+                            </option>
+                            {BAIRROS_LIST.map((b) => (
+                              <option key={b} value={b} className="bg-[#0B1B3E] text-white">
+                                {b}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div className="w-full md:col-span-2" id="waitlist-input-praias">
+                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                          Praias que frequenta <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsPraiaModalOpen(true)}
+                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                            errors.praias ? "border-red-500/70" : "border-white/10"
+                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                        >
+                          <span className="truncate">
+                            {selectedPraias.length > 0
+                              ? selectedPraias.join(", ")
+                              : "Selecione as praias que costuma frequentar..."}
+                          </span>
+                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                        </button>
+                        {errors.praias && (
+                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                            <span>⚠</span> {errors.praias.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Condicionais PF: Turista -> Bairro de Hospedagem, Praias que frequenta */}
+                  {perfil === "turista" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="w-full" id="waitlist-input-bairros">
+                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                          Bairro de Hospedagem <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsBairroModalOpen(true)}
+                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                            errors.bairros ? "border-red-500/70" : "border-white/10"
+                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                        >
+                          <span className="truncate">
+                            {selectedBairros.length > 0
+                              ? selectedBairros.join(", ")
+                              : "Selecione o bairro de hospedagem..."}
+                          </span>
+                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                        </button>
+                        {errors.bairros && (
+                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                            <span>⚠</span> {errors.bairros.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="w-full" id="waitlist-input-praias">
+                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                          Praias que frequenta <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsPraiaModalOpen(true)}
+                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                            errors.praias ? "border-red-500/70" : "border-white/10"
+                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                        >
+                          <span className="truncate">
+                            {selectedPraias.length > 0
+                              ? selectedPraias.join(", ")
+                              : "Selecione as praias que costuma frequentar..."}
+                          </span>
+                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                        </button>
+                        {errors.praias && (
+                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                            <span>⚠</span> {errors.praias.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* 6. Tem conta no Mercado Pago? (Obrigatório e visível apenas para perfis profissionais / associações) */}
-              {perfil?.some((p) => ["associacao", "mototaxista", "diarista", "ambulante", "cocoecia", "tomador"].includes(p)) && (
-                <div id="waitlist-input-possuiContaMercadoPago">
-                  <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
-                    Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { value: true, label: "Sim" },
-                      { value: false, label: "Não" }
-                    ].map((opt) => {
-                      const selected = watch("possuiContaMercadoPago") === opt.value;
-                      return (
-                        <button
-                          key={opt.label}
-                          type="button"
-                          onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
-                          className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
-                            selected
-                              ? "bg-green/10 border-green text-green"
-                              : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+              {/* ========================================================================= */}
+              {/* FLUXO PESSOA JURÍDICA / ASSOCIAÇÃO (PJ) */}
+              {/* ========================================================================= */}
+              {tipoPessoa === "PJ" && (
+                <>
+                  {/* Nome da Associação/Empresa e CNPJ */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="waitlist-input-nome_empresa" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Nome da Associação / Empresa <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-nome_empresa"
+                        type="text" 
+                        placeholder="Ex: Associação dos Quiosques de Ubatuba" 
+                        {...register("nome_empresa")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.nome_empresa ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.nome_empresa && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.nome_empresa.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-cnpj" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        CNPJ <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-cnpj"
+                        type="text" 
+                        placeholder="00.000.000/0000-00" 
+                        {...register("cnpj", {
+                          onChange: (e) => {
+                            setValue("cnpj", maskCNPJ(e.target.value), { shouldValidate: true });
+                          }
+                        })}
+                        maxLength={18}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.cnpj ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.cnpj && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.cnpj.message}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {errors.possuiContaMercadoPago && (
+
+                  {/* Responsável Legal e CPF do Responsável */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="waitlist-input-responsavel_legal" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Responsável Legal <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-responsavel_legal"
+                        type="text" 
+                        placeholder="Ex: Mariana Oliveira" 
+                        {...register("responsavel_legal")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.responsavel_legal && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.responsavel_legal.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-cpf_responsavel" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        CPF do Responsável <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-cpf_responsavel"
+                        type="text" 
+                        placeholder="000.000.000-00" 
+                        {...register("cpf_responsavel", {
+                          onChange: (e) => {
+                            setValue("cpf_responsavel", maskCPF(e.target.value), { shouldValidate: true });
+                          }
+                        })}
+                        maxLength={14}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.cpf_responsavel ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.cpf_responsavel && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.cpf_responsavel.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* WhatsApp e E-mail da Associação */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="waitlist-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        WhatsApp <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-telefone"
+                        type="tel" 
+                        placeholder="Ex: (12) 99999-9999" 
+                        {...register("telefone", {
+                          onChange: (e) => {
+                            setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
+                          }
+                        })}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.telefone && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.telefone.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        E-mail <span className="text-red-500">*</span>
+                      </label>
+                      <input 
+                        id="waitlist-input-email"
+                        type="email" 
+                        placeholder="Ex: contato@associacao.org.br" 
+                        {...register("email")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-base transition-all`}
+                      />
+                      {errors.email && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.email.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown de Região de Atuação PJ (Sul, Centro, Norte, Oeste) */}
+                  <div id="waitlist-input-regiao_atuacao_pj">
+                    <label htmlFor="waitlist-select-regiao-pj" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                      Região de Atuação <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="waitlist-select-regiao-pj"
+                        {...register("regiao_atuacao_pj")}
+                        className={`w-full px-6 py-5 rounded-2xl bg-[#132348] border ${
+                          errors.regiao_atuacao_pj ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer`}
+                      >
+                        <option value="" className="bg-[#0B1B3E] text-white/50">Selecione a região de atuação...</option>
+                        <option value="Sul" className="bg-[#0B1B3E] text-white">Sul</option>
+                        <option value="Centro" className="bg-[#0B1B3E] text-white">Centro</option>
+                        <option value="Norte" className="bg-[#0B1B3E] text-white">Norte</option>
+                        <option value="Oeste" className="bg-[#0B1B3E] text-white">Oeste</option>
+                      </select>
+                      <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    {errors.regiao_atuacao_pj && (
+                      <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                        <span>⚠</span> {errors.regiao_atuacao_pj.message}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* ========================================================================= */}
+              {/* CAMPOS FINAIS COMUNS (PF & PJ): Senha, Mercado Pago e LGPD */}
+              {/* ========================================================================= */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="waitlist-input-senha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    Senha <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input 
+                      id="waitlist-input-senha"
+                      type={showSenha ? "text" : "password"}
+                      placeholder="Mínimo 8 caracteres" 
+                      {...register("senha")}
+                      className={`w-full pl-6 pr-14 py-5 rounded-2xl bg-white/5 border ${
+                        errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                      } outline-none text-white text-base transition-all`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSenha(!showSenha)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-2 cursor-pointer"
+                      aria-label={showSenha ? "Ocultar senha" : "Ver senha"}
+                    >
+                      {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {errors.senha && (
                     <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                      <span>⚠</span> {errors.possuiContaMercadoPago.message}
+                      <span>⚠</span> {errors.senha.message}
                     </p>
                   )}
                 </div>
-              )}
 
-              {/* 7. LGPD Accept Terms */}
+                <div>
+                  <label htmlFor="waitlist-input-confirmarSenha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    Confirme sua Senha <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input 
+                      id="waitlist-input-confirmarSenha"
+                      type={showConfirmarSenha ? "text" : "password"}
+                      placeholder="Digite a senha novamente" 
+                      {...register("confirmarSenha")}
+                      className={`w-full pl-6 pr-14 py-5 rounded-2xl bg-white/5 border ${
+                        errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                      } outline-none text-white text-base transition-all`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmarSenha(!showConfirmarSenha)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-2 cursor-pointer"
+                      aria-label={showConfirmarSenha ? "Ocultar senha" : "Ver senha"}
+                    >
+                      {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {errors.confirmarSenha && (
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.confirmarSenha.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Mercado Pago (Sim / Não) */}
+              <div id="waitlist-input-possuiContaMercadoPago">
+                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
+                  Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { value: true, label: "Sim" },
+                    { value: false, label: "Não" }
+                  ].map((opt) => {
+                    const selected = watch("possuiContaMercadoPago") === opt.value;
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setValue("possuiContaMercadoPago", opt.value, { shouldValidate: true })}
+                        className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
+                          selected
+                            ? "bg-green/10 border-green text-green"
+                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.possuiContaMercadoPago && (
+                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.possuiContaMercadoPago.message}
+                  </p>
+                )}
+              </div>
+
+              {/* LGPD Accept Terms */}
               <div className="flex flex-col gap-1 mt-2" id="waitlist-input-acceptTerms">
                 <div className="flex gap-3 items-start">
                   <input 
