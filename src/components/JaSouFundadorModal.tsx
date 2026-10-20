@@ -161,7 +161,7 @@ export default function JaSouFundadorModal({
       }
 
       // 2. Fallback: busca direta em usuarios
-      let usersQuery = supabase.from("usuarios").select("id, nome, email, telefone, referral_code");
+      let usersQuery = supabase.from("usuarios").select("id, nome, email, telefone, cpf, referral_code");
       if (isEmail) {
         usersQuery = usersQuery.ilike("email", sanitizedQuery);
       } else if (sanitizedQuery.length >= 11) {

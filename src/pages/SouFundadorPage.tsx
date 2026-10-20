@@ -28,6 +28,7 @@ interface FounderData {
   nome: string;
   email?: string;
   telefone?: string;
+  cpf?: string;
   referral_code?: string;
 }
 
@@ -66,14 +67,24 @@ export default function SouFundadorPage() {
   const [copied, setCopied] = useState(false);
 
   // 1. Carrega dados do fundador se já autenticado no Supabase Auth
-  const loadFounderData = async (userId: string, emailHint?: string | null) => {
+  const loadFounderData = async (userId?: string | null, emailHint?: string | null) => {
+    // Blindagem rigorosa contra undefined, null ou ID vazio
+    if (!userId || typeof userId !== "string" || !userId.trim() || userId === "undefined" || userId === "null") {
+      return;
+    }
+    const cleanUserId = userId.trim();
+
     try {
-      // Busca em public.usuarios
-      const { data: userData } = await supabase
+      // Busca em public.usuarios com o schema exato: id, nome, email, telefone, cpf, referral_code
+      const { data: userData, error: userError } = await supabase
         .from("usuarios")
-        .select("id, nome, email, telefone, referral_code")
-        .eq("id", userId)
+        .select("id, nome, email, telefone, cpf, referral_code")
+        .eq("id", cleanUserId)
         .maybeSingle();
+
+      if (userError) {
+        console.warn("[SouFundadorPage] Aviso ao buscar usuário:", userError.message);
+      }
 
       if (userData) {
         const code = userData.referral_code || generateReferralSlug(userData.nome, userData.id);
@@ -82,18 +93,30 @@ export default function SouFundadorPage() {
           nome: userData.nome || "Membro Fundador",
           email: userData.email || emailHint || "",
           telefone: userData.telefone || "",
+          cpf: userData.cpf || "",
           referral_code: code,
         });
         setCustomSlug(code);
         return;
       }
 
-      // Fallback para public.waitlist
-      const { data: wlData } = await supabase
+      // Fallback seguro para public.waitlist
+      const cleanEmail = emailHint?.trim()?.toLowerCase();
+      let wlQuery = supabase
         .from("waitlist")
-        .select("id, nome, email, telefone, referral_code")
-        .or(`id.eq.${userId},email.ilike.${emailHint || ""}`)
-        .maybeSingle();
+        .select("id, nome, email, telefone, cpf, referral_code");
+
+      if (cleanEmail) {
+        wlQuery = wlQuery.or(`user_id.eq.${cleanUserId},id.eq.${cleanUserId},email.ilike.${cleanEmail}`);
+      } else {
+        wlQuery = wlQuery.or(`user_id.eq.${cleanUserId},id.eq.${cleanUserId}`);
+      }
+
+      const { data: wlData, error: wlError } = await wlQuery.limit(1).maybeSingle();
+
+      if (wlError) {
+        console.warn("[SouFundadorPage] Aviso ao buscar waitlist:", wlError.message);
+      }
 
       if (wlData) {
         const code = wlData.referral_code || generateReferralSlug(wlData.nome, wlData.id);
@@ -102,6 +125,7 @@ export default function SouFundadorPage() {
           nome: wlData.nome || "Membro Fundador",
           email: wlData.email || emailHint || "",
           telefone: wlData.telefone || "",
+          cpf: wlData.cpf || "",
           referral_code: code,
         });
         setCustomSlug(code);
@@ -109,9 +133,9 @@ export default function SouFundadorPage() {
       }
 
       // Se autenticado mas sem registro explícito em usuarios/waitlist
-      const fallbackCode = generateReferralSlug("fundador", userId);
+      const fallbackCode = generateReferralSlug("fundador", cleanUserId);
       setFounder({
-        id: userId,
+        id: cleanUserId,
         nome: "Membro Fundador",
         email: emailHint || "",
         referral_code: fallbackCode,
@@ -128,9 +152,16 @@ export default function SouFundadorPage() {
     const checkSession = async () => {
       try {
         setAuthLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-        if (user && isMounted) {
+        if (userError) {
+          // Sem sessão ativa: apenas remove loading para exibir o formulário de login
+          if (isMounted) setAuthLoading(false);
+          return;
+        }
+
+        // Blindagem contra undefined antes de invocar a consulta
+        if (user?.id && isMounted) {
           await loadFounderData(user.id, user.email);
         }
       } catch (err) {
@@ -143,7 +174,7 @@ export default function SouFundadorPage() {
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (session?.user?.id) {
         await loadFounderData(session.user.id, session.user.email);
       } else if (event === "SIGNED_OUT") {
         setFounder(null);
@@ -252,7 +283,7 @@ export default function SouFundadorPage() {
         return;
       }
 
-      if (authData?.user) {
+      if (authData?.user?.id) {
         await loadFounderData(authData.user.id, authData.user.email);
         trackEvent("founder_login_success", "marketing", { userId: authData.user.id });
       }
