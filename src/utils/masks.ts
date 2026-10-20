@@ -39,8 +39,8 @@ export const maskCNPJ = (v: string) =>
     .replace(/(\d{4})(\d{1,2})/, "$1-$2")
     .slice(0, 18);
 
-export const generateReferralSlug = (name?: string, id?: string): string => {
-  const rawFirstName = (name || "fundador").trim().split(/\s+/)[0] || "fundador";
+export const generateReferralSlug = (name?: string, docOrId?: string): string => {
+  const rawFirstName = (name || "fundador").trim().split(/[\s\-_]+/)[0] || "fundador";
   const cleanFirstName = rawFirstName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -50,15 +50,21 @@ export const generateReferralSlug = (name?: string, id?: string): string => {
 
   const safeName = cleanFirstName || "fundador";
 
-  // Alphanumeric 4-character short code
+  // Se docOrId contém dígitos (ex: CPF), extrai os 3 primeiros dígitos numéricos
+  const digits = (docOrId || "").replace(/\D/g, "");
+  if (digits.length >= 3) {
+    return `${safeName}-${digits.slice(0, 3)}`;
+  }
+
+  // Alphanumeric 4-character short code fallback
   let shortCode = "4d1e";
-  if (id) {
-    const cleanId = id.replace(/[^a-zA-Z0-9]/g, "");
+  if (docOrId) {
+    const cleanId = docOrId.replace(/[^a-zA-Z0-9]/g, "");
     shortCode = cleanId.slice(-4) || "4d1e";
   } else {
     shortCode = Math.random().toString(36).substring(2, 6);
   }
 
-  return `${safeName}-${shortCode}`;
+  return `${safeName}-${shortCode.toLowerCase()}`;
 };
 
