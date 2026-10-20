@@ -2,8 +2,8 @@
 -- MIGRATION: 20261020150000_waitlist_and_usuarios_bifurcated_fields.sql
 -- Descrição:
 --   Suporte aos novos campos do fluxo bifurcado de Cadastro de Fundadores (PF vs PJ)
---   nas tabelas public.waitlist e public.usuarios, com saneamento automático de
---   registros duplicados de testes anteriores, índices de unicidade e políticas RLS.
+--   nas tabelas public.waitlist e public.usuarios, incluindo chave Pix para
+--   integração com Mercado Pago, saneamento de duplicatas, índices de unicidade e RLS.
 -- ==============================================================================
 
 BEGIN;
@@ -17,7 +17,9 @@ ALTER TABLE public.waitlist
     ADD COLUMN IF NOT EXISTS responsavel_legal text,
     ADD COLUMN IF NOT EXISTS cpf_responsavel text,
     ADD COLUMN IF NOT EXISTS regiao_atuacao text,
-    ADD COLUMN IF NOT EXISTS bairro_hospedagem text;
+    ADD COLUMN IF NOT EXISTS bairro_hospedagem text,
+    ADD COLUMN IF NOT EXISTS chave_pix text,
+    ADD COLUMN IF NOT EXISTS tipo_chave_pix text;
 
 -- 2. Campos para a tabela public.usuarios
 ALTER TABLE public.usuarios
@@ -26,7 +28,9 @@ ALTER TABLE public.usuarios
     ADD COLUMN IF NOT EXISTS cnpj text,
     ADD COLUMN IF NOT EXISTS responsavel_legal text,
     ADD COLUMN IF NOT EXISTS cpf_responsavel text,
-    ADD COLUMN IF NOT EXISTS regiao_atuacao text;
+    ADD COLUMN IF NOT EXISTS regiao_atuacao text,
+    ADD COLUMN IF NOT EXISTS chave_pix text,
+    ADD COLUMN IF NOT EXISTS tipo_chave_pix text;
 
 -- 3. Saneamento: Limpeza de registros duplicados de testes anteriores
 -- (Mantém apenas o registro mais recente para cada e-mail, CPF e CNPJ antes de criar os índices de unicidade)

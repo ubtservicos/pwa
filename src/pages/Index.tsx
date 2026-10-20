@@ -355,14 +355,14 @@ const waitlistSchema = z.object({
   // Campos PF
   nome: z.string().optional(),
   cpf: z.string().optional(),
-  perfil: z.string().optional(),
+  perfil: z.array(z.string()).optional().default([]),
 
   // Campos PJ
   nome_empresa: z.string().optional(),
   cnpj: z.string().optional(),
   responsavel_legal: z.string().optional(),
   cpf_responsavel: z.string().optional(),
-  regiao_atuacao_pj: z.string().optional(),
+  regiao_atuacao_pj: z.array(z.string()).optional().default([]),
 
   // Campos Comuns
   telefone: z.string().min(10, "Informe um WhatsApp válido"),
@@ -370,12 +370,14 @@ const waitlistSchema = z.object({
   senha: z.string().min(8, "A senha deve ter no mínimo 8 caracteres"),
   confirmarSenha: z.string().min(1, "Confirme sua senha"),
   possuiContaMercadoPago: z.boolean({ required_error: "Informe se possui conta no Mercado Pago" }),
+  tipo_chave_pix: z.string().optional().default(""),
+  chave_pix: z.string().optional().default(""),
 
   // Condicionais PF
   regiao_atuacao_pf: z.array(z.string()).optional().default([]),
   praias: z.array(z.string()).optional().default([]),
   bairros: z.array(z.string()).optional().default([]),
-  bairro_trabalho: z.string().optional().default(""),
+  bairro_trabalho: z.array(z.string()).optional().default([]),
 
   acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
 }).superRefine((data, ctx) => {
@@ -407,14 +409,14 @@ const waitlistSchema = z.object({
       });
     }
 
-    if (!data.perfil) {
+    if (!data.perfil || data.perfil.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione seu perfil",
+        message: "Selecione pelo menos um perfil",
         path: ["perfil"],
       });
     } else {
-      if ((data.perfil === "mototaxista" || data.perfil === "diarista") && (!data.regiao_atuacao_pf || data.regiao_atuacao_pf.length === 0)) {
+      if (data.perfil.some(p => p === "mototaxista" || p === "diarista") && (!data.regiao_atuacao_pf || data.regiao_atuacao_pf.length === 0)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Selecione pelo menos uma região de atuação",
@@ -422,7 +424,7 @@ const waitlistSchema = z.object({
         });
       }
 
-      if (data.perfil === "ambulante" && (!data.praias || data.praias.length === 0)) {
+      if (data.perfil.includes("ambulante") && (!data.praias || data.praias.length === 0)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Selecione pelo menos uma praia de atuação",
@@ -430,7 +432,7 @@ const waitlistSchema = z.object({
         });
       }
 
-      if (data.perfil === "morador") {
+      if (data.perfil.includes("morador")) {
         if (!data.bairros || data.bairros.length === 0) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -447,8 +449,8 @@ const waitlistSchema = z.object({
         }
       }
 
-      if (data.perfil === "turista") {
-        if (!data.bairros || data.bairros.length === 0) {
+      if (data.perfil.includes("turista")) {
+        if (!data.perfil.includes("morador") && (!data.bairros || data.bairros.length === 0)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Selecione o bairro de hospedagem",
@@ -502,11 +504,29 @@ const waitlistSchema = z.object({
       });
     }
 
-    if (!data.regiao_atuacao_pj) {
+    if (!data.regiao_atuacao_pj || data.regiao_atuacao_pj.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione a região de atuação",
+        message: "Selecione pelo menos uma região de atuação",
         path: ["regiao_atuacao_pj"],
+      });
+    }
+  }
+
+  // 4. Validação da Chave Pix (se possui conta no Mercado Pago)
+  if (data.possuiContaMercadoPago === true) {
+    if (!data.tipo_chave_pix || data.tipo_chave_pix.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o tipo de Chave Pix",
+        path: ["tipo_chave_pix"],
+      });
+    }
+    if (!data.chave_pix || data.chave_pix.trim().length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe a sua Chave Pix cadastrada no Mercado Pago",
+        path: ["chave_pix"],
       });
     }
   }
@@ -553,9 +573,11 @@ export default function Index() {
   const [registeredUser, setRegisteredUser] = useState<{ id?: string; nome: string; email: string; referral_code?: string } | null>(null);
 
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
+  const [isBairroTrabalhoModalOpen, setIsBairroTrabalhoModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
   const [searchPraiaQuery, setSearchPraiaQuery] = useState("");
   const [searchBairroQuery, setSearchBairroQuery] = useState("");
+  const [searchBairroTrabalhoQuery, setSearchBairroTrabalhoQuery] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
 
@@ -573,35 +595,43 @@ export default function Index() {
       tipoPessoa: "PF",
       nome: "",
       cpf: "",
-      perfil: "",
+      perfil: [],
       nome_empresa: "",
       cnpj: "",
       responsavel_legal: "",
       cpf_responsavel: "",
-      regiao_atuacao_pj: "",
+      regiao_atuacao_pj: [],
       telefone: "",
       email: "",
       senha: "",
       confirmarSenha: "",
       possuiContaMercadoPago: undefined as unknown as boolean,
+      tipo_chave_pix: "",
+      chave_pix: "",
       regiao_atuacao_pf: [],
       praias: [],
       bairros: [],
-      bairro_trabalho: "",
+      bairro_trabalho: [],
       acceptTerms: false,
     },
   });
 
   const tipoPessoa = watch("tipoPessoa") || "PF";
-  const perfil = watch("perfil") || "";
+  const selectedPerfil = watch("perfil") || [];
   const selectedBairros = watch("bairros") || [];
+  const selectedBairrosTrabalho = watch("bairro_trabalho") || [];
   const selectedPraias = watch("praias") || [];
   const selectedRegiaoPf = watch("regiao_atuacao_pf") || [];
+  const selectedRegiaoPj = watch("regiao_atuacao_pj") || [];
+  const possuiContaMercadoPago = watch("possuiContaMercadoPago");
   const filteredPraias = PRAIAS_LIST.filter((p) =>
     p.toLowerCase().includes(searchPraiaQuery.toLowerCase())
   );
   const filteredBairros = BAIRROS_LIST.filter((b) =>
     b.toLowerCase().includes(searchBairroQuery.toLowerCase())
+  );
+  const filteredBairrosTrabalho = BAIRROS_LIST.filter((b) =>
+    b.toLowerCase().includes(searchBairroTrabalhoQuery.toLowerCase())
   );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -870,11 +900,14 @@ export default function Index() {
       const cleanCnpj = !isPF && values.cnpj ? values.cnpj.replace(/\D/g, "") : null;
       const cleanCpfResp = !isPF && values.cpf_responsavel ? values.cpf_responsavel.replace(/\D/g, "") : null;
       const nomeFinal = (isPF ? values.nome : values.nome_empresa)?.trim() || "";
-      const perfilArray = isPF ? (values.perfil ? [values.perfil] : ["morador"]) : ["associacao"];
-      const userRole = isPF ? (values.perfil || "morador") : "associacao";
+      const perfilArray = isPF ? (values.perfil && values.perfil.length > 0 ? values.perfil : ["morador"]) : ["associacao"];
+      const userRole = isPF ? (values.perfil?.[0] || "morador") : "associacao";
       const regiao = isPF 
         ? (values.regiao_atuacao_pf && values.regiao_atuacao_pf.length > 0 ? values.regiao_atuacao_pf.join(", ") : null) 
-        : (values.regiao_atuacao_pj || null);
+        : (values.regiao_atuacao_pj && values.regiao_atuacao_pj.length > 0 ? values.regiao_atuacao_pj.join(", ") : null);
+      const bairroTrabalhoStr = isPF && values.bairro_trabalho && values.bairro_trabalho.length > 0 ? values.bairro_trabalho.join(", ") : null;
+      const chavePix = values.possuiContaMercadoPago ? (values.chave_pix?.trim() || null) : null;
+      const tipoChavePix = values.possuiContaMercadoPago ? (values.tipo_chave_pix?.trim() || null) : null;
 
       // 1. Registro real no Supabase Auth para habilitar login imediato e fluxo nativo de recuperação de senha
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -892,6 +925,8 @@ export default function Index() {
             responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
             cpf_responsavel: cleanCpfResp,
             regiao_atuacao: regiao,
+            chave_pix: chavePix,
+            tipo_chave_pix: tipoChavePix,
           }
         }
       });
@@ -934,8 +969,10 @@ export default function Index() {
             responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
             cpf_responsavel: cleanCpfResp,
             regiao_atuacao: regiao,
+            chave_pix: chavePix,
+            tipo_chave_pix: tipoChavePix,
             bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-            bairro_trabalho: isPF && values.bairro_trabalho ? values.bairro_trabalho.trim() : null,
+            bairro_trabalho: bairroTrabalhoStr,
             praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
           } as any);
         } catch (syncErr) {
@@ -957,6 +994,9 @@ export default function Index() {
       if (values.possuiContaMercadoPago !== undefined && values.possuiContaMercadoPago !== null) {
         obsParts.push(`Mercado Pago: ${values.possuiContaMercadoPago ? 'Sim' : 'Não'}`);
       }
+      if (chavePix) {
+        obsParts.push(`Chave Pix (${tipoChavePix}): ${chavePix}`);
+      }
       if (regiao) {
         obsParts.push(`Região: ${regiao}`);
       }
@@ -965,6 +1005,9 @@ export default function Index() {
       }
       if (values.bairros && values.bairros.length > 0) {
         obsParts.push(`Bairros: ${values.bairros.join(", ")}`);
+      }
+      if (bairroTrabalhoStr) {
+        obsParts.push(`Bairros Trabalho: ${bairroTrabalhoStr}`);
       }
       const obsText = obsParts.join(" | ");
 
@@ -992,10 +1035,12 @@ export default function Index() {
         os: parsedUA.os,
         regiao_atuacao: regiao,
         bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-        bairro_hospedagem: isPF && values.perfil === "turista" && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-        bairro_trabalho: isPF && values.bairro_trabalho && values.bairro_trabalho.trim().length > 0 ? values.bairro_trabalho.trim() : null,
+        bairro_hospedagem: isPF && values.perfil?.includes("turista") && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
+        bairro_trabalho: bairroTrabalhoStr,
         praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias.join(", ") : null,
         possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
+        chave_pix: chavePix,
+        tipo_chave_pix: tipoChavePix,
         observacoes: obsText || null
       };
 
@@ -1571,6 +1616,7 @@ export default function Index() {
                 <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Associações
                 </span>
+                <span className="text-2xl font-display font-bold text-yellow-400">0,5%</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Associações mais fortes.
@@ -1902,27 +1948,48 @@ export default function Index() {
                     </div>
                   </div>
 
-                  {/* Dropdown de Perfil PF (Ambulante, Mototaxista, Diarista, Morador, Turista/Visitante — Sem Côco & Cia) */}
+                  {/* Multi-seleção de Perfil PF (Ambulante, Mototaxista, Diarista, Morador, Turista/Visitante — Sem Côco & Cia) */}
                   <div id="waitlist-input-perfil">
-                    <label htmlFor="waitlist-select-perfil" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                      Seu Perfil <span className="text-red-500">*</span>
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                      Seu Perfil (selecione uma ou mais opções) <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative">
-                      <select
-                        id="waitlist-select-perfil"
-                        {...register("perfil")}
-                        className={`w-full px-6 py-5 rounded-2xl bg-[#132348] border ${
-                          errors.perfil ? "border-red-500/70" : "border-white/10"
-                        } outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer`}
-                      >
-                        <option value="" className="bg-[#0B1B3E] text-white/50">Selecione seu perfil...</option>
-                        <option value="ambulante" className="bg-[#0B1B3E] text-white">Ambulante</option>
-                        <option value="mototaxista" className="bg-[#0B1B3E] text-white">Mototaxista</option>
-                        <option value="diarista" className="bg-[#0B1B3E] text-white">Diarista</option>
-                        <option value="morador" className="bg-[#0B1B3E] text-white">Morador</option>
-                        <option value="turista" className="bg-[#0B1B3E] text-white">Turista / Visitante</option>
-                      </select>
-                      <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 rounded-2xl bg-white/5 border ${
+                      errors.perfil ? "border-red-500/70" : "border-white/10"
+                    }`}>
+                      {[
+                        { id: "ambulante", label: "Ambulante", icon: "🏖️" },
+                        { id: "mototaxista", label: "Mototaxista", icon: "🏍️" },
+                        { id: "diarista", label: "Diarista", icon: "🧹" },
+                        { id: "morador", label: "Morador", icon: "🏡" },
+                        { id: "turista", label: "Turista / Visitante", icon: "🧳" },
+                      ].map((perf) => {
+                        const isChecked = selectedPerfil.includes(perf.id);
+                        return (
+                          <button
+                            key={perf.id}
+                            type="button"
+                            onClick={() => {
+                              const next = isChecked
+                                ? selectedPerfil.filter((p) => p !== perf.id)
+                                : [...selectedPerfil, perf.id];
+                              setValue("perfil", next, { shouldValidate: true });
+                            }}
+                            className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer select-none ${
+                              isChecked
+                                ? "bg-green/10 border-green text-green"
+                                : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                              isChecked ? "bg-green border-green text-navy" : "border-white/30 bg-transparent"
+                            }`}>
+                              {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
+                            <span className="text-base shrink-0">{perf.icon}</span>
+                            <span className="text-sm font-sans font-medium">{perf.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                     {errors.perfil && (
                       <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
@@ -1932,7 +1999,7 @@ export default function Index() {
                   </div>
 
                   {/* Condicionais PF: Mototaxista / Diarista -> Área de Atuação */}
-                  {(perfil === "mototaxista" || perfil === "diarista") && (
+                  {selectedPerfil.some((p) => p === "mototaxista" || p === "diarista") && (
                     <div className="w-full" id="waitlist-input-regiao_atuacao_pf">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
                         Área de Atuação <span className="text-red-500">*</span>
@@ -1971,36 +2038,8 @@ export default function Index() {
                     </div>
                   )}
 
-                  {/* Condicionais PF: Ambulante -> Praias de Atuação */}
-                  {perfil === "ambulante" && (
-                    <div className="w-full" id="waitlist-input-praias">
-                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                        Praias de Atuação <span className="text-red-500">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setIsPraiaModalOpen(true)}
-                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
-                          errors.praias ? "border-red-500/70" : "border-white/10"
-                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
-                      >
-                        <span className="truncate">
-                          {selectedPraias.length > 0
-                            ? selectedPraias.join(", ")
-                            : "Selecione a(s) praia(s) onde atua..."}
-                        </span>
-                        <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
-                      </button>
-                      {errors.praias && (
-                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                          <span>⚠</span> {errors.praias.message}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Condicionais PF: Morador -> Bairro Residência, Bairro Trabalho, Praias que frequenta */}
-                  {perfil === "morador" && (
+                  {/* Condicionais PF: Morador -> Bairros de Residência e Trabalho (Multi-seleção) */}
+                  {selectedPerfil.includes("morador") && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="w-full" id="waitlist-input-bairros">
                         <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
@@ -2027,107 +2066,82 @@ export default function Index() {
                         )}
                       </div>
 
+                      {/* Bairro Trabalho (Multi-seleção) */}
                       <div className="w-full" id="waitlist-input-bairro-trabalho">
                         <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                          Bairro Trabalho
-                        </label>
-                        <div className="relative">
-                          <select
-                            {...register("bairro_trabalho")}
-                            className="w-full px-6 py-5 rounded-2xl bg-[#132348] border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer"
-                          >
-                            <option value="" className="bg-[#0B1B3E] text-white/50">
-                              Selecione o bairro de trabalho (opcional)...
-                            </option>
-                            {BAIRROS_LIST.map((b) => (
-                              <option key={b} value={b} className="bg-[#0B1B3E] text-white">
-                                {b}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        </div>
-                      </div>
-
-                      <div className="w-full md:col-span-2" id="waitlist-input-praias">
-                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                          Praias que frequenta <span className="text-red-500">*</span>
+                          Bairros de Trabalho (opcional)
                         </label>
                         <button
                           type="button"
-                          onClick={() => setIsPraiaModalOpen(true)}
-                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
-                            errors.praias ? "border-red-500/70" : "border-white/10"
-                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                          onClick={() => setIsBairroTrabalhoModalOpen(true)}
+                          className="w-full text-left px-6 py-5 rounded-2xl bg-white/5 border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer"
                         >
                           <span className="truncate">
-                            {selectedPraias.length > 0
-                              ? selectedPraias.join(", ")
-                              : "Selecione as praias que costuma frequentar..."}
+                            {selectedBairrosTrabalho.length > 0
+                              ? selectedBairrosTrabalho.join(", ")
+                              : "Selecione o(s) bairro(s) de trabalho..."}
                           </span>
                           <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
                         </button>
-                        {errors.praias && (
-                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                            <span>⚠</span> {errors.praias.message}
-                          </p>
-                        )}
                       </div>
                     </div>
                   )}
 
-                  {/* Condicionais PF: Turista -> Bairro de Hospedagem, Praias que frequenta */}
-                  {perfil === "turista" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="w-full" id="waitlist-input-bairros">
-                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                          Bairro de Hospedagem <span className="text-red-500">*</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setIsBairroModalOpen(true)}
-                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
-                            errors.bairros ? "border-red-500/70" : "border-white/10"
-                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
-                        >
-                          <span className="truncate">
-                            {selectedBairros.length > 0
-                              ? selectedBairros.join(", ")
-                              : "Selecione o bairro de hospedagem..."}
-                          </span>
-                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
-                        </button>
-                        {errors.bairros && (
-                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                            <span>⚠</span> {errors.bairros.message}
-                          </p>
-                        )}
-                      </div>
+                  {/* Condicionais PF: Turista (se não for morador) -> Bairro de Hospedagem */}
+                  {selectedPerfil.includes("turista") && !selectedPerfil.includes("morador") && (
+                    <div className="w-full" id="waitlist-input-bairros-hospedagem">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Bairro de Hospedagem <span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsBairroModalOpen(true)}
+                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.bairros ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                      >
+                        <span className="truncate">
+                          {selectedBairros.length > 0
+                            ? selectedBairros.join(", ")
+                            : "Selecione o bairro de hospedagem..."}
+                        </span>
+                        <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                      </button>
+                      {errors.bairros && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.bairros.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                      <div className="w-full" id="waitlist-input-praias">
-                        <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                          Praias que frequenta <span className="text-red-500">*</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setIsPraiaModalOpen(true)}
-                          className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
-                            errors.praias ? "border-red-500/70" : "border-white/10"
-                          } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
-                        >
-                          <span className="truncate">
-                            {selectedPraias.length > 0
-                              ? selectedPraias.join(", ")
-                              : "Selecione as praias que costuma frequentar..."}
-                          </span>
-                          <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
-                        </button>
-                        {errors.praias && (
-                          <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                            <span>⚠</span> {errors.praias.message}
-                          </p>
-                        )}
-                      </div>
+                  {/* Condicionais PF: Praias de Atuação / Frequência (Ambulante, Morador ou Turista) */}
+                  {(selectedPerfil.includes("ambulante") || selectedPerfil.includes("morador") || selectedPerfil.includes("turista")) && (
+                    <div className="w-full" id="waitlist-input-praias">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        {selectedPerfil.includes("ambulante") ? "Praias de Atuação e Frequência" : "Praias que costuma frequentar"} <span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsPraiaModalOpen(true)}
+                        className={`w-full text-left px-6 py-5 rounded-2xl bg-white/5 border ${
+                          errors.praias ? "border-red-500/70" : "border-white/10"
+                        } outline-none text-white text-base hover:border-white/20 transition-all flex justify-between items-center cursor-pointer`}
+                      >
+                        <span className="truncate">
+                          {selectedPraias.length > 0
+                            ? selectedPraias.join(", ")
+                            : selectedPerfil.includes("ambulante")
+                            ? "Selecione as praias onde atua ou frequenta..."
+                            : "Selecione as praias que costuma frequentar..."}
+                        </span>
+                        <ChevronDown className="w-5 h-5 text-white/40 shrink-0 ml-2" />
+                      </button>
+                      {errors.praias && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.praias.message}
+                        </p>
+                      )}
                     </div>
                   )}
                 </>
@@ -2281,26 +2295,36 @@ export default function Index() {
                     </div>
                   </div>
 
-                  {/* Dropdown de Região de Atuação PJ (Sul, Centro, Norte, Oeste) */}
+                  {/* Multi-seleção de Região de Atuação PJ (Sul, Centro, Norte, Oeste) */}
                   <div id="waitlist-input-regiao_atuacao_pj">
-                    <label htmlFor="waitlist-select-regiao-pj" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                      Região de Atuação <span className="text-red-500">*</span>
+                    <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                      Região de Atuação (selecione uma ou mais) <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative">
-                      <select
-                        id="waitlist-select-regiao-pj"
-                        {...register("regiao_atuacao_pj")}
-                        className={`w-full px-6 py-5 rounded-2xl bg-[#132348] border ${
-                          errors.regiao_atuacao_pj ? "border-red-500/70" : "border-white/10"
-                        } outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer`}
-                      >
-                        <option value="" className="bg-[#0B1B3E] text-white/50">Selecione a região de atuação...</option>
-                        <option value="Sul" className="bg-[#0B1B3E] text-white">Sul</option>
-                        <option value="Centro" className="bg-[#0B1B3E] text-white">Centro</option>
-                        <option value="Norte" className="bg-[#0B1B3E] text-white">Norte</option>
-                        <option value="Oeste" className="bg-[#0B1B3E] text-white">Oeste</option>
-                      </select>
-                      <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-2xl bg-white/5 border ${
+                      errors.regiao_atuacao_pj ? "border-red-500/70" : "border-white/10"
+                    }`}>
+                      {["Sul", "Centro", "Norte", "Oeste"].map((reg) => {
+                        const checked = selectedRegiaoPj.includes(reg);
+                        return (
+                          <button
+                            key={reg}
+                            type="button"
+                            onClick={() => {
+                              const next = checked
+                                ? selectedRegiaoPj.filter((r) => r !== reg)
+                                : [...selectedRegiaoPj, reg];
+                              setValue("regiao_atuacao_pj", next, { shouldValidate: true });
+                            }}
+                            className={`flex items-center justify-center p-3.5 rounded-xl border text-sm font-sans font-medium transition-all cursor-pointer ${
+                              checked
+                                ? "bg-green/10 border-green text-green"
+                                : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                            }`}
+                          >
+                            <span>{reg}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                     {errors.regiao_atuacao_pj && (
                       <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
@@ -2312,7 +2336,7 @@ export default function Index() {
               )}
 
               {/* ========================================================================= */}
-              {/* CAMPOS FINAIS COMUNS (PF & PJ): Senha, Mercado Pago e LGPD */}
+              {/* CAMPOS FINAIS COMUNS (PF & PJ): Senha, Mercado Pago, Pix e LGPD */}
               {/* ========================================================================= */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
@@ -2409,6 +2433,71 @@ export default function Index() {
                   </p>
                 )}
               </div>
+
+              {/* Condicional Chave Pix Mercado Pago */}
+              {possuiContaMercadoPago === true && (
+                <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300" id="waitlist-input-pix">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green animate-pulse" />
+                    <span className="font-display font-bold text-xs uppercase tracking-wider text-green">
+                      Dados da sua Chave Pix (Mercado Pago)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="waitlist-select-tipo-chave-pix" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Tipo de Chave Pix <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          id="waitlist-select-tipo-chave-pix"
+                          {...register("tipo_chave_pix")}
+                          className={`w-full px-5 py-4 rounded-xl bg-[#132348] border ${
+                            errors.tipo_chave_pix ? "border-red-500/70" : "border-white/10"
+                          } outline-none text-white text-sm hover:border-white/20 transition-all appearance-none cursor-pointer`}
+                        >
+                          <option value="" className="bg-[#0B1B3E] text-white/50">Selecione o tipo de chave...</option>
+                          <option value="cpf" className="bg-[#0B1B3E] text-white">CPF</option>
+                          <option value="telefone" className="bg-[#0B1B3E] text-white">Telefone (WhatsApp)</option>
+                          <option value="email" className="bg-[#0B1B3E] text-white">E-mail</option>
+                          <option value="aleatoria" className="bg-[#0B1B3E] text-white">Chave Aleatória (EVP)</option>
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-white/40 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                      {errors.tipo_chave_pix && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.tipo_chave_pix.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="waitlist-input-chave-pix" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Chave Pix <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="waitlist-input-chave-pix"
+                        type="text"
+                        placeholder="Informe sua Chave Pix"
+                        {...register("chave_pix")}
+                        className={`w-full px-5 py-4 rounded-xl bg-white/5 border ${
+                          errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                        } outline-none text-white text-sm transition-all`}
+                      />
+                      {errors.chave_pix && (
+                        <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                          <span>⚠</span> {errors.chave_pix.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-white/50 leading-relaxed font-sans pl-1">
+                    ℹ️ <strong>Lembre-se:</strong> Para que os pagamentos funcionem perfeitamente, a Chave Pix (se for e-mail, telefone ou CPF) deve ser a mesma cadastrada na sua conta do Mercado Pago.
+                  </p>
+                </div>
+              )}
 
               {/* LGPD Accept Terms */}
               <div className="flex flex-col gap-1 mt-2" id="waitlist-input-acceptTerms">
@@ -2642,7 +2731,7 @@ export default function Index() {
           <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-display font-bold text-lg text-white">
-                {perfil === "morador" ? "Bairro de residência" : "Bairro que costuma se hospedar"}
+                {selectedPerfil.includes("morador") ? "Bairro de residência" : "Bairro que costuma se hospedar"}
               </h4>
               <button
                 type="button"
@@ -2719,12 +2808,95 @@ export default function Index() {
         </div>
       )}
 
+      {/* Modal Bairros de Trabalho (Multi-seleção) */}
+      {isBairroTrabalhoModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-display font-bold text-lg text-white">
+                Bairros de Trabalho
+              </h4>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBairroTrabalhoModalOpen(false);
+                  setSearchBairroTrabalhoQuery("");
+                }}
+                className="text-white/40 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="mb-4 relative">
+              <input
+                type="text"
+                placeholder="Buscar bairro de trabalho..."
+                value={searchBairroTrabalhoQuery}
+                onChange={(e) => setSearchBairroTrabalhoQuery(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none text-white text-sm focus:border-green transition-all"
+              />
+            </div>
+            
+            <div 
+              className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 scrollbar-none"
+              style={{ maxHeight: "50vh" }}
+            >
+              {filteredBairrosTrabalho.length > 0 ? (
+                filteredBairrosTrabalho.map((b) => {
+                  const checked = selectedBairrosTrabalho.includes(b);
+                  return (
+                    <label
+                      key={b}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
+                        checked
+                          ? "bg-green/10 border-green text-green"
+                          : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked
+                            ? selectedBairrosTrabalho.filter((x) => x !== b)
+                            : [...selectedBairrosTrabalho, b];
+                          setValue("bairro_trabalho", next, { shouldValidate: true });
+                        }}
+                        className="h-5 w-5 accent-green shrink-0 cursor-pointer"
+                      />
+                      <span className="text-sm font-sans font-medium">{b}</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-8 text-center text-white/40 text-sm font-sans">
+                  Nenhum bairro encontrado
+                </div>
+              )}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => {
+                setIsBairroTrabalhoModalOpen(false);
+                setSearchBairroTrabalhoQuery("");
+              }}
+              className="w-full mt-6 py-4 rounded-xl bg-green text-navy font-display font-bold text-sm hover:bg-green-dark transition-all"
+            >
+              Confirmar Seleção
+            </button>
+          </div>
+        </div>
+      )}
+
       {isPraiaModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-[#0b1329] border border-white/10 rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-display font-bold text-lg text-white">
-                {perfil === "ambulante" ? "Praias de atuação" : "Praias que costuma frequentar"}
+                {selectedPerfil.includes("ambulante") ? "Praias de atuação e frequência" : "Praias que costuma frequentar"}
               </h4>
               <button
                 type="button"
