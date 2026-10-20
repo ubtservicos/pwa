@@ -35,14 +35,14 @@ try {
 
 // Dynamically configure Title for Environment if needed
 try {
-  const isProd = 
-    window.location.hostname === "ubt.app.br" ||
-    (import.meta.env.VITE_APP_ENV === "production" && 
-     !window.location.hostname.includes("homolog") && 
-     !window.location.hostname.includes("localhost"));
-  
-  if (!isProd && typeof document !== "undefined") {
-    document.title = "UBT Homolog — O Superapp do Trabalhador";
+  const isHomolog =
+    window.location.hostname.includes("homolog") ||
+    window.location.hostname.includes("localhost");
+
+  if (typeof document !== "undefined") {
+    document.title = isHomolog
+      ? "UBT Homolog — O Superapp da Praia"
+      : "UBT Serviços — O Superapp da Praia";
   }
 } catch (e) {
   console.debug("[PWA] Environment title configuration bypassed:", e);
