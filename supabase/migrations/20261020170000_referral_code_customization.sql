@@ -184,7 +184,13 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 8. RPC para localização de fundador (E-mail, CPF ou Telefone)
-CREATE OR REPLACE FUNCTION public.buscar_fundador_identificador(p_identificador text)
+DROP FUNCTION IF EXISTS public.buscar_fundador_identificador(text);
+DROP FUNCTION IF EXISTS public.buscar_fundador_identificador(text, text);
+
+CREATE OR REPLACE FUNCTION public.buscar_fundador_identificador(
+  identificador text DEFAULT NULL,
+  p_identificador text DEFAULT NULL
+)
 RETURNS TABLE (
   id uuid,
   nome text,
@@ -193,8 +199,9 @@ RETURNS TABLE (
   referral_code text
 ) AS $$
 DECLARE
-  clean_doc text := regexp_replace(p_identificador, '\D', '', 'g');
-  clean_email text := lower(trim(p_identificador));
+  v_identificador text := COALESCE(p_identificador, identificador, '');
+  clean_doc text := regexp_replace(v_identificador, '\D', '', 'g');
+  clean_email text := lower(trim(v_identificador));
 BEGIN
   -- Busca por E-mail
   IF clean_email LIKE '%@%' THEN
@@ -253,7 +260,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.generate_unique_referral_code() TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.check_referral_code_available(text, uuid) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.set_user_referral_code(uuid, text) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.buscar_fundador_identificador(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.buscar_fundador_identificador(text, text) TO anon, authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
 

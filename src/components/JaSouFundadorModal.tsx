@@ -125,14 +125,30 @@ export default function JaSouFundadorModal({
     setErrorMsg("");
 
     try {
-      // 1. Tentar chamar a RPC buscar_fundador_identificador
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        "buscar_fundador_identificador",
-        { p_identificador: queryForSearch }
-      );
+      // 1. Tentar chamar a RPC buscar_fundador_identificador testando ambos os formatos de parâmetro:
+      // { p_identificador: valorLimpo } e fallback para { identificador: valorLimpo }
+      let rpcResultData: any = null;
 
-      if (!rpcError && rpcData && rpcData.length > 0) {
-        const found = rpcData[0];
+      // Tentativa A: { p_identificador: valorLimpo }
+      const resP = await supabase.rpc("buscar_fundador_identificador", {
+        p_identificador: queryForSearch,
+      });
+
+      if (!resP.error && resP.data && resP.data.length > 0) {
+        rpcResultData = resP.data;
+      } else {
+        // Tentativa B: { identificador: valorLimpo }
+        const resId = await supabase.rpc("buscar_fundador_identificador", {
+          identificador: queryForSearch,
+        });
+
+        if (!resId.error && resId.data && resId.data.length > 0) {
+          rpcResultData = resId.data;
+        }
+      }
+
+      if (rpcResultData && rpcResultData.length > 0) {
+        const found = rpcResultData[0];
         handleFoundCandidate({
           id: found.id,
           nome: found.nome || "Fundador(a)",
@@ -145,7 +161,7 @@ export default function JaSouFundadorModal({
       }
 
       // 2. Fallback: busca direta em usuarios
-      let usersQuery = supabase.from("usuarios").select("id, nome, email, telefone, referral_code");
+      let usersQuery = supabase.from("usuarios").select("id, nome, email, telefone, cpf, referral_code");
       if (isEmail) {
         usersQuery = usersQuery.ilike("email", sanitizedQuery);
       } else if (sanitizedQuery.length >= 11) {
@@ -646,26 +662,15 @@ export default function JaSouFundadorModal({
               </p>
             </div>
 
-            {/* Referral Link Box */}
+            {/* Referral Link Box com Botão de Personalização Visível */}
             <div className="w-full flex flex-col gap-2 text-left mb-4">
               <div className="flex justify-between items-center pl-1">
                 <label className="text-xs font-mono text-white/50 uppercase tracking-wider">
                   Seu Link Exclusivo de Indicação:
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditingSlug(!isEditingSlug);
-                    setSlugError("");
-                    setSlugSuccessMsg("");
-                  }}
-                  className="text-xs text-green hover:underline flex items-center gap-1 font-mono cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>{isEditingSlug ? "Fechar edição" : "Personalizar Link"}</span>
-                </button>
               </div>
 
+              {/* Linha principal com Input + Botão Copiar + Botão Personalizar Link */}
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -676,7 +681,7 @@ export default function JaSouFundadorModal({
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 border border-white/10 cursor-pointer active:scale-95"
+                  className="px-3.5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 border border-white/10 cursor-pointer active:scale-95"
                   aria-label="Copiar link de indicação"
                 >
                   {copied ? (
@@ -691,13 +696,32 @@ export default function JaSouFundadorModal({
                     </>
                   )}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingSlug(!isEditingSlug);
+                    setSlugError("");
+                    setSlugSuccessMsg("");
+                  }}
+                  className={`px-3.5 py-3 rounded-xl font-display font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 cursor-pointer active:scale-95 border ${
+                    isEditingSlug
+                      ? "bg-green text-navy border-green"
+                      : "bg-[#0DB87E]/15 hover:bg-[#0DB87E]/25 text-[#0DB87E] border-[#0DB87E]/30"
+                  }`}
+                  aria-label="Personalizar Link"
+                  title="Personalizar seu Link de Indicação"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>{isEditingSlug ? "Fechar" : "Personalizar"}</span>
+                </button>
               </div>
 
-              {/* Box de Personalização de Slug */}
+              {/* Box Expansível de Personalização de Slug */}
               {isEditingSlug && (
-                <div className="w-full mt-2 p-4 rounded-2xl bg-black/60 border border-green/30 text-left flex flex-col gap-3 animate-in fade-in duration-200">
+                <div className="w-full mt-2 p-4 rounded-2xl bg-black/70 border border-green/30 text-left flex flex-col gap-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-green uppercase tracking-wider font-semibold">
+                    <span className="text-xs font-mono text-green uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                      <Edit3 className="w-3.5 h-3.5 text-green" />
                       Escolha seu código exclusivo (Slug)
                     </span>
                     <span className="text-[10px] text-white/40 font-mono">3 a 30 caracteres</span>

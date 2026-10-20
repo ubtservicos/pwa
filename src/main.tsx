@@ -33,19 +33,9 @@ try {
 }
 */
 
-// Dynamically configure Title for Environment if needed
-try {
-  const isHomolog =
-    window.location.hostname.includes("homolog") ||
-    window.location.hostname.includes("localhost");
-
-  if (typeof document !== "undefined") {
-    document.title = isHomolog
-      ? "UBT Homolog — O Superapp da Praia"
-      : "UBT Serviços — O Superapp da Praia";
-  }
-} catch (e) {
-  console.debug("[PWA] Environment title configuration bypassed:", e);
+// Configure Title strictly fixed across all environments and hostnames
+if (typeof document !== "undefined") {
+  document.title = "UBT Serviços — O Superapp da Praia";
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
