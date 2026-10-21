@@ -1284,67 +1284,67 @@ export default function AdminWaitlistPage() {
                 </div>
 
                 {/* Atualização Cadastral via WhatsApp */}
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Atualização Cadastral via WhatsApp:
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      readOnly
-                      type="text"
-                      value={`${getAppOrigin()}/atualizacao-cadastral?tel=${encodeURIComponent(selectedLeadModal.telefone)}`}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                        cursor: "text",
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/atualizacao-cadastral?tel=${encodeURIComponent(selectedLeadModal.telefone)}`, "atualizacao")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: copiedLink === "atualizacao" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                        color: copiedLink === "atualizacao" ? "#0DB87E" : "var(--admin-text)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {copiedLink === "atualizacao" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copiar
-                        </>
-                      )}
-                    </button>
-                    {(() => {
-                      const firstName = selectedLeadModal.nome ? selectedLeadModal.nome.trim().split(" ")[0] : "Fundador(a)";
-                      const updateUrl = `${getAppOrigin()}/atualizacao-cadastral?tel=${encodeURIComponent(selectedLeadModal.telefone)}`;
-                      const waMsg = `Olá, ${firstName}! Aqui é da equipe UBT Serviços. Estamos nos preparativos finais de aprovação do seu cadastro de Fundador em Ubatuba. Para liberar seu acesso e link de comissões, conclua seus dados pendentes e crie sua senha neste link seguro: ${updateUrl}`;
-                      const cleanDigits = selectedLeadModal.telefone.replace(/\D/g, "");
-                      const formattedPhone = cleanDigits.length >= 10 && !cleanDigits.startsWith("55") ? `55${cleanDigits}` : cleanDigits;
-                      const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
+                {(() => {
+                  const telLimpo = (selectedLeadModal.telefone || "").replace(/\D/g, "");
+                  const linkAtualizacao = `${getAppOrigin()}/atualizacao-cadastral?tel=${telLimpo}`;
+                  const firstName = selectedLeadModal.nome ? selectedLeadModal.nome.trim().split(" ")[0] : "Fundador(a)";
+                  const waMsg = `Olá, ${firstName}! Aqui é da equipe UBT Serviços. Estamos nos preparativos finais de aprovação do seu cadastro de Fundador em Ubatuba. Para liberar seu acesso e link de comissões, conclua seus dados pendentes e crie sua senha neste link seguro: ${linkAtualizacao}`;
+                  const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
+                  const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
 
-                      return (
+                  return (
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                        Atualização Cadastral via WhatsApp:
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          readOnly
+                          type="text"
+                          value={linkAtualizacao}
+                          style={{
+                            flex: 1,
+                            background: "var(--admin-bg)",
+                            border: "1px solid var(--admin-border)",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                            fontSize: 12,
+                            fontFamily: "monospace",
+                            color: "var(--admin-text)",
+                            outline: "none",
+                            cursor: "text",
+                          }}
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(linkAtualizacao, "atualizacao")}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            border: "1px solid var(--admin-border)",
+                            background: copiedLink === "atualizacao" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                            color: copiedLink === "atualizacao" ? "#0DB87E" : "var(--admin-text)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {copiedLink === "atualizacao" ? (
+                            <>
+                              <Check size={13} color="#0DB87E" /> Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={13} /> Copiar
+                            </>
+                          )}
+                        </button>
                         <a
                           href={waLink}
                           target="_blank"
@@ -1370,10 +1370,10 @@ export default function AdminWaitlistPage() {
                           </svg>
                           <span>Enviar WhatsApp</span>
                         </a>
-                      );
-                    })()}
-                  </div>
-                </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* LGPD Consentimento - Reposicionado no final do card (após os botões de status) */}
