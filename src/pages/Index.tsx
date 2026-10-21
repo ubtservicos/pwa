@@ -38,8 +38,20 @@ import { createClient } from "@supabase/supabase-js";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { maskPhone, maskCPF, maskCNPJ, generateReferralSlug } from "@/utils/masks";
+import { 
+  maskPhone, 
+  maskCPF, 
+  maskCNPJ, 
+  generateReferralSlug,
+  applyPixMask,
+  getPixPlaceholder,
+  getPixMaxLength,
+  isValidCPF,
+  isValidCNPJ,
+  isValidEVP,
+  isValidPixPhone,
+  isValidEmail
+} from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
 
@@ -521,12 +533,57 @@ const waitlistSchema = z.object({
         path: ["tipo_chave_pix"],
       });
     }
-    if (!data.chave_pix || data.chave_pix.trim().length < 3) {
+
+    const chave = (data.chave_pix || "").trim();
+    if (!chave) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Informe a sua Chave Pix cadastrada no Mercado Pago",
         path: ["chave_pix"],
       });
+    } else {
+      const tipo = (data.tipo_chave_pix || "").toLowerCase().trim();
+      if (tipo === "telefone" || tipo === "celular") {
+        if (!isValidPixPhone(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Telefone inválido. Informe DDD + 8 ou 9 dígitos numéricos.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "cpf") {
+        if (!isValidCPF(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "CPF inválido. Verifique os dígitos informados.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "cnpj") {
+        if (!isValidCNPJ(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "CNPJ inválido. Verifique os dígitos informados.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "email") {
+        if (!isValidEmail(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "E-mail inválido para Chave Pix.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "aleatoria" || tipo === "evp") {
+        if (!isValidEVP(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Chave aleatória inválida. Padrão UUID (36 caracteres) requerido.",
+            path: ["chave_pix"],
+          });
+        }
+      }
     }
   }
 });
@@ -622,6 +679,8 @@ export default function Index() {
   const selectedRegiaoPf = watch("regiao_atuacao_pf") || [];
   const selectedRegiaoPj = watch("regiao_atuacao_pj") || [];
   const possuiContaMercadoPago = watch("possuiContaMercadoPago");
+  const tipoChavePix = watch("tipo_chave_pix");
+  const chavePix = watch("chave_pix");
   const filteredPraias = PRAIAS_LIST.filter((p) =>
     p.toLowerCase().includes(searchPraiaQuery.toLowerCase())
   );
@@ -2451,12 +2510,17 @@ export default function Index() {
                         <select
                           id="waitlist-select-tipo-chave-pix"
                           {...register("tipo_chave_pix")}
+                          onChange={(e) => {
+                            setValue("tipo_chave_pix", e.target.value, { shouldValidate: true });
+                            setValue("chave_pix", "", { shouldValidate: true });
+                          }}
                           className={`w-full px-5 py-4 rounded-xl bg-[#132348] border ${
                             errors.tipo_chave_pix ? "border-red-500/70" : "border-white/10"
                           } outline-none text-white text-sm hover:border-white/20 transition-all appearance-none cursor-pointer`}
                         >
                           <option value="" className="bg-[#0B1B3E] text-white/50">Selecione o tipo de chave...</option>
                           <option value="cpf" className="bg-[#0B1B3E] text-white">CPF</option>
+                          <option value="cnpj" className="bg-[#0B1B3E] text-white">CNPJ</option>
                           <option value="telefone" className="bg-[#0B1B3E] text-white">Telefone (WhatsApp)</option>
                           <option value="email" className="bg-[#0B1B3E] text-white">E-mail</option>
                           <option value="aleatoria" className="bg-[#0B1B3E] text-white">Chave Aleatória (EVP)</option>
@@ -2477,8 +2541,14 @@ export default function Index() {
                       <input
                         id="waitlist-input-chave-pix"
                         type="text"
-                        placeholder="Informe sua Chave Pix"
                         {...register("chave_pix")}
+                        value={chavePix || ""}
+                        onChange={(e) => {
+                          const masked = applyPixMask(e.target.value, tipoChavePix);
+                          setValue("chave_pix", masked, { shouldValidate: true });
+                        }}
+                        placeholder={getPixPlaceholder(tipoChavePix)}
+                        maxLength={getPixMaxLength(tipoChavePix)}
                         className={`w-full px-5 py-4 rounded-xl bg-white/5 border ${
                           errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
                         } outline-none text-white text-sm transition-all`}

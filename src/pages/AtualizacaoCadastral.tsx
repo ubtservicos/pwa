@@ -21,7 +21,19 @@ import {
   ChevronDown
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { maskCPF, maskCNPJ, maskPhone } from "@/utils/masks";
+import { 
+  maskCPF, 
+  maskCNPJ, 
+  maskPhone,
+  applyPixMask,
+  getPixPlaceholder,
+  getPixMaxLength,
+  isValidCPF,
+  isValidCNPJ,
+  isValidEVP,
+  isValidPixPhone,
+  isValidEmail
+} from "@/utils/masks";
 import { trackEvent } from "@/services/AnalyticsService";
 
 export const BAIRROS_LIST = [
@@ -240,12 +252,57 @@ const atualizacaoSchema = z.object({
         path: ["tipo_chave_pix"],
       });
     }
-    if (!data.chave_pix || data.chave_pix.trim().length < 3) {
+
+    const chave = (data.chave_pix || "").trim();
+    if (!chave) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Informe a sua Chave Pix cadastrada no Mercado Pago",
         path: ["chave_pix"],
       });
+    } else {
+      const tipo = (data.tipo_chave_pix || "").toLowerCase().trim();
+      if (tipo === "telefone" || tipo === "celular") {
+        if (!isValidPixPhone(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Telefone inválido. Informe DDD + 8 ou 9 dígitos numéricos.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "cpf") {
+        if (!isValidCPF(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "CPF inválido. Verifique os dígitos informados.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "cnpj") {
+        if (!isValidCNPJ(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "CNPJ inválido. Verifique os dígitos informados.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "email") {
+        if (!isValidEmail(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "E-mail inválido para Chave Pix.",
+            path: ["chave_pix"],
+          });
+        }
+      } else if (tipo === "aleatoria" || tipo === "evp") {
+        if (!isValidEVP(chave)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Chave aleatória inválida. Padrão UUID (36 caracteres) requerido.",
+            path: ["chave_pix"],
+          });
+        }
+      }
     }
   }
 });
@@ -306,6 +363,8 @@ export default function AtualizacaoCadastral() {
   const tipoPessoa = watch("tipoPessoa");
   const perfil = watch("perfil");
   const possuiContaMercadoPago = watch("possuiContaMercadoPago");
+  const tipoChavePix = watch("tipo_chave_pix");
+  const chavePix = watch("chave_pix");
   const regiaoAtuacaoPf = watch("regiao_atuacao_pf");
   const regiaoAtuacaoPj = watch("regiao_atuacao_pj");
   const praias = watch("praias");
@@ -1253,6 +1312,10 @@ export default function AtualizacaoCadastral() {
                       <div>
                         <select
                           {...register("tipo_chave_pix")}
+                          onChange={(e) => {
+                            setValue("tipo_chave_pix", e.target.value, { shouldValidate: true });
+                            setValue("chave_pix", "", { shouldValidate: true });
+                          }}
                           className="w-full px-3 py-2.5 rounded-xl bg-black/80 border border-white/10 text-white text-xs font-sans outline-none focus:border-green"
                         >
                           <option value="">Selecione o tipo de Chave Pix...</option>
@@ -1271,7 +1334,13 @@ export default function AtualizacaoCadastral() {
                         <input
                           type="text"
                           {...register("chave_pix")}
-                          placeholder="Digite sua Chave Pix"
+                          value={chavePix || ""}
+                          onChange={(e) => {
+                            const masked = applyPixMask(e.target.value, tipoChavePix);
+                            setValue("chave_pix", masked, { shouldValidate: true });
+                          }}
+                          placeholder={getPixPlaceholder(tipoChavePix)}
+                          maxLength={getPixMaxLength(tipoChavePix)}
                           className="w-full px-4 py-2.5 rounded-xl bg-black/80 border border-white/10 focus:border-green text-white text-xs font-mono outline-none"
                         />
                         {errors.chave_pix && (
