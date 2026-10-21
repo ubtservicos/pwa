@@ -19,7 +19,6 @@ import { setCurrentUid, useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import InAppNotificationBell from "@/components/notifications/InAppNotificationBell";
-import CocoSmartBanner from "@/components/notifications/CocoSmartBanner";
 
 interface ServiceItem {
   label: string;
@@ -275,9 +274,6 @@ const AppHome = () => {
           </div>
         </div>
       </header>
-
-      {/* Dynamic Smart Recycling Reminder Banner */}
-      <CocoSmartBanner />
 
       {/* Toggle Tomador/Prestador no Topo */}
       <section className="mt-5 flex">

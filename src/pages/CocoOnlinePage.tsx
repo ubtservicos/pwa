@@ -8,7 +8,7 @@ import { getMaterial } from "@/mocks/cocoMateriais";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { CaminhaoMarker, ColetaMarker } from "@/lib/mapIcons";
 import { formatDist, haversineKm } from "@/utils/geo";
-import { UBTMap, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
+import UBTMap, { isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -70,7 +70,7 @@ const CocoOnlinePage = () => {
   const [loadingTrucks, setLoadingTrucks] = useState(true);
   const [isOnline, setIsOnline] = useState(false);
   const [pontos, setPontos] = useState<PontoColeta[]>([]);
-  const [myLocation, setMyLocation] = useState({ lat: -23.432, lng: -45.083 });
+  const [myLocation, setMyLocation] = useState({ lat: -23.4332, lng: -45.0834 });
   const [collectionsToday, setCollectionsToday] = useState(0);
   const [selectedPonto, setSelectedPonto] = useState<any | null>(null);
   const [showConfigAreas, setShowConfigAreas] = useState(false);
@@ -954,11 +954,11 @@ const CocoOnlinePage = () => {
       <div style={{ height: "55svh", position: "relative" }}>
         {mounted && (
           <UBTMap
-            center={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }}
+            center={{ lat: myLocation?.lat ?? -23.4332, lng: myLocation?.lng ?? -45.0834 }}
             zoom={14}
             style={{ width: "100%", height: "100%" }}
           >
-            <AdvancedMarker position={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }}>
+            <AdvancedMarker position={{ lat: myLocation?.lat ?? -23.4332, lng: myLocation?.lng ?? -45.0834 }}>
               <CaminhaoMarker isOnline={isOnline} />
             </AdvancedMarker>
             {pontos.map((p) => {

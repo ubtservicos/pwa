@@ -30,7 +30,7 @@ import {
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { TomadorMarker, ColetaMarker, CaminhaoMarker } from "@/lib/mapIcons";
 import { reverseGeocode } from "@/lib/geoService";
-import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
+import UBTMap, { UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -41,7 +41,7 @@ import CocoSmartBanner from "@/components/notifications/CocoSmartBanner";
 
 type Tab = "informar" | "acompanhar" | "contribuir";
 
-const FALLBACK_CENTER = { lat: -23.432, lng: -45.083 };
+const FALLBACK_CENTER = { lat: -23.4332, lng: -45.0834 };
 
 const MapFallback = ({ pontos }: { pontos: PontoColeta[] }) => (
   <div
@@ -382,11 +382,11 @@ const CocoPage = () => {
       <div style={{ position: "absolute", inset: 0 }}>
         {mounted && (
           <UBTMap
-            center={{ lat: center?.lat || -23.4332, lng: center?.lng || -45.0711 }}
+            center={{ lat: center?.lat ?? -23.4332, lng: center?.lng ?? -45.0834 }}
             zoom={14}
             style={{ width: "100%", height: "100%" }}
           >
-            <AdvancedMarker position={{ lat: center?.lat || -23.4332, lng: center?.lng || -45.0711 }}>
+            <AdvancedMarker position={{ lat: center?.lat ?? -23.4332, lng: center?.lng ?? -45.0834 }}>
               <TomadorMarker />
             </AdvancedMarker>
             {pontos.map((p) => {
