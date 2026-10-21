@@ -12,9 +12,9 @@ ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
 ALTER TABLE public.coco_agenda_bairros
 ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
 
--- 3. coco_config: Criar se não existir e adicionar vanity_slug e logo_url
+-- 3. coco_config: Criar se não existir com ID integer (singleton 1) e adicionar vanity_slug e logo_url
 CREATE TABLE IF NOT EXISTS public.coco_config (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id integer PRIMARY KEY DEFAULT 1,
   pix_key text,
   descricao text,
   missao text,
@@ -29,15 +29,17 @@ ADD COLUMN IF NOT EXISTS vanity_slug text DEFAULT 'cocoecia',
 ADD COLUMN IF NOT EXISTS logo_url text,
 ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
--- Inserir registro inicial na coco_config se vazio
+-- Inserir ou atualizar registro singleton na coco_config
 INSERT INTO public.coco_config (id, pix_key, descricao, missao, vanity_slug)
-SELECT 
-  gen_random_uuid(),
-  'contato@cocoecia.ubatuba.sp.gov.br',
-  'Associação e logística reversa comunitária em Ubatuba.',
-  'Promover a conscientização, descarte correto e valorização dos trabalhadores de reciclagem em Ubatuba.',
+VALUES (
+  1,
+  'cocoecia@ubatuba.sp.gov.br',
+  'Braço ecológico e social da UBT para reciclagem em Ubatuba',
+  'Promover a sustentabilidade e economia circular em nossas praias',
   'cocoecia'
-WHERE NOT EXISTS (SELECT 1 FROM public.coco_config LIMIT 1);
+)
+ON CONFLICT (id) DO UPDATE SET
+  vanity_slug = COALESCE(public.coco_config.vanity_slug, EXCLUDED.vanity_slug);
 
 -- 4. coco_caminhoes: Garantir colunas completas
 CREATE TABLE IF NOT EXISTS public.coco_caminhoes (
@@ -46,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.coco_caminhoes (
   apelido text NOT NULL,
   prestador_id uuid,
   pix_key text,
-  areas_atendidas text[] DEFAULT ARRAY['Centro', 'Itaguá'],
+  areas_atendidas text[] DEFAULT ARRAY['Centro', 'Itaguá']::text[],
   status_aprovacao text DEFAULT 'approved',
   role_solicitada text DEFAULT 'cocoecia-colaborador',
   is_online boolean DEFAULT false,
@@ -89,22 +91,29 @@ CREATE POLICY "Public_Read_Coco_Caminhoes" ON public.coco_caminhoes FOR SELECT U
 DROP POLICY IF EXISTS "Auth_Write_Coco_Caminhoes" ON public.coco_caminhoes;
 CREATE POLICY "Auth_Write_Coco_Caminhoes" ON public.coco_caminhoes FOR ALL TO authenticated USING (true);
 
--- 6. Storage Bucket para 'entidades'
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('entidades', 'entidades', true)
-ON CONFLICT (id) DO UPDATE SET public = true;
+-- 6. Storage Bucket para 'entidades' (execução protegida)
+DO $$
+BEGIN
+  INSERT INTO storage.buckets (id, name, public)
+  VALUES ('entidades', 'entidades', true)
+  ON CONFLICT (id) DO UPDATE SET public = true;
 
-DROP POLICY IF EXISTS "Public_Read_Entidades_Bucket" ON storage.objects;
-CREATE POLICY "Public_Read_Entidades_Bucket" ON storage.objects
-  FOR SELECT USING (bucket_id = 'entidades');
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
+    DROP POLICY IF EXISTS "Public_Read_Entidades_Bucket" ON storage.objects;
+    CREATE POLICY "Public_Read_Entidades_Bucket" ON storage.objects
+      FOR SELECT USING (bucket_id = 'entidades');
 
-DROP POLICY IF EXISTS "Auth_Insert_Entidades_Bucket" ON storage.objects;
-CREATE POLICY "Auth_Insert_Entidades_Bucket" ON storage.objects
-  FOR INSERT TO authenticated WITH CHECK (bucket_id = 'entidades');
+    DROP POLICY IF EXISTS "Auth_Insert_Entidades_Bucket" ON storage.objects;
+    CREATE POLICY "Auth_Insert_Entidades_Bucket" ON storage.objects
+      FOR INSERT TO authenticated WITH CHECK (bucket_id = 'entidades');
 
-DROP POLICY IF EXISTS "Auth_Update_Entidades_Bucket" ON storage.objects;
-CREATE POLICY "Auth_Update_Entidades_Bucket" ON storage.objects
-  FOR UPDATE TO authenticated USING (bucket_id = 'entidades');
+    DROP POLICY IF EXISTS "Auth_Update_Entidades_Bucket" ON storage.objects;
+    CREATE POLICY "Auth_Update_Entidades_Bucket" ON storage.objects
+      FOR UPDATE TO authenticated USING (bucket_id = 'entidades');
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
 
 -- 7. Atualização UTF-8 das Dicas Educativas
 UPDATE public.coco_dicas_materiais

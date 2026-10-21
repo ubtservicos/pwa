@@ -91,6 +91,7 @@ export default function AdminCocoCaptacao() {
         const { error } = await supabase
           .from("coco_config")
           .insert([{ 
+            id: 1,
             vanity_slug: slug,
             updated_at: new Date().toISOString()
           }]);

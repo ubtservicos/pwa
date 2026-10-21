@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- MIGRATION: 20261021150000_founder_funnel_fixes.sql
 -- Descrição:
---   1. Adiciona coluna cadastro_completo em public.waitlist.
+--   1. Adiciona colunas cadastro_completo, status e updated_at em public.waitlist.
 --   2. Criação da RPC salvar_slug_fundador (SECURITY DEFINER) para permitir
 --      atualização segura do slug pelo telefone, CPF, e-mail ou ID do fundador.
 --   3. Criação da RPC concluir_atualizacao_cadastral (SECURITY DEFINER) para
@@ -11,9 +11,14 @@
 
 BEGIN;
 
--- 1. Colunas adicionais na waitlist
+-- 1. Colunas adicionais na waitlist e usuarios
 ALTER TABLE public.waitlist
-  ADD COLUMN IF NOT EXISTS cadastro_completo boolean DEFAULT false;
+  ADD COLUMN IF NOT EXISTS cadastro_completo boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'pendente',
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+ALTER TABLE public.usuarios
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
 -- Atualiza leads legados com status completo se já tiverem preenchido dados essenciais
 UPDATE public.waitlist
@@ -31,7 +36,7 @@ CREATE OR REPLACE FUNCTION public.salvar_slug_fundador(
 RETURNS jsonb AS $$
 DECLARE
   clean_slug text := lower(trim(p_novo_slug));
-  clean_id text := trim(p_identificador);
+  clean_id text := trim(COALESCE(p_identificador, ''));
   clean_digits text := regexp_replace(clean_id, '\D', '', 'g');
   found_lead_id uuid := NULL;
   found_user_id uuid := NULL;
@@ -69,7 +74,7 @@ BEGIN
     END IF;
   END IF;
 
-  IF found_lead_id IS NULL AND found_user_id IS NULL THEN
+  IF found_lead_id IS NULL AND found_user_id IS NULL AND clean_id <> '' THEN
     -- Busca por e-mail ou referral_code atual
     SELECT id, user_id INTO found_lead_id, found_user_id
       FROM public.waitlist
@@ -113,12 +118,13 @@ BEGIN
 
   IF found_user_id IS NOT NULL THEN
     UPDATE public.usuarios
-       SET referral_code = clean_slug
+       SET referral_code = clean_slug,
+           updated_at = now()
      WHERE id = found_user_id;
   END IF;
 
   -- Se não encontrou por ID específico mas achou por e-mail/telefone
-  IF found_lead_id IS NULL AND found_user_id IS NULL THEN
+  IF found_lead_id IS NULL AND found_user_id IS NULL AND clean_id <> '' THEN
     -- Tenta atualizar diretamente por match de telefone/cpf/email
     UPDATE public.waitlist
        SET referral_code = clean_slug,
@@ -130,7 +136,8 @@ BEGIN
            ));
 
     UPDATE public.usuarios
-       SET referral_code = clean_slug
+       SET referral_code = clean_slug,
+           updated_at = now()
      WHERE lower(email) = lower(clean_id)
         OR (length(clean_digits) >= 8 AND (
               regexp_replace(telefone, '\D', '', 'g') = clean_digits
@@ -148,12 +155,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION public.salvar_slug_fundador(text, text) TO anon, authenticated, service_role;
 
--- 3. RPC concluir_atualizacao_cadastral
+-- 3. RPC concluir_atualizacao_cadastral (com suporte tanto a UUID quanto a TEXT)
 DROP FUNCTION IF EXISTS public.concluir_atualizacao_cadastral(uuid, jsonb);
+DROP FUNCTION IF EXISTS public.concluir_atualizacao_cadastral(text, jsonb);
 
 CREATE OR REPLACE FUNCTION public.concluir_atualizacao_cadastral(
-  p_lead_id uuid,
-  p_dados jsonb
+  p_lead_id text DEFAULT NULL,
+  p_dados jsonb DEFAULT '{}'::jsonb
 )
 RETURNS jsonb AS $$
 DECLARE
@@ -170,19 +178,29 @@ DECLARE
   v_bairro_moradia text := trim(COALESCE(p_dados->>'bairro_moradia', ''));
   v_bairro_trabalho text := trim(COALESCE(p_dados->>'bairro_trabalho', ''));
   v_bairro_hospedagem text := trim(COALESCE(p_dados->>'bairro_hospedagem', ''));
-  v_possui_mp boolean := (p_dados->>'possui_conta_mercado_pago')::boolean;
+  v_possui_mp boolean := NULL;
   v_chave_pix text := trim(COALESCE(p_dados->>'chave_pix', ''));
   v_tipo_chave_pix text := trim(COALESCE(p_dados->>'tipo_chave_pix', ''));
   v_observacoes text := trim(COALESCE(p_dados->>'observacoes', ''));
   v_user_id uuid := NULL;
-  v_target_id uuid := p_lead_id;
+  v_target_id uuid := NULL;
 BEGIN
+  -- Converte boolean possui_mp com segurança
+  IF (p_dados->>'possui_conta_mercado_pago') IS NOT NULL THEN
+    v_possui_mp := (p_dados->>'possui_conta_mercado_pago')::boolean;
+  END IF;
+
   -- Converte user_id se fornecido
   IF (p_dados->>'user_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
     v_user_id := (p_dados->>'user_id')::uuid;
   END IF;
 
-  -- Se p_lead_id não for informado, tenta buscar por email ou telefone
+  -- Converte p_lead_id se fornecido no formato UUID
+  IF p_lead_id IS NOT NULL AND p_lead_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    v_target_id := p_lead_id::uuid;
+  END IF;
+
+  -- Se v_target_id não for informado, tenta buscar por email ou telefone
   IF v_target_id IS NULL THEN
     SELECT id INTO v_target_id
       FROM public.waitlist
@@ -192,7 +210,7 @@ BEGIN
      LIMIT 1;
   END IF;
 
-  -- 1. Atualizar ou inserir na waitlist
+  -- 1. Atualizar na waitlist
   IF v_target_id IS NOT NULL THEN
     UPDATE public.waitlist
        SET nome = CASE WHEN v_nome <> '' THEN v_nome ELSE nome END,
@@ -208,7 +226,7 @@ BEGIN
            bairro_moradia = CASE WHEN v_bairro_moradia <> '' THEN v_bairro_moradia ELSE bairro_moradia END,
            bairro_trabalho = CASE WHEN v_bairro_trabalho <> '' THEN v_bairro_trabalho ELSE bairro_trabalho END,
            bairro_hospedagem = CASE WHEN v_bairro_hospedagem <> '' THEN v_bairro_hospedagem ELSE bairro_hospedagem END,
-           possui_conta_mercado_pago = v_possui_mp,
+           possui_conta_mercado_pago = COALESCE(v_possui_mp, possui_conta_mercado_pago),
            chave_pix = CASE WHEN v_chave_pix <> '' THEN v_chave_pix ELSE chave_pix END,
            tipo_chave_pix = CASE WHEN v_tipo_chave_pix <> '' THEN v_tipo_chave_pix ELSE tipo_chave_pix END,
            observacoes = CASE WHEN v_observacoes <> '' THEN v_observacoes ELSE observacoes END,
@@ -219,29 +237,30 @@ BEGIN
      WHERE id = v_target_id;
   END IF;
 
-  -- 2. Sincronizar na tabela public.usuarios se houver user_id ou se já existir usuario
+  -- 2. Sincronizar na tabela public.usuarios se houver user_id
   IF v_user_id IS NOT NULL THEN
     INSERT INTO public.usuarios (
       id, nome, email, telefone, cpf, cnpj, tipo_pessoa,
       responsavel_legal, cpf_responsavel, regiao_atuacao,
-      chave_pix, tipo_chave_pix, bairro_moradia, bairro_trabalho, status
+      chave_pix, tipo_chave_pix, bairro_moradia, bairro_trabalho, status, updated_at
     ) VALUES (
       v_user_id, v_nome, v_email, v_telefone, v_cpf, v_cnpj, v_tipo_pessoa,
       v_responsavel_legal, v_cpf_responsavel, v_regiao_atuacao,
-      v_chave_pix, v_tipo_chave_pix, v_bairro_moradia, v_bairro_trabalho, 'completo'
+      v_chave_pix, v_tipo_chave_pix, v_bairro_moradia, v_bairro_trabalho, 'completo', now()
     )
     ON CONFLICT (id) DO UPDATE
-      SET nome = EXCLUDED.nome,
-          email = EXCLUDED.email,
-          telefone = EXCLUDED.telefone,
-          cpf = EXCLUDED.cpf,
-          cnpj = EXCLUDED.cnpj,
+      SET nome = CASE WHEN EXCLUDED.nome <> '' THEN EXCLUDED.nome ELSE usuarios.nome END,
+          email = CASE WHEN EXCLUDED.email <> '' THEN EXCLUDED.email ELSE usuarios.email END,
+          telefone = CASE WHEN EXCLUDED.telefone <> '' THEN EXCLUDED.telefone ELSE usuarios.telefone END,
+          cpf = CASE WHEN EXCLUDED.cpf <> '' THEN EXCLUDED.cpf ELSE usuarios.cpf END,
+          cnpj = CASE WHEN EXCLUDED.cnpj <> '' THEN EXCLUDED.cnpj ELSE usuarios.cnpj END,
           tipo_pessoa = EXCLUDED.tipo_pessoa,
-          chave_pix = EXCLUDED.chave_pix,
-          tipo_chave_pix = EXCLUDED.tipo_chave_pix,
-          bairro_moradia = EXCLUDED.bairro_moradia,
-          bairro_trabalho = EXCLUDED.bairro_trabalho,
-          status = 'completo';
+          chave_pix = CASE WHEN EXCLUDED.chave_pix <> '' THEN EXCLUDED.chave_pix ELSE usuarios.chave_pix END,
+          tipo_chave_pix = CASE WHEN EXCLUDED.tipo_chave_pix <> '' THEN EXCLUDED.tipo_chave_pix ELSE usuarios.tipo_chave_pix END,
+          bairro_moradia = CASE WHEN EXCLUDED.bairro_moradia <> '' THEN EXCLUDED.bairro_moradia ELSE usuarios.bairro_moradia END,
+          bairro_trabalho = CASE WHEN EXCLUDED.bairro_trabalho <> '' THEN EXCLUDED.bairro_trabalho ELSE usuarios.bairro_trabalho END,
+          status = 'completo',
+          updated_at = now();
   END IF;
 
   RETURN jsonb_build_object(
@@ -253,6 +272,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Overload que aceita UUID diretamente
+CREATE OR REPLACE FUNCTION public.concluir_atualizacao_cadastral(
+  p_lead_id uuid,
+  p_dados jsonb
+)
+RETURNS jsonb AS $$
+BEGIN
+  RETURN public.concluir_atualizacao_cadastral(p_lead_id::text, p_dados);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.concluir_atualizacao_cadastral(text, jsonb) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.concluir_atualizacao_cadastral(uuid, jsonb) TO anon, authenticated, service_role;
 
 COMMIT;
