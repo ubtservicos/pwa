@@ -18,7 +18,11 @@ import {
   Lock,
   AlertCircle,
   HelpCircle,
-  ChevronDown
+  ChevronDown,
+  MapPin,
+  X,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -165,35 +169,23 @@ const atualizacaoSchema = z.object({
       }
 
       if (data.perfil.includes("morador")) {
-        if (!data.bairros || data.bairros.length === 0) {
+        const totalLocais = (data.bairros?.length || 0) + (data.praias?.length || 0);
+        if (totalLocais === 0) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Selecione o bairro de residência",
+            message: "Selecione pelo menos um bairro ou praia em Ubatuba",
             path: ["bairros"],
-          });
-        }
-        if (!data.praias || data.praias.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Selecione pelo menos uma praia que costuma frequentar",
-            path: ["praias"],
           });
         }
       }
 
       if (data.perfil.includes("turista")) {
-        if (!data.perfil.includes("morador") && (!data.bairros || data.bairros.length === 0)) {
+        const totalLocais = (data.bairros?.length || 0) + (data.praias?.length || 0);
+        if (totalLocais === 0) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Selecione o bairro de hospedagem",
+            message: "Selecione pelo menos um bairro de estadia ou praia frequentada",
             path: ["bairros"],
-          });
-        }
-        if (!data.praias || data.praias.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Selecione pelo menos uma praia que costuma frequentar",
-            path: ["praias"],
           });
         }
       }
@@ -328,6 +320,11 @@ export default function AtualizacaoCadastral() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  // Estados do Modal de Seleção Múltipla de Bairros e Praias
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [locationTab, setLocationTab] = useState<"todos" | "bairros" | "praias">("todos");
+
   const {
     register,
     handleSubmit,
@@ -372,6 +369,49 @@ export default function AtualizacaoCadastral() {
   const praias = watch("praias");
   const bairros = watch("bairros");
   const bairroTrabalho = watch("bairro_trabalho");
+
+  // Filtragem de Bairros e Praias para o Modal
+  const normalizedSearch = locationSearch.toLowerCase().trim();
+  const filteredBairros = BAIRROS_LIST.filter(b =>
+    !normalizedSearch || b.toLowerCase().includes(normalizedSearch)
+  );
+  const filteredPraias = PRAIAS_LIST.filter(p =>
+    !normalizedSearch || p.toLowerCase().includes(normalizedSearch)
+  );
+
+  const toggleLocationItem = (item: string, type: "bairro" | "praia") => {
+    if (type === "bairro") {
+      const exists = bairros.includes(item);
+      const next = exists ? bairros.filter(b => b !== item) : [...bairros, item];
+      setValue("bairros", next, { shouldValidate: true });
+    } else {
+      const exists = praias.includes(item);
+      const next = exists ? praias.filter(p => p !== item) : [...praias, item];
+      setValue("praias", next, { shouldValidate: true });
+    }
+  };
+
+  const clearAllLocations = () => {
+    setValue("bairros", [], { shouldValidate: true });
+    setValue("praias", [], { shouldValidate: true });
+  };
+
+  // Feedback imediato caso o formulário possua campos pendentes (elimina bloqueio silencioso)
+  const onInvalid = (formErrors: typeof errors) => {
+    console.warn("[AtualizacaoCadastral] Erros de validação:", formErrors);
+    const errorKeys = Object.keys(formErrors) as (keyof AtualizacaoFormData)[];
+    if (errorKeys.length > 0) {
+      const firstErrKey = errorKeys[0];
+      const firstErr = formErrors[firstErrKey];
+      const msg = firstErr?.message ? String(firstErr.message) : "Preencha todos os campos obrigatórios.";
+      toast.error(`Atenção: ${msg}`);
+
+      const el = document.querySelector(`[name="${firstErrKey}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  };
 
   // Função auxiliar para carregar lead por telefone
   const searchLeadByPhone = async (rawPhone: string) => {
@@ -652,7 +692,7 @@ export default function AtualizacaoCadastral() {
         console.warn("[AtualizacaoCadastral] Erro no salvamento da waitlist:", saveErr);
       }
 
-      // 4. Upsert na tabela public.usuarios com o authUserId vinculado
+      // 4. Upsert na tabela public.usuarios com o authUserId vinculado (sem telefone em usuarios)
       if (authUserId) {
         try {
           await supabase.from("usuarios").upsert({
@@ -662,7 +702,6 @@ export default function AtualizacaoCadastral() {
             role: userRole,
             cpf: cleanCpf,
             cnpj: cleanCnpj,
-            telefone: values.telefone.trim(),
             tipo_pessoa: values.tipoPessoa,
             responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
             cpf_responsavel: cleanCpfResp,
@@ -684,19 +723,30 @@ export default function AtualizacaoCadastral() {
         user_id: authUserId
       });
 
-      // Feedback de Sucesso: Chuva de confetes
-      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      // Feedback de Sucesso: Chuva de confetes solicitada
+      confetti({ particleCount: 150, spread: 80 });
 
-      // Toast vibrante
-      toast.success("Cadastro ativado com sucesso! 🎉");
+      // Auto-login garantido para abrir a rota /sou-fundador já autenticado
+      try {
+        await supabase.auth.signInWithPassword({
+          email: values.email.trim().toLowerCase(),
+          password: values.senha,
+        });
+      } catch (loginErr) {
+        // Ignora se a sessão já estiver ativa via signUp
+      }
 
-      // Aguarda 2 segundos antes de redirecionar para /sou-fundador
+      // Toast vibrante de sucesso
+      toast.success("Cadastro ativado com sucesso! Seja bem-vindo à rede de Fundadores! 🎉");
+
+      // Redireciona para /sou-fundador com a sessão aberta
       setTimeout(() => {
         navigate("/sou-fundador");
-      }, 2000);
+      }, 1200);
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao salvar cadastro:", err);
       setSubmitError(err.message || "Erro ao atualizar dados. Tente novamente.");
+      toast.error(err.message || "Erro ao atualizar dados. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -888,7 +938,7 @@ export default function AtualizacaoCadastral() {
             </div>
 
             {/* Formulário Principal */}
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 sm:p-8 rounded-3xl bg-[#0E1528] border border-white/10 shadow-2xl flex flex-col gap-6 text-left">
+            <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="p-6 sm:p-8 rounded-3xl bg-[#0E1528] border border-white/10 shadow-2xl flex flex-col gap-6 text-left">
               {/* Seletor Tipo de Pessoa (PF vs PJ) */}
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-mono uppercase tracking-wider text-white/50">
@@ -1024,116 +1074,77 @@ export default function AtualizacaoCadastral() {
                     </div>
                   )}
 
-                  {/* Condicional Morador: Bairro Moradia & Bairro Trabalho */}
-                  {perfil.includes("morador") && (
-                    <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col gap-3">
+                  {/* SELEÇÃO RESPONSIVA DE BAIRROS E PRAIAS (MODAL / FULLSCREEN) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-black/40 border border-white/10 flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <div>
-                        <label className="text-xs font-mono text-green uppercase tracking-wider block mb-1">
-                          Bairro de Residência *
-                        </label>
-                        <select
-                          value={bairros[0] || ""}
-                          onChange={(e) => setValue("bairros", e.target.value ? [e.target.value] : [], { shouldValidate: true })}
-                          className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-sans outline-none focus:border-green"
-                        >
-                          <option value="">Selecione o seu bairro...</option>
-                          {BAIRROS_LIST.map((b) => (
-                            <option key={b} value={b} className="bg-[#0B1329] text-white">
-                              {b}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.bairros && (
-                          <p className="text-[11px] text-red-400 mt-1">{errors.bairros.message}</p>
-                        )}
+                        <span className="text-xs font-mono text-green uppercase tracking-wider block font-semibold">
+                          Bairros e Praias de Atuação / Residência *
+                        </span>
+                        <p className="text-[11px] text-white/50 font-sans">
+                          Escolha as localidades onde você mora, trabalha ou frequenta em Ubatuba.
+                        </p>
                       </div>
+                      <span className="text-[11px] font-mono text-white/60 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10 self-start sm:self-auto">
+                        {(bairros?.length || 0) + (praias?.length || 0)} selecionado(s)
+                      </span>
+                    </div>
 
-                      <div>
-                        <label className="text-xs font-mono text-white/70 uppercase tracking-wider block mb-1">
-                          Bairros em que Trabalha ou Frequenta com Frequência:
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 rounded-xl bg-black/60 border border-white/10">
-                          {BAIRROS_LIST.slice(0, 30).map((b) => {
-                            const isSelected = bairroTrabalho.includes(b);
-                            return (
-                              <button
-                                key={b}
-                                type="button"
-                                onClick={() => toggleBairroTrabalho(b)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-sans transition-all cursor-pointer ${
-                                  isSelected
-                                    ? "bg-green text-navy font-bold"
-                                    : "bg-white/5 text-white/70 hover:bg-white/10"
-                                }`}
-                              >
-                                {b}
-                              </button>
-                            );
-                          })}
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationModalOpen(true)}
+                      className="w-full py-3.5 px-4 rounded-xl bg-black/60 hover:bg-black/80 border border-white/15 hover:border-green text-white text-xs sm:text-sm font-sans flex items-center justify-between gap-3 transition-all cursor-pointer shadow-inner group active:scale-98"
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <div className="w-8 h-8 rounded-lg bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
+                          <MapPin className="w-4 h-4 text-green" />
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Condicional Turista: Bairro Hospedagem */}
-                  {perfil.includes("turista") && !perfil.includes("morador") && (
-                    <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col gap-2">
-                      <label className="text-xs font-mono text-green uppercase tracking-wider block mb-1">
-                        Bairro de Hospedagem habitual em Ubatuba *
-                      </label>
-                      <select
-                        value={bairros[0] || ""}
-                        onChange={(e) => setValue("bairros", e.target.value ? [e.target.value] : [], { shouldValidate: true })}
-                        className="w-full px-4 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs font-sans outline-none focus:border-green"
-                      >
-                        <option value="">Selecione o bairro da estadia...</option>
-                        {BAIRROS_LIST.map((b) => (
-                          <option key={b} value={b} className="bg-[#0B1329] text-white">
-                            {b}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.bairros && (
-                        <p className="text-[11px] text-red-400 mt-1">{errors.bairros.message}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Condicional Ambulante / Morador / Turista: Praias */}
-                  {(perfil.includes("ambulante") || perfil.includes("morador") || perfil.includes("turista")) && (
-                    <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-mono text-green uppercase tracking-wider block">
-                          Praias que Atua ou Frequenta *
-                        </label>
-                        <span className="text-[10px] text-white/40 font-mono">
-                          {praias.length} selecionada(s)
+                        <span className="font-semibold text-white truncate">
+                          {(bairros?.length || 0) + (praias?.length || 0) === 0
+                            ? "Selecionar Bairros e Praias..."
+                            : `Selecionar Bairros e Praias (${(bairros?.length || 0) + (praias?.length || 0)} selecionados)`}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 rounded-xl bg-black/60 border border-white/10">
-                        {PRAIAS_LIST.map((p) => {
-                          const isSelected = praias.includes(p);
-                          return (
-                            <button
-                              key={p}
-                              type="button"
-                              onClick={() => togglePraia(p)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-sans transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-green text-navy font-bold"
-                                  : "bg-white/5 text-white/70 hover:bg-white/10"
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          );
-                        })}
+                      <span className="text-[11px] text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0">
+                        Abrir Seleção →
+                      </span>
+                    </button>
+
+                    {/* Preview dos Itens Selecionados */}
+                    {((bairros?.length || 0) + (praias?.length || 0)) > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {bairros.slice(0, 5).map((b) => (
+                          <span
+                            key={`preview-b-${b}`}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white/80 font-sans flex items-center gap-1.5"
+                          >
+                            <span className="text-white/40 text-[9px] font-mono uppercase">Bairro</span>
+                            <span>{b}</span>
+                          </span>
+                        ))}
+                        {praias.slice(0, 5).map((p) => (
+                          <span
+                            key={`preview-p-${p}`}
+                            className="px-2.5 py-1 rounded-lg bg-green/10 border border-green/20 text-[11px] text-green font-sans flex items-center gap-1.5"
+                          >
+                            <span className="text-green/60 text-[9px] font-mono uppercase">Praia</span>
+                            <span>{p}</span>
+                          </span>
+                        ))}
+                        {((bairros?.length || 0) + (praias?.length || 0)) > 10 && (
+                          <span className="px-2 py-1 rounded-lg bg-white/5 text-[10px] text-white/50 font-mono">
+                            + {((bairros?.length || 0) + (praias?.length || 0)) - 10} outros
+                          </span>
+                        )}
                       </div>
-                      {errors.praias && (
-                        <p className="text-[11px] text-red-400 mt-1">{errors.praias.message}</p>
-                      )}
-                    </div>
-                  )}
+                    )}
+
+                    {(errors.bairros || errors.praias) && (
+                      <p className="text-[11px] text-red-400 mt-0.5">
+                        {errors.bairros?.message || errors.praias?.message}
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -1456,6 +1467,201 @@ export default function AtualizacaoCadastral() {
       <footer className="relative z-10 border-t border-white/5 py-6 px-4 text-center text-xs text-white/40 font-mono">
         UBT Serviços • O Superapp da Praia • Ubatuba, SP
       </footer>
+
+      {/* ========================================================================= */}
+      {/* MODAL RESPONSIVO DE SELEÇÃO MÚLTIPLA DE BAIRROS E PRAIAS                  */}
+      {/* ========================================================================= */}
+      {isLocationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-xl rounded-none sm:rounded-3xl bg-[#0B1329] border-0 sm:border border-white/15 shadow-2xl flex flex-col overflow-hidden text-left">
+            {/* Header do Modal */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#0E1733] shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
+                  <MapPin className="w-4 h-4 text-green" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-white leading-tight">
+                    Bairros e Praias de Ubatuba
+                  </h3>
+                  <p className="text-[11px] text-white/50 font-sans">
+                    {(bairros?.length || 0) + (praias?.length || 0)} localidade(s) selecionada(s)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(false)}
+                className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                aria-label="Fechar seleção de bairros e praias"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Barra de Pesquisa e Filtros */}
+            <div className="p-3 sm:p-4 border-b border-white/5 flex flex-col gap-2.5 bg-[#080D1F] shrink-0">
+              <div className="relative">
+                <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                  placeholder="Buscar por bairro ou praia..."
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-black/60 border border-white/10 focus:border-green text-white text-xs sm:text-sm font-sans outline-none placeholder:text-white/30"
+                  autoFocus
+                />
+                {locationSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setLocationSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Tabs de Filtro */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setLocationTab("todos")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
+                    locationTab === "todos"
+                      ? "bg-white/15 text-white font-bold"
+                      : "text-white/50 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Todos ({filteredBairros.length + filteredPraias.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationTab("bairros")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
+                    locationTab === "bairros"
+                      ? "bg-white/15 text-white font-bold"
+                      : "text-white/50 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Bairros ({filteredBairros.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationTab("praias")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
+                    locationTab === "praias"
+                      ? "bg-white/15 text-white font-bold"
+                      : "text-white/50 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Praias ({filteredPraias.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Lista com Rolagem Vertical */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-3 divide-y divide-white/5">
+              {(locationTab === "todos" || locationTab === "bairros") && (
+                <div className="mb-2">
+                  {locationTab === "todos" && filteredBairros.length > 0 && (
+                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-white/40 bg-white/[0.02] rounded-md mb-1">
+                      Bairros ({filteredBairros.length})
+                    </div>
+                  )}
+                  {filteredBairros.map((b) => {
+                    const isSelected = bairros.includes(b);
+                    return (
+                      <div
+                        key={`modal-b-${b}`}
+                        onClick={() => toggleLocationItem(b, "bairro")}
+                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl cursor-pointer transition-colors ${
+                          isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors shrink-0 ${
+                              isSelected ? "bg-green border-green text-navy" : "border-white/20 bg-black/40"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs sm:text-sm font-sans font-medium">{b}</span>
+                        </div>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-white/5 text-white/50 border border-white/5 shrink-0">
+                          Bairro
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {(locationTab === "todos" || locationTab === "praias") && (
+                <div>
+                  {locationTab === "todos" && filteredPraias.length > 0 && (
+                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-green/60 bg-green/[0.02] rounded-md mb-1">
+                      Praias ({filteredPraias.length})
+                    </div>
+                  )}
+                  {filteredPraias.map((p) => {
+                    const isSelected = praias.includes(p);
+                    return (
+                      <div
+                        key={`modal-p-${p}`}
+                        onClick={() => toggleLocationItem(p, "praia")}
+                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl cursor-pointer transition-colors ${
+                          isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors shrink-0 ${
+                              isSelected ? "bg-green border-green text-navy" : "border-white/20 bg-black/40"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs sm:text-sm font-sans font-medium">{p}</span>
+                        </div>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-green/10 text-green/80 border border-green/20 shrink-0">
+                          Praia
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {filteredBairros.length === 0 && filteredPraias.length === 0 && (
+                <div className="py-12 text-center text-xs font-mono text-white/40">
+                  Nenhum bairro ou praia localizado para &quot;{locationSearch}&quot;.
+                </div>
+              )}
+            </div>
+
+            {/* Footer com Ações */}
+            <div className="p-3 sm:p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={clearAllLocations}
+                className="px-3 py-2 text-xs font-mono text-white/50 hover:text-white transition-colors cursor-pointer"
+              >
+                Limpar Seleção
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(false)}
+                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20 active:scale-98"
+              >
+                Confirmar Seleção ({(bairros?.length || 0) + (praias?.length || 0)})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

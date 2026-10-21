@@ -18,6 +18,7 @@ ALTER TABLE public.waitlist
   ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
 ALTER TABLE public.usuarios
+  ADD COLUMN IF NOT EXISTS telefone text,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
 -- Atualiza leads legados com status completo se já tiverem preenchido dados essenciais
@@ -239,28 +240,33 @@ BEGIN
 
   -- 2. Sincronizar na tabela public.usuarios se houver user_id
   IF v_user_id IS NOT NULL THEN
-    INSERT INTO public.usuarios (
-      id, nome, email, telefone, cpf, cnpj, tipo_pessoa,
-      responsavel_legal, cpf_responsavel, regiao_atuacao,
-      chave_pix, tipo_chave_pix, bairro_moradia, bairro_trabalho, status, updated_at
-    ) VALUES (
-      v_user_id, v_nome, v_email, v_telefone, v_cpf, v_cnpj, v_tipo_pessoa,
-      v_responsavel_legal, v_cpf_responsavel, v_regiao_atuacao,
-      v_chave_pix, v_tipo_chave_pix, v_bairro_moradia, v_bairro_trabalho, 'completo', now()
-    )
-    ON CONFLICT (id) DO UPDATE
-      SET nome = CASE WHEN EXCLUDED.nome <> '' THEN EXCLUDED.nome ELSE usuarios.nome END,
-          email = CASE WHEN EXCLUDED.email <> '' THEN EXCLUDED.email ELSE usuarios.email END,
-          telefone = CASE WHEN EXCLUDED.telefone <> '' THEN EXCLUDED.telefone ELSE usuarios.telefone END,
-          cpf = CASE WHEN EXCLUDED.cpf <> '' THEN EXCLUDED.cpf ELSE usuarios.cpf END,
-          cnpj = CASE WHEN EXCLUDED.cnpj <> '' THEN EXCLUDED.cnpj ELSE usuarios.cnpj END,
-          tipo_pessoa = EXCLUDED.tipo_pessoa,
-          chave_pix = CASE WHEN EXCLUDED.chave_pix <> '' THEN EXCLUDED.chave_pix ELSE usuarios.chave_pix END,
-          tipo_chave_pix = CASE WHEN EXCLUDED.tipo_chave_pix <> '' THEN EXCLUDED.tipo_chave_pix ELSE usuarios.tipo_chave_pix END,
-          bairro_moradia = CASE WHEN EXCLUDED.bairro_moradia <> '' THEN EXCLUDED.bairro_moradia ELSE usuarios.bairro_moradia END,
-          bairro_trabalho = CASE WHEN EXCLUDED.bairro_trabalho <> '' THEN EXCLUDED.bairro_trabalho ELSE usuarios.bairro_trabalho END,
-          status = 'completo',
-          updated_at = now();
+    BEGIN
+      INSERT INTO public.usuarios (
+        id, nome, email, telefone, cpf, cnpj, tipo_pessoa,
+        responsavel_legal, cpf_responsavel, regiao_atuacao,
+        chave_pix, tipo_chave_pix, bairro_moradia, bairro_trabalho, status, updated_at
+      ) VALUES (
+        v_user_id, v_nome, v_email, v_telefone, v_cpf, v_cnpj, v_tipo_pessoa,
+        v_responsavel_legal, v_cpf_responsavel, v_regiao_atuacao,
+        v_chave_pix, v_tipo_chave_pix, v_bairro_moradia, v_bairro_trabalho, 'completo', now()
+      )
+      ON CONFLICT (id) DO UPDATE
+        SET nome = CASE WHEN EXCLUDED.nome <> '' THEN EXCLUDED.nome ELSE usuarios.nome END,
+            email = CASE WHEN EXCLUDED.email <> '' THEN EXCLUDED.email ELSE usuarios.email END,
+            telefone = CASE WHEN EXCLUDED.telefone <> '' THEN EXCLUDED.telefone ELSE usuarios.telefone END,
+            cpf = CASE WHEN EXCLUDED.cpf <> '' THEN EXCLUDED.cpf ELSE usuarios.cpf END,
+            cnpj = CASE WHEN EXCLUDED.cnpj <> '' THEN EXCLUDED.cnpj ELSE usuarios.cnpj END,
+            tipo_pessoa = EXCLUDED.tipo_pessoa,
+            chave_pix = CASE WHEN EXCLUDED.chave_pix <> '' THEN EXCLUDED.chave_pix ELSE usuarios.chave_pix END,
+            tipo_chave_pix = CASE WHEN EXCLUDED.tipo_chave_pix <> '' THEN EXCLUDED.tipo_chave_pix ELSE usuarios.tipo_chave_pix END,
+            bairro_moradia = CASE WHEN EXCLUDED.bairro_moradia <> '' THEN EXCLUDED.bairro_moradia ELSE usuarios.bairro_moradia END,
+            bairro_trabalho = CASE WHEN EXCLUDED.bairro_trabalho <> '' THEN EXCLUDED.bairro_trabalho ELSE usuarios.bairro_trabalho END,
+            status = 'completo',
+            updated_at = now();
+    EXCEPTION WHEN OTHERS THEN
+      -- Evita que qualquer divergência de colunas em usuarios bloqueie a migração/atualização do lead
+      NULL;
+    END;
   END IF;
 
   RETURN jsonb_build_object(

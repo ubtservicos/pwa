@@ -76,10 +76,10 @@ export default function SouFundadorPage() {
     const cleanUserId = userId.trim();
 
     try {
-      // Busca em public.usuarios com o schema exato: id, nome, email, telefone, cpf, referral_code
+      // Busca em public.usuarios SEM telefone (apenas colunas existentes: id, nome, email, cpf, referral_code)
       const { data: userData, error: userError } = await supabase
         .from("usuarios")
-        .select("id, nome, email, telefone, cpf, referral_code")
+        .select("id, nome, email, cpf, referral_code")
         .eq("id", cleanUserId)
         .maybeSingle();
 
@@ -87,21 +87,7 @@ export default function SouFundadorPage() {
         console.warn("[SouFundadorPage] Aviso ao buscar usuário:", userError.message);
       }
 
-      if (userData) {
-        const code = userData.referral_code || generateReferralSlug(userData.nome, userData.id);
-        setFounder({
-          id: userData.id,
-          nome: userData.nome || "Membro Fundador",
-          email: userData.email || emailHint || "",
-          telefone: userData.telefone || "",
-          cpf: userData.cpf || "",
-          referral_code: code,
-        });
-        setCustomSlug(code);
-        return;
-      }
-
-      // Fallback seguro para public.waitlist
+      // Busca na waitlist para obter telefone e/ou dados complementares
       const cleanEmail = emailHint?.trim()?.toLowerCase();
       let wlQuery = supabase
         .from("waitlist")
@@ -119,29 +105,21 @@ export default function SouFundadorPage() {
         console.warn("[SouFundadorPage] Aviso ao buscar waitlist:", wlError.message);
       }
 
-      if (wlData) {
-        const code = wlData.referral_code || generateReferralSlug(wlData.nome, wlData.id);
-        setFounder({
-          id: wlData.id,
-          nome: wlData.nome || "Membro Fundador",
-          email: wlData.email || emailHint || "",
-          telefone: wlData.telefone || "",
-          cpf: wlData.cpf || "",
-          referral_code: code,
-        });
-        setCustomSlug(code);
-        return;
-      }
+      const nomeFinal = userData?.nome || wlData?.nome || "Membro Fundador";
+      const emailFinal = userData?.email || wlData?.email || emailHint || "";
+      const telefoneFinal = wlData?.telefone || "";
+      const cpfFinal = userData?.cpf || wlData?.cpf || "";
+      const code = userData?.referral_code || wlData?.referral_code || generateReferralSlug(nomeFinal, cleanUserId);
 
-      // Se autenticado mas sem registro explícito em usuarios/waitlist
-      const fallbackCode = generateReferralSlug("fundador", cleanUserId);
       setFounder({
         id: cleanUserId,
-        nome: "Membro Fundador",
-        email: emailHint || "",
-        referral_code: fallbackCode,
+        nome: nomeFinal,
+        email: emailFinal,
+        telefone: telefoneFinal,
+        cpf: cpfFinal,
+        referral_code: code,
       });
-      setCustomSlug(fallbackCode);
+      setCustomSlug(code);
     } catch (err) {
       console.error("[SouFundadorPage] Erro ao carregar dados do fundador:", err);
     }
@@ -153,20 +131,24 @@ export default function SouFundadorPage() {
     const checkSession = async () => {
       try {
         setAuthLoading(true);
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // Validação obrigatória de sessão via getSession()
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-        if (userError) {
-          // Sem sessão ativa: apenas remove loading para exibir o formulário de login
-          if (isMounted) setAuthLoading(false);
+        if (sessionError || !sessionData?.session?.user) {
+          if (isMounted) {
+            setFounder(null);
+            setAuthLoading(false);
+          }
           return;
         }
 
-        // Blindagem contra undefined antes de invocar a consulta
-        if (user?.id && isMounted) {
-          await loadFounderData(user.id, user.email);
+        const sessionUser = sessionData.session.user;
+        if (sessionUser?.id && isMounted) {
+          await loadFounderData(sessionUser.id, sessionUser.email);
         }
       } catch (err) {
         console.error("[SouFundadorPage] Erro na checagem de sessão:", err);
+        if (isMounted) setFounder(null);
       } finally {
         if (isMounted) setAuthLoading(false);
       }
@@ -428,54 +410,43 @@ export default function SouFundadorPage() {
 
       {/* Conteúdo Central */}
       <main className="relative z-10 flex-1 max-w-4xl mx-auto w-full px-4 sm:px-8 py-8 sm:py-12 flex flex-col gap-10">
-        {/* ========================================================================= */}
-        {/* SEÇÃO 1: MANIFESTO & STATUS DE IMPLANTAÇÃO */}
-        {/* ========================================================================= */}
-        <section className="text-center flex flex-col items-center">
-          {/* Badge Superior */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 border border-green/30 text-green text-[11px] font-mono uppercase tracking-widest font-semibold mb-6 shadow-[0_0_20px_rgba(0,255,102,0.15)]">
-            <span className="w-2 h-2 rounded-full bg-green animate-ping" />
-            <span>FASE FINAL DE IMPLANTAÇÃO • UBATUBA, SP</span>
-          </div>
-
-          {/* Título Principal */}
-          <h1 className="font-display font-extrabold text-3xl sm:text-4xl md:text-5xl text-white tracking-tight leading-[1.15] max-w-2xl mb-6">
-            Estamos nos ajustes finais para transformar a economia de Ubatuba.
-          </h1>
-
-          {/* Texto Manifesto */}
-          <div className="p-6 sm:p-8 rounded-3xl bg-[#0B1329]/90 border border-white/10 shadow-2xl text-left max-w-2xl backdrop-blur-sm">
-            <p className="text-sm sm:text-base text-zinc-300 leading-relaxed font-sans mb-4">
-              Mais do que um aplicativo, a UBT nasce como um movimento de valorização do trabalhador local. Estamos calibrando os últimos detalhes técnicos e regulatórios para entregar uma plataforma ágil, justa e construída para quem vive e move a nossa cidade — de ponta a ponta, do Perequê-Açú ao Maranduba, da serra ao mar.
-            </p>
-            <p className="text-sm sm:text-base text-zinc-300 leading-relaxed font-sans">
-              Aqui, o dinheiro circula onde deve: dentro da comunidade caiçara, fortalecendo ambulantes, mototaxistas, diaristas, pequenos comerciantes e famílias da região. Você, como membro fundador, tem papel central nessa história.
-            </p>
-          </div>
-        </section>
-
         {/* Loading inicial de verificação de autenticação */}
         {authLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Loader2 className="w-8 h-8 text-green animate-spin" />
+          <div className="flex flex-col items-center justify-center py-24 gap-3 my-auto">
+            <Loader2 className="w-10 h-10 text-green animate-spin" />
             <span className="text-xs font-mono text-white/50 tracking-wider">
               Verificando credenciais de fundador...
             </span>
           </div>
         ) : !founder ? (
-          /* Seção 2: FORMULÁRIO DE IDENTIFICAÇÃO E LOGIN DIRETO NO SISTEMA */
-          <section className="w-full max-w-md mx-auto animate-in fade-in zoom-in-95 duration-300">
-            <div className="p-6 sm:p-8 rounded-3xl bg-[#0E1528] border border-white/10 shadow-2xl flex flex-col gap-5 text-left">
+          /* ========================================================================= */
+          /* TELA DEDICADA DE LOGIN / IDENTIFICAÇÃO DO FUNDADOR (ACESSO PROTEGIDO)      */
+          /* ========================================================================= */
+          <section className="w-full max-w-md mx-auto my-auto animate-in fade-in zoom-in-95 duration-300">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 border border-green/30 text-green text-[10px] font-mono uppercase tracking-widest font-semibold mb-3">
+                <span className="w-2 h-2 rounded-full bg-green animate-ping" />
+                <span>Área Restrita • Membros Fundadores</span>
+              </div>
+              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight">
+                Painel do Fundador
+              </h1>
+              <p className="text-xs text-zinc-400 font-sans mt-1">
+                Identifique-se para acessar seu link exclusivo e acompanhar sua rede.
+              </p>
+            </div>
+
+            <div className="p-6 sm:p-8 rounded-3xl bg-[#0E1528] border border-white/10 shadow-2xl flex flex-col gap-5 text-left backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
                   <Lock className="w-5 h-5 text-green" />
                 </div>
                 <div>
-                  <h2 className="font-display font-bold text-lg text-white">
-                    Acesse seu Espaço de Fundador
+                  <h2 className="font-display font-bold text-base text-white">
+                    Identificação de Acesso
                   </h2>
                   <p className="text-xs text-white/50 font-sans">
-                    Informe seu E-mail ou CPF e sua senha cadastrada.
+                    Entre com seu E-mail ou CPF e sua senha.
                   </p>
                 </div>
               </div>
@@ -560,7 +531,17 @@ export default function SouFundadorPage() {
                 </button>
               </form>
 
-              <div className="pt-4 border-t border-white/5 text-center flex flex-col gap-1.5">
+              <div className="pt-4 border-t border-white/5 text-center flex flex-col gap-2">
+                <span className="text-xs text-white/40 font-sans">
+                  Já se inscreveu na Fila de Espera e ainda não ativou sua senha?
+                </span>
+                <Link
+                  to="/atualizacao-cadastral"
+                  className="text-xs text-green hover:underline font-mono font-semibold"
+                >
+                  Concluir Atualização Cadastral e Criar Senha →
+                </Link>
+                <div className="h-px bg-white/5 my-1" />
                 <span className="text-xs text-white/40 font-sans">
                   Ainda não fez sua inscrição pioneira?
                 </span>
@@ -596,6 +577,20 @@ export default function SouFundadorPage() {
                   </h2>
                 </div>
               </div>
+            </div>
+
+            {/* Manifesto & Status de Implantação para o Fundador */}
+            <div className="p-6 rounded-3xl bg-[#0B1329]/90 border border-white/10 shadow-2xl text-left backdrop-blur-sm flex flex-col gap-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/60 border border-green/30 text-green text-[10px] font-mono uppercase tracking-widest font-semibold self-start">
+                <span className="w-2 h-2 rounded-full bg-green animate-ping" />
+                <span>FASE FINAL DE IMPLANTAÇÃO • UBATUBA, SP</span>
+              </div>
+              <h3 className="font-display font-extrabold text-xl sm:text-2xl text-white tracking-tight">
+                Estamos nos ajustes finais para transformar a economia de Ubatuba.
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-sans">
+                Mais do que um aplicativo, a UBT nasce como um movimento de valorização do trabalhador local. Estamos calibrando os últimos detalhes técnicos e regulatórios para entregar uma plataforma ágil, justa e construída para quem vive e move a nossa cidade — de ponta a ponta, do Perequê-Açú ao Maranduba, da serra ao mar.
+              </p>
             </div>
 
             {/* Mecânica do Programa Padrinho & Madrinha */}

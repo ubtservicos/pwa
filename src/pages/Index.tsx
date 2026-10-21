@@ -999,7 +999,12 @@ export default function Index() {
           authMsg.includes("already exists") || 
           authMsg.includes("user already exists")
         ) {
-          setSubmitError("Este e-mail já está cadastrado. Você pode redefinir sua senha na tela de login.");
+          const cleanTel = (values.telefone || "").replace(/\D/g, "");
+          const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
+          toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
+          setTimeout(() => {
+            navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
+          }, 1200);
           setIsSubmitting(false);
           return;
         }
@@ -1007,23 +1012,28 @@ export default function Index() {
       }
 
       if (authData?.user && authData.user.identities && authData.user.identities.length === 0) {
-        setSubmitError("Este e-mail já está cadastrado. Você pode redefinir sua senha na tela de login.");
+        const cleanTel = (values.telefone || "").replace(/\D/g, "");
+        const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
+        toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
+        setTimeout(() => {
+          navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
+        }, 1200);
         setIsSubmitting(false);
         return;
       }
 
       const userId = authData?.user?.id || null;
 
-      // 2. Sincronizar dados na tabela usuarios se o user_id foi gerado
+      // 2. Sincronizar dados na tabela usuarios se o user_id foi gerado (sem telefone em usuarios)
       if (userId) {
         try {
           await supabase.from("usuarios").upsert({
             id: userId,
             nome: nomeFinal,
+            email: values.email.trim().toLowerCase(),
             role: userRole,
             cpf: cleanCpf,
             cnpj: cleanCnpj,
-            telefone: values.telefone.trim(),
             status: "pendente",
             tipo_pessoa: values.tipoPessoa,
             responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
@@ -1113,13 +1123,22 @@ export default function Index() {
 
       if (insertError) {
         console.error("[Waitlist] Erro no Supabase Insert:", insertError);
+        const errMsg = insertError.message?.toLowerCase() || "";
+        const errDet = insertError.details?.toLowerCase() || "";
         if (
           insertError.code === "23505" || 
-          insertError.message?.toLowerCase().includes("unique") || 
-          insertError.message?.toLowerCase().includes("duplicate") ||
-          insertError.details?.toLowerCase().includes("already exists")
+          errMsg.includes("unique") || 
+          errMsg.includes("duplicate") ||
+          errMsg.includes("already exists") ||
+          errDet.includes("already exists") ||
+          errDet.includes("idx_waitlist_email_unique")
         ) {
-          setSubmitError("Este e-mail, telefone ou documento já está cadastrado na nossa fila de fundadores!");
+          const cleanTel = (values.telefone || "").replace(/\D/g, "");
+          const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
+          toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
+          setTimeout(() => {
+            navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
+          }, 1200);
           setIsSubmitting(false);
           return;
         }
@@ -1146,6 +1165,27 @@ export default function Index() {
 
     } catch (err: any) {
       console.error("[Waitlist] Falha ao registrar:", err);
+      const errMsg = (err?.message || "").toLowerCase();
+      const errDet = (err?.details || "").toLowerCase();
+
+      if (
+        err?.code === "23505" ||
+        errMsg.includes("duplicate") ||
+        errMsg.includes("unique") ||
+        errMsg.includes("already exists") ||
+        errDet.includes("already exists") ||
+        errDet.includes("idx_waitlist_email_unique")
+      ) {
+        const cleanTel = (values.telefone || "").replace(/\D/g, "");
+        const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
+        toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
+        setTimeout(() => {
+          navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
+        }, 1200);
+        setIsSubmitting(false);
+        return;
+      }
+
       const errorMsg = err?.message || "Erro de conexão";
       const errorDetails = err?.details ? ` (${err.details})` : "";
       const errorHint = err?.hint ? ` - Dica: ${err.hint}` : "";
