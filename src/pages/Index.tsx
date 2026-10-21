@@ -38,6 +38,7 @@ import { createClient } from "@supabase/supabase-js";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { 
   maskPhone, 
   maskCPF, 
