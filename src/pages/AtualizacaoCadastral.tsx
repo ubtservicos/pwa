@@ -373,34 +373,56 @@ export default function AtualizacaoCadastral() {
 
   // Função auxiliar para carregar lead por telefone
   const searchLeadByPhone = async (rawPhone: string) => {
-    const cleanDigits = rawPhone.replace(/\D/g, "");
-    if (!cleanDigits || cleanDigits.length < 8) {
+    // Sanitização para extrair estritamente dígitos numéricos
+    const telDigits = (rawPhone || "").replace(/\D/g, "");
+    if (!telDigits || telDigits.length < 8) {
       setLookupError("Informe um número de telefone com DDD válido (ex: 12 99999-8888).");
       return;
     }
+
+    // Normaliza removendo 55 se houver mais de 10 dígitos (ex: 5512982267829 -> 12982267829)
+    const telQuery = (telDigits.startsWith("55") && telDigits.length > 10)
+      ? telDigits.slice(2)
+      : telDigits;
 
     setIsLookingUp(true);
     setLookupError("");
 
     try {
-      // Normaliza removendo 55 se houver mais de 10 dígitos
-      const normalizedQuery = cleanDigits.startsWith("55") && cleanDigits.length > 10
-        ? cleanDigits.slice(2)
-        : cleanDigits;
+      let leadData: any = null;
 
-      const { data, error } = await supabase
-        .from("waitlist")
-        .select("*")
-        .or(`telefone.ilike.%${normalizedQuery}%,telefone.ilike.%${cleanDigits}%`)
-        .order("created_at_utc", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // 1. Tenta chamar RPC buscar_lead_waitlist
+      try {
+        const { data: rpcData, error: rpcError } = await supabase
+          .rpc("buscar_lead_waitlist", { p_identificador: telQuery });
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
+        if (!rpcError && rpcData) {
+          leadData = Array.isArray(rpcData) ? (rpcData[0] || null) : rpcData;
+        }
+      } catch (rpcErr) {
+        // Fallback silencioso para consulta direta
       }
 
-      if (!data) {
+      // 2. Fallback: Consulta direta comparando número limpo, com máscara e últimos 8 dígitos
+      if (!leadData) {
+        const mascaraTelefone = maskPhone(telQuery);
+        const last8 = telQuery.slice(-8);
+
+        const { data, error } = await supabase
+          .from("waitlist")
+          .select("*")
+          .or(`telefone.eq.${telQuery},telefone.eq.${mascaraTelefone},telefone.ilike.%${last8}%`)
+          .order("created_at_utc", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error && error.code !== "PGRST116") {
+          throw error;
+        }
+        leadData = data;
+      }
+
+      if (!leadData) {
         setLookupError("Nenhum cadastro de fundador encontrado com este número. Verifique os dígitos ou faça sua inscrição como novo fundador.");
         setIsLookingUp(false);
         setStep("lookup");
@@ -408,54 +430,54 @@ export default function AtualizacaoCadastral() {
       }
 
       // Lead localizado! Preenche os campos do formulário
-      setLeadRecord(data);
+      setLeadRecord(leadData);
 
-      const isPJ = data.tipo_pessoa === "PJ" || !!data.cnpj;
-      const perfilArr = Array.isArray(data.perfil) 
-        ? data.perfil 
-        : (data.perfil ? [data.perfil] : ["morador"]);
+      const isPJ = leadData.tipo_pessoa === "PJ" || !!leadData.cnpj;
+      const perfilArr = Array.isArray(leadData.perfil) 
+        ? leadData.perfil 
+        : (leadData.perfil ? [leadData.perfil] : ["morador"]);
 
       // Regiões salvas
-      const regioesList = data.regiao_atuacao 
-        ? data.regiao_atuacao.split(",").map((s: string) => s.trim()).filter(Boolean)
+      const regioesList = leadData.regiao_atuacao 
+        ? leadData.regiao_atuacao.split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
 
       // Bairros trabalho
-      const bairrosTrabList = data.bairro_trabalho
-        ? data.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
+      const bairrosTrabList = leadData.bairro_trabalho
+        ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
 
       // Praias salvas
-      const praiasList = Array.isArray(data.praias_frequenta)
-        ? data.praias_frequenta
+      const praiasList = Array.isArray(leadData.praias_frequenta)
+        ? leadData.praias_frequenta
         : [];
 
       reset({
         tipoPessoa: isPJ ? "PJ" : "PF",
-        nome: data.nome || "",
-        cpf: data.cpf ? maskCPF(data.cpf) : "",
+        nome: leadData.nome || "",
+        cpf: leadData.cpf ? maskCPF(leadData.cpf) : "",
         perfil: perfilArr,
-        nome_empresa: data.razao_social || data.nome || "",
-        cnpj: data.cnpj ? maskCNPJ(data.cnpj) : "",
-        responsavel_legal: data.responsavel_legal || "",
-        cpf_responsavel: data.cpf_responsavel ? maskCPF(data.cpf_responsavel) : "",
+        nome_empresa: leadData.razao_social || leadData.nome || "",
+        cnpj: leadData.cnpj ? maskCNPJ(leadData.cnpj) : "",
+        responsavel_legal: leadData.responsavel_legal || "",
+        cpf_responsavel: leadData.cpf_responsavel ? maskCPF(leadData.cpf_responsavel) : "",
         regiao_atuacao_pj: isPJ ? regioesList : [],
-        telefone: data.telefone ? maskPhone(data.telefone) : maskPhone(cleanDigits),
-        email: data.email || "",
+        telefone: leadData.telefone ? maskPhone(leadData.telefone) : maskPhone(telQuery),
+        email: leadData.email || "",
         senha: "",
         confirmarSenha: "",
-        possuiContaMercadoPago: typeof data.possui_conta_mercado_pago === "boolean" ? data.possui_conta_mercado_pago : false,
-        tipo_chave_pix: data.tipo_chave_pix || "",
-        chave_pix: data.chave_pix || "",
+        possuiContaMercadoPago: typeof leadData.possui_conta_mercado_pago === "boolean" ? leadData.possui_conta_mercado_pago : false,
+        tipo_chave_pix: leadData.tipo_chave_pix || "",
+        chave_pix: leadData.chave_pix ? applyPixMask(leadData.chave_pix, leadData.tipo_chave_pix) : "",
         regiao_atuacao_pf: !isPJ ? regioesList : [],
         praias: praiasList,
-        bairros: data.bairro_moradia ? [data.bairro_moradia] : (data.bairro_hospedagem ? [data.bairro_hospedagem] : []),
+        bairros: leadData.bairro_moradia ? [leadData.bairro_moradia] : (leadData.bairro_hospedagem ? [leadData.bairro_hospedagem] : []),
         bairro_trabalho: bairrosTrabList,
         acceptTerms: true,
       });
 
       setStep("form");
-      trackEvent("atualizacao_cadastral_lead_loaded", "onboarding", { lead_id: data.id });
+      trackEvent("atualizacao_cadastral_lead_loaded", "onboarding", { lead_id: leadData.id });
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao buscar lead:", err);
       setLookupError("Ocorreu um erro ao consultar os dados. Tente novamente.");
@@ -467,10 +489,17 @@ export default function AtualizacaoCadastral() {
 
   // Inicialização: checa parâmetro tel ou telefone na URL
   useEffect(() => {
-    const telParam = searchParams.get("tel") || searchParams.get("telefone");
-    if (telParam && telParam.trim()) {
-      setLookupPhone(maskPhone(telParam));
-      searchLeadByPhone(telParam);
+    const rawParam = searchParams.get("tel") || searchParams.get("telefone") || "";
+    const telDigits = decodeURIComponent(rawParam).replace(/\D/g, "");
+
+    if (telDigits && telDigits.length >= 8) {
+      // Normaliza removendo 55 se houver mais de 10 dígitos (ex: 5512982267829 -> 12982267829)
+      const cleanPhone = (telDigits.startsWith("55") && telDigits.length > 10)
+        ? telDigits.slice(2)
+        : telDigits;
+
+      setLookupPhone(maskPhone(cleanPhone));
+      searchLeadByPhone(cleanPhone);
     } else {
       setStep("lookup");
     }
@@ -790,7 +819,10 @@ export default function AtualizacaoCadastral() {
               <button
                 type="button"
                 disabled={isLookingUp || lookupPhone.replace(/\D/g, "").length < 8}
-                onClick={() => searchLeadByPhone(lookupPhone)}
+                onClick={() => {
+                  const clean = lookupPhone.replace(/\D/g, "");
+                  searchLeadByPhone(clean);
+                }}
                 className="w-full py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-green/10"
               >
                 {isLookingUp ? (
