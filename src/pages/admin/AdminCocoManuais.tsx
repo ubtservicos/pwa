@@ -4,10 +4,10 @@ import {
   Plus, 
   Trash2, 
   Edit3, 
-  Sparkles, 
   Check, 
   X, 
-  Layers 
+  Layers,
+  Power
 } from "lucide-react";
 import { Card, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -19,6 +19,7 @@ export interface DicaMaterial {
   material_id: string;
   titulo?: string;
   conteudo_html: string;
+  is_active?: boolean;
 }
 
 export default function AdminCocoManuais() {
@@ -29,6 +30,7 @@ export default function AdminCocoManuais() {
   const [dicaMaterialId, setDicaMaterialId] = useState("plastico");
   const [dicaTitulo, setDicaTitulo] = useState("");
   const [dicaHtml, setDicaHtml] = useState("");
+  const [dicaIsActive, setDicaIsActive] = useState(true);
   const [isDicaModalOpen, setIsDicaModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +43,10 @@ export default function AdminCocoManuais() {
         .order("material_id", { ascending: true });
 
       if (!error && data && data.length > 0) {
-        setDicas(data);
+        setDicas(data.map((d: any) => ({
+          ...d,
+          is_active: d.is_active !== false
+        })));
       }
     } catch (e) {
       console.warn("Offline fallback para manuais educativos:", e);
@@ -60,13 +65,34 @@ export default function AdminCocoManuais() {
       setDicaMaterialId(dica.material_id);
       setDicaTitulo(dica.titulo || "");
       setDicaHtml(dica.conteudo_html.replace(/<[^>]*>?/gm, ""));
+      setDicaIsActive(dica.is_active !== false);
     } else {
       setEditingDica(null);
       setDicaMaterialId("plastico");
       setDicaTitulo("");
       setDicaHtml("");
+      setDicaIsActive(true);
     }
     setIsDicaModalOpen(true);
+  };
+
+  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    // Otimistic update
+    setDicas(prev => prev.map(d => d.id === id ? { ...d, is_active: nextStatus } : d));
+
+    try {
+      const { error } = await supabase
+        .from("coco_dicas_materiais")
+        .update({ is_active: nextStatus })
+        .eq("id", id);
+
+      if (error) throw error;
+      toast.show(`Manual ${nextStatus ? "ativado" : "desativado"} com sucesso!`);
+    } catch (err: any) {
+      console.warn("Fallback offline ao alterar status do manual:", err);
+      toast.show(`Status alterado localmente para ${nextStatus ? "Ativo" : "Inativo"}.`);
+    }
   };
 
   const handleSaveDica = async (e: React.FormEvent) => {
@@ -78,6 +104,8 @@ export default function AdminCocoManuais() {
     }
 
     setSaving(true);
+    const finalTitulo = dicaTitulo.trim() || `Como descartar ${getMaterial(dicaMaterialId).nome}`;
+
     try {
       if (editingDica) {
         // Atualizar
@@ -85,8 +113,9 @@ export default function AdminCocoManuais() {
           .from("coco_dicas_materiais")
           .update({
             material_id: dicaMaterialId,
-            titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-            conteudo_html: cleanText
+            titulo: finalTitulo,
+            conteudo_html: cleanText,
+            is_active: dicaIsActive
           })
           .eq("id", editingDica.id);
 
@@ -98,12 +127,13 @@ export default function AdminCocoManuais() {
           .from("coco_dicas_materiais")
           .insert([{
             material_id: dicaMaterialId,
-            titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-            conteudo_html: cleanText
+            titulo: finalTitulo,
+            conteudo_html: cleanText,
+            is_active: dicaIsActive
           }]);
 
         if (error) throw error;
-        toast.show("Novo manual educativo criado!");
+        toast.show("Novo manual educativo criado com sucesso!");
       }
 
       setIsDicaModalOpen(false);
@@ -113,15 +143,17 @@ export default function AdminCocoManuais() {
         setDicas(prev => prev.map(d => d.id === editingDica.id ? {
           ...d,
           material_id: dicaMaterialId,
-          titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-          conteudo_html: cleanText
+          titulo: finalTitulo,
+          conteudo_html: cleanText,
+          is_active: dicaIsActive
         } : d));
       } else {
         setDicas(prev => [...prev, {
           id: `local-${Date.now()}`,
           material_id: dicaMaterialId,
-          titulo: dicaTitulo || `Como descartar ${getMaterial(dicaMaterialId).nome}`,
-          conteudo_html: cleanText
+          titulo: finalTitulo,
+          conteudo_html: cleanText,
+          is_active: dicaIsActive
         }]);
       }
       toast.show("Manual salvo localmente.");
@@ -131,8 +163,8 @@ export default function AdminCocoManuais() {
     }
   };
 
-  const handleDeleteDica = async (id: string, materialId: string) => {
-    if (!window.confirm(`Tem certeza que deseja remover o manual de "${materialId}"?`)) return;
+  const handleDeleteDica = async (id: string, materialNome: string) => {
+    if (!window.confirm(`Tem certeza que deseja remover o manual de "${materialNome}"?`)) return;
 
     try {
       const { error } = await supabase
@@ -140,7 +172,7 @@ export default function AdminCocoManuais() {
         .delete()
         .eq("id", id);
       if (error) throw error;
-      toast.show("Manual removido.");
+      toast.show("Manual removido com sucesso!");
       fetchDicas();
     } catch {
       setDicas(prev => prev.filter(d => d.id !== id));
@@ -189,7 +221,11 @@ export default function AdminCocoManuais() {
       </div>
 
       {/* Grid de Manuais */}
-      {dicas.length === 0 ? (
+      {loading ? (
+        <Card style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
+          Carregando manuais educativos...
+        </Card>
+      ) : dicas.length === 0 ? (
         <Card style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
           Nenhum manual de descarte cadastrado ainda. Clique em "Novo Manual" para cadastrar orientações para a população.
         </Card>
@@ -198,9 +234,20 @@ export default function AdminCocoManuais() {
           {dicas.map((dica) => {
             const mat = getMaterial(dica.material_id);
             const plainContent = (dica.conteudo_html || "").replace(/<[^>]*>?/gm, "").trim();
+            const isActive = dica.is_active !== false;
 
             return (
-              <Card key={dica.id} style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <Card 
+                key={dica.id} 
+                style={{ 
+                  padding: 20, 
+                  display: "flex", 
+                  flexDirection: "column", 
+                  justifyContent: "space-between",
+                  opacity: isActive ? 1 : 0.65,
+                  transition: "opacity 200ms ease"
+                }}
+              >
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -217,7 +264,38 @@ export default function AdminCocoManuais() {
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {/* Toggle Ativo/Inativo */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(dica.id, isActive)}
+                        title={isActive ? "Manual Ativo (clique para desativar)" : "Manual Inativo (clique para ativar)"}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 8px",
+                          borderRadius: 20,
+                          border: "1px solid",
+                          borderColor: isActive ? "rgba(13,184,126,0.3)" : "var(--admin-border)",
+                          background: isActive ? "rgba(13,184,126,0.12)" : "var(--admin-bg)",
+                          color: isActive ? "#0DB87E" : "var(--admin-muted)",
+                          fontFamily: "DM Sans",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <span style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: isActive ? "#0DB87E" : "var(--admin-muted)",
+                          display: "inline-block"
+                        }} />
+                        {isActive ? "Ativo" : "Inativo"}
+                      </button>
+
                       <button
                         onClick={() => handleOpenDicaModal(dica)}
                         style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer", padding: 4 }}
@@ -300,16 +378,29 @@ export default function AdminCocoManuais() {
 
               <div>
                 <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
-                  Conteúdo Orientativo (HTML ou Texto) *
+                  Conteúdo Orientativo & Passos de Descarte *
                 </label>
                 <textarea
                   required
                   rows={5}
-                  placeholder="Instruções para o cidadão: ex: Enxaguar antes do descarte, retirar tampas..."
+                  placeholder="Instruções para o cidadão: ex: Enxaguar antes do descarte, retirar tampas, amassar garrafas..."
                   value={dicaHtml}
                   onChange={(e) => setDicaHtml(e.target.value)}
                   style={{ width: "100%", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: "10px 12px", color: "var(--admin-text)", fontFamily: "DM Sans", fontSize: 14, resize: "vertical" }}
                 />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  id="dica_is_active"
+                  checked={dicaIsActive}
+                  onChange={(e) => setDicaIsActive(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: "#0DB87E", cursor: "pointer" }}
+                />
+                <label htmlFor="dica_is_active" style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", cursor: "pointer" }}>
+                  Manual ativo para visualização no aplicativo do cidadão
+                </label>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>

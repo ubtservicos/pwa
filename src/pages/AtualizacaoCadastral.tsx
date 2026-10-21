@@ -35,6 +35,8 @@ import {
   isValidEmail
 } from "@/utils/masks";
 import { trackEvent } from "@/services/AnalyticsService";
+import confetti from "canvas-confetti";
+import { toast } from "sonner";
 
 export const BAIRROS_LIST = [
   "Acaraú", "Aguas do Inga", "Aracaú", "Arariba", "Bairro Silop", "Bairro do Tenorio",
@@ -630,15 +632,24 @@ export default function AtualizacaoCadastral() {
         updated_at: new Date().toISOString(),
       };
 
-      if (leadRecord?.id) {
-        const { error: wlErr } = await supabase
-          .from("waitlist")
-          .update(waitlistUpdateData)
-          .eq("id", leadRecord.id);
+      // 3. Persistência via RPC segura concluir_atualizacao_cadastral
+      try {
+        const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
+          p_lead_id: leadRecord?.id || null,
+          p_dados: waitlistUpdateData,
+        });
 
-        if (wlErr) {
-          console.warn("[AtualizacaoCadastral] Erro na atualização de waitlist:", wlErr);
+        if (rpcErr) {
+          console.warn("[AtualizacaoCadastral] RPC falhou, tentando fallback direto:", rpcErr);
+          if (leadRecord?.id) {
+            await supabase
+              .from("waitlist")
+              .update(waitlistUpdateData)
+              .eq("id", leadRecord.id);
+          }
         }
+      } catch (saveErr) {
+        console.warn("[AtualizacaoCadastral] Erro no salvamento da waitlist:", saveErr);
       }
 
       // 4. Upsert na tabela public.usuarios com o authUserId vinculado
@@ -661,7 +672,7 @@ export default function AtualizacaoCadastral() {
             bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
             bairro_trabalho: bairroTrabalhoStr,
             praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
-            status: "pendente",
+            status: "completo",
           } as any);
         } catch (syncErr) {
           console.warn("[AtualizacaoCadastral] Aviso na sincronização com public.usuarios:", syncErr);
@@ -673,8 +684,16 @@ export default function AtualizacaoCadastral() {
         user_id: authUserId
       });
 
-      // 5. Redirecionamento direto para /sou-fundador
-      navigate("/sou-fundador");
+      // Feedback de Sucesso: Chuva de confetes
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+
+      // Toast vibrante
+      toast.success("Cadastro ativado com sucesso! 🎉");
+
+      // Aguarda 2 segundos antes de redirecionar para /sou-fundador
+      setTimeout(() => {
+        navigate("/sou-fundador");
+      }, 2000);
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao salvar cadastro:", err);
       setSubmitError(err.message || "Erro ao atualizar dados. Tente novamente.");

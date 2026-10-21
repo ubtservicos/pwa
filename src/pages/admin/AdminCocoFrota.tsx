@@ -12,7 +12,13 @@ import {
   MapPin, 
   Layers,
   Settings,
-  Edit3
+  Edit3,
+  Clock,
+  UserCheck,
+  UserX,
+  Phone,
+  Mail,
+  RotateCcw
 } from "lucide-react";
 import { Card, PrimaryButton, GhostButton, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -28,20 +34,47 @@ const BAIRROS_UBATUBA = [
   "Perequê-Açu",
   "Maranduba",
   "Ubatumirim",
-  "Estufa I e II",
+  "Estufa I",
+  "Estufa II",
   "Ipiranguinha",
-  "Tamoios",
-  "Taquaral"
+  "Taquaral",
+  "Itamambuca",
+  "Praia do Félix",
+  "Praia do Lázaro"
 ];
+
+interface CaminhaoFrota {
+  id: string;
+  plate: string;
+  apelido: string;
+  prestador_id?: string | null;
+  pix_key?: string | null;
+  areas_atendidas?: string[];
+  status_aprovacao: "approved" | "pending" | "rejected";
+  role_solicitada?: string;
+  is_online?: boolean;
+  collections_today?: number;
+  total_collections?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface PrestadorInfo {
+  id: string;
+  nome?: string;
+  email?: string;
+  telefone?: string;
+}
 
 export default function AdminCocoFrota() {
   const toast = useAdminToast();
   const navigate = useNavigate();
 
-  const [caminhoes, setCaminhoes] = useState<any[]>([]);
+  const [caminhoes, setCaminhoes] = useState<CaminhaoFrota[]>([]);
+  const [prestadorsMap, setPrestadorsMap] = useState<Record<string, PrestadorInfo>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"todos" | "online" | "pending" | "approved">("todos");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "online" | "pending" | "approved" | "rejected">("todos");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,7 +93,29 @@ export default function AdminCocoFrota() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      if (data) setCaminhoes(data);
+      if (data) {
+        setCaminhoes(data);
+
+        // Fetch prestadores details for linked trucks
+        const prestadorIds = data
+          .map((c: any) => c.prestador_id)
+          .filter((id: any): id is string => Boolean(id));
+
+        if (prestadorIds.length > 0) {
+          const { data: usersData } = await supabase
+            .from("usuarios")
+            .select("id, nome, email, telefone")
+            .in("id", prestadorIds);
+
+          if (usersData) {
+            const map: Record<string, PrestadorInfo> = {};
+            usersData.forEach((u: any) => {
+              map[u.id] = u;
+            });
+            setPrestadorsMap(map);
+          }
+        }
+      }
     } catch (err: any) {
       console.warn("Erro ao buscar frota:", err);
     } finally {
@@ -94,7 +149,7 @@ export default function AdminCocoFrota() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("coco_caminhoes")
         .insert({
           plate: plate.trim().toUpperCase(),
@@ -106,13 +161,11 @@ export default function AdminCocoFrota() {
           is_online: false,
           collections_today: 0,
           total_collections: 0,
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
 
-      toast.show(`Caminhão "${apelido}" cadastrado com sucesso!`);
+      toast.show(`Caminhão "${apelido}" cadastrado na frota oficial!`);
       setIsModalOpen(false);
       setPlate("");
       setApelido("");
@@ -152,12 +205,15 @@ export default function AdminCocoFrota() {
     }
   };
 
-  const handleAprovar = async (id: string, prestadorId: string, apelido: string, role?: string) => {
+  const handleAprovar = async (id: string, prestadorId: string | null | undefined, apelido: string, role?: string) => {
     const finalRole = role || "cocoecia-colaborador";
     try {
       const { error } = await supabase
         .from("coco_caminhoes")
-        .update({ status_aprovacao: "approved" })
+        .update({ 
+          status_aprovacao: "approved",
+          updated_at: new Date().toISOString()
+        })
         .eq("id", id);
       if (error) throw error;
 
@@ -165,12 +221,34 @@ export default function AdminCocoFrota() {
         await supabase.from("usuarios").update({ role: finalRole }).eq("id", prestadorId);
         await supabase.from("profiles").update({ role: finalRole }).eq("id", prestadorId);
       }
-      toast.show(`Caminhão "${apelido}" aprovado com sucesso!`);
+      toast.show(`Vinculação do caminhão "${apelido}" aprovada com sucesso!`);
       fetchCaminhoes();
     } catch (err: any) {
       toast.show(`Erro ao aprovar: ${err.message}`);
     }
   };
+
+  const handleRejeitar = async (id: string, apelido: string) => {
+    if (!window.confirm(`Tem certeza que deseja rejeitar a vinculação do veículo "${apelido}"?`)) return;
+    try {
+      const { error } = await supabase
+        .from("coco_caminhoes")
+        .update({ 
+          status_aprovacao: "rejected",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+      if (error) throw error;
+
+      toast.show(`Solicitação do caminhão "${apelido}" rejeitada.`);
+      fetchCaminhoes();
+    } catch (err: any) {
+      toast.show(`Erro ao rejeitar: ${err.message}`);
+    }
+  };
+
+  // Pending trucks
+  const pendingRequests = caminhoes.filter((c) => c.status_aprovacao === "pending");
 
   const filteredCaminhoes = caminhoes.filter((c) => {
     const matchesSearch = 
@@ -183,6 +261,7 @@ export default function AdminCocoFrota() {
     if (statusFilter === "online") return c.is_online && c.status_aprovacao === "approved";
     if (statusFilter === "pending") return c.status_aprovacao === "pending";
     if (statusFilter === "approved") return c.status_aprovacao === "approved";
+    if (statusFilter === "rejected") return c.status_aprovacao === "rejected";
     return true;
   });
 
@@ -211,10 +290,10 @@ export default function AdminCocoFrota() {
           </button>
           <div>
             <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-              Gestão de Frota & Motoristas
+              Gestão de Frota & Aprovação de Prestadores
             </h1>
             <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
-              Monitore os veículos da Côco & Cia, status em tempo real e cadastre novos operadores.
+              Gerencie os veículos oficiais da Côco & Cia e aprove/rejeite pedidos de vinculação de motoristas parceiros.
             </p>
           </div>
         </div>
@@ -238,13 +317,149 @@ export default function AdminCocoFrota() {
               boxShadow: "0 4px 14px rgba(13,184,126,0.25)"
             }}
           >
-            <Plus size={16} /> Cadastrar Caminhão / Motorista
+            <Plus size={16} /> Cadastrar Caminhão Oficial
           </button>
         </div>
       </div>
 
+      {/* BLOCO DESTACADO: SOLICITAÇÕES PENDENTES DE VINCULAÇÃO */}
+      {pendingRequests.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              background: "rgba(245,166,35,0.08)",
+              border: "1px solid rgba(245,166,35,0.3)",
+              borderRadius: 16,
+              padding: 20
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(245,166,35,0.2)", color: "#F5A623", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                    Solicitações Pendentes de Vinculação ({pendingRequests.length})
+                  </h3>
+                  <span style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
+                    Prestadores que solicitaram vinculação aos caminhões da Côco & Cia aguardando validação do administrador.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+              {pendingRequests.map((req) => {
+                const prestador = req.prestador_id ? prestadorsMap[req.prestador_id] : null;
+
+                return (
+                  <Card key={req.id} style={{ padding: 18, background: "var(--admin-surface)", border: "1px solid var(--admin-border)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Truck size={18} color="#F5A623" />
+                          <strong style={{ fontFamily: "Syne", fontSize: 15, color: "var(--admin-text)" }}>
+                            {req.apelido}
+                          </strong>
+                        </div>
+                        <span style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: "2px 8px", borderRadius: 6, fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--admin-text)" }}>
+                          {req.plate}
+                        </span>
+                      </div>
+
+                      {/* Dados do Prestador */}
+                      <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 8, marginBottom: 12, fontSize: 12, fontFamily: "DM Sans", display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ color: "var(--admin-text)", fontWeight: 600 }}>
+                          Prestador: {prestador?.nome || (req.prestador_id ? `ID: ${req.prestador_id.slice(0, 8)}...` : "Não identificado")}
+                        </div>
+                        {prestador?.telefone && (
+                          <div style={{ color: "var(--admin-subtle)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <Phone size={12} /> {prestador.telefone}
+                          </div>
+                        )}
+                        {prestador?.email && (
+                          <div style={{ color: "var(--admin-subtle)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <Mail size={12} /> {prestador.email}
+                          </div>
+                        )}
+                        <div style={{ color: "#F5A623", fontWeight: 600, marginTop: 2 }}>
+                          Função Solicitada: {req.role_solicitada === "cocoecia-dirigentes" ? "💼 Dirigente" : "🚚 Colaborador / Motorista"}
+                        </div>
+                      </div>
+
+                      {/* Áreas */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+                        {req.areas_atendidas && req.areas_atendidas.length > 0 ? (
+                          req.areas_atendidas.map((b) => (
+                            <span key={b} style={{ fontSize: 11, background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, color: "var(--admin-subtle)" }}>
+                              {b}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--admin-muted)" }}>Centro / Itaguá</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botões Diretos de Aprovação e Rejeição */}
+                    <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--admin-border)" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleAprovar(req.id, req.prestador_id, req.apelido, req.role_solicitada)}
+                        style={{
+                          flex: 1,
+                          background: "#0DB87E",
+                          color: "white",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "8px 12px",
+                          fontFamily: "Syne",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6
+                        }}
+                      >
+                        <UserCheck size={14} /> Aprovar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRejeitar(req.id, req.apelido)}
+                        style={{
+                          flex: 1,
+                          background: "rgba(232,64,64,0.12)",
+                          color: "#E84040",
+                          border: "1px solid rgba(232,64,64,0.3)",
+                          borderRadius: 8,
+                          padding: "8px 12px",
+                          fontFamily: "Syne",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6
+                        }}
+                      >
+                        <UserX size={14} /> Rejeitar
+                      </button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters & Search */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
         {/* Search */}
         <div style={{ position: "relative", maxWidth: 360, width: "100%" }}>
           <input
@@ -269,12 +484,13 @@ export default function AdminCocoFrota() {
         </div>
 
         {/* Status Filters */}
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
             { id: "todos", label: "Todos" },
             { id: "online", label: "🟢 Online" },
             { id: "approved", label: "Aprovados" },
-            { id: "pending", label: "⏳ Pendentes" },
+            { id: "pending", label: `⏳ Pendentes (${pendingRequests.length})` },
+            { id: "rejected", label: "❌ Rejeitados" },
           ].map((f) => (
             <button
               key={f.id}
@@ -326,107 +542,163 @@ export default function AdminCocoFrota() {
                 </td>
               </tr>
             ) : (
-              filteredCaminhoes.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
-                  <td style={{ padding: "16px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Truck size={18} />
-                      </div>
-                      <div>
-                        <div style={{ fontFamily: "Syne", fontWeight: 700, color: "var(--admin-text)", fontSize: 14 }}>
-                          {c.apelido}
+              filteredCaminhoes.map((c) => {
+                const prestador = c.prestador_id ? prestadorsMap[c.prestador_id] : null;
+
+                return (
+                  <tr key={c.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
+                    <td style={{ padding: "16px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Truck size={18} />
                         </div>
-                        <span style={{ fontSize: 11, color: "var(--admin-subtle)" }}>
-                          {c.role_solicitada === "cocoecia-dirigentes" ? "💼 Dirigente" : "🚚 Colaborador"}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td style={{ padding: "16px 20px" }}>
-                    <span style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: "4px 8px", borderRadius: 6, fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--admin-text)" }}>
-                      {c.plate}
-                    </span>
-                  </td>
-
-                  <td style={{ padding: "16px 20px", maxWidth: 200 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {c.areas_atendidas && c.areas_atendidas.length > 0 ? (
-                        c.areas_atendidas.map((a: string) => (
-                          <span key={a} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, fontSize: 11, color: "var(--admin-subtle)" }}>
-                            {a}
+                        <div>
+                          <div style={{ fontFamily: "Syne", fontWeight: 700, color: "var(--admin-text)", fontSize: 14 }}>
+                            {c.apelido}
+                          </div>
+                          <span style={{ fontSize: 11, color: "var(--admin-subtle)" }}>
+                            {prestador?.nome ? `${prestador.nome} · ` : ""}
+                            {c.role_solicitada === "cocoecia-dirigentes" ? "💼 Dirigente" : "🚚 Colaborador"}
                           </span>
-                        ))
+                        </div>
+                      </div>
+                    </td>
+
+                    <td style={{ padding: "16px 20px" }}>
+                      <span style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: "4px 8px", borderRadius: 6, fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--admin-text)" }}>
+                        {c.plate}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: "16px 20px", maxWidth: 200 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {c.areas_atendidas && c.areas_atendidas.length > 0 ? (
+                          c.areas_atendidas.map((a: string) => (
+                            <span key={a} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, fontSize: 11, color: "var(--admin-subtle)" }}>
+                              {a}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ color: "var(--admin-muted)", fontSize: 11 }}>Todas as regiões</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td style={{ padding: "16px 20px", color: "var(--admin-subtle)", fontFamily: "monospace", fontSize: 12 }}>
+                      {c.pix_key || <span style={{ color: "var(--admin-muted)" }}>Não cadastrada</span>}
+                    </td>
+
+                    <td style={{ padding: "16px 20px", fontWeight: 700, color: "var(--admin-text)" }}>
+                      {c.collections_today || 0} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--admin-subtle)" }}>({c.total_collections || 0} total)</span>
+                    </td>
+
+                    <td style={{ padding: "16px 20px" }}>
+                      {c.status_aprovacao === "pending" ? (
+                        <Pill bg="rgba(245,166,35,0.15)" color="#F5A623" size="sm">
+                          ⏳ Aprovação Pendente
+                        </Pill>
+                      ) : c.status_aprovacao === "rejected" ? (
+                        <Pill bg="rgba(232,64,64,0.15)" color="#E84040" size="sm">
+                          ❌ Rejeitado
+                        </Pill>
                       ) : (
-                        <span style={{ color: "var(--admin-muted)", fontSize: 11 }}>Todas as regiões</span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td style={{ padding: "16px 20px", color: "var(--admin-subtle)", fontFamily: "monospace", fontSize: 12 }}>
-                    {c.pix_key || <span style={{ color: "var(--admin-muted)" }}>Não cadastrada</span>}
-                  </td>
-
-                  <td style={{ padding: "16px 20px", fontWeight: 700, color: "var(--admin-text)" }}>
-                    {c.collections_today || 0} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--admin-subtle)" }}>({c.total_collections || 0} total)</span>
-                  </td>
-
-                  <td style={{ padding: "16px 20px" }}>
-                    {c.status_aprovacao === "pending" ? (
-                      <Pill bg="rgba(245,166,35,0.15)" color="#F5A623" size="sm">
-                        ⏳ Aprovação Pendente
-                      </Pill>
-                    ) : (
-                      <button
-                        onClick={() => handleToggleOnline(c.id, c.is_online, c.apelido)}
-                        style={{
-                          border: "none",
-                          background: c.is_online ? "rgba(13,184,126,0.15)" : "var(--admin-border)",
-                          color: c.is_online ? "#0DB87E" : "var(--admin-muted)",
-                          padding: "4px 10px",
-                          borderRadius: 999,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: "pointer"
-                        }}
-                      >
-                        {c.is_online ? "🟢 Online no Mapa" : "⚪ Offline"}
-                      </button>
-                    )}
-                  </td>
-
-                  <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                    <div style={{ display: "inline-flex", gap: 8 }}>
-                      {c.status_aprovacao === "pending" && (
                         <button
-                          onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                          onClick={() => handleToggleOnline(c.id, Boolean(c.is_online), c.apelido)}
                           style={{
-                            background: "#0DB87E",
-                            color: "white",
                             border: "none",
-                            borderRadius: 6,
-                            padding: "4px 8px",
-                            fontSize: 11,
+                            background: c.is_online ? "rgba(13,184,126,0.15)" : "var(--admin-border)",
+                            color: c.is_online ? "#0DB87E" : "var(--admin-muted)",
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            fontSize: 12,
                             fontWeight: 700,
                             cursor: "pointer"
                           }}
                         >
-                          Aprovar
+                          {c.is_online ? "🟢 Online no Mapa" : "⚪ Offline"}
                         </button>
                       )}
+                    </td>
 
-                      <button
-                        onClick={() => handleDeleteCaminhao(c.id, c.apelido)}
-                        style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 6 }}
-                        title="Remover Caminhão"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        {c.status_aprovacao === "pending" && (
+                          <>
+                            <button
+                              onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                              style={{
+                                background: "#0DB87E",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 6,
+                                padding: "4px 8px",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4
+                              }}
+                              title="Aprovar Prestador"
+                            >
+                              <Check size={12} /> Aprovar
+                            </button>
+                            <button
+                              onClick={() => handleRejeitar(c.id, c.apelido)}
+                              style={{
+                                background: "rgba(232,64,64,0.15)",
+                                color: "#E84040",
+                                border: "1px solid rgba(232,64,64,0.3)",
+                                borderRadius: 6,
+                                padding: "4px 8px",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4
+                              }}
+                              title="Rejeitar Solicitação"
+                            >
+                              <X size={12} /> Rejeitar
+                            </button>
+                          </>
+                        )}
+
+                        {c.status_aprovacao === "rejected" && (
+                          <button
+                            onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                            style={{
+                              background: "rgba(13,184,126,0.15)",
+                              color: "#0DB87E",
+                              border: "1px solid rgba(13,184,126,0.3)",
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4
+                            }}
+                            title="Reavaliar e Aprovar"
+                          >
+                            <RotateCcw size={12} /> Reaprovar
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteCaminhao(c.id, c.apelido)}
+                          style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 6 }}
+                          title="Remover Caminhão"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -440,7 +712,7 @@ export default function AdminCocoFrota() {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Truck size={20} color="#0DB87E" />
                 <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, margin: 0, color: "var(--admin-text)" }}>
-                  Cadastrar Novo Caminhão / Motorista
+                  Cadastrar Caminhão Oficial da Frota
                 </h3>
               </div>
               <button onClick={() => setIsModalOpen(false)} style={closeBtnStyle}>
@@ -462,7 +734,7 @@ export default function AdminCocoFrota() {
               </div>
 
               <div>
-                <label style={labelStyle}>Apelido do Veículo / Nome do Motorista *</label>
+                <label style={labelStyle}>Apelido do Veículo / Identificação *</label>
                 <input
                   type="text"
                   required
@@ -485,7 +757,7 @@ export default function AdminCocoFrota() {
               </div>
 
               <div>
-                <label style={labelStyle}>Função Operacional</label>
+                <label style={labelStyle}>Função Operacional Padrão</label>
                 <select
                   value={roleSolicitada}
                   onChange={(e) => setRoleSolicitada(e.target.value)}

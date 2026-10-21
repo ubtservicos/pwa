@@ -55,6 +55,8 @@ import {
 } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
+import confetti from "canvas-confetti";
+import { toast } from "sonner";
 
 interface FaqItemProps {
   question: string;
@@ -1136,6 +1138,8 @@ export default function Index() {
         email: values.email.trim(),
         referral_code: refCode,
       });
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      toast.success("Inscrição de Fundador realizada com sucesso! 🎉");
       setShowWelcomeModal(true);
       trackEvent("landing_waitlist_success", "marketing", { perfil: perfilArray, tipo_pessoa: values.tipoPessoa });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
@@ -1146,7 +1150,9 @@ export default function Index() {
       const errorDetails = err?.details ? ` (${err.details})` : "";
       const errorHint = err?.hint ? ` - Dica: ${err.hint}` : "";
       
-      setSubmitError(`Falha no envio: ${errorMsg}${errorDetails}${errorHint}`);
+      const fullError = `Falha no envio: ${errorMsg}${errorDetails}${errorHint}`;
+      setSubmitError(fullError);
+      toast.error(fullError);
       
       const formTop = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
       if (formTop) {
@@ -1168,8 +1174,35 @@ export default function Index() {
         element.focus?.();
         element.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      const errorMessage = formErrors[firstError]?.message || "Por favor, preencha todos os campos obrigatórios destacados em vermelho.";
-      setSubmitError(errorMessage);
+
+      const friendlyFieldNames: Record<string, string> = {
+        nome: "Nome Completo",
+        cpf: "CPF",
+        cnpj: "CNPJ",
+        telefone: "Telefone / WhatsApp",
+        email: "E-mail",
+        senha: "Senha",
+        confirmarSenha: "Confirmação de Senha",
+        nome_empresa: "Razão Social / Empresa",
+        responsavel_legal: "Responsável Legal",
+        cpf_responsavel: "CPF do Responsável",
+        chave_pix: "Chave Pix",
+        tipo_chave_pix: "Tipo de Chave Pix",
+        perfil: "Perfil",
+        bairros: "Bairro",
+        praias: "Praia",
+        acceptTerms: "Aceite dos Termos",
+      };
+
+      const invalidNames = errorKeys
+        .map((k) => friendlyFieldNames[k] || formErrors[k]?.message || k)
+        .slice(0, 3)
+        .join(", ");
+
+      const firstMessage = formErrors[firstError]?.message || "Verifique os campos pendentes.";
+      const errorMsg = `Verifique o CPF ou campos pendentes: ${invalidNames}. (${firstMessage})`;
+      setSubmitError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
@@ -2591,9 +2624,9 @@ export default function Index() {
               {/* Submit Button with Reactive Validation & Loading Spinner */}
               <button
                 type="submit"
-                disabled={!isValid || isSubmitting}
+                disabled={isSubmitting}
                 className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-sm tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
-                  !isValid || isSubmitting 
+                  isSubmitting 
                     ? "bg-white/10 text-white/30 cursor-not-allowed border border-white/5" 
                     : "bg-green hover:bg-green-dark active:scale-[0.98] text-navy shadow-lg shadow-green/25 cursor-pointer"
                 }`}

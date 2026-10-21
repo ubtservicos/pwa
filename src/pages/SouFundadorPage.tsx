@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { getAppOrigin } from "@/lib/appUrl";
 import { trackEvent } from "@/services/AnalyticsService";
 import { maskCPF, generateReferralSlug } from "@/utils/masks";
+import { toast } from "sonner";
 
 interface FounderData {
   id: string;
@@ -349,56 +350,23 @@ export default function SouFundadorPage() {
     setSlugSuccess("");
 
     try {
-      // 1. Tenta RPC segura set_user_referral_code
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc("set_user_referral_code", {
-        p_user_id: founder.id,
-        p_code: cleanSlug,
+      const leadTelefoneOuCpf = founder.telefone || founder.cpf || founder.email || founder.id;
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("salvar_slug_fundador", {
+        p_identificador: leadTelefoneOuCpf,
+        p_novo_slug: cleanSlug,
       });
 
-      if (!rpcErr && rpcRes) {
-        if (rpcRes.success === false) {
-          setSlugError(rpcRes.error || "Este código já está em uso por outro fundador.");
-          setIsSavingSlug(false);
-          return;
-        }
-      } else {
-        // Fallback: validação direta no banco
-        const { data: existingUser } = await supabase
-          .from("usuarios")
-          .select("id")
-          .ilike("referral_code", cleanSlug)
-          .neq("id", founder.id)
-          .maybeSingle();
+      if (rpcErr) throw rpcErr;
 
-        if (existingUser) {
-          setSlugError("Este código já está em uso por outro fundador.");
-          setIsSavingSlug(false);
-          return;
-        }
-
-        const { data: existingWl } = await supabase
-          .from("waitlist")
-          .select("id")
-          .ilike("referral_code", cleanSlug)
-          .neq("id", founder.id)
-          .maybeSingle();
-
-        if (existingWl) {
-          setSlugError("Este código já está em uso na lista de espera.");
-          setIsSavingSlug(false);
-          return;
-        }
-
-        // Atualização direta
-        await supabase.from("usuarios").update({ referral_code: cleanSlug }).eq("id", founder.id);
-        await supabase.from("waitlist").update({ referral_code: cleanSlug }).eq("id", founder.id);
-        if (founder.email) {
-          await supabase.from("waitlist").update({ referral_code: cleanSlug }).ilike("email", founder.email);
-        }
+      if (rpcRes && rpcRes.success === false) {
+        setSlugError(rpcRes.error || "Este código já está em uso por outro fundador.");
+        setIsSavingSlug(false);
+        return;
       }
 
       setFounder((prev) => (prev ? { ...prev, referral_code: cleanSlug } : prev));
       setSlugSuccess("Link personalizado com sucesso! 🎉");
+      toast.success("Link de indicação atualizado com sucesso! 🎉");
       trackEvent("founder_hub_custom_slug_saved", "marketing", { id: founder.id, slug: cleanSlug });
 
       setTimeout(() => {

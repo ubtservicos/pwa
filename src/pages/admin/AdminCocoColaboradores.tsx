@@ -13,6 +13,7 @@ import {
 import { Card, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { useNavigate } from "react-router-dom";
 
 export interface ColaboradorCoco {
   id: string;
@@ -40,6 +41,7 @@ const BAIRROS_UBATUBA = [
 
 export default function AdminCocoColaboradores() {
   const toast = useAdminToast();
+  const navigate = useNavigate();
   const [colaboradores, setColaboradores] = useState<ColaboradorCoco[]>(() => {
     try {
       const stored = localStorage.getItem("coco_colaboradores_local");
@@ -236,26 +238,48 @@ export default function AdminCocoColaboradores() {
           </p>
         </div>
 
-        <button
-          onClick={() => handleOpenModal()}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "#0DB87E",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "10px 18px",
-            fontFamily: "Syne",
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(13,184,126,0.3)"
-          }}
-        >
-          <Plus size={16} /> Cadastrar Novo Colaborador
-        </button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            onClick={() => navigate("/admin/coco/frota")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "transparent",
+              color: "var(--admin-subtle)",
+              border: "1px solid var(--admin-border)",
+              borderRadius: 10,
+              padding: "10px 16px",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer"
+            }}
+          >
+            <Truck size={16} /> Gestão de Frota & Aprovações
+          </button>
+
+          <button
+            onClick={() => handleOpenModal()}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#0DB87E",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontFamily: "Syne",
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(13,184,126,0.3)"
+            }}
+          >
+            <Plus size={16} /> Cadastrar Novo Colaborador
+          </button>
+        </div>
       </div>
 
       {/* Barra de Busca e Filtros */}

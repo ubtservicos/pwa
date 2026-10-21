@@ -126,10 +126,12 @@ const CocoPage = () => {
         if (dicasData && dicasData.length > 0) {
           const mapped: Record<string, { titulo: string; conteudo_html: string }> = {};
           dicasData.forEach((d: any) => {
-            mapped[d.material_id] = {
-              titulo: d.titulo || `Como descartar ${d.material_id}`,
-              conteudo_html: d.conteudo_html
-            };
+            if (d.is_active !== false) {
+              mapped[d.material_id] = {
+                titulo: d.titulo || `Como descartar ${d.material_id}`,
+                conteudo_html: d.conteudo_html
+              };
+            }
           });
           setDicasMateriais(mapped);
         }

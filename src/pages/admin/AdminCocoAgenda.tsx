@@ -22,7 +22,7 @@ export interface AgendaBairro {
   is_active: boolean;
 }
 
-const DIAS_SEMANA = [
+export const DIAS_SEMANA = [
   "Segunda-feira",
   "Terça-feira",
   "Quarta-feira",
@@ -32,12 +32,43 @@ const DIAS_SEMANA = [
   "Domingo"
 ];
 
+export const BAIRROS_OFICIAIS_UBATUBA = [
+  "Centro",
+  "Itaguá",
+  "Perequê-Açu",
+  "Praia Grande",
+  "Tenório",
+  "Toninhas",
+  "Enseada",
+  "Maranduba",
+  "Ubatumirim",
+  "Estufa I",
+  "Estufa II",
+  "Ipiranguinha",
+  "Itamambuca",
+  "Praia Vermelha do Norte",
+  "Praia Vermelha do Centro",
+  "Praia do Félix",
+  "Praia do Lázaro",
+  "Saco da Ribeira",
+  "Picinguaba",
+  "Taquaral",
+  "Sesmaria",
+  "Horto Florestal",
+  "Matinha",
+  "Sapê",
+  "Lagoinha",
+  "Tabatinga",
+  "Puruba",
+  "Prumirim"
+].sort((a, b) => a.localeCompare(b, "pt-BR"));
+
 export default function AdminCocoAgenda() {
   const toast = useAdminToast();
   const [agendas, setAgendas] = useState<AgendaBairro[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAgenda, setEditingAgenda] = useState<AgendaBairro | null>(null);
-  const [agendaBairroNome, setAgendaBairroNome] = useState("");
+  const [agendaBairroNome, setAgendaBairroNome] = useState(BAIRROS_OFICIAIS_UBATUBA[0]);
   const [agendaDiaSemana, setAgendaDiaSemana] = useState("Segunda-feira");
   const [agendaHoraInicio, setAgendaHoraInicio] = useState("08:00");
   const [agendaHoraFim, setAgendaHoraFim] = useState("12:00");
@@ -75,7 +106,7 @@ export default function AdminCocoAgenda() {
       setAgendaHoraFim(agenda.horario_fim);
     } else {
       setEditingAgenda(null);
-      setAgendaBairroNome("");
+      setAgendaBairroNome(BAIRROS_OFICIAIS_UBATUBA[0]);
       setAgendaDiaSemana("Segunda-feira");
       setAgendaHoraInicio("08:00");
       setAgendaHoraFim("12:00");
@@ -85,15 +116,20 @@ export default function AdminCocoAgenda() {
 
   const handleSaveAgenda = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!agendaBairroNome.trim()) {
-      toast.show("Informe o nome do bairro.");
+    if (!agendaBairroNome) {
+      toast.show("Selecione o bairro oficial de Ubatuba.");
+      return;
+    }
+
+    if (agendaHoraInicio >= agendaHoraFim) {
+      toast.show("O horário de início deve ser anterior ao horário de término.");
       return;
     }
 
     setSaving(true);
     try {
       if (editingAgenda) {
-        // Atualizar
+        // Atualizar janela existente
         const { error } = await supabase
           .from("coco_agenda_bairros")
           .update({
@@ -105,9 +141,9 @@ export default function AdminCocoAgenda() {
           .eq("id", editingAgenda.id);
 
         if (error) throw error;
-        toast.show("Escala do bairro atualizada com sucesso!");
+        toast.show(`Escala de ${agendaBairroNome} atualizada com sucesso!`);
       } else {
-        // Inserir
+        // Inserir nova rota
         const { error } = await supabase
           .from("coco_agenda_bairros")
           .insert([{
@@ -119,7 +155,7 @@ export default function AdminCocoAgenda() {
           }]);
 
         if (error) throw error;
-        toast.show("Bairro adicionado à escala de coleta!");
+        toast.show(`Bairro ${agendaBairroNome} adicionado à escala de coleta!`);
       }
 
       setIsAgendaModalOpen(false);
@@ -152,17 +188,19 @@ export default function AdminCocoAgenda() {
   };
 
   const handleToggleAgendaActive = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    setAgendas(prev => prev.map(a => a.id === id ? { ...a, is_active: nextStatus } : a));
+
     try {
       const { error } = await supabase
         .from("coco_agenda_bairros")
-        .update({ is_active: !currentStatus })
+        .update({ is_active: nextStatus })
         .eq("id", id);
       if (error) throw error;
-      toast.show("Status da rota atualizado!");
+      toast.show(`Status da rota ${nextStatus ? "ativado" : "pausado"} com sucesso!`);
       fetchAgendas();
     } catch {
-      setAgendas(prev => prev.map(a => a.id === id ? { ...a, is_active: !currentStatus } : a));
-      toast.show("Status atualizado localmente.");
+      toast.show(`Status atualizado localmente para ${nextStatus ? "Ativo" : "Pausado"}.`);
     }
   };
 
@@ -175,7 +213,7 @@ export default function AdminCocoAgenda() {
         .delete()
         .eq("id", id);
       if (error) throw error;
-      toast.show("Bairro removido da escala.");
+      toast.show(`Bairro ${bairroNome} removido da escala.`);
       fetchAgendas();
     } catch {
       setAgendas(prev => prev.filter(a => a.id !== id));
@@ -197,7 +235,7 @@ export default function AdminCocoAgenda() {
             </h1>
           </div>
           <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", margin: 0 }}>
-            Define os dias e horários em que os caminhões atendem cada região de Ubatuba para a trava geográfica do cidadão.
+            Define os dias e janelas de horário em que os caminhões atendem cada bairro de Ubatuba para a trava geográfica do cidadão.
           </p>
         </div>
 
@@ -219,7 +257,7 @@ export default function AdminCocoAgenda() {
             boxShadow: "0 4px 12px rgba(13,184,126,0.3)"
           }}
         >
-          <Plus size={16} /> Adicionar Bairro
+          <Plus size={16} /> Adicionar Rota de Bairro
         </button>
       </div>
 
@@ -229,16 +267,22 @@ export default function AdminCocoAgenda() {
             <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", color: "var(--admin-subtle)", fontSize: 12, textTransform: "uppercase" }}>
               <th style={{ padding: "16px 20px" }}>Bairro de Ubatuba</th>
               <th style={{ padding: "16px 20px" }}>Dia da Semana</th>
-              <th style={{ padding: "16px 20px" }}>Horário de Coleta</th>
+              <th style={{ padding: "16px 20px" }}>Janela de Coleta</th>
               <th style={{ padding: "16px 20px" }}>Status</th>
               <th style={{ padding: "16px 20px", textAlign: "right" }}>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {agendas.length === 0 ? (
+            {loading ? (
               <tr>
                 <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
-                  Nenhum bairro cadastrado na rota.
+                  Carregando rotas da agenda de coleta...
+                </td>
+              </tr>
+            ) : agendas.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
+                  Nenhum bairro cadastrado na rota. Clique em "Adicionar Rota de Bairro" para iniciar.
                 </td>
               </tr>
             ) : (
@@ -255,9 +299,9 @@ export default function AdminCocoAgenda() {
                       <Calendar size={13} /> {ag.dia_semana}
                     </span>
                   </td>
-                  <td style={{ padding: "16px 20px", color: "var(--admin-subtle)" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <Clock size={14} color="var(--admin-muted)" /> {ag.horario_inicio} às {ag.horario_fim}
+                  <td style={{ padding: "16px 20px", color: "var(--admin-text)" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "DM Sans", fontSize: 13, fontWeight: 600 }}>
+                      <Clock size={14} color="#0DB87E" /> Entre {ag.horario_inicio} e {ag.horario_fim}
                     </span>
                   </td>
                   <td style={{ padding: "16px 20px" }}>
@@ -267,12 +311,13 @@ export default function AdminCocoAgenda() {
                         border: "none",
                         background: ag.is_active ? "rgba(13,184,126,0.15)" : "var(--admin-border)",
                         color: ag.is_active ? "#0DB87E" : "var(--admin-muted)",
-                        padding: "4px 10px",
+                        padding: "4px 12px",
                         borderRadius: 999,
                         fontSize: 12,
                         fontWeight: 700,
                         cursor: "pointer"
                       }}
+                      title="Clique para alternar status da rota"
                     >
                       {ag.is_active ? "🟢 Ativo na Rota" : "⚪ Pausado"}
                     </button>
@@ -282,14 +327,14 @@ export default function AdminCocoAgenda() {
                       <button
                         onClick={() => handleOpenAgendaModal(ag)}
                         style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer", padding: 6 }}
-                        title="Editar Bairro"
+                        title="Editar Janela de Horário"
                       >
                         <Edit3 size={16} />
                       </button>
                       <button
                         onClick={() => handleDeleteAgenda(ag.id, ag.bairro_nome)}
                         style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 6 }}
-                        title="Remover Bairro"
+                        title="Remover Rota do Bairro"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -308,7 +353,7 @@ export default function AdminCocoAgenda() {
           <div style={{ background: "var(--admin-surface)", border: "1px solid var(--admin-border)", borderRadius: 16, width: "100%", maxWidth: 440, padding: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, margin: 0, color: "var(--admin-text)" }}>
-                {editingAgenda ? "Editar Escala do Bairro" : "Adicionar Bairro à Escala"}
+                {editingAgenda ? "Editar Janela de Horário da Rota" : "Adicionar Bairro à Escala de Coleta"}
               </h3>
               <button onClick={() => setIsAgendaModalOpen(false)} style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer" }}>
                 <X size={20} />
@@ -318,16 +363,18 @@ export default function AdminCocoAgenda() {
             <form onSubmit={handleSaveAgenda} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)", marginBottom: 6 }}>
-                  Nome do Bairro (Ubatuba) *
+                  Bairro Oficial de Ubatuba *
                 </label>
-                <input
-                  type="text"
+                <select
                   required
-                  placeholder="Ex: Itaguá, Perequê-Açu, Toninhas"
                   value={agendaBairroNome}
                   onChange={(e) => setAgendaBairroNome(e.target.value)}
                   style={{ width: "100%", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", borderRadius: 8, padding: "10px 12px", color: "var(--admin-text)", fontFamily: "DM Sans", fontSize: 14 }}
-                />
+                >
+                  {BAIRROS_OFICIAIS_UBATUBA.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -372,12 +419,16 @@ export default function AdminCocoAgenda() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
+              <div style={{ background: "rgba(13,184,126,0.08)", padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(13,184,126,0.2)", fontSize: 12, color: "#0DB87E", fontFamily: "DM Sans" }}>
+                Exibição no app: <strong>Entre {agendaHoraInicio} e {agendaHoraFim}</strong>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>
                 <GhostButton type="button" onClick={() => setIsAgendaModalOpen(false)}>
                   Cancelar
                 </GhostButton>
                 <PrimaryButton type="submit" disabled={saving}>
-                  {saving ? "Salvando..." : (editingAgenda ? "Salvar Alterações" : "Adicionar Bairro")}
+                  {saving ? "Salvando..." : (editingAgenda ? "Salvar Alterações" : "Adicionar Rota")}
                 </PrimaryButton>
               </div>
             </form>

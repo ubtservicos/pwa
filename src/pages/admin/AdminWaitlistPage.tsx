@@ -756,28 +756,58 @@ export default function AdminWaitlistPage() {
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       {(() => {
-                        const perfilArr = Array.isArray(lead.perfil) ? lead.perfil : [lead.perfil];
+                        let perfilArr: string[] = [];
+                        if (Array.isArray(lead.perfil)) {
+                          perfilArr = lead.perfil;
+                        } else if (typeof lead.perfil === "string") {
+                          try {
+                            const parsed = JSON.parse(lead.perfil);
+                            perfilArr = Array.isArray(parsed) ? parsed : [lead.perfil];
+                          } catch {
+                            perfilArr = lead.perfil.split(",").map((p) => p.trim());
+                          }
+                        }
+                        const cleanList = perfilArr.filter(Boolean);
+                        if (cleanList.length === 0) {
+                          cleanList.push("morador");
+                        }
+
+                        const mapPerfil: Record<string, { label: string; color: string; bg: string }> = {
+                          morador: { label: "Morador", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                          prestador: { label: "Prestador", color: "#2B6EE8", bg: "rgba(43,110,232,0.12)" },
+                          diarista: { label: "Diarista", color: "#9333EA", bg: "rgba(147,51,234,0.12)" },
+                          mototaxista: { label: "Mototaxista", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                          ambulante: { label: "Ambulante", color: "#EC4899", bg: "rgba(236,72,153,0.12)" },
+                          associacao: { label: "Associação", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                          turista: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
+                          visitante: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
+                          empresa: { label: "Empresa", color: "#EC4899", bg: "rgba(236,72,153,0.12)" },
+                        };
+
                         return (
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Morador</Pill>}
-                            {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA" size="sm">Diarista</Pill>}
-                            {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6" size="sm">Mototaxista</Pill>}
-                            {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Ambulante</Pill>}
-                            {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981" size="sm">Associação</Pill>}
-                            {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Prestador</Pill>}
-                            {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623" size="sm">Turista</Pill>}
-                            {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899" size="sm">Empresa</Pill>}
+                            {cleanList.map((p) => {
+                              const lower = p.toLowerCase();
+                              const conf = mapPerfil[lower] || { 
+                                label: p.charAt(0).toUpperCase() + p.slice(1), 
+                                color: "var(--admin-subtle)", 
+                                bg: "rgba(255,255,255,0.06)" 
+                              };
+                              return (
+                                <Pill key={p} bg={conf.bg} color={conf.color} size="sm">
+                                  {conf.label}
+                                </Pill>
+                              );
+                            })}
                           </div>
                         );
                       })()}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       {lead.observacoes?.includes("Mercado Pago: Sim") || (lead as any).possui_conta_mercado_pago === true ? (
-                        <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Sim</Pill>
-                      ) : lead.observacoes?.includes("Mercado Pago: Não") || (lead as any).possui_conta_mercado_pago === false ? (
-                        <Pill bg="rgba(239,68,68,0.08)" color="#EF4444" size="sm">Não</Pill>
+                        <Pill bg="rgba(13,184,126,0.15)" color="#0DB87E" size="sm" style={{ fontWeight: 700 }}>SIM</Pill>
                       ) : (
-                        <span style={{ fontSize: 12, color: "var(--admin-muted)", fontStyle: "italic" }}>—</span>
+                        <Pill bg="rgba(239,68,68,0.15)" color="#EF4444" size="sm" style={{ fontWeight: 700 }}>NÃO</Pill>
                       )}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)" }}>
@@ -793,11 +823,25 @@ export default function AdminWaitlistPage() {
                       {lead.utm_source || "—"}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      {lead.status === "novo" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Novo</Pill>}
-                      {lead.status === "contatado" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Contatado</Pill>}
-                      {lead.status === "rejeitado" && <Pill bg="rgba(239,68,68,0.08)" color="#EF4444" size="sm">Rejeitado</Pill>}
-                      {lead.status === "arquivado" && <Pill bg="rgba(148,163,184,0.08)" color="var(--admin-subtle)" size="sm">Arquivado</Pill>}
-                      {lead.status === "approved" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Aprovado</Pill>}
+                      {((lead as any).cadastro_completo === true || lead.status === "completo" || lead.status === "approved") ? (
+                        <Pill 
+                          bg="rgba(0,255,102,0.15)" 
+                          color="#00FF66" 
+                          size="sm" 
+                          style={{ fontWeight: 800, border: "1px solid rgba(0,255,102,0.4)", textShadow: "0 0 8px rgba(0,255,102,0.5)" }}
+                        >
+                          COMPLETO
+                        </Pill>
+                      ) : (
+                        <Pill 
+                          bg="rgba(148,163,184,0.12)" 
+                          color="var(--admin-subtle)" 
+                          size="sm" 
+                          style={{ fontWeight: 700, border: "1px solid var(--admin-border)" }}
+                        >
+                          PENDENTE
+                        </Pill>
+                      )}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)", whiteSpace: "nowrap" }}>
                       {lead.created_at_local}
@@ -949,11 +993,9 @@ export default function AdminWaitlistPage() {
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
                   <div style={{ marginTop: 4 }}>
                     {selectedLeadModal.observacoes?.includes("Mercado Pago: Sim") || (selectedLeadModal as any).possui_conta_mercado_pago === true ? (
-                      <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Sim</Pill>
-                    ) : selectedLeadModal.observacoes?.includes("Mercado Pago: Não") || (selectedLeadModal as any).possui_conta_mercado_pago === false ? (
-                      <Pill bg="rgba(239,68,68,0.08)" color="#EF4444">Não</Pill>
+                      <Pill bg="rgba(13,184,126,0.15)" color="#0DB87E" style={{ fontWeight: 700 }}>SIM</Pill>
                     ) : (
-                      <span style={{ fontSize: 13, color: "var(--admin-subtle)", fontStyle: "italic" }}>Não informado</span>
+                      <Pill bg="rgba(239,68,68,0.15)" color="#EF4444" style={{ fontWeight: 700 }}>NÃO</Pill>
                     )}
                   </div>
                 </div>

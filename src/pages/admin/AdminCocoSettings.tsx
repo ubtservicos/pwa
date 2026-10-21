@@ -12,7 +12,10 @@ import {
   ShieldCheck, 
   Recycle, 
   ArrowLeft,
-  DollarSign
+  DollarSign,
+  Upload,
+  Image as ImageIcon,
+  ShieldAlert
 } from "lucide-react";
 import { Card, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -38,8 +41,19 @@ export default function AdminCocoSettings() {
   const [pixKey, setPixKey] = useState("");
   const [missao, setMissao] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [loadingOps, setLoadingOps] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
+
+  // RBAC Permission Logic
+  // Superadmin ('super_admin', 'admin', 'operator') and Alta Gestão ('cocoecia', 'cocoecia-dirigentes') have full financial access.
+  // Colaborador ('cocoecia-colaborador') has restricted Pix / financial view.
+  const isColaborador = user.role === "cocoecia-colaborador";
+  const canManagePix = !isColaborador && (
+    ["super_admin", "admin", "operator", "cocoecia", "cocoecia-dirigentes"].includes(user.role) ||
+    user.email === "ubt.servicos@gmail.com"
+  );
 
   // Fetch initial profile & entity settings
   useEffect(() => {
@@ -77,6 +91,7 @@ export default function AdminCocoSettings() {
           if (config.pix_key) setPixKey(config.pix_key);
           if (config.missao) setMissao(config.missao);
           if (config.descricao) setDescricao(config.descricao);
+          if (config.logo_url) setLogoUrl(config.logo_url);
         } else {
           // Fallback to localStorage pix
           const localPix = localStorage.getItem("coco_pix_fallback");
@@ -91,6 +106,79 @@ export default function AdminCocoSettings() {
 
     loadSettings();
   }, [user.uid]);
+
+  // Handle Logo Upload to Supabase Storage
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.show("A imagem deve ter no máximo 5MB.");
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const fileExt = file.name.split(".").pop() || "png";
+      const fileName = `logo-${Date.now()}.${fileExt}`;
+      const filePath = `logos/${fileName}`;
+
+      // Tenta bucket entidades primeiro, com fallback para public-assets
+      let publicUrl = "";
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("entidades")
+        .upload(filePath, file, { upsert: true });
+
+      if (!uploadError && uploadData) {
+        const { data: urlData } = supabase.storage
+          .from("entidades")
+          .getPublicUrl(filePath);
+        publicUrl = urlData.publicUrl;
+      } else {
+        const { data: fallbackUpload, error: fallbackErr } = await supabase.storage
+          .from("public-assets")
+          .upload(filePath, file, { upsert: true });
+
+        if (fallbackErr) throw fallbackErr || uploadError;
+        const { data: fbUrlData } = supabase.storage
+          .from("public-assets")
+          .getPublicUrl(filePath);
+        publicUrl = fbUrlData.publicUrl;
+      }
+
+      setLogoUrl(publicUrl);
+
+      // Persistir na coco_config
+      const { data: existingConfig } = await supabase
+        .from("coco_config")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+
+      if (existingConfig?.id) {
+        await supabase
+          .from("coco_config")
+          .update({
+            logo_url: publicUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existingConfig.id);
+      } else {
+        await supabase
+          .from("coco_config")
+          .insert([{
+            logo_url: publicUrl,
+            updated_at: new Date().toISOString()
+          }]);
+      }
+
+      toast.show("Logo oficial da Côco & Cia salvo com sucesso!");
+    } catch (err: any) {
+      toast.show(`Erro ao fazer upload do logo: ${err.message || "Falha no armazenamento"}`);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   // Update Auth Credentials (Password / Email)
   const handleUpdateAuth = async (e: React.FormEvent) => {
@@ -124,7 +212,7 @@ export default function AdminCocoSettings() {
         return;
       }
 
-      const { data, error } = await supabase.auth.updateUser(updates);
+      const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
 
       if (updates.email) {
@@ -175,28 +263,32 @@ export default function AdminCocoSettings() {
         .limit(1)
         .maybeSingle();
 
+      const configPayload: any = {
+        missao: missao.trim(),
+        descricao: descricao.trim(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // RBAC: Only update pix_key if authorized
+      if (canManagePix) {
+        configPayload.pix_key = pixKey.trim();
+      }
+
       if (existingConfig?.id) {
         const { error } = await supabase
           .from("coco_config")
-          .update({
-            pix_key: pixKey.trim(),
-            missao: missao.trim(),
-            descricao: descricao.trim(),
-            updated_at: new Date().toISOString(),
-          })
+          .update(configPayload)
           .eq("id", existingConfig.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("coco_config").insert({
-          pix_key: pixKey.trim(),
-          missao: missao.trim(),
-          descricao: descricao.trim(),
-        });
+        const { error } = await supabase.from("coco_config").insert([configPayload]);
         if (error) throw error;
       }
 
-      // 3. Update localStorage fallback
-      localStorage.setItem("coco_pix_fallback", pixKey.trim());
+      // 3. Update localStorage fallback if authorized
+      if (canManagePix) {
+        localStorage.setItem("coco_pix_fallback", pixKey.trim());
+      }
 
       toast.show("Dados operacionais atualizados com sucesso!");
     } catch (err: any) {
@@ -207,9 +299,9 @@ export default function AdminCocoSettings() {
   };
 
   return (
-    <div style={{ padding: 32, maxWidth: 980, margin: "0 auto" }}>
+    <div style={{ padding: 32, maxWidth: 1040, margin: "0 auto" }}>
       {/* Header & Sub-Navigation */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             onClick={() => navigate("/admin/coco")}
@@ -234,7 +326,7 @@ export default function AdminCocoSettings() {
               Configurações da Entidade & Gestão
             </h1>
             <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
-              Edite suas credenciais de acesso (e-mail, senha) e os dados operacionais da Côco & Cia.
+              Logo oficial, credenciais de acesso e dados operacionais da Côco & Cia.
             </p>
           </div>
         </div>
@@ -276,97 +368,180 @@ export default function AdminCocoSettings() {
         </div>
       </div>
 
+      {/* Grid Principal */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         
-        {/* CARD 1: SEGURANÇA & CREDENCIAIS DE ACESSO */}
-        <Card style={{ padding: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <KeyRound size={20} />
-            </div>
-            <div>
-              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-                Credenciais de Autenticação
-              </h2>
-              <span style={{ fontSize: 11, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-                Alteração de e-mail e senha de gestor
-              </span>
-            </div>
-          </div>
-
-          <form onSubmit={handleUpdateAuth} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <label style={labelStyle}>E-mail de Login</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="gestor@cocoecia.com.br"
-                  style={{ ...inputStyle, paddingLeft: 38 }}
-                />
-                <Mail size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
+        {/* COLUNA ESQUERDA: LOGO OFICIAL & CREDENCIAIS */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          
+          {/* CARD: LOGO OFICIAL DA ENTIDADE */}
+          <Card style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ImageIcon size={20} />
               </div>
-              <span style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 4, display: "block" }}>
-                E-mail atual: <strong>{currentEmail || "Carregando..."}</strong>
-              </span>
-            </div>
-
-            <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14 }}>
-              <label style={labelStyle}>Nova Senha de Acesso</label>
-              <div style={{ position: "relative", marginBottom: 12 }}>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  style={{ ...inputStyle, paddingLeft: 38 }}
-                />
-                <Lock size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
-              </div>
-
-              <label style={labelStyle}>Confirmar Nova Senha</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repita a nova senha"
-                  style={{ ...inputStyle, paddingLeft: 38 }}
-                />
-                <Lock size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
+              <div>
+                <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                  Logo Oficial da Côco & Cia
+                </h2>
+                <span style={{ fontSize: 11, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
+                  Exibido no aplicativo do cidadão, cabeçalho e materiais de divulgação
+                </span>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loadingAuth}
-              style={{
-                marginTop: 8,
-                background: "#0DB87E",
-                color: "white",
-                border: "none",
-                borderRadius: 10,
-                padding: "12px 18px",
-                fontFamily: "Syne",
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: loadingAuth ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                opacity: loadingAuth ? 0.7 : 1
-              }}
-            >
-              <Save size={16} />
-              <span>{loadingAuth ? "Salvando..." : "Atualizar Credenciais"}</span>
-            </button>
-          </form>
-        </Card>
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              <div
+                style={{
+                  width: 90,
+                  height: 90,
+                  borderRadius: 16,
+                  background: "var(--admin-bg)",
+                  border: "2px dashed var(--admin-border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  flexShrink: 0
+                }}
+              >
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Logo Côco & Cia"
+                    style={{ width: "100%", height: "100%", objectFit: "contain", padding: 6 }}
+                  />
+                ) : (
+                  <div style={{ textAlign: "center", color: "var(--admin-muted)" }}>
+                    <ImageIcon size={24} />
+                    <span style={{ fontSize: 10, display: "block", marginTop: 2 }}>Sem Logo</span>
+                  </div>
+                )}
+              </div>
 
-        {/* CARD 2: DADOS OPERACIONAIS & CHAVE PIX */}
-        <Card style={{ padding: 28 }}>
+              <div style={{ flex: 1 }}>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "rgba(13,184,126,0.15)",
+                    color: "#0DB87E",
+                    padding: "10px 16px",
+                    borderRadius: 10,
+                    fontFamily: "Syne",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: uploadingLogo ? "not-allowed" : "pointer"
+                  }}
+                >
+                  <Upload size={16} />
+                  <span>{uploadingLogo ? "Enviando..." : "Selecionar Nova Imagem"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadLogo}
+                    disabled={uploadingLogo}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <span style={{ display: "block", fontSize: 11, color: "var(--admin-subtle)", marginTop: 6, fontFamily: "DM Sans" }}>
+                  PNG, JPG ou WEBP (máx. 5MB). Salvo automaticamente no Supabase Storage.
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          {/* CARD: SEGURANÇA & CREDENCIAIS DE ACESSO */}
+          <Card style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <KeyRound size={20} />
+              </div>
+              <div>
+                <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                  Credenciais de Autenticação
+                </h2>
+                <span style={{ fontSize: 11, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
+                  Alteração de e-mail e senha de gestor
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateAuth} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={labelStyle}>E-mail de Login</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="gestor@cocoecia.com.br"
+                    style={{ ...inputStyle, paddingLeft: 38 }}
+                  />
+                  <Mail size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
+                </div>
+                <span style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 4, display: "block" }}>
+                  E-mail atual: <strong>{currentEmail || "Carregando..."}</strong>
+                </span>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14 }}>
+                <label style={labelStyle}>Nova Senha de Acesso</label>
+                <div style={{ position: "relative", marginBottom: 12 }}>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    style={{ ...inputStyle, paddingLeft: 38 }}
+                  />
+                  <Lock size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
+                </div>
+
+                <label style={labelStyle}>Confirmar Nova Senha</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita a nova senha"
+                    style={{ ...inputStyle, paddingLeft: 38 }}
+                  />
+                  <Lock size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 13 }} />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loadingAuth}
+                style={{
+                  marginTop: 8,
+                  background: "#0DB87E",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "12px 18px",
+                  fontFamily: "Syne",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: loadingAuth ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  opacity: loadingAuth ? 0.7 : 1
+                }}
+              >
+                <Save size={16} />
+                <span>{loadingAuth ? "Salvando..." : "Atualizar Credenciais"}</span>
+              </button>
+            </form>
+          </Card>
+        </div>
+
+        {/* COLUNA DIREITA: DADOS OPERACIONAIS & CHAVE PIX COM RBAC */}
+        <Card style={{ padding: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Building2 size={20} />
@@ -376,7 +551,7 @@ export default function AdminCocoSettings() {
                 Dados Operacionais & Chave PIX
               </h2>
               <span style={{ fontSize: 11, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-                Informações de contato e arrecadação oficial
+                Informações de contato, missão e arrecadação oficial
               </span>
             </div>
           </div>
@@ -407,22 +582,49 @@ export default function AdminCocoSettings() {
               </div>
             </div>
 
-            <div>
-              <label style={labelStyle}>Chave PIX Oficial de Contingência</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="text"
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  placeholder="CNPJ, E-mail, Telefone ou Chave Aleatória"
-                  style={{ ...inputStyle, paddingLeft: 38 }}
-                />
-                <DollarSign size={16} color="#0DB87E" style={{ position: "absolute", left: 12, top: 13 }} />
+            {/* SEÇÃO PIX PROTEGIDA POR RBAC */}
+            {canManagePix ? (
+              <div>
+                <label style={labelStyle}>
+                  Chave PIX Oficial de Contingência & Doações
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="CNPJ, E-mail, Telefone ou Chave Aleatória"
+                    style={{ ...inputStyle, paddingLeft: 38 }}
+                  />
+                  <DollarSign size={16} color="#0DB87E" style={{ position: "absolute", left: 12, top: 13 }} />
+                </div>
+                <span style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 4, display: "block" }}>
+                  Recebe doações diretas voluntárias da comunidade e comércios no app.
+                </span>
               </div>
-              <span style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 4, display: "block" }}>
-                Recebe doações de Tomadores quando nenhum caminhão específico está online.
-              </span>
-            </div>
+            ) : (
+              <div
+                style={{
+                  background: "rgba(232,64,64,0.08)",
+                  border: "1px solid rgba(232,64,64,0.25)",
+                  borderRadius: 10,
+                  padding: 14,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10
+                }}
+              >
+                <ShieldAlert size={18} color="#E84040" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#E84040" }}>
+                    Chave PIX Restrita (RBAC)
+                  </div>
+                  <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>
+                    Seu perfil ({user.role || "colaborador"}) não possui privilégios para visualizar ou alterar a Chave PIX e dados bancários da entidade. Apenas a Alta Gestão (Dirigentes) e Superadmin têm essa permissão.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div>
               <label style={labelStyle}>Missão / Descrição da Entidade</label>
@@ -431,6 +633,23 @@ export default function AdminCocoSettings() {
                 value={missao}
                 onChange={(e) => setMissao(e.target.value)}
                 placeholder="Ex: Coleta seletiva solidária e conscientização ambiental em Ubatuba."
+                style={{
+                  ...inputStyle,
+                  height: "auto",
+                  padding: 10,
+                  fontSize: 13,
+                  resize: "vertical"
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Informações Complementares / Endereço da Sede</label>
+              <textarea
+                rows={2}
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Ex: Galpão de Triagem - Rua Principal, Centro, Ubatuba - SP."
                 style={{
                   ...inputStyle,
                   height: "auto",
