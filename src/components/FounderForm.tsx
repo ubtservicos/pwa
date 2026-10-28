@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,9 +15,9 @@ import {
   Loader2,
   Send,
   Users,
-  ShieldCheck,
   Search,
-  Sparkles
+  Sparkles,
+  Compass
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -170,11 +170,11 @@ export const PRAIAS_LIST = [
 export const REGIOES_UBATUBA = ["Sul", "Centro", "Norte", "Oeste"];
 
 export const PERFIS_PF_LIST = [
+  { id: "morador", label: "Morador / Consumidor", icon: "🏡" },
+  { id: "turista", label: "Turista / Visitante", icon: "🧳" },
   { id: "ambulante", label: "Ambulante de Praia", icon: "🏖️" },
   { id: "mototaxista", label: "Mototaxista", icon: "🏍️" },
   { id: "diarista", label: "Diarista / Faxina", icon: "🧹" },
-  { id: "morador", label: "Morador / Consumidor", icon: "🏡" },
-  { id: "turista", label: "Turista / Visitante", icon: "🧳" },
 ];
 
 export const founderFormSchema = z.object({
@@ -202,10 +202,11 @@ export const founderFormSchema = z.object({
   tipo_chave_pix: z.string().optional().default(""),
   chave_pix: z.string().optional().default(""),
 
-  // 1. CAMPOS GEOGRÁFICOS ISOLADOS
+  // 1. CAMPOS GEOGRÁFICOS CONDICIONAIS
   regioes: z.array(z.string()).default([]),
   bairro_residencia: z.string().default(""),
   bairros_atuacao: z.array(z.string()).default([]),
+  bairros_hospedagem: z.array(z.string()).default([]),
   praias: z.array(z.string()).default([]),
 
   // Compatibilidade Legada
@@ -250,32 +251,56 @@ export const founderFormSchema = z.object({
         message: "Selecione pelo menos um perfil de atuação",
         path: ["perfil"],
       });
-    }
+    } else {
+      const hasMorador = data.perfil.includes("morador");
+      const hasTurista = data.perfil.includes("turista");
+      const hasAmbulante = data.perfil.includes("ambulante");
+      const hasMototaxista = data.perfil.includes("mototaxista");
+      const hasDiarista = data.perfil.includes("diarista");
 
-    // Bairro de Residência é obrigatório para Pessoa Física (*)
-    if (!data.bairro_residencia || data.bairro_residencia.trim() === "") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione o seu bairro de residência em Ubatuba",
-        path: ["bairro_residencia"],
-      });
-    }
+      // Bairro de Residência (Obrigatório para Morador e Diarista)
+      if (hasMorador || hasDiarista) {
+        if (!data.bairro_residencia || data.bairro_residencia.trim() === "") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione o seu bairro de residência em Ubatuba",
+            path: ["bairro_residencia"],
+          });
+        }
+      }
 
-    // Regras específicas por perfil
-    if (data.perfil.includes("ambulante") && (!data.praias || data.praias.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Ambulante de praia deve selecionar ao menos uma praia de atuação",
-        path: ["praias"],
-      });
-    }
+      // Bairros de Hospedagem (Obrigatório para Turista quando não é Morador)
+      if (hasTurista && !hasMorador) {
+        if ((!data.bairros_hospedagem || data.bairros_hospedagem.length === 0) && (!data.bairro_residencia || data.bairro_residencia.trim() === "")) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione ao menos um bairro onde costuma se hospedar em Ubatuba",
+            path: ["bairros_hospedagem"],
+          });
+        }
+      }
 
-    if (data.perfil.some(p => p === "mototaxista" || p === "diarista") && (!data.regioes || data.regioes.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Selecione ao menos uma Zona / Região de atuação (Sul, Centro, Norte ou Oeste)",
-        path: ["regioes"],
-      });
+      // Região / Zona de Atuação (Obrigatório para Ambulante, Mototaxista e Diarista)
+      if (hasAmbulante || hasMototaxista || hasDiarista) {
+        if (!data.regioes || data.regioes.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione ao menos uma Zona / Região de atuação (Sul, Centro, Norte ou Oeste)",
+            path: ["regioes"],
+          });
+        }
+      }
+
+      // Praias de Atuação (Obrigatório para Ambulante)
+      if (hasAmbulante) {
+        if (!data.praias || data.praias.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Ambulante de praia deve selecionar ao menos uma praia de atuação",
+            path: ["praias"],
+          });
+        }
+      }
     }
   }
 
@@ -320,6 +345,14 @@ export const founderFormSchema = z.object({
         code: z.ZodIssueCode.custom,
         message: "Selecione o bairro da sede da empresa em Ubatuba",
         path: ["bairro_residencia"],
+      });
+    }
+
+    if (!data.regioes || data.regioes.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione ao menos uma Zona / Região de atuação da empresa",
+        path: ["regioes"],
       });
     }
   }
@@ -396,6 +429,7 @@ export interface FounderFormProps {
   submitButtonText?: string;
   hideAlreadyRegisteredButton?: boolean;
   onSuccess?: (data?: any) => void;
+  onClose?: () => void;
   defaultValues?: Partial<FounderFormData>;
   className?: string;
 }
@@ -443,6 +477,7 @@ export default function FounderForm({
   submitButtonText,
   hideAlreadyRegisteredButton = false,
   onSuccess,
+  onClose,
   defaultValues = {},
   className = ""
 }: FounderFormProps) {
@@ -459,6 +494,9 @@ export default function FounderForm({
 
   const [isBairrosAtuacaoModalOpen, setIsBairrosAtuacaoModalOpen] = useState(false);
   const [bairrosAtuacaoSearch, setBairrosAtuacaoSearch] = useState("");
+
+  const [isBairrosHospedagemModalOpen, setIsBairrosHospedagemModalOpen] = useState(false);
+  const [bairrosHospedagemSearch, setBairrosHospedagemSearch] = useState("");
 
   const [isPraiasModalOpen, setIsPraiasModalOpen] = useState(false);
   const [praiasSearch, setPraiasSearch] = useState("");
@@ -494,6 +532,7 @@ export default function FounderForm({
       regioes: [],
       bairro_residencia: "",
       bairros_atuacao: [],
+      bairros_hospedagem: [],
       praias: [],
       bairros: [],
       bairro_trabalho: [],
@@ -522,20 +561,28 @@ export default function FounderForm({
         || leadRecord?.bairro_residencia
         || leadRecord?.bairro_moradia
         || (Array.isArray(leadRecord?.bairros) && leadRecord.bairros.length > 0 ? leadRecord.bairros[0] : "")
-        || (leadRecord?.bairro_hospedagem || "")
         || (defaultValues.bairros && defaultValues.bairros.length > 0 ? defaultValues.bairros[0] : "");
 
-      // Bairros de Atuação / Frequência (Múltipla Seleção)
+      // Bairros de Atuação / Trabalho (Múltipla Seleção)
       const rawBairroTrabStr = leadRecord?.bairro_trabalho || "";
       const bTrabFromStr = rawBairroTrabStr ? rawBairroTrabStr.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
       const bAtuacaoResolved = defaultValues.bairros_atuacao && defaultValues.bairros_atuacao.length > 0
         ? defaultValues.bairros_atuacao
         : (Array.isArray(leadRecord?.bairros_atuacao) ? leadRecord.bairros_atuacao : bTrabFromStr);
 
+      // Bairros de Hospedagem (Turista)
+      const rawBairroHospStr = leadRecord?.bairro_hospedagem || "";
+      const bHospFromStr = rawBairroHospStr ? rawBairroHospStr.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      const bHospResolved = defaultValues.bairros_hospedagem && defaultValues.bairros_hospedagem.length > 0
+        ? defaultValues.bairros_hospedagem
+        : (Array.isArray(leadRecord?.bairros_hospedagem) ? leadRecord.bairros_hospedagem : bHospFromStr);
+
       // Praias
       const praiasResolved = defaultValues.praias && defaultValues.praias.length > 0
         ? defaultValues.praias
         : (Array.isArray(leadRecord?.praias_frequenta) ? leadRecord.praias_frequenta : (Array.isArray(leadRecord?.praias) ? leadRecord.praias : []));
+
+      const combinedBairros = [bResResolved, ...bAtuacaoResolved, ...bHospResolved].filter(Boolean);
 
       reset({
         tipoPessoa: isPJ ? "PJ" : "PF",
@@ -556,8 +603,9 @@ export default function FounderForm({
         regioes: regioesResolved,
         bairro_residencia: bResResolved,
         bairros_atuacao: bAtuacaoResolved,
+        bairros_hospedagem: bHospResolved,
         praias: praiasResolved,
-        bairros: [bResResolved, ...bAtuacaoResolved].filter(Boolean),
+        bairros: combinedBairros,
         bairro_trabalho: bAtuacaoResolved,
         regiao_atuacao_pf: regioesResolved,
         regiao_atuacao_pj: regioesResolved,
@@ -572,11 +620,42 @@ export default function FounderForm({
   const tipoChavePix = watch("tipo_chave_pix");
   const chavePix = watch("chave_pix");
 
-  // Watches dos 4 Campos Geográficos Isolados
+  // Watches dos Campos Geográficos
   const regioes = watch("regioes") || [];
   const bairroResidencia = watch("bairro_residencia") || "";
   const bairrosAtuacao = watch("bairros_atuacao") || [];
+  const bairrosHospedagem = watch("bairros_hospedagem") || [];
   const praias = watch("praias") || [];
+
+  // =========================================================================
+  // 1. REGRAS CONDICIONAIS DE CAMPOS GEOGRÁFICOS POR PERFIL (UNIÃO LÓGICA)
+  // =========================================================================
+  const isPF = tipoPessoa === "PF";
+  const isPJ = tipoPessoa === "PJ";
+
+  const hasMorador = isPF && perfil.includes("morador");
+  const hasTurista = isPF && perfil.includes("turista");
+  const hasAmbulante = isPF && perfil.includes("ambulante");
+  const hasMototaxista = isPF && perfil.includes("mototaxista");
+  const hasDiarista = isPF && perfil.includes("diarista");
+
+  // Região / Zona de Atuação: Ambulante, Mototaxista, Diarista, PJ
+  const showRegioes = isPJ || hasAmbulante || hasMototaxista || hasDiarista;
+
+  // Bairro de Residência (Único, Obrigatório): Morador, Diarista, PJ (sede)
+  const showBairroResidencia = isPJ || hasMorador || hasDiarista;
+
+  // Bairros de Trabalho (Múltipla Escolha, Opcional): Morador
+  const showBairrosTrabalho = hasMorador;
+
+  // Bairros de Hospedagem (Múltipla Escolha): Turista
+  const showBairrosHospedagem = hasTurista;
+
+  // Praias (Múltipla Escolha): Morador, Turista, Ambulante
+  const showPraias = hasMorador || hasTurista || hasAmbulante;
+  const praiasLabel = hasAmbulante && !hasMorador && !hasTurista
+    ? "Praias que Costuma Atuar"
+    : (hasAmbulante ? "Praias que Costuma Atuar / Frequentar" : "Praias que Costuma Frequentar");
 
   // =========================================================================
   // LÓGICA INTELIGENTE DA CHAVE PIX (MERCADO PAGO)
@@ -599,7 +678,6 @@ export default function FounderForm({
     } else if (tipo === "telefone" || tipo === "celular") {
       const onlyDigits = currentTel.replace(/\D/g, "");
       if (onlyDigits) {
-        // WhatsApp em dígitos numéricos puros
         setValue("chave_pix", onlyDigits, { shouldValidate: true });
       }
     } else if (tipo === "cnpj") {
@@ -645,19 +723,28 @@ export default function FounderForm({
   // Seleção de Bairro de Residência (Select Único)
   const selectBairroResidencia = (bairro: string) => {
     setValue("bairro_residencia", bairro, { shouldValidate: true });
-    const currentCombined = [bairro, ...bairrosAtuacao].filter(Boolean);
+    const currentCombined = [bairro, ...bairrosAtuacao, ...bairrosHospedagem].filter(Boolean);
     setValue("bairros", currentCombined);
     setIsBairroResidenciaModalOpen(false);
     setBairroResidenciaSearch("");
   };
 
-  // Alternador de Bairros de Atuação (Múltipla Seleção)
+  // Alternador de Bairros de Trabalho (Múltipla Seleção)
   const toggleBairroAtuacao = (bairro: string) => {
     const exists = bairrosAtuacao.includes(bairro);
     const next = exists ? bairrosAtuacao.filter(b => b !== bairro) : [...bairrosAtuacao, bairro];
     setValue("bairros_atuacao", next, { shouldValidate: true });
     setValue("bairro_trabalho", next);
-    const currentCombined = [bairroResidencia, ...next].filter(Boolean);
+    const currentCombined = [bairroResidencia, ...next, ...bairrosHospedagem].filter(Boolean);
+    setValue("bairros", currentCombined);
+  };
+
+  // Alternador de Bairros de Hospedagem (Múltipla Seleção)
+  const toggleBairroHospedagem = (bairro: string) => {
+    const exists = bairrosHospedagem.includes(bairro);
+    const next = exists ? bairrosHospedagem.filter(b => b !== bairro) : [...bairrosHospedagem, bairro];
+    setValue("bairros_hospedagem", next, { shouldValidate: true });
+    const currentCombined = [bairroResidencia, ...bairrosAtuacao, ...next].filter(Boolean);
     setValue("bairros", currentCombined);
   };
 
@@ -666,6 +753,17 @@ export default function FounderForm({
     const exists = praias.includes(praia);
     const next = exists ? praias.filter(p => p !== praia) : [...praias, praia];
     setValue("praias", next, { shouldValidate: true });
+  };
+
+  // Ação de Fechar (Header Fixo)
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else if (isUpdateMode) {
+      navigate("/");
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   // Feedback imediato caso o formulário possua erros (onInvalid)
@@ -690,25 +788,26 @@ export default function FounderForm({
   };
 
   // =========================================================================
-  // SUBMISSÃO PRINCIPAL (CRIAÇÃO OU ATUALIZAÇÃO)
+  // SUBMISSÃO PRINCIPAL
   // =========================================================================
   const onSubmit = async (values: FounderFormData) => {
     setIsSubmitting(true);
     setSubmitError("");
 
     try {
-      const isPF = values.tipoPessoa === "PF";
-      const cleanCpf = isPF && values.cpf ? values.cpf.replace(/\D/g, "") : null;
-      const cleanCnpj = !isPF && values.cnpj ? values.cnpj.replace(/\D/g, "") : null;
-      const cleanCpfResp = !isPF && values.cpf_responsavel ? values.cpf_responsavel.replace(/\D/g, "") : null;
-      const nomeFinal = (isPF ? values.nome : values.nome_empresa)?.trim() || "";
-      const perfilArray = isPF ? (values.perfil && values.perfil.length > 0 ? values.perfil : ["morador"]) : ["associacao"];
-      const userRole = isPF ? (values.perfil?.[0] || "morador") : "associacao";
+      const isPFMode = values.tipoPessoa === "PF";
+      const cleanCpf = isPFMode && values.cpf ? values.cpf.replace(/\D/g, "") : null;
+      const cleanCnpj = !isPFMode && values.cnpj ? values.cnpj.replace(/\D/g, "") : null;
+      const cleanCpfResp = !isPFMode && values.cpf_responsavel ? values.cpf_responsavel.replace(/\D/g, "") : null;
+      const nomeFinal = (isPFMode ? values.nome : values.nome_empresa)?.trim() || "";
+      const perfilArray = isPFMode ? (values.perfil && values.perfil.length > 0 ? values.perfil : ["morador"]) : ["associacao"];
+      const userRole = isPFMode ? (values.perfil?.[0] || "morador") : "associacao";
 
       const regioesArr = values.regioes && values.regioes.length > 0 ? values.regioes : [];
       const regiaoStr = regioesArr.length > 0 ? regioesArr.join(", ") : null;
       const bairroTrabStr = values.bairros_atuacao && values.bairros_atuacao.length > 0 ? values.bairros_atuacao.join(", ") : null;
-      const bairrosCombined = [values.bairro_residencia, ...(values.bairros_atuacao || [])].filter(Boolean);
+      const bairroHospStr = values.bairros_hospedagem && values.bairros_hospedagem.length > 0 ? values.bairros_hospedagem.join(", ") : null;
+      const bairrosCombined = [values.bairro_residencia, ...(values.bairros_atuacao || []), ...(values.bairros_hospedagem || [])].filter(Boolean);
 
       const chavePixFinal = values.possuiContaMercadoPago ? (values.chave_pix?.trim() || null) : null;
       const tipoChavePixFinal = values.possuiContaMercadoPago ? (values.tipo_chave_pix?.trim() || null) : null;
@@ -728,12 +827,13 @@ export default function FounderForm({
             telefone: values.telefone.trim(),
             perfil: perfilArray,
             role: userRole,
-            responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+            responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
             cpf_responsavel: cleanCpfResp,
             regiao_atuacao: regiaoStr,
             regioes: regioesArr,
             bairro_residencia: values.bairro_residencia,
             bairros_atuacao: values.bairros_atuacao,
+            bairros_hospedagem: values.bairros_hospedagem,
             praias: values.praias,
             chave_pix: chavePixFinal,
             tipo_chave_pix: tipoChavePixFinal,
@@ -750,7 +850,6 @@ export default function FounderForm({
 
         if (isDuplicate) {
           if (!isUpdateMode) {
-            // Se já tem cadastro na landing page, redireciona para atualização
             const cleanTel = (values.telefone || "").replace(/\D/g, "");
             const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
             toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
@@ -760,7 +859,6 @@ export default function FounderForm({
             setIsSubmitting(false);
             return;
           } else {
-            // Em modo atualização, tenta autenticar com a senha definida
             const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
               email: values.email.trim().toLowerCase(),
               password: values.senha,
@@ -782,7 +880,7 @@ export default function FounderForm({
         authUserId = leadRecord.user_id || leadRecord.id;
       }
 
-      // Observações descritivas estruturadas
+      // Observações descritivas
       const obsParts: string[] = [];
       obsParts.push(`Tipo: ${values.tipoPessoa}`);
       if (isUpdateMode) obsParts.push(`Atualizado via Link Seguro: Sim`);
@@ -801,13 +899,16 @@ export default function FounderForm({
       if (bairroTrabStr) {
         obsParts.push(`Trabalho: ${bairroTrabStr}`);
       }
+      if (bairroHospStr) {
+        obsParts.push(`Hospedagem: ${bairroHospStr}`);
+      }
       if (values.praias && values.praias.length > 0) {
         obsParts.push(`Praias: ${values.praias.join(", ")}`);
       }
       const obsText = obsParts.join(" | ");
 
       // =====================================================================
-      // 2. MODO ATUALIZAÇÃO CADASTRAL (RPC & SYNC)
+      // MODO ATUALIZAÇÃO CADASTRAL
       // =====================================================================
       if (isUpdateMode) {
         const waitlistUpdateData: any = {
@@ -816,8 +917,8 @@ export default function FounderForm({
           nome: nomeFinal,
           cpf: cleanCpf,
           cnpj: cleanCnpj,
-          razao_social: !isPF ? values.nome_empresa?.trim() : null,
-          responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+          razao_social: !isPFMode ? values.nome_empresa?.trim() : null,
+          responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
           cpf_responsavel: cleanCpfResp,
           email: values.email.trim().toLowerCase(),
           telefone: values.telefone.trim(),
@@ -829,6 +930,8 @@ export default function FounderForm({
           bairro_moradia: values.bairro_residencia,
           bairros_atuacao: values.bairros_atuacao,
           bairro_trabalho: bairroTrabStr,
+          bairro_hospedagem: bairroHospStr,
+          bairros_hospedagem: values.bairros_hospedagem,
           bairros: bairrosCombined,
           praias: values.praias,
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
@@ -841,7 +944,6 @@ export default function FounderForm({
           updated_at: new Date().toISOString(),
         };
 
-        // Invoca a RPC concluir_atualizacao_cadastral
         try {
           const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
             p_lead_id: leadRecord?.id || null,
@@ -861,7 +963,6 @@ export default function FounderForm({
           console.warn("[FounderForm] Exceção ao persistir waitlist:", saveErr);
         }
 
-        // Sincroniza em public.usuarios de forma segura
         if (authUserId) {
           try {
             await supabase.from("usuarios").upsert({
@@ -872,7 +973,7 @@ export default function FounderForm({
               cpf: cleanCpf,
               cnpj: cleanCnpj,
               tipo_pessoa: values.tipoPessoa,
-              responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+              responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
               cpf_responsavel: cleanCpfResp,
               regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
@@ -887,7 +988,6 @@ export default function FounderForm({
           }
         }
 
-        // Assegura sessão ativa
         try {
           await supabase.auth.signInWithPassword({
             email: values.email.trim().toLowerCase(),
@@ -897,10 +997,7 @@ export default function FounderForm({
           // Sessão já pode estar ativa
         }
 
-        // Chuva de confetes
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-
-        // Toast verde de confirmação
         toast.success("Cadastro ativado com sucesso! 🎉");
 
         trackEvent("atualizacao_cadastral_success", "onboarding", {
@@ -912,14 +1009,13 @@ export default function FounderForm({
           onSuccess({ user: authData?.user, waitlistData: waitlistUpdateData });
         }
 
-        // Redireciona em 2 segundos para /sou-fundador
         setTimeout(() => {
           navigate("/sou-fundador");
         }, 2000);
 
       } else {
         // =====================================================================
-        // 3. MODO NOVO CADASTRO (LANDING PAGE)
+        // MODO NOVO CADASTRO (LANDING PAGE)
         // =====================================================================
         const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
         const ua = navigator.userAgent;
@@ -935,8 +1031,8 @@ export default function FounderForm({
           nome: nomeFinal,
           cpf: cleanCpf,
           cnpj: cleanCnpj,
-          razao_social: !isPF ? values.nome_empresa?.trim() : null,
-          responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+          razao_social: !isPFMode ? values.nome_empresa?.trim() : null,
+          responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
           cpf_responsavel: cleanCpfResp,
           email: values.email.trim().toLowerCase(),
           telefone: values.telefone.trim(),
@@ -957,6 +1053,8 @@ export default function FounderForm({
           bairro_moradia: values.bairro_residencia,
           bairros_atuacao: values.bairros_atuacao,
           bairro_trabalho: bairroTrabStr,
+          bairro_hospedagem: bairroHospStr,
+          bairros_hospedagem: values.bairros_hospedagem,
           bairros: bairrosCombined,
           praias: values.praias,
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
@@ -994,7 +1092,6 @@ export default function FounderForm({
           throw insertError;
         }
 
-        // Sincroniza em public.usuarios
         if (authUserId) {
           try {
             await supabase.from("usuarios").upsert({
@@ -1006,7 +1103,7 @@ export default function FounderForm({
               cnpj: cleanCnpj,
               status: "pendente",
               tipo_pessoa: values.tipoPessoa,
-              responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
+              responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
               cpf_responsavel: cleanCpfResp,
               regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
@@ -1042,7 +1139,7 @@ export default function FounderForm({
     }
   };
 
-  // Listas filtradas para os 3 seletores geográficos
+  // Listas filtradas para busca
   const filteredBairrosResidencia = BAIRROS_LIST.filter(b =>
     !bairroResidenciaSearch.trim() || b.toLowerCase().includes(bairroResidenciaSearch.toLowerCase().trim())
   );
@@ -1051,13 +1148,45 @@ export default function FounderForm({
     !bairrosAtuacaoSearch.trim() || b.toLowerCase().includes(bairrosAtuacaoSearch.toLowerCase().trim())
   );
 
+  const filteredBairrosHospedagem = BAIRROS_LIST.filter(b =>
+    !bairrosHospedagemSearch.trim() || b.toLowerCase().includes(bairrosHospedagemSearch.toLowerCase().trim())
+  );
+
   const filteredPraias = PRAIAS_LIST.filter(p =>
     !praiasSearch.trim() || p.toLowerCase().includes(praiasSearch.toLowerCase().trim())
   );
 
   return (
-    <div className={`w-full ${className}`}>
-      <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col gap-6 text-left">
+    <div className={`w-full max-w-4xl mx-auto bg-slate-950 text-white rounded-3xl border border-emerald-500/20 shadow-2xl shadow-emerald-950/40 relative flex flex-col ${className}`}>
+      {/* ========================================================================= */}
+      {/* 2. HEADER FIXO (STICKY TOP) */}
+      {/* ========================================================================= */}
+      <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md px-5 sm:px-8 py-3.5 border-b border-emerald-500/20 flex items-center justify-between rounded-t-3xl">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#00FF66] animate-pulse shadow-[0_0_10px_#00FF66]" />
+          <span className="font-display font-black text-xs sm:text-sm tracking-wider uppercase text-white">
+            UBT <span className="text-[#00FF66]">FUNDADOR</span>
+          </span>
+          <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold tracking-wider uppercase">
+            {isUpdateMode ? "Etapa Final" : "Inscrição Pioneira"}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleClose}
+          className="w-9 h-9 rounded-full bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-[#00FF66]/50 flex items-center justify-center text-white/70 hover:text-[#00FF66] transition-all cursor-pointer group shadow-sm active:scale-95"
+          aria-label="Fechar"
+          title="Fechar"
+        >
+          <X className="w-4 h-4 transition-transform group-hover:rotate-90 duration-200" />
+        </button>
+      </header>
+
+      {/* ========================================================================= */}
+      {/* CORPO DO FORMULÁRIO */}
+      {/* ========================================================================= */}
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col gap-6 text-left p-5 sm:p-8">
         {submitError && (
           <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs sm:text-sm text-red-400 font-sans leading-relaxed text-center animate-in fade-in">
             {submitError}
@@ -1065,19 +1194,19 @@ export default function FounderForm({
         )}
 
         {/* ========================================================================= */}
-        {/* SELETOR PRINCIPAL: PESSOA FÍSICA (PF) VS EMPRESA / ASSOCIAÇÃO (PJ) */}
+        {/* SELETOR: PESSOA FÍSICA (PF) VS EMPRESA / ASSOCIAÇÃO (PJ) */}
         {/* ========================================================================= */}
         <div className="flex flex-col gap-2">
           <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
             Tipo de Cadastro <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-white/5 border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10">
             <button
               type="button"
               onClick={() => setValue("tipoPessoa", "PF", { shouldValidate: true })}
               className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PF"
-                  ? "bg-green text-navy shadow-lg shadow-green/20"
+                  ? "bg-[#00FF66] text-slate-950 shadow-[0_0_15px_rgba(0,255,102,0.35)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -1090,7 +1219,7 @@ export default function FounderForm({
               onClick={() => setValue("tipoPessoa", "PJ", { shouldValidate: true })}
               className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PJ"
-                  ? "bg-green text-navy shadow-lg shadow-green/20"
+                  ? "bg-[#00FF66] text-slate-950 shadow-[0_0_15px_rgba(0,255,102,0.35)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -1115,8 +1244,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Seu nome completo"
                   {...register("nome")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.nome && (
@@ -1140,8 +1269,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={14}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cpf && (
@@ -1165,10 +1294,10 @@ export default function FounderForm({
                       key={item.id}
                       type="button"
                       onClick={() => togglePerfil(item.id)}
-                      className={`p-3 sm:p-3.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                      className={`p-3 sm:p-3.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer select-none active:scale-98 ${
                         isSelected
-                          ? "bg-green/10 border-green text-green shadow-sm"
-                          : "bg-white/5 border-white/10 text-white/70 hover:border-white/20 hover:text-white"
+                          ? "bg-emerald-500/15 border-[#00FF66] text-[#00FF66] shadow-[0_0_12px_rgba(0,255,102,0.2)]"
+                          : "bg-slate-900/80 border-white/10 text-white/70 hover:border-white/20 hover:text-white"
                       }`}
                     >
                       <span className="text-xl shrink-0">{item.icon}</span>
@@ -1201,8 +1330,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Ex: Associação dos Quiosques de Ubatuba"
                   {...register("nome_empresa")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.nome_empresa ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.nome_empresa ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.nome_empresa && (
@@ -1226,8 +1355,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={18}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.cnpj ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.cnpj ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cnpj && (
@@ -1248,8 +1377,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Nome completo do responsável"
                   {...register("responsavel_legal")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.responsavel_legal && (
@@ -1273,8 +1402,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={14}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.cpf_responsavel ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                    errors.cpf_responsavel ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cpf_responsavel && (
@@ -1288,7 +1417,7 @@ export default function FounderForm({
         )}
 
         {/* ========================================================================= */}
-        {/* CAMPOS COMUNS: WHATSAPP E E-MAIL */}
+        {/* CONTATO: WHATSAPP E E-MAIL */}
         {/* ========================================================================= */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
@@ -1305,8 +1434,8 @@ export default function FounderForm({
                 }
               })}
               maxLength={15}
-              className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+              className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
               } outline-none text-white text-sm sm:text-base font-mono transition-all`}
             />
             {errors.telefone && (
@@ -1325,8 +1454,8 @@ export default function FounderForm({
               type="email"
               placeholder="seu@email.com"
               {...register("email")}
-              className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+              className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
               } outline-none text-white text-sm sm:text-base transition-all`}
             />
             {errors.email && (
@@ -1338,268 +1467,352 @@ export default function FounderForm({
         </div>
 
         {/* ========================================================================= */}
-        {/* 1. ESTRUTURAÇÃO DOS CAMPOS GEOGRÁFICOS (ISOLADOS E MODULARES) */}
+        {/* 1. SEÇÃO GEOGRÁFICA CONDICIONAL POR PERFIL (UNIÃO LÓGICA SEM DUPLICAÇÃO) */}
         {/* ========================================================================= */}
-        <div className="p-5 sm:p-7 rounded-3xl bg-[#0B1329]/90 border border-white/10 shadow-xl flex flex-col gap-6">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-white/10">
-            <div className="w-8 h-8 rounded-xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
-              <MapPin className="w-4 h-4 text-green" />
+        {(showRegioes || showBairroResidencia || showBairrosTrabalho || showBairrosHospedagem || showPraias) && (
+          <div className="p-5 sm:p-7 rounded-3xl bg-slate-900/60 border border-emerald-500/20 shadow-2xl flex flex-col gap-6 relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-emerald-500/15">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
+                <Compass className="w-4 h-4 text-[#00FF66]" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-sm sm:text-base text-white tracking-wide">
+                  Localização e Regiões de Atuação
+                </h4>
+                <p className="text-[11px] text-white/50 font-sans">
+                  Campos configurados estritamente conforme o seu perfil em Ubatuba.
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-display font-extrabold text-sm sm:text-base text-white tracking-wide">
-                Localização e Atuação em Ubatuba
-              </h4>
-              <p className="text-[11px] text-white/50 font-sans">
-                Campos organizados de forma independente para residência, trabalho e praias.
-              </p>
-            </div>
-          </div>
 
-          {/* 1.1 ZONA / REGIÃO DE ATUAÇÃO (MÚLTIPLA SELEÇÃO) */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
-                Zona / Região de Atuação
-              </label>
-              <span className="text-[11px] font-mono text-green">
-                {regioes.length === 0 ? "Selecione as zonas" : `${regioes.length} selecionada(s)`}
-              </span>
-            </div>
-            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
-              Marque uma ou mais regiões de Ubatuba onde você reside ou pretende atuar.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {REGIOES_UBATUBA.map((reg) => {
-                const isSelected = regioes.includes(reg);
-                return (
-                  <button
-                    key={`zona-${reg}`}
-                    type="button"
-                    onClick={() => toggleRegiao(reg)}
-                    className={`py-3 px-3.5 rounded-xl border font-display font-bold text-xs uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-98 ${
-                      isSelected
-                        ? "bg-green text-navy border-green shadow-lg shadow-green/20"
-                        : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span>Região {reg}</span>
-                    <div
-                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-navy text-green" : "border border-white/20 bg-white/5"
-                      }`}
-                    >
-                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+            {/* CONDICIONAL A: ZONA / REGIÃO DE ATUAÇÃO (SUL, CENTRO, NORTE, OESTE) */}
+            {showRegioes && (
+              <div className="flex flex-col gap-2.5 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono text-white/80 uppercase tracking-widest pl-1 font-semibold">
+                    Zona / Região de Atuação <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-[#00FF66]">
+                    {regioes.length === 0 ? "Selecione as zonas" : `${regioes.length} selecionada(s)`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+                  Marque uma ou mais regiões de Ubatuba onde você pretende atender ou circular.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {REGIOES_UBATUBA.map((reg) => {
+                    const isSelected = regioes.includes(reg);
+                    return (
+                      <button
+                        key={`zona-${reg}`}
+                        type="button"
+                        onClick={() => toggleRegiao(reg)}
+                        className={`py-3.5 px-3.5 rounded-xl border font-display font-bold text-xs uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-98 ${
+                          isSelected
+                            ? "bg-[#00FF66] text-slate-950 border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                            : "bg-slate-900/80 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <span>Região {reg}</span>
+                        <div
+                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                            isSelected ? "bg-slate-950 text-[#00FF66]" : "border border-white/20 bg-white/5"
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.regioes && (
+                  <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                    <span>⚠</span> {errors.regioes.message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* CONDICIONAL B: BAIRRO DE RESIDÊNCIA (SELECT ÚNICO - OBRIGATÓRIO) */}
+            {showBairroResidencia && (
+              <div className="flex flex-col gap-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="bairro_residencia_button" className="block text-xs font-mono text-white/80 uppercase tracking-widest pl-1 font-semibold">
+                    {isPJ ? "Bairro da Sede da Empresa" : "Bairro de Residência"} <span className="text-red-500">*</span>
+                  </label>
+                  {bairroResidencia && (
+                    <span className="text-[11px] font-mono text-[#00FF66] flex items-center gap-1">
+                      <Check className="w-3 h-3 text-[#00FF66]" /> Bairro Selecionado
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+                  {isPJ ? "Selecione o bairro oficial onde fica a sede ou base." : "Selecione apenas 1 bairro oficial onde você mora em Ubatuba."}
+                </p>
+
+                <button
+                  id="bairro_residencia_button"
+                  type="button"
+                  onClick={() => setIsBairroResidenciaModalOpen(true)}
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
+                    errors.bairro_residencia
+                      ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20"
+                      : "border-white/10 hover:border-[#00FF66]/50 focus:border-[#00FF66]"
+                  } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      bairroResidencia ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                    }`}>
+                      <MapPin className="w-4 h-4" />
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-            {errors.regioes && (
-              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
-                <span>⚠</span> {errors.regioes.message}
-              </p>
-            )}
-          </div>
-
-          {/* 1.2 BAIRRO DE RESIDÊNCIA (DROPLIST / SELECT ÚNICO - OBRIGATÓRIO) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="bairro_residencia_button" className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
-                Bairro de Residência <span className="text-red-500">*</span>
-              </label>
-              {bairroResidencia && (
-                <span className="text-[11px] font-mono text-green flex items-center gap-1">
-                  <Check className="w-3 h-3 text-green" /> Bairro Selecionado
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
-              Selecione apenas 1 bairro oficial de Ubatuba onde você mora atualmente.
-            </p>
-
-            <button
-              id="bairro_residencia_button"
-              type="button"
-              onClick={() => setIsBairroResidenciaModalOpen(true)}
-              className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border ${
-                errors.bairro_residencia
-                  ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20"
-                  : "border-white/10 hover:border-green/50 focus:border-green"
-              } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
-            >
-              <div className="flex items-center gap-3 truncate">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  bairroResidencia ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
-                }`}>
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <span className={`text-sm sm:text-base font-sans truncate ${
-                  bairroResidencia ? "text-white font-semibold" : "text-white/40"
-                }`}>
-                  {bairroResidencia || "Selecione seu bairro de moradia (ex: Centro, Itaguá, Perequê-Açu)..."}
-                </span>
-              </div>
-              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
-                <span>{bairroResidencia ? "Alterar" : "Escolher"}</span>
-                <ChevronDown className="w-4 h-4" />
-              </span>
-            </button>
-            {errors.bairro_residencia && (
-              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
-                <span>⚠</span> {errors.bairro_residencia.message}
-              </p>
-            )}
-          </div>
-
-          {/* 1.3 BAIRROS DE TRABALHO / FREQUÊNCIA (DROPLIST / MODAL MÚLTIPLA ESCOLHA - OPCIONAL) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
-                Bairros de Trabalho / Frequência <span className="text-white/40 font-normal lowercase">(opcional)</span>
-              </label>
-              {bairrosAtuacao.length > 0 && (
-                <span className="text-[11px] font-mono text-green">
-                  {bairrosAtuacao.length} bairro(s)
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
-              Bairros onde você costuma trabalhar, prestar serviços ou frequentar.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setIsBairrosAtuacaoModalOpen(true)}
-              className="w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border border-white/10 hover:border-green/50 text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98"
-            >
-              <div className="flex items-center gap-3 truncate">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  bairrosAtuacao.length > 0 ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
-                }`}>
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <span className={`text-sm sm:text-base font-sans truncate ${
-                  bairrosAtuacao.length > 0 ? "text-white font-semibold" : "text-white/40"
-                }`}>
-                  {bairrosAtuacao.length === 0
-                    ? "Selecionar bairros de trabalho (opcional)..."
-                    : `${bairrosAtuacao.length} bairro(s) de trabalho selecionado(s)`}
-                </span>
-              </div>
-              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
-                <span>{bairrosAtuacao.length > 0 ? "Gerenciar" : "Adicionar"}</span>
-                <ChevronDown className="w-4 h-4" />
-              </span>
-            </button>
-
-            {/* Chips dos Bairros de Trabalho Selecionados */}
-            {bairrosAtuacao.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {bairrosAtuacao.map((b) => (
-                  <span
-                    key={`chip-trab-${b}`}
-                    className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/15 text-[11px] text-white font-sans flex items-center gap-1.5"
-                  >
-                    <span>{b}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleBairroAtuacao(b);
-                      }}
-                      className="hover:text-red-400 p-0.5"
-                      title={`Remover ${b}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                    <span className={`text-sm sm:text-base font-sans truncate ${
+                      bairroResidencia ? "text-white font-semibold" : "text-white/40"
+                    }`}>
+                      {bairroResidencia || "Selecione seu bairro (Centro, Itaguá, Perequê-Açu, Estufa I...)"}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#00FF66] font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                    <span>{bairroResidencia ? "Alterar" : "Escolher"}</span>
+                    <ChevronDown className="w-4 h-4" />
                   </span>
-                ))}
+                </button>
+                {errors.bairro_residencia && (
+                  <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                    <span>⚠</span> {errors.bairro_residencia.message}
+                  </p>
+                )}
               </div>
             )}
-          </div>
 
-          {/* 1.4 PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO - INDEPENDENTE) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
-                Praias que Costuma Frequentar / Atuar
-                {perfil.includes("ambulante") && <span className="text-red-500"> *</span>}
-              </label>
-              {praias.length > 0 && (
-                <span className="text-[11px] font-mono text-green">
-                  {praias.length} praia(s)
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
-              Lista oficial das praias de Ubatuba onde você atua, trabalha ou frequenta.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setIsPraiasModalOpen(true)}
-              className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border ${
-                errors.praias ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-green/50"
-              } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
-            >
-              <div className="flex items-center gap-3 truncate">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  praias.length > 0 ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
-                }`}>
-                  <span className="text-sm">🏖️</span>
+            {/* CONDICIONAL C: BAIRROS DE TRABALHO (MÚLTIPLA ESCOLHA - MORADOR OPCIONAL) */}
+            {showBairrosTrabalho && (
+              <div className="flex flex-col gap-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono text-white/80 uppercase tracking-widest pl-1 font-semibold">
+                    Bairros de Trabalho <span className="text-white/40 font-normal lowercase">(opcional)</span>
+                  </label>
+                  {bairrosAtuacao.length > 0 && (
+                    <span className="text-[11px] font-mono text-[#00FF66]">
+                      {bairrosAtuacao.length} bairro(s)
+                    </span>
+                  )}
                 </div>
-                <span className={`text-sm sm:text-base font-sans truncate ${
-                  praias.length > 0 ? "text-white font-semibold" : "text-white/40"
-                }`}>
-                  {praias.length === 0
-                    ? "Selecionar praias de Ubatuba..."
-                    : `${praias.length} praia(s) selecionada(s)`}
-                </span>
-              </div>
-              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
-                <span>{praias.length > 0 ? "Gerenciar" : "Selecionar"}</span>
-                <ChevronDown className="w-4 h-4" />
-              </span>
-            </button>
+                <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+                  Bairros adicionais onde você costuma trabalhar, prestar serviços ou circular.
+                </p>
 
-            {/* Chips das Praias Selecionadas */}
-            {praias.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {praias.map((p) => (
-                  <span
-                    key={`chip-praia-${p}`}
-                    className="px-2.5 py-1 rounded-lg bg-green/10 border border-green/30 text-[11px] text-green font-sans flex items-center gap-1.5"
-                  >
-                    <span>{p}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePraia(p);
-                      }}
-                      className="hover:text-red-400 p-0.5"
-                      title={`Remover ${p}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBairrosAtuacaoModalOpen(true)}
+                  className="w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border border-white/10 hover:border-[#00FF66]/50 text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98"
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      bairrosAtuacao.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                    }`}>
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <span className={`text-sm sm:text-base font-sans truncate ${
+                      bairrosAtuacao.length > 0 ? "text-white font-semibold" : "text-white/40"
+                    }`}>
+                      {bairrosAtuacao.length === 0
+                        ? "Selecionar bairros de trabalho..."
+                        : `${bairrosAtuacao.length} bairro(s) de trabalho selecionado(s)`}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#00FF66] font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                    <span>{bairrosAtuacao.length > 0 ? "Gerenciar" : "Adicionar"}</span>
+                    <ChevronDown className="w-4 h-4" />
                   </span>
-                ))}
+                </button>
+
+                {bairrosAtuacao.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {bairrosAtuacao.map((b) => (
+                      <span
+                        key={`chip-trab-${b}`}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/30 text-[11px] text-white font-sans flex items-center gap-1.5"
+                      >
+                        <span>{b}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBairroAtuacao(b);
+                          }}
+                          className="hover:text-red-400 p-0.5"
+                          title={`Remover ${b}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-            {errors.praias && (
-              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
-                <span>⚠</span> {errors.praias.message}
-              </p>
+
+            {/* CONDICIONAL D: BAIRROS DE HOSPEDAGEM (MÚLTIPLA ESCOLHA - TURISTA) */}
+            {showBairrosHospedagem && (
+              <div className="flex flex-col gap-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono text-white/80 uppercase tracking-widest pl-1 font-semibold">
+                    Bairros que Costuma se Hospedar
+                    {!hasMorador && <span className="text-red-500"> *</span>}
+                  </label>
+                  {bairrosHospedagem.length > 0 && (
+                    <span className="text-[11px] font-mono text-[#00FF66]">
+                      {bairrosHospedagem.length} bairro(s)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+                  Bairros onde você costuma alugar casa, pousada ou se hospedar em viagens a Ubatuba.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setIsBairrosHospedagemModalOpen(true)}
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
+                    errors.bairros_hospedagem ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-[#00FF66]/50"
+                  } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      bairrosHospedagem.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                    }`}>
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <span className={`text-sm sm:text-base font-sans truncate ${
+                      bairrosHospedagem.length > 0 ? "text-white font-semibold" : "text-white/40"
+                    }`}>
+                      {bairrosHospedagem.length === 0
+                        ? "Selecionar bairros de hospedagem..."
+                        : `${bairrosHospedagem.length} bairro(s) de hospedagem selecionado(s)`}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#00FF66] font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                    <span>{bairrosHospedagem.length > 0 ? "Gerenciar" : "Adicionar"}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </span>
+                </button>
+
+                {bairrosHospedagem.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {bairrosHospedagem.map((b) => (
+                      <span
+                        key={`chip-hosp-${b}`}
+                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/30 text-[11px] text-white font-sans flex items-center gap-1.5"
+                      >
+                        <span>{b}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBairroHospedagem(b);
+                          }}
+                          className="hover:text-red-400 p-0.5"
+                          title={`Remover ${b}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {errors.bairros_hospedagem && (
+                  <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                    <span>⚠</span> {errors.bairros_hospedagem.message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* CONDICIONAL E: PRAIAS QUE COSTUMA FREQUENTAR / ATUAR */}
+            {showPraias && (
+              <div className="flex flex-col gap-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono text-white/80 uppercase tracking-widest pl-1 font-semibold">
+                    {praiasLabel}
+                    {hasAmbulante && <span className="text-red-500"> *</span>}
+                  </label>
+                  {praias.length > 0 && (
+                    <span className="text-[11px] font-mono text-[#00FF66]">
+                      {praias.length} praia(s)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+                  Lista oficial das praias de Ubatuba onde você atua ou costuma frequentar.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPraiasModalOpen(true)}
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
+                    errors.praias ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-[#00FF66]/50"
+                  } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      praias.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                    }`}>
+                      <span className="text-sm">🏖️</span>
+                    </div>
+                    <span className={`text-sm sm:text-base font-sans truncate ${
+                      praias.length > 0 ? "text-white font-semibold" : "text-white/40"
+                    }`}>
+                      {praias.length === 0
+                        ? "Selecionar praias de Ubatuba..."
+                        : `${praias.length} praia(s) selecionada(s)`}
+                    </span>
+                  </div>
+                  <span className="text-xs text-[#00FF66] font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                    <span>{praias.length > 0 ? "Gerenciar" : "Selecionar"}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </span>
+                </button>
+
+                {praias.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {praias.map((p) => (
+                      <span
+                        key={`chip-praia-${p}`}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-[#00FF66]/30 text-[11px] text-[#00FF66] font-sans flex items-center gap-1.5"
+                      >
+                        <span>{p}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePraia(p);
+                          }}
+                          className="hover:text-red-400 p-0.5"
+                          title={`Remover ${p}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {errors.praias && (
+                  <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                    <span>⚠</span> {errors.praias.message}
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* ========================================================================= */}
         {/* SEÇÃO MERCADO PAGO E CHAVE PIX */}
         {/* ========================================================================= */}
-        <div className="p-5 sm:p-7 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-4">
+        <div className="p-5 sm:p-7 rounded-3xl bg-slate-900/60 border border-emerald-500/20 shadow-xl flex flex-col gap-4 backdrop-blur-md">
           <div>
-            <label className="block text-xs font-mono text-white/70 uppercase tracking-widest mb-1 pl-1 font-semibold">
+            <label className="block text-xs font-mono text-white/80 uppercase tracking-widest mb-1 pl-1 font-semibold">
               Você possui conta no Mercado Pago? <span className="text-red-500">*</span>
             </label>
             <p className="text-[11px] text-white/50 font-sans pl-1 mb-3">
@@ -1612,11 +1825,11 @@ export default function FounderForm({
                 onClick={() => handleMercadoPagoToggle(true)}
                 className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   possuiContaMercadoPago === true
-                    ? "bg-green text-navy border-green shadow-md shadow-green/20"
-                    : "bg-white/5 border border-white/10 text-white/60 hover:text-white"
+                    ? "bg-[#00FF66] text-slate-950 border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                    : "bg-slate-900 border border-white/10 text-white/60 hover:text-white"
                 }`}
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-4 h-4 stroke-[3]" />
                 <span>Sim, possuo</span>
               </button>
 
@@ -1626,7 +1839,7 @@ export default function FounderForm({
                 className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   possuiContaMercadoPago === false
                     ? "bg-white/20 text-white border border-white/30"
-                    : "bg-white/5 border border-white/10 text-white/60 hover:text-white"
+                    : "bg-slate-900 border border-white/10 text-white/60 hover:text-white"
                 }`}
               >
                 <span>Não possuo ainda</span>
@@ -1651,14 +1864,14 @@ export default function FounderForm({
                     id="form-select-tipo_pix"
                     value={tipoChavePix}
                     onChange={handleTipoChavePixChange}
-                    className="w-full px-4 py-3.5 rounded-xl bg-black/60 border border-white/10 focus:border-green text-white text-xs sm:text-sm font-mono outline-none appearance-none cursor-pointer"
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-white/10 focus:border-[#00FF66] text-white text-xs sm:text-sm font-mono outline-none appearance-none cursor-pointer"
                   >
-                    <option value="" disabled className="bg-navy text-white/40">Selecione o tipo de chave...</option>
-                    <option value="cpf" className="bg-navy text-white">CPF</option>
-                    <option value="cnpj" className="bg-navy text-white">CNPJ</option>
-                    <option value="email" className="bg-navy text-white">E-mail</option>
-                    <option value="telefone" className="bg-navy text-white">Telefone / Celular</option>
-                    <option value="aleatoria" className="bg-navy text-white">Chave Aleatória (EVP)</option>
+                    <option value="" disabled className="bg-slate-950 text-white/40">Selecione o tipo de chave...</option>
+                    <option value="cpf" className="bg-slate-950 text-white">CPF</option>
+                    <option value="cnpj" className="bg-slate-950 text-white">CNPJ</option>
+                    <option value="email" className="bg-slate-950 text-white">E-mail</option>
+                    <option value="telefone" className="bg-slate-950 text-white">Telefone / Celular</option>
+                    <option value="aleatoria" className="bg-slate-950 text-white">Chave Aleatória (EVP)</option>
                   </select>
                   <ChevronDown className="w-4 h-4 text-white/40 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -1678,7 +1891,7 @@ export default function FounderForm({
                     <button
                       type="button"
                       onClick={() => applySmartPixAutofill(tipoChavePix)}
-                      className="text-[10px] text-green hover:underline font-mono uppercase"
+                      className="text-[10px] text-[#00FF66] hover:underline font-mono uppercase"
                     >
                       Preencher Auto
                     </button>
@@ -1694,8 +1907,8 @@ export default function FounderForm({
                       setValue("chave_pix", applyPixMask(e.target.value, tipoChavePix), { shouldValidate: true });
                     }
                   })}
-                  className={`w-full px-4 py-3.5 rounded-xl bg-black/60 border ${
-                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  className={`w-full px-4 py-3.5 rounded-xl bg-slate-950 border ${
+                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                   } text-white text-xs sm:text-sm font-mono outline-none transition-all`}
                 />
                 {errors.chave_pix && (
@@ -1722,8 +1935,8 @@ export default function FounderForm({
                 type={showSenha ? "text" : "password"}
                 placeholder="Mínimo 6 caracteres"
                 {...register("senha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                 } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
@@ -1752,8 +1965,8 @@ export default function FounderForm({
                 type={showConfirmarSenha ? "text" : "password"}
                 placeholder="Repita sua senha"
                 {...register("confirmarSenha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
                 } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
@@ -1779,7 +1992,7 @@ export default function FounderForm({
             <input
               type="checkbox"
               {...register("acceptTerms")}
-              className="mt-1 h-5 w-5 accent-green rounded cursor-pointer shrink-0"
+              className="mt-1 h-5 w-5 accent-[#00FF66] rounded cursor-pointer shrink-0"
             />
             <span className="text-xs text-white/60 font-sans leading-relaxed">
               Aceito os Termos de Uso e autorizo a coleta dos meus dados para validação pioneira da UBT em Ubatuba, conforme a LGPD. <span className="text-red-500">*</span>
@@ -1791,20 +2004,21 @@ export default function FounderForm({
             </p>
           )}
         </div>
+      </form>
 
-        {/* Botão de Envio com Rótulo Configurável */}
+      {/* ========================================================================= */}
+      {/* 2. FOOTER FIXO DE AÇÃO (STICKY BOTTOM - NEON GAMER UBT) */}
+      {/* ========================================================================= */}
+      <footer className="sticky bottom-0 z-40 p-4 sm:p-5 bg-slate-950/95 border-t border-emerald-500/20 backdrop-blur-md rounded-b-3xl flex flex-col gap-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
         <button
-          type="submit"
+          type="button"
+          onClick={handleSubmit(onSubmit, onInvalid)}
           disabled={isSubmitting}
-          className={`w-full py-5 rounded-2xl font-display font-extrabold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
-            isSubmitting
-              ? "bg-white/10 text-white/30 cursor-not-allowed border border-white/5"
-              : "bg-green hover:bg-green-dark active:scale-[0.98] text-navy shadow-lg shadow-green/25 cursor-pointer"
-          }`}
+          className={`w-full py-4 sm:py-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-display font-extrabold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-3 transition-all cursor-pointer shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:shadow-[0_0_30px_rgba(0,255,102,0.6)] disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin text-navy" />
+              <Loader2 className="w-5 h-5 animate-spin text-slate-950" />
               <span>Processando Cadastro...</span>
             </>
           ) : (
@@ -1815,30 +2029,28 @@ export default function FounderForm({
           )}
         </button>
 
-        {/* Botão Secundário: Já sou Fundador */}
         {!hideAlreadyRegisteredButton && (
           <button
             type="button"
             onClick={() => navigate("/sou-fundador")}
-            className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
+            className="w-full py-2.5 text-center text-xs font-mono text-white/60 hover:text-[#00FF66] transition-colors cursor-pointer"
           >
-            <Users className="w-3.5 h-3.5 text-green" />
-            <span>Já realizou sua inscrição?</span>
-            <span className="text-green font-bold underline underline-offset-4">Já sou Fundador</span>
+            <span>Já realizou sua inscrição? </span>
+            <span className="text-[#00FF66] font-bold underline underline-offset-4">Já sou Fundador</span>
           </button>
         )}
-      </form>
+      </footer>
 
       {/* ========================================================================= */}
       {/* MODAL 1: BAIRRO DE RESIDÊNCIA (SELECT ÚNICO COM BUSCA) */}
       {/* ========================================================================= */}
       {isBairroResidenciaModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
+            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <MapPin className="w-5 h-5 text-green" />
+                <MapPin className="w-5 h-5 text-[#00FF66]" />
                 <h3 className="font-display font-extrabold text-base text-white">
                   Selecione seu Bairro de Residência
                 </h3>
@@ -1849,14 +2061,14 @@ export default function FounderForm({
                   setIsBairroResidenciaModalOpen(false);
                   setBairroResidenciaSearch("");
                 }}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-[#00FF66] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
+            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -1864,7 +2076,7 @@ export default function FounderForm({
                   placeholder="Buscar bairro oficial de Ubatuba..."
                   value={bairroResidenciaSearch}
                   onChange={(e) => setBairroResidenciaSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
@@ -1880,13 +2092,13 @@ export default function FounderForm({
                     type="button"
                     onClick={() => selectBairroResidencia(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors text-left cursor-pointer ${
-                      isSelected ? "bg-green/15 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
                     }`}
                   >
                     <span className="text-sm font-sans font-medium">{b}</span>
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-green text-navy" : "border border-white/20 bg-white/5"
+                        isSelected ? "bg-[#00FF66] text-slate-950" : "border border-white/20 bg-white/5"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -1902,7 +2114,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer */}
-            <div className="p-3 border-t border-white/10 bg-[#0E1733] flex justify-end shrink-0">
+            <div className="p-3 border-t border-emerald-500/15 bg-slate-900/90 flex justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1922,14 +2134,14 @@ export default function FounderForm({
       {/* MODAL 2: BAIRROS DE TRABALHO / ATUAÇÃO (MÚLTIPLA SELEÇÃO) */}
       {/* ========================================================================= */}
       {isBairrosAtuacaoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
+            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
-                <Building2 className="w-5 h-5 text-green" />
+                <Building2 className="w-5 h-5 text-[#00FF66]" />
                 <h3 className="font-display font-extrabold text-base text-white">
-                  Bairros de Trabalho / Frequência
+                  Bairros de Trabalho
                 </h3>
               </div>
               <button
@@ -1938,14 +2150,14 @@ export default function FounderForm({
                   setIsBairrosAtuacaoModalOpen(false);
                   setBairrosAtuacaoSearch("");
                 }}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-[#00FF66] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
+            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -1953,7 +2165,7 @@ export default function FounderForm({
                   placeholder="Buscar bairro de trabalho..."
                   value={bairrosAtuacaoSearch}
                   onChange={(e) => setBairrosAtuacaoSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
@@ -1968,13 +2180,13 @@ export default function FounderForm({
                     key={`b-trab-${b}`}
                     onClick={() => toggleBairroAtuacao(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
                     }`}
                   >
                     <span className="text-sm font-sans font-medium">{b}</span>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-green text-navy border-green" : "border border-white/20 bg-black/40"
+                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -1990,7 +2202,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -2008,7 +2220,7 @@ export default function FounderForm({
                   setIsBairrosAtuacaoModalOpen(false);
                   setBairrosAtuacaoSearch("");
                 }}
-                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
               >
                 Confirmar ({bairrosAtuacao.length})
               </button>
@@ -2018,13 +2230,111 @@ export default function FounderForm({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO) */}
+      {/* MODAL 3: BAIRROS DE HOSPEDAGEM (MÚLTIPLA SELEÇÃO - TURISTA) */}
+      {/* ========================================================================= */}
+      {isBairrosHospedagemModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
+              <div className="flex items-center gap-2.5">
+                <MapPin className="w-5 h-5 text-[#00FF66]" />
+                <h3 className="font-display font-extrabold text-base text-white">
+                  Bairros de Hospedagem
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBairrosHospedagemModalOpen(false);
+                  setBairrosHospedagemSearch("");
+                }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-[#00FF66] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Busca */}
+            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
+              <div className="relative">
+                <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar bairro de hospedagem..."
+                  value={bairrosHospedagemSearch}
+                  onChange={(e) => setBairrosHospedagemSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Lista com Checkboxes */}
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+              {filteredBairrosHospedagem.map((b) => {
+                const isSelected = bairrosHospedagem.includes(b);
+                return (
+                  <div
+                    key={`b-hosp-${b}`}
+                    onClick={() => toggleBairroHospedagem(b)}
+                    className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
+                    }`}
+                  >
+                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
+                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredBairrosHospedagem.length === 0 && (
+                <div className="py-12 text-center text-white/40 text-xs font-mono">
+                  Nenhum bairro localizado com &quot;{bairrosHospedagemSearch}&quot;.
+                </div>
+              )}
+            </div>
+
+            {/* Footer com Ações */}
+            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setValue("bairros_hospedagem", [], { shouldValidate: true });
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Limpar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBairrosHospedagemModalOpen(false);
+                  setBairrosHospedagemSearch("");
+                }}
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+              >
+                Confirmar ({bairrosHospedagem.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO) */}
       {/* ========================================================================= */}
       {isPraiasModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
+            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
               <div className="flex items-center gap-2.5">
                 <span className="text-xl">🏖️</span>
                 <h3 className="font-display font-extrabold text-base text-white">
@@ -2037,14 +2347,14 @@ export default function FounderForm({
                   setIsPraiasModalOpen(false);
                   setPraiasSearch("");
                 }}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-[#00FF66] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
+            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2052,7 +2362,7 @@ export default function FounderForm({
                   placeholder="Buscar praia (ex: Praia Grande, Itamambuca)..."
                   value={praiasSearch}
                   onChange={(e) => setPraiasSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
@@ -2067,13 +2377,13 @@ export default function FounderForm({
                     key={`p-${p}`}
                     onClick={() => togglePraia(p)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
                     }`}
                   >
                     <span className="text-sm font-sans font-medium">{p}</span>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-green text-navy border-green" : "border border-white/20 bg-black/40"
+                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2089,7 +2399,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setValue("praias", [], { shouldValidate: true })}
@@ -2104,7 +2414,7 @@ export default function FounderForm({
                   setIsPraiasModalOpen(false);
                   setPraiasSearch("");
                 }}
-                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
               >
                 Confirmar ({praias.length})
               </button>

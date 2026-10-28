@@ -112,6 +112,11 @@ export default function AtualizacaoCadastral() {
         ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
         : (Array.isArray(leadData.bairros_atuacao) ? leadData.bairros_atuacao : []);
 
+      // Bairros hospedagem salvos
+      const bHospList = leadData.bairro_hospedagem
+        ? leadData.bairro_hospedagem.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : (Array.isArray(leadData.bairros_hospedagem) ? leadData.bairros_hospedagem : []);
+
       // Praias salvas
       const praiasList = Array.isArray(leadData.praias_frequenta)
         ? leadData.praias_frequenta
@@ -138,9 +143,11 @@ export default function AtualizacaoCadastral() {
         regioes: regioesList,
         bairro_residencia: bResidenciaSalvo,
         bairros_atuacao: bairrosTrabList,
+        bairros_hospedagem: bHospList,
         praias: praiasList,
-        bairros: [bResidenciaSalvo, ...bairrosTrabList].filter(Boolean),
+        bairros: [bResidenciaSalvo, ...bairrosTrabList, ...bHospList].filter(Boolean),
         bairro_trabalho: bairrosTrabList,
+        bairro_hospedagem: bHospList.join(", "),
         acceptTerms: true,
       });
 
