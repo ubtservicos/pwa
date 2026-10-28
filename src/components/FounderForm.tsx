@@ -186,13 +186,66 @@ export const PERFIS_PF_LIST = [
   { id: "diarista", label: "Diarista / Faxina", icon: "🧹" },
 ];
 
+export function normalizePerfilItem(raw: string): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  const clean = raw.trim().toLowerCase();
+
+  if (clean.includes("morador") || clean.includes("consumidor")) return "morador";
+  if (clean.includes("turista") || clean.includes("visitante") || clean.includes("hospede")) return "turista";
+  if (clean.includes("ambulante") || clean.includes("praia")) return "ambulante";
+  if (clean.includes("mototaxi") || clean.includes("moto")) return "mototaxista";
+  if (clean.includes("diarista") || clean.includes("faxina") || clean.includes("limpeza")) return "diarista";
+  if (clean.includes("associacao") || clean.includes("empresa") || clean.includes("pj")) return "associacao";
+
+  return clean || null;
+}
+
+export function normalizePerfilList(rawInput: any): string[] {
+  if (!rawInput) return [];
+
+  let items: string[] = [];
+
+  if (Array.isArray(rawInput)) {
+    items = rawInput.map(String);
+  } else if (typeof rawInput === "string") {
+    let str = rawInput.trim();
+    if (str.startsWith("{") && str.endsWith("}")) {
+      str = str.slice(1, -1);
+    }
+    if (str.startsWith("[") && str.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) {
+          items = parsed.map(String);
+        }
+      } catch {
+        // continue
+      }
+    }
+    if (items.length === 0) {
+      items = str.split(/[,;|]/).map(s => s.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+    }
+  }
+
+  const normalized = items
+    .map(normalizePerfilItem)
+    .filter((id): id is string => Boolean(id));
+
+  return Array.from(new Set(normalized));
+}
+
 export const founderFormSchema = z.object({
   tipoPessoa: z.enum(["PF", "PJ"]).default("PF"),
 
   // Campos PF
   nome: z.string().optional(),
   cpf: z.string().optional(),
-  perfil: z.array(z.string()).default([]),
+  perfil: z.preprocess((val) => {
+    if (val === undefined || val === null) return [];
+    if (Array.isArray(val)) return normalizePerfilList(val);
+    if (typeof val === "string") return normalizePerfilList(val);
+    return [];
+  }, z.array(z.string()).default([])),
 
   // Campos PJ
   nome_empresa: z.string().optional(),
@@ -257,7 +310,7 @@ export const founderFormSchema = z.object({
     if (!data.perfil || data.perfil.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos um perfil de atuação",
+        message: "Por favor, selecione pelo menos um perfil de atuação.",
         path: ["perfil"],
       });
     } else {
@@ -523,10 +576,12 @@ export default function FounderForm({
   } = useForm<FounderFormData>({
     resolver: zodResolver(founderFormSchema),
     defaultValues: {
-      tipoPessoa: "PF",
+      tipoPessoa: (defaultValues?.tipoPessoa || leadRecord?.tipo_pessoa) === "PJ" || !!leadRecord?.cnpj ? "PJ" : "PF",
       nome: "",
       cpf: "",
-      perfil: ["morador"],
+      perfil: normalizePerfilList(defaultValues?.perfil ?? leadRecord?.perfil ?? leadRecord?.perfis).length > 0
+        ? normalizePerfilList(defaultValues?.perfil ?? leadRecord?.perfil ?? leadRecord?.perfis)
+        : ((defaultValues?.tipoPessoa || leadRecord?.tipo_pessoa) === "PJ" || !!leadRecord?.cnpj ? ["associacao"] : ["morador"]),
       nome_empresa: "",
       cnpj: "",
       responsavel_legal: "",
@@ -556,7 +611,9 @@ export default function FounderForm({
   useEffect(() => {
     if ((defaultValues && Object.keys(defaultValues).length > 0) || leadRecord) {
       const isPJ = (defaultValues.tipoPessoa || leadRecord?.tipo_pessoa) === "PJ" || !!leadRecord?.cnpj;
-      const perfList = defaultValues.perfil || (Array.isArray(leadRecord?.perfil) ? leadRecord.perfil : (leadRecord?.perfil ? [leadRecord.perfil] : ["morador"]));
+      const rawPerfSource = defaultValues?.perfil ?? leadRecord?.perfil ?? leadRecord?.perfis;
+      const normalizedPerf = normalizePerfilList(rawPerfSource);
+      const perfList = normalizedPerf.length > 0 ? normalizedPerf : (isPJ ? ["associacao"] : ["morador"]);
 
       // Regiões / Zonas
       const rawRegiaoStr = leadRecord?.regiao_atuacao || "";
@@ -778,6 +835,20 @@ export default function FounderForm({
   // Feedback imediato caso o formulário possua erros (onInvalid)
   const onInvalid = (formErrors: typeof errors) => {
     console.warn("[FounderForm] Erros de validação Zod:", formErrors);
+
+    // Prioridade máxima: erro no campo perfil
+    if (formErrors.perfil) {
+      toast.error("Por favor, selecione pelo menos um perfil de atuação.");
+      const perfilEl = document.getElementById("form-section-perfil")
+        || document.getElementById("perfil")
+        || document.querySelector(`[name="perfil"]`);
+
+      if (perfilEl) {
+        perfilEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
+
     const errorKeys = Object.keys(formErrors) as (keyof FounderFormData)[];
 
     if (errorKeys.length > 0) {
@@ -786,9 +857,10 @@ export default function FounderForm({
       const msg = firstErr?.message ? String(firstErr.message) : "Preencha todos os campos obrigatórios.";
       toast.error(`Atenção: ${msg}`);
 
-      const el = document.querySelector(`[name="${firstErrKey}"]`)
-        || document.getElementById(`form-input-${firstErrKey}`)
-        || document.getElementById(firstErrKey);
+      const el = document.getElementById(`form-section-${String(firstErrKey)}`)
+        || document.getElementById(`form-input-${String(firstErrKey)}`)
+        || document.getElementById(String(firstErrKey))
+        || document.querySelector(`[name="${String(firstErrKey)}"]`);
 
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1331,7 +1403,7 @@ export default function FounderForm({
             </div>
 
             {/* Perfis de Atuação PF */}
-            <div className="flex flex-col gap-2.5">
+            <div id="form-section-perfil" className="flex flex-col gap-2.5 scroll-mt-24">
               <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
                 Como você atuará na UBT? <span className="text-red-500">*</span>
               </label>

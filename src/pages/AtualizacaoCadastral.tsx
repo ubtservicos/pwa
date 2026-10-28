@@ -12,6 +12,7 @@ import { maskPhone, maskCPF, maskCNPJ, applyPixMask } from "@/utils/masks";
 import { trackEvent } from "@/services/AnalyticsService";
 import FounderForm, {
   FounderFormData,
+  normalizePerfilList,
   BAIRROS_LIST,
   BAIRROS_COM_OUTRA_CIDADE_LIST,
   BAIRROS_RESIDENCIA_LIST,
@@ -105,9 +106,9 @@ export default function AtualizacaoCadastral() {
       setLeadRecord(leadData);
 
       const isPJ = leadData.tipo_pessoa === "PJ" || !!leadData.cnpj;
-      const perfilArr = Array.isArray(leadData.perfil)
-        ? leadData.perfil
-        : (leadData.perfil ? [leadData.perfil] : ["morador"]);
+      const rawLeadPerfil = leadData.perfil || leadData.perfis;
+      const perfilArr = normalizePerfilList(rawLeadPerfil);
+      const finalPerfil = perfilArr.length > 0 ? perfilArr : (!isPJ ? ["morador"] : ["associacao"]);
 
       // Regiões salvas
       const regioesList = leadData.regiao_atuacao
@@ -138,7 +139,7 @@ export default function AtualizacaoCadastral() {
         tipoPessoa: isPJ ? "PJ" : "PF",
         nome: leadData.nome || "",
         cpf: leadData.cpf ? maskCPF(leadData.cpf) : "",
-        perfil: perfilArr,
+        perfil: finalPerfil,
         nome_empresa: leadData.razao_social || leadData.nome || "",
         cnpj: leadData.cnpj ? maskCNPJ(leadData.cnpj) : "",
         responsavel_legal: leadData.responsavel_legal || "",
