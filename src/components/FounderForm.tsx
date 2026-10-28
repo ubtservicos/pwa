@@ -1063,33 +1063,11 @@ export default function FounderForm({
           console.warn("[FounderForm] Auth não-bloqueante:", authErr);
         }
 
-        if (authUserId) {
+        if (authUserId && targetLeadUuid) {
           try {
-            if (targetLeadUuid) {
-              await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", targetLeadUuid);
-            }
-            await supabase.from("usuarios").upsert({
-              id: authUserId,
-              nome: nomeFinal,
-              email: values.email.trim().toLowerCase(),
-              role: userRole,
-              cpf: cleanCpf,
-              cnpj: cleanCnpj,
-              tipo_pessoa: values.tipoPessoa,
-              responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
-              cpf_responsavel: cleanCpfResp,
-              regiao_atuacao: regiaoStr,
-              chave_pix: chavePixFinal,
-              tipo_chave_pix: tipoChavePixFinal,
-              bairro: bairroCanonical,
-              bairro_residencia: bairroCanonical,
-              bairro_moradia: bairroCanonical,
-              bairro_trabalho: bairroTrabStr,
-              praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
-              status: "completo",
-            } as any);
+            await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", targetLeadUuid);
           } catch (syncErr) {
-            console.warn("[FounderForm] Sincronização usuarios:", syncErr);
+            console.warn("[FounderForm] Sincronização user_id na waitlist:", syncErr);
           }
         }
 
@@ -1133,10 +1111,12 @@ export default function FounderForm({
           email: values.email.trim().toLowerCase(),
           telefone: values.telefone.trim(),
           cidade: "Ubatuba",
+          role: userRole,
           perfil: perfilArray,
           perfis: perfilArray,
           consentimento_lgpd: true,
-          status: "novo",
+          status: "completo",
+          cadastro_completo: true,
           created_at_local: createdLocal,
           origem: "direto",
           referer: document.referrer || null,
@@ -1163,82 +1143,17 @@ export default function FounderForm({
           observacoes: obsText || null
         };
 
-        let { data: insertData, error: insertError } = await supabase
+        const { data: upsertData, error: upsertError } = await supabase
           .from("waitlist")
-          .insert(newWaitlistPayload)
+          .upsert(newWaitlistPayload, { onConflict: "telefone" })
           .select();
 
-        // Se falhar por erro de cache de schema PostgREST (código PGRST204)
-        if (insertError && (insertError.code === "PGRST204" || insertError.message?.toLowerCase().includes("schema cache") || insertError.message?.toLowerCase().includes("bairro_residencia"))) {
-          console.warn("[FounderForm] Fallback de inserção ativado devido a divergência no schema cache:", insertError);
-          const safeInsertPayload: any = {
-            tipo_pessoa: values.tipoPessoa,
-            nome: nomeFinal,
-            cpf: cleanCpf,
-            cnpj: cleanCnpj,
-            razao_social: !isPFMode ? values.nome_empresa?.trim() : null,
-            responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
-            cpf_responsavel: cleanCpfResp,
-            email: values.email.trim().toLowerCase(),
-            telefone: values.telefone.trim(),
-            cidade: "Ubatuba",
-            perfil: perfilArray,
-            bairro_moradia: bairroCanonical,
-            bairro_trabalho: bairroTrabStr,
-            bairro_hospedagem: bairroHospStr,
-            bairros: bairrosCanonical,
-            praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
-            chave_pix: chavePixFinal,
-            tipo_chave_pix: tipoChavePixFinal,
-            consentimento_lgpd: true,
-            status: "novo",
-            created_at_local: createdLocal,
-            origem: "direto",
-            referer: document.referrer || null,
-            ip_hash: ipHashVal,
-            device_type: parsedUA.device_type,
-            browser: parsedUA.browser,
-            os: parsedUA.os,
-            observacoes: obsText || null
-          };
-
-          const retryResult = await supabase
-            .from("waitlist")
-            .insert(safeInsertPayload)
-            .select();
-
-          if (!retryResult.error) {
-            insertError = null;
-            insertData = retryResult.data;
-          } else {
-            insertError = retryResult.error;
-          }
+        if (upsertError) {
+          console.error("[FounderForm] Erro no upsert da waitlist:", upsertError);
+          throw upsertError;
         }
 
-        if (insertError) {
-          const errMsg = insertError.message?.toLowerCase() || "";
-          const errDet = insertError.details?.toLowerCase() || "";
-          if (
-            insertError.code === "23505" ||
-            errMsg.includes("unique") ||
-            errMsg.includes("duplicate") ||
-            errMsg.includes("already exists") ||
-            errDet.includes("already exists") ||
-            errDet.includes("idx_waitlist_email_unique")
-          ) {
-            const cleanTel = (values.telefone || "").replace(/\D/g, "");
-            const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
-            toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
-            setTimeout(() => {
-              navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
-            }, 1200);
-            setIsSubmitting(false);
-            return;
-          }
-          throw insertError;
-        }
-
-        const newLeadId = insertData?.[0]?.id || null;
+        const newLeadId = upsertData?.[0]?.id || null;
 
         // 2º Passo: Auth signUp desacoplado em bloco try/catch não-bloqueante
         // Falhas como HTTP 429 (email rate limit exceeded) NÃO cancelam o cadastro concluído
@@ -1275,26 +1190,6 @@ export default function FounderForm({
             if (newLeadId && authUserId) {
               await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", newLeadId);
             }
-            await supabase.from("usuarios").upsert({
-              id: authUserId,
-              nome: nomeFinal,
-              email: values.email.trim().toLowerCase(),
-              role: userRole,
-              cpf: cleanCpf,
-              cnpj: cleanCnpj,
-              status: "pendente",
-              tipo_pessoa: values.tipoPessoa,
-              responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
-              cpf_responsavel: cleanCpfResp,
-              regiao_atuacao: regiaoStr,
-              chave_pix: chavePixFinal,
-              tipo_chave_pix: tipoChavePixFinal,
-              bairro: bairroCanonical,
-              bairro_residencia: bairroCanonical,
-              bairro_moradia: bairroCanonical,
-              bairro_trabalho: bairroTrabStr,
-              praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
-            } as any);
           } else if (authError) {
             console.warn("[FounderForm] Auth SignUp capturado de forma não-bloqueante (429/email limit):", authError);
             const authMsg = authError.message?.toLowerCase() || "";
@@ -1322,7 +1217,7 @@ export default function FounderForm({
         if (onSuccess) {
           onSuccess({
             user: authenticatedUser,
-            waitlistData: insertData && insertData[0] ? insertData[0] : newWaitlistPayload
+            waitlistData: upsertData && upsertData[0] ? upsertData[0] : newWaitlistPayload
           });
         }
       }
