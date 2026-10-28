@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { logSystem } from "@/services/LoggingService";
 
+export { logSystem };
+
 export type AnalyticsEventName =
   | "landing_view"
   | "landing_cta"

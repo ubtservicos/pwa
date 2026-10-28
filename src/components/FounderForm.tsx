@@ -33,7 +33,8 @@ import {
   isValidEmail,
   generateReferralSlug
 } from "@/utils/masks";
-import { trackEvent, logSystem } from "@/services/AnalyticsService";
+import { trackEvent } from "@/services/AnalyticsService";
+import { logSystem } from "@/services/LoggingService";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
 
