@@ -16,7 +16,8 @@ import {
   Send,
   Users,
   ShieldCheck,
-  Search
+  Search,
+  Sparkles
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -39,45 +40,140 @@ import confetti from "canvas-confetti";
 import { toast } from "sonner";
 
 export const BAIRROS_LIST = [
-  "Acaraú", "Aguas do Inga", "Aracaú", "Arariba", "Bairro Silop", "Bairro do Tenorio",
-  "Barra Seca", "Barra Seca Praias Vermelha e Alto", "Barra da Lagoa", "Bela Vista",
-  "Camburi", "Casanga", "Caçandoca", "Centro", "Centro (Picinguaba)", "Corcovado",
-  "Estufa I", "Estufa II", "Figueira", "Flamengo Praias Ribeira e Sete Fortes",
-  "Folha Seca", "Galhetas", "Horto", "Horto Florestal", "Ipiranguinha", "Itaguá",
-  "Itamambuca", "Jardim Carolina", "Jardim Enseada", "Jardim Marisol", "Jardim Samambaia",
-  "Jardim Santa Luzia", "Jardim Ubatuba", "Lagoinha", "Marafunda", "Mato Dentro",
-  "Monte Valerio", "Park Hills", "Pedreira", "Perequê-Açu", "Perequê-Mirim",
-  "Picinguaba", "Ponta Aguda", "Ponta Grossa", "Praia Brava", "Praia Brava do Sul",
-  "Praia Domingas Dias", "Praia Dura", "Praia Grande", "Praia Santa Rita",
-  "Praia Vermelha do Centro", "Praia Vermelha do Sul", "Praia da Almada", "Praia da Barra",
-  "Praia da Enseada", "Praia da Fazenda", "Praia da Fortaleza", "Praia das Toninhas",
-  "Praia de Itaguá", "Praia de Maranduba", "Praia do Frade", "Praia do Félix",
-  "Praia do Itamambuca", "Praia do Lazaro", "Praia do Perequê Mirim", "Praia do Pulso",
-  "Praia do Puruba", "Praia do Sapê", "Praia do Sununga", "Promirim", "Prumirim",
-  "Ressaca", "Rio Escuro", "Rio da Prata", "Saco da Ribeira", "Sape", "Sertao do Meio",
-  "Sertão da Quina", "Sertão do Ingá", "Sesmaria", "Silop", "Sumare", "Taquaral",
-  "Tenório", "Ubatuba", "Ubatuba Country", "Ubatumirim", "Umuarama", "Área Rural de Ubatuba"
-];
+  "Acaraú",
+  "Águas do Ingá",
+  "Aracaú",
+  "Arariba",
+  "Bairro das Palmeiras",
+  "Bairro do Tenório",
+  "Bairro Silop",
+  "Barra da Lagoa",
+  "Barra Seca",
+  "Bela Vista",
+  "Camburi",
+  "Caçandoca",
+  "Casanga",
+  "Centro",
+  "Centro (Picinguaba)",
+  "Corcovado",
+  "Estufa I",
+  "Estufa II",
+  "Figueira",
+  "Folha Seca",
+  "Galhetas",
+  "Horto Florestal",
+  "Iperoig",
+  "Ipiranguinha",
+  "Itaguá",
+  "Itamambuca",
+  "Jardim Carolina",
+  "Jardim Enseada",
+  "Jardim Marisol",
+  "Jardim Samambaia",
+  "Jardim Santa Luzia",
+  "Jardim Ubatuba",
+  "Lagoinha",
+  "Marafunda",
+  "Maranduba",
+  "Mato Dentro",
+  "Monte Valério",
+  "Park Hills",
+  "Pedreira",
+  "Perequê-Açu",
+  "Perequê-Mirim",
+  "Picinguaba",
+  "Ponta Aguda",
+  "Ponta Grossa",
+  "Praia Grande",
+  "Praia Vermelha",
+  "Promirim",
+  "Prumirim",
+  "Puruba",
+  "Ressaca",
+  "Rio da Prata",
+  "Rio Escuro",
+  "Saco da Ribeira",
+  "Sapê",
+  "Sertão da Quina",
+  "Sertão do Ingá",
+  "Sertão do Meio",
+  "Sertão do Ubatumirim",
+  "Sesmaria",
+  "Sumaré",
+  "Taquaral",
+  "Tenório",
+  "Toninhas",
+  "Ubatumirim",
+  "Umuarama",
+  "Vale do Sol",
+  "Vila Nova",
+  "Área Rural de Ubatuba"
+].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
 export const PRAIAS_LIST = [
-  "Almada", "Alto", "Barra", "Barra Seca", "Bonete", "Brava da Almada", "Brava da Fortaleza",
-  "Brava da Itamambuca", "Brava do Camburi", "Brava do Sul", "Camburi", "Caçandoca",
-  "Caçandoquinha", "Cedrinho ou Cedro", "Cedro do Sul", "Cruzeiro ou Iperoig", "Deserto",
-  "Domingas Dias", "Dura", "Engenho", "Enseada", "Fazenda", "Figueira", "Flamengo",
-  "Fortaleza", "Félix", "Grande do Bonete", "Itaguá", "Itamambuca", "Justa", "Lagoinha",
-  "Lamberto", "Lázaro", "Maranduba", "Meio", "Perequê-Açú", "Perequê-Mirim", "Picinguaba",
-  "Ponta Aguda", "Praia Grande", "Prumirim", "Pulso", "Puruba", "Ribeira", "Santa Rita",
-  "Sapê", "Sete Fontes", "Sununga", "Tenório", "Toninhas", "Ubatumirim", "Vermelha do Centro",
-  "Vermelha do Norte", "Vermelha do Sul"
-];
+  "Almada",
+  "Alto",
+  "Barra",
+  "Barra Seca",
+  "Bonete",
+  "Brava da Almada",
+  "Brava da Fortaleza",
+  "Brava de Itamambuca",
+  "Brava do Camburi",
+  "Brava do Sul",
+  "Caçandoca",
+  "Caçandoquinha",
+  "Camburi",
+  "Cedrinho",
+  "Cedro do Sul",
+  "Cruzeiro (Iperoig)",
+  "Deserto",
+  "Domingas Dias",
+  "Dura",
+  "Engenho",
+  "Enseada",
+  "Fazenda",
+  "Félix",
+  "Figueira",
+  "Flamengo",
+  "Fortaleza",
+  "Grande do Bonete",
+  "Itaguá",
+  "Itamambuca",
+  "Justa",
+  "Lagoinha",
+  "Lamberto",
+  "Lázaro",
+  "Maranduba",
+  "Meio",
+  "Perequê-Açu",
+  "Perequê-Mirim",
+  "Picinguaba",
+  "Ponta Aguda",
+  "Praia Grande",
+  "Prumirim",
+  "Pulso",
+  "Puruba",
+  "Ribeira",
+  "Santa Rita",
+  "Sapê",
+  "Sete Fontes",
+  "Sununga",
+  "Tenório",
+  "Toninhas",
+  "Ubatumirim",
+  "Vermelha do Centro",
+  "Vermelha do Norte",
+  "Vermelha do Sul"
+].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
 export const REGIOES_UBATUBA = ["Sul", "Centro", "Norte", "Oeste"];
 
 export const PERFIS_PF_LIST = [
-  { id: "ambulante", label: "Ambulante", icon: "🏖️" },
+  { id: "ambulante", label: "Ambulante de Praia", icon: "🏖️" },
   { id: "mototaxista", label: "Mototaxista", icon: "🏍️" },
-  { id: "diarista", label: "Diarista", icon: "🧹" },
-  { id: "morador", label: "Morador", icon: "🏡" },
+  { id: "diarista", label: "Diarista / Faxina", icon: "🧹" },
+  { id: "morador", label: "Morador / Consumidor", icon: "🏡" },
   { id: "turista", label: "Turista / Visitante", icon: "🧳" },
 ];
 
@@ -94,24 +190,31 @@ export const founderFormSchema = z.object({
   cnpj: z.string().optional(),
   responsavel_legal: z.string().optional(),
   cpf_responsavel: z.string().optional(),
-  regiao_atuacao_pj: z.array(z.string()).default([]),
 
-  // Campos Comuns
-  telefone: z.string().min(10, "Informe um WhatsApp válido"),
+  // Campos Comuns de Contato & Autenticação
+  telefone: z.string().min(10, "Informe um WhatsApp válido com DDD"),
   email: z.string().email("E-mail inválido"),
   senha: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
   confirmarSenha: z.string().min(1, "Confirme sua senha"),
+
+  // Chave Pix & Mercado Pago
   possuiContaMercadoPago: z.boolean({ required_error: "Informe se possui conta no Mercado Pago" }),
   tipo_chave_pix: z.string().optional().default(""),
   chave_pix: z.string().optional().default(""),
 
-  // Condicionais PF
-  regiao_atuacao_pf: z.array(z.string()).default([]),
+  // 1. CAMPOS GEOGRÁFICOS ISOLADOS
+  regioes: z.array(z.string()).default([]),
+  bairro_residencia: z.string().default(""),
+  bairros_atuacao: z.array(z.string()).default([]),
   praias: z.array(z.string()).default([]),
+
+  // Compatibilidade Legada
   bairros: z.array(z.string()).default([]),
   bairro_trabalho: z.array(z.string()).default([]),
+  regiao_atuacao_pf: z.array(z.string()).default([]),
+  regiao_atuacao_pj: z.array(z.string()).default([]),
 
-  acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
+  acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos de uso"),
 }).superRefine((data, ctx) => {
   // 1. Validação de Senha
   if (data.senha !== data.confirmarSenha) {
@@ -122,7 +225,7 @@ export const founderFormSchema = z.object({
     });
   }
 
-  // 2. Validação se PF
+  // 2. Validação se Pessoa Física (PF)
   if (data.tipoPessoa === "PF") {
     if (!data.nome || data.nome.trim().length < 3) {
       ctx.addIssue({
@@ -136,7 +239,7 @@ export const founderFormSchema = z.object({
     if (cleanCpf.length !== 11) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "CPF deve ter 11 dígitos",
+        message: "CPF deve ter exatamente 11 dígitos",
         path: ["cpf"],
       });
     }
@@ -147,53 +250,41 @@ export const founderFormSchema = z.object({
         message: "Selecione pelo menos um perfil de atuação",
         path: ["perfil"],
       });
-    } else {
-      if (data.perfil.some(p => p === "mototaxista" || p === "diarista") && (!data.regiao_atuacao_pf || data.regiao_atuacao_pf.length === 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Selecione pelo menos uma região de atuação",
-          path: ["regiao_atuacao_pf"],
-        });
-      }
+    }
 
-      if (data.perfil.includes("ambulante") && (!data.praias || data.praias.length === 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Selecione pelo menos uma praia de atuação",
-          path: ["praias"],
-        });
-      }
+    // Bairro de Residência é obrigatório para Pessoa Física (*)
+    if (!data.bairro_residencia || data.bairro_residencia.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o seu bairro de residência em Ubatuba",
+        path: ["bairro_residencia"],
+      });
+    }
 
-      if (data.perfil.includes("morador")) {
-        const totalLocais = (data.bairros?.length || 0) + (data.praias?.length || 0);
-        if (totalLocais === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Selecione pelo menos um bairro ou praia em Ubatuba",
-            path: ["bairros"],
-          });
-        }
-      }
+    // Regras específicas por perfil
+    if (data.perfil.includes("ambulante") && (!data.praias || data.praias.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Ambulante de praia deve selecionar ao menos uma praia de atuação",
+        path: ["praias"],
+      });
+    }
 
-      if (data.perfil.includes("turista")) {
-        const totalLocais = (data.bairros?.length || 0) + (data.praias?.length || 0);
-        if (totalLocais === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Selecione pelo menos um bairro de estadia ou praia frequentada",
-            path: ["bairros"],
-          });
-        }
-      }
+    if (data.perfil.some(p => p === "mototaxista" || p === "diarista") && (!data.regioes || data.regioes.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione ao menos uma Zona / Região de atuação (Sul, Centro, Norte ou Oeste)",
+        path: ["regioes"],
+      });
     }
   }
 
-  // 3. Validação se PJ
+  // 3. Validação se Pessoa Jurídica (PJ)
   if (data.tipoPessoa === "PJ") {
     if (!data.nome_empresa || data.nome_empresa.trim().length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Informe o nome da Associação ou Empresa",
+        message: "Informe a Razão Social ou Nome Fantasia da empresa",
         path: ["nome_empresa"],
       });
     }
@@ -210,7 +301,7 @@ export const founderFormSchema = z.object({
     if (!data.responsavel_legal || data.responsavel_legal.trim().length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Informe o nome do responsável legal",
+        message: "Informe o nome do responsável legal da empresa",
         path: ["responsavel_legal"],
       });
     }
@@ -224,11 +315,11 @@ export const founderFormSchema = z.object({
       });
     }
 
-    if (!data.regiao_atuacao_pj || data.regiao_atuacao_pj.length === 0) {
+    if (!data.bairro_residencia || data.bairro_residencia.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione pelo menos uma região de atuação",
-        path: ["regiao_atuacao_pj"],
+        message: "Selecione o bairro da sede da empresa em Ubatuba",
+        path: ["bairro_residencia"],
       });
     }
   }
@@ -238,7 +329,7 @@ export const founderFormSchema = z.object({
     if (!data.tipo_chave_pix || data.tipo_chave_pix.trim() === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Selecione o tipo de Chave Pix",
+        message: "Selecione o tipo de Chave Pix (CPF, CNPJ, E-mail, Celular ou Aleatória)",
         path: ["tipo_chave_pix"],
       });
     }
@@ -256,7 +347,7 @@ export const founderFormSchema = z.object({
         if (!isValidPixPhone(chave)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Telefone inválido. Informe DDD + 8 ou 9 dígitos numéricos.",
+            message: "Telefone inválido para Pix. Digite DDD + 8 ou 9 dígitos.",
             path: ["chave_pix"],
           });
         }
@@ -264,7 +355,7 @@ export const founderFormSchema = z.object({
         if (!isValidCPF(chave)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "CPF inválido. Verifique os dígitos informados.",
+            message: "CPF inválido para Pix. Verifique os dígitos informados.",
             path: ["chave_pix"],
           });
         }
@@ -272,7 +363,7 @@ export const founderFormSchema = z.object({
         if (!isValidCNPJ(chave)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "CNPJ inválido. Verifique os dígitos informados.",
+            message: "CNPJ inválido para Pix. Verifique os dígitos informados.",
             path: ["chave_pix"],
           });
         }
@@ -302,14 +393,14 @@ export type FounderFormData = z.infer<typeof founderFormSchema>;
 export interface FounderFormProps {
   isUpdateMode?: boolean;
   leadRecord?: any;
-  defaultValues?: Partial<FounderFormData>;
-  onSuccess?: (data: { user?: any; waitlistData?: any }) => void;
   submitButtonText?: string;
   hideAlreadyRegisteredButton?: boolean;
+  onSuccess?: (data?: any) => void;
+  defaultValues?: Partial<FounderFormData>;
   className?: string;
 }
 
-// Funções auxiliares para fingerprinting anonimizado
+// Funções utilitárias de fingerprinting anonimizado
 async function sha256(message: string): Promise<string> {
   try {
     const msgBuffer = new TextEncoder().encode(message);
@@ -349,10 +440,10 @@ function parseUserAgent(userAgent: string) {
 export default function FounderForm({
   isUpdateMode = false,
   leadRecord = null,
-  defaultValues = {},
-  onSuccess,
   submitButtonText,
   hideAlreadyRegisteredButton = false,
+  onSuccess,
+  defaultValues = {},
   className = ""
 }: FounderFormProps) {
   const navigate = useNavigate();
@@ -362,10 +453,18 @@ export default function FounderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  // Estados do Modal de Seleção Múltipla de Bairros e Praias
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [locationSearch, setLocationSearch] = useState("");
-  const [locationTab, setLocationTab] = useState<"todos" | "bairros" | "praias">("todos");
+  // Modais de Seleção Geográfica Dedicados e Isolados
+  const [isBairroResidenciaModalOpen, setIsBairroResidenciaModalOpen] = useState(false);
+  const [bairroResidenciaSearch, setBairroResidenciaSearch] = useState("");
+
+  const [isBairrosAtuacaoModalOpen, setIsBairrosAtuacaoModalOpen] = useState(false);
+  const [bairrosAtuacaoSearch, setBairrosAtuacaoSearch] = useState("");
+
+  const [isPraiasModalOpen, setIsPraiasModalOpen] = useState(false);
+  const [praiasSearch, setPraiasSearch] = useState("");
+
+  // Rótulo padrão do botão final
+  const finalButtonText = submitButtonText || (isUpdateMode ? "Concluir cadastro" : "Quero ser um Fundador");
 
   const {
     register,
@@ -385,7 +484,6 @@ export default function FounderForm({
       cnpj: "",
       responsavel_legal: "",
       cpf_responsavel: "",
-      regiao_atuacao_pj: [],
       telefone: "",
       email: "",
       senha: "",
@@ -393,56 +491,95 @@ export default function FounderForm({
       possuiContaMercadoPago: false,
       tipo_chave_pix: "",
       chave_pix: "",
-      regiao_atuacao_pf: [],
+      regioes: [],
+      bairro_residencia: "",
+      bairros_atuacao: [],
       praias: [],
       bairros: [],
       bairro_trabalho: [],
+      regiao_atuacao_pf: [],
+      regiao_atuacao_pj: [],
       acceptTerms: true,
       ...defaultValues
     }
   });
 
-  // Atualiza formulário se defaultValues ou leadRecord mudarem
+  // Carregamento reativo quando leadRecord ou defaultValues mudam
   useEffect(() => {
-    if (defaultValues && Object.keys(defaultValues).length > 0) {
+    if ((defaultValues && Object.keys(defaultValues).length > 0) || leadRecord) {
+      const isPJ = (defaultValues.tipoPessoa || leadRecord?.tipo_pessoa) === "PJ" || !!leadRecord?.cnpj;
+      const perfList = defaultValues.perfil || (Array.isArray(leadRecord?.perfil) ? leadRecord.perfil : (leadRecord?.perfil ? [leadRecord.perfil] : ["morador"]));
+
+      // Regiões / Zonas
+      const rawRegiaoStr = leadRecord?.regiao_atuacao || "";
+      const regListFromStr = rawRegiaoStr ? rawRegiaoStr.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      const regioesResolved = defaultValues.regioes && defaultValues.regioes.length > 0
+        ? defaultValues.regioes
+        : (Array.isArray(leadRecord?.regioes) ? leadRecord.regioes : regListFromStr);
+
+      // Bairro de Residência (Select Único)
+      const bResResolved = defaultValues.bairro_residencia
+        || leadRecord?.bairro_residencia
+        || leadRecord?.bairro_moradia
+        || (Array.isArray(leadRecord?.bairros) && leadRecord.bairros.length > 0 ? leadRecord.bairros[0] : "")
+        || (leadRecord?.bairro_hospedagem || "")
+        || (defaultValues.bairros && defaultValues.bairros.length > 0 ? defaultValues.bairros[0] : "");
+
+      // Bairros de Atuação / Frequência (Múltipla Seleção)
+      const rawBairroTrabStr = leadRecord?.bairro_trabalho || "";
+      const bTrabFromStr = rawBairroTrabStr ? rawBairroTrabStr.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+      const bAtuacaoResolved = defaultValues.bairros_atuacao && defaultValues.bairros_atuacao.length > 0
+        ? defaultValues.bairros_atuacao
+        : (Array.isArray(leadRecord?.bairros_atuacao) ? leadRecord.bairros_atuacao : bTrabFromStr);
+
+      // Praias
+      const praiasResolved = defaultValues.praias && defaultValues.praias.length > 0
+        ? defaultValues.praias
+        : (Array.isArray(leadRecord?.praias_frequenta) ? leadRecord.praias_frequenta : (Array.isArray(leadRecord?.praias) ? leadRecord.praias : []));
+
       reset({
-        tipoPessoa: defaultValues.tipoPessoa || "PF",
-        nome: defaultValues.nome || "",
-        cpf: defaultValues.cpf ? maskCPF(defaultValues.cpf) : "",
-        perfil: defaultValues.perfil || ["morador"],
-        nome_empresa: defaultValues.nome_empresa || "",
-        cnpj: defaultValues.cnpj ? maskCNPJ(defaultValues.cnpj) : "",
-        responsavel_legal: defaultValues.responsavel_legal || "",
-        cpf_responsavel: defaultValues.cpf_responsavel ? maskCPF(defaultValues.cpf_responsavel) : "",
-        regiao_atuacao_pj: defaultValues.regiao_atuacao_pj || [],
-        telefone: defaultValues.telefone ? maskPhone(defaultValues.telefone) : "",
-        email: defaultValues.email || "",
+        tipoPessoa: isPJ ? "PJ" : "PF",
+        nome: defaultValues.nome || leadRecord?.nome || "",
+        cpf: defaultValues.cpf ? maskCPF(defaultValues.cpf) : (leadRecord?.cpf ? maskCPF(leadRecord.cpf) : ""),
+        perfil: perfList,
+        nome_empresa: defaultValues.nome_empresa || leadRecord?.razao_social || leadRecord?.nome || "",
+        cnpj: defaultValues.cnpj ? maskCNPJ(defaultValues.cnpj) : (leadRecord?.cnpj ? maskCNPJ(leadRecord.cnpj) : ""),
+        responsavel_legal: defaultValues.responsavel_legal || leadRecord?.responsavel_legal || "",
+        cpf_responsavel: defaultValues.cpf_responsavel ? maskCPF(defaultValues.cpf_responsavel) : (leadRecord?.cpf_responsavel ? maskCPF(leadRecord.cpf_responsavel) : ""),
+        telefone: defaultValues.telefone ? maskPhone(defaultValues.telefone) : (leadRecord?.telefone ? maskPhone(leadRecord.telefone) : ""),
+        email: defaultValues.email || leadRecord?.email || "",
         senha: defaultValues.senha || "",
         confirmarSenha: defaultValues.confirmarSenha || "",
-        possuiContaMercadoPago: defaultValues.possuiContaMercadoPago ?? false,
-        tipo_chave_pix: defaultValues.tipo_chave_pix || "",
-        chave_pix: defaultValues.chave_pix || "",
-        regiao_atuacao_pf: defaultValues.regiao_atuacao_pf || [],
-        praias: defaultValues.praias || [],
-        bairros: defaultValues.bairros || [],
-        bairro_trabalho: defaultValues.bairro_trabalho || [],
+        possuiContaMercadoPago: defaultValues.possuiContaMercadoPago ?? (typeof leadRecord?.possui_conta_mercado_pago === "boolean" ? leadRecord.possui_conta_mercado_pago : false),
+        tipo_chave_pix: defaultValues.tipo_chave_pix || leadRecord?.tipo_chave_pix || "",
+        chave_pix: defaultValues.chave_pix || (leadRecord?.chave_pix ? applyPixMask(leadRecord.chave_pix, leadRecord.tipo_chave_pix) : ""),
+        regioes: regioesResolved,
+        bairro_residencia: bResResolved,
+        bairros_atuacao: bAtuacaoResolved,
+        praias: praiasResolved,
+        bairros: [bResResolved, ...bAtuacaoResolved].filter(Boolean),
+        bairro_trabalho: bAtuacaoResolved,
+        regiao_atuacao_pf: regioesResolved,
+        regiao_atuacao_pj: regioesResolved,
         acceptTerms: true,
       });
     }
-  }, [defaultValues, reset]);
+  }, [defaultValues, leadRecord, reset]);
 
   const tipoPessoa = watch("tipoPessoa");
-  const perfil = watch("perfil");
+  const perfil = watch("perfil") || [];
   const possuiContaMercadoPago = watch("possuiContaMercadoPago");
   const tipoChavePix = watch("tipo_chave_pix");
   const chavePix = watch("chave_pix");
-  const regiaoAtuacaoPf = watch("regiao_atuacao_pf");
-  const regiaoAtuacaoPj = watch("regiao_atuacao_pj");
-  const praias = watch("praias");
-  const bairros = watch("bairros");
+
+  // Watches dos 4 Campos Geográficos Isolados
+  const regioes = watch("regioes") || [];
+  const bairroResidencia = watch("bairro_residencia") || "";
+  const bairrosAtuacao = watch("bairros_atuacao") || [];
+  const praias = watch("praias") || [];
 
   // =========================================================================
-  // 2. LÓGICA INTELIGENTE DA CHAVE PIX (MERCADO PAGO)
+  // LÓGICA INTELIGENTE DA CHAVE PIX (MERCADO PAGO)
   // =========================================================================
   const applySmartPixAutofill = (tipo: string) => {
     const currentEmail = (watch("email") || defaultValues.email || leadRecord?.email || "").trim().toLowerCase();
@@ -462,7 +599,7 @@ export default function FounderForm({
     } else if (tipo === "telefone" || tipo === "celular") {
       const onlyDigits = currentTel.replace(/\D/g, "");
       if (onlyDigits) {
-        // Preenche com o número do WhatsApp (somente dígitos numéricos)
+        // WhatsApp em dígitos numéricos puros
         setValue("chave_pix", onlyDigits, { shouldValidate: true });
       }
     } else if (tipo === "cnpj") {
@@ -489,43 +626,63 @@ export default function FounderForm({
     }
   };
 
-  // Filtragem de Bairros e Praias para o Modal
-  const normalizedSearch = locationSearch.toLowerCase().trim();
-  const filteredBairros = BAIRROS_LIST.filter(b =>
-    !normalizedSearch || b.toLowerCase().includes(normalizedSearch)
-  );
-  const filteredPraias = PRAIAS_LIST.filter(p =>
-    !normalizedSearch || p.toLowerCase().includes(normalizedSearch)
-  );
-
-  const toggleLocationItem = (item: string, type: "bairro" | "praia") => {
-    if (type === "bairro") {
-      const exists = bairros.includes(item);
-      const next = exists ? bairros.filter(b => b !== item) : [...bairros, item];
-      setValue("bairros", next, { shouldValidate: true });
-    } else {
-      const exists = praias.includes(item);
-      const next = exists ? praias.filter(p => p !== item) : [...praias, item];
-      setValue("praias", next, { shouldValidate: true });
-    }
+  // Alternador de Regiões / Zonas (Múltipla Seleção)
+  const toggleRegiao = (reg: string) => {
+    const exists = regioes.includes(reg);
+    const next = exists ? regioes.filter(r => r !== reg) : [...regioes, reg];
+    setValue("regioes", next, { shouldValidate: true });
+    setValue("regiao_atuacao_pf", next);
+    setValue("regiao_atuacao_pj", next);
   };
 
-  const clearAllLocations = () => {
-    setValue("bairros", [], { shouldValidate: true });
-    setValue("praias", [], { shouldValidate: true });
+  // Alternador de Perfil PF
+  const togglePerfil = (id: string) => {
+    const exists = perfil.includes(id);
+    const next = exists ? perfil.filter(p => p !== id) : [...perfil, id];
+    setValue("perfil", next, { shouldValidate: true });
   };
 
-  // Feedback imediato caso o formulário possua campos pendentes (elimina bloqueio silencioso)
+  // Seleção de Bairro de Residência (Select Único)
+  const selectBairroResidencia = (bairro: string) => {
+    setValue("bairro_residencia", bairro, { shouldValidate: true });
+    const currentCombined = [bairro, ...bairrosAtuacao].filter(Boolean);
+    setValue("bairros", currentCombined);
+    setIsBairroResidenciaModalOpen(false);
+    setBairroResidenciaSearch("");
+  };
+
+  // Alternador de Bairros de Atuação (Múltipla Seleção)
+  const toggleBairroAtuacao = (bairro: string) => {
+    const exists = bairrosAtuacao.includes(bairro);
+    const next = exists ? bairrosAtuacao.filter(b => b !== bairro) : [...bairrosAtuacao, bairro];
+    setValue("bairros_atuacao", next, { shouldValidate: true });
+    setValue("bairro_trabalho", next);
+    const currentCombined = [bairroResidencia, ...next].filter(Boolean);
+    setValue("bairros", currentCombined);
+  };
+
+  // Alternador de Praias (Múltipla Seleção)
+  const togglePraia = (praia: string) => {
+    const exists = praias.includes(praia);
+    const next = exists ? praias.filter(p => p !== praia) : [...praias, praia];
+    setValue("praias", next, { shouldValidate: true });
+  };
+
+  // Feedback imediato caso o formulário possua erros (onInvalid)
   const onInvalid = (formErrors: typeof errors) => {
-    console.warn("[FounderForm] Erros de validação:", formErrors);
+    console.warn("[FounderForm] Erros de validação Zod:", formErrors);
     const errorKeys = Object.keys(formErrors) as (keyof FounderFormData)[];
+
     if (errorKeys.length > 0) {
       const firstErrKey = errorKeys[0];
       const firstErr = formErrors[firstErrKey];
       const msg = firstErr?.message ? String(firstErr.message) : "Preencha todos os campos obrigatórios.";
       toast.error(`Atenção: ${msg}`);
 
-      const el = document.querySelector(`[name="${firstErrKey}"]`);
+      const el = document.querySelector(`[name="${firstErrKey}"]`)
+        || document.getElementById(`form-input-${firstErrKey}`)
+        || document.getElementById(firstErrKey);
+
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -533,7 +690,7 @@ export default function FounderForm({
   };
 
   // =========================================================================
-  // SUBMISSÃO PRINCIPAL (CRIAÇÃO OU ATUALIZAÇÃO VIA RPC)
+  // SUBMISSÃO PRINCIPAL (CRIAÇÃO OU ATUALIZAÇÃO)
   // =========================================================================
   const onSubmit = async (values: FounderFormData) => {
     setIsSubmitting(true);
@@ -547,14 +704,16 @@ export default function FounderForm({
       const nomeFinal = (isPF ? values.nome : values.nome_empresa)?.trim() || "";
       const perfilArray = isPF ? (values.perfil && values.perfil.length > 0 ? values.perfil : ["morador"]) : ["associacao"];
       const userRole = isPF ? (values.perfil?.[0] || "morador") : "associacao";
-      const regiao = isPF
-        ? (values.regiao_atuacao_pf && values.regiao_atuacao_pf.length > 0 ? values.regiao_atuacao_pf.join(", ") : null)
-        : (values.regiao_atuacao_pj && values.regiao_atuacao_pj.length > 0 ? values.regiao_atuacao_pj.join(", ") : null);
-      const bairroTrabalhoStr = isPF && values.bairro_trabalho && values.bairro_trabalho.length > 0 ? values.bairro_trabalho.join(", ") : null;
+
+      const regioesArr = values.regioes && values.regioes.length > 0 ? values.regioes : [];
+      const regiaoStr = regioesArr.length > 0 ? regioesArr.join(", ") : null;
+      const bairroTrabStr = values.bairros_atuacao && values.bairros_atuacao.length > 0 ? values.bairros_atuacao.join(", ") : null;
+      const bairrosCombined = [values.bairro_residencia, ...(values.bairros_atuacao || [])].filter(Boolean);
+
       const chavePixFinal = values.possuiContaMercadoPago ? (values.chave_pix?.trim() || null) : null;
       const tipoChavePixFinal = values.possuiContaMercadoPago ? (values.tipo_chave_pix?.trim() || null) : null;
 
-      // 1. Criação ou validação de sessão nativa no Supabase Auth
+      // 1. Criação ou Autenticação na Sessão do Supabase Auth
       let authUserId: string | null = null;
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -571,7 +730,11 @@ export default function FounderForm({
             role: userRole,
             responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
             cpf_responsavel: cleanCpfResp,
-            regiao_atuacao: regiao,
+            regiao_atuacao: regiaoStr,
+            regioes: regioesArr,
+            bairro_residencia: values.bairro_residencia,
+            bairros_atuacao: values.bairros_atuacao,
+            praias: values.praias,
             chave_pix: chavePixFinal,
             tipo_chave_pix: tipoChavePixFinal,
           }
@@ -579,7 +742,7 @@ export default function FounderForm({
       });
 
       if (authError) {
-        console.warn("[FounderForm] Aviso Auth SignUp:", authError);
+        console.warn("[FounderForm] Auth SignUp:", authError);
         const authMsg = authError.message?.toLowerCase() || "";
         const isDuplicate = authMsg.includes("already registered") ||
           authMsg.includes("already exists") ||
@@ -587,7 +750,7 @@ export default function FounderForm({
 
         if (isDuplicate) {
           if (!isUpdateMode) {
-            // Na Landing Page, redireciona o lead existente para atualização cadastral
+            // Se já tem cadastro na landing page, redireciona para atualização
             const cleanTel = (values.telefone || "").replace(/\D/g, "");
             const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
             toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
@@ -597,7 +760,7 @@ export default function FounderForm({
             setIsSubmitting(false);
             return;
           } else {
-            // No modo de atualização cadastral, autentica com a senha definida
+            // Em modo atualização, tenta autenticar com a senha definida
             const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
               email: values.email.trim().toLowerCase(),
               password: values.senha,
@@ -619,7 +782,7 @@ export default function FounderForm({
         authUserId = leadRecord.user_id || leadRecord.id;
       }
 
-      // Observações formatadas
+      // Observações descritivas estruturadas
       const obsParts: string[] = [];
       obsParts.push(`Tipo: ${values.tipoPessoa}`);
       if (isUpdateMode) obsParts.push(`Atualizado via Link Seguro: Sim`);
@@ -629,22 +792,22 @@ export default function FounderForm({
       if (chavePixFinal) {
         obsParts.push(`Chave Pix (${tipoChavePixFinal}): ${chavePixFinal}`);
       }
-      if (regiao) {
-        obsParts.push(`Região: ${regiao}`);
+      if (regiaoStr) {
+        obsParts.push(`Zonas: ${regiaoStr}`);
+      }
+      if (values.bairro_residencia) {
+        obsParts.push(`Residência: ${values.bairro_residencia}`);
+      }
+      if (bairroTrabStr) {
+        obsParts.push(`Trabalho: ${bairroTrabStr}`);
       }
       if (values.praias && values.praias.length > 0) {
         obsParts.push(`Praias: ${values.praias.join(", ")}`);
       }
-      if (values.bairros && values.bairros.length > 0) {
-        obsParts.push(`Bairros: ${values.bairros.join(", ")}`);
-      }
-      if (bairroTrabalhoStr) {
-        obsParts.push(`Bairros Trabalho: ${bairroTrabalhoStr}`);
-      }
       const obsText = obsParts.join(" | ");
 
       // =====================================================================
-      // 3. PERSISTÊNCIA: MODO ATUALIZAÇÃO (RPC) vs MODO NOVO CADASTRO (INSERT)
+      // 2. MODO ATUALIZAÇÃO CADASTRAL (RPC & SYNC)
       // =====================================================================
       if (isUpdateMode) {
         const waitlistUpdateData: any = {
@@ -660,11 +823,15 @@ export default function FounderForm({
           telefone: values.telefone.trim(),
           cidade: "Ubatuba",
           perfil: perfilArray,
-          regiao_atuacao: regiao,
-          bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-          bairro_hospedagem: isPF && values.perfil?.includes("turista") && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-          bairro_trabalho: bairroTrabalhoStr,
-          praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
+          regiao_atuacao: regiaoStr,
+          regioes: regioesArr,
+          bairro_residencia: values.bairro_residencia,
+          bairro_moradia: values.bairro_residencia,
+          bairros_atuacao: values.bairros_atuacao,
+          bairro_trabalho: bairroTrabStr,
+          bairros: bairrosCombined,
+          praias: values.praias,
+          praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
           chave_pix: chavePixFinal,
           tipo_chave_pix: tipoChavePixFinal,
@@ -674,7 +841,7 @@ export default function FounderForm({
           updated_at: new Date().toISOString(),
         };
 
-        // Invoca a RPC oficial concluir_atualizacao_cadastral
+        // Invoca a RPC concluir_atualizacao_cadastral
         try {
           const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
             p_lead_id: leadRecord?.id || null,
@@ -682,7 +849,7 @@ export default function FounderForm({
           });
 
           if (rpcErr) {
-            console.warn("[FounderForm] RPC concluir_atualizacao_cadastral falhou, aplicando fallback:", rpcErr);
+            console.warn("[FounderForm] RPC concluir_atualizacao_cadastral fallback direto:", rpcErr);
             if (leadRecord?.id) {
               await supabase
                 .from("waitlist")
@@ -691,10 +858,10 @@ export default function FounderForm({
             }
           }
         } catch (saveErr) {
-          console.warn("[FounderForm] Exceção ao atualizar waitlist:", saveErr);
+          console.warn("[FounderForm] Exceção ao persistir waitlist:", saveErr);
         }
 
-        // Sincroniza em public.usuarios de forma segura (sem telefone)
+        // Sincroniza em public.usuarios de forma segura
         if (authUserId) {
           try {
             await supabase.from("usuarios").upsert({
@@ -707,33 +874,33 @@ export default function FounderForm({
               tipo_pessoa: values.tipoPessoa,
               responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
               cpf_responsavel: cleanCpfResp,
-              regiao_atuacao: regiao,
+              regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
               tipo_chave_pix: tipoChavePixFinal,
-              bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-              bairro_trabalho: bairroTrabalhoStr,
-              praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
+              bairro_moradia: values.bairro_residencia,
+              bairro_trabalho: bairroTrabStr,
+              praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
               status: "completo",
             } as any);
           } catch (syncErr) {
-            console.warn("[FounderForm] Aviso na sincronização com usuarios:", syncErr);
+            console.warn("[FounderForm] Sincronização usuarios:", syncErr);
           }
         }
 
-        // Garante sessão ativa antes de redirecionar para /sou-fundador
+        // Assegura sessão ativa
         try {
           await supabase.auth.signInWithPassword({
             email: values.email.trim().toLowerCase(),
             password: values.senha,
           });
         } catch (loginErr) {
-          // Sessão já pode estar ativa via signUp
+          // Sessão já pode estar ativa
         }
 
-        // Confetes solicitados
-        confetti({ particleCount: 150, spread: 80 });
+        // Chuva de confetes
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
 
-        // Toast verde oficial
+        // Toast verde de confirmação
         toast.success("Cadastro ativado com sucesso! 🎉");
 
         trackEvent("atualizacao_cadastral_success", "onboarding", {
@@ -745,13 +912,15 @@ export default function FounderForm({
           onSuccess({ user: authData?.user, waitlistData: waitlistUpdateData });
         }
 
-        // Redireciona após 2 segundos para /sou-fundador
+        // Redireciona em 2 segundos para /sou-fundador
         setTimeout(() => {
           navigate("/sou-fundador");
         }, 2000);
 
       } else {
-        // MODO LANDING PAGE (NOVO CADASTRO)
+        // =====================================================================
+        // 3. MODO NOVO CADASTRO (LANDING PAGE)
+        // =====================================================================
         const createdLocal = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
         const ua = navigator.userAgent;
         const lang = navigator.language || "pt-BR";
@@ -782,11 +951,15 @@ export default function FounderForm({
           device_type: parsedUA.device_type,
           browser: parsedUA.browser,
           os: parsedUA.os,
-          regiao_atuacao: regiao,
-          bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-          bairro_hospedagem: isPF && values.perfil?.includes("turista") && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-          bairro_trabalho: bairroTrabalhoStr,
-          praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
+          regiao_atuacao: regiaoStr,
+          regioes: regioesArr,
+          bairro_residencia: values.bairro_residencia,
+          bairro_moradia: values.bairro_residencia,
+          bairros_atuacao: values.bairros_atuacao,
+          bairro_trabalho: bairroTrabStr,
+          bairros: bairrosCombined,
+          praias: values.praias,
+          praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
           chave_pix: chavePixFinal,
           tipo_chave_pix: tipoChavePixFinal,
@@ -821,7 +994,7 @@ export default function FounderForm({
           throw insertError;
         }
 
-        // Sincroniza em public.usuarios (sem telefone)
+        // Sincroniza em public.usuarios
         if (authUserId) {
           try {
             await supabase.from("usuarios").upsert({
@@ -835,15 +1008,15 @@ export default function FounderForm({
               tipo_pessoa: values.tipoPessoa,
               responsavel_legal: !isPF ? values.responsavel_legal?.trim() : null,
               cpf_responsavel: cleanCpfResp,
-              regiao_atuacao: regiao,
+              regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
               tipo_chave_pix: tipoChavePixFinal,
-              bairro_moradia: isPF && values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-              bairro_trabalho: bairroTrabalhoStr,
-              praias_frequenta: isPF && values.praias && values.praias.length > 0 ? values.praias : null,
+              bairro_moradia: values.bairro_residencia,
+              bairro_trabalho: bairroTrabStr,
+              praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
             } as any);
           } catch (syncErr) {
-            console.warn("[FounderForm] Aviso na sincronização com usuarios:", syncErr);
+            console.warn("[FounderForm] Sincronização usuarios:", syncErr);
           }
         }
 
@@ -859,50 +1032,41 @@ export default function FounderForm({
           });
         }
       }
-
     } catch (err: any) {
-      console.error("[FounderForm] Falha ao registrar:", err);
-      const errMsg = (err?.message || "").toLowerCase();
-      const errDet = (err?.details || "").toLowerCase();
-
-      if (
-        err?.code === "23505" ||
-        errMsg.includes("duplicate") ||
-        errMsg.includes("unique") ||
-        errMsg.includes("already exists") ||
-        errDet.includes("already exists") ||
-        errDet.includes("idx_waitlist_email_unique")
-      ) {
-        const cleanTel = (values.telefone || "").replace(/\D/g, "");
-        const redirectParam = cleanTel || (values.cpf ? values.cpf.replace(/\D/g, "") : "") || encodeURIComponent(values.email.trim());
-        toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
-        setTimeout(() => {
-          navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
-        }, 1200);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const fullError = err?.message || "Erro ao processar formulário. Tente novamente.";
-      setSubmitError(fullError);
-      toast.error(fullError);
+      console.error("[FounderForm] Falha na submissão:", err);
+      const msg = err.message || "Erro de conexão ao processar os dados. Tente novamente.";
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const finalButtonLabel = submitButtonText || (isUpdateMode ? "Concluir cadastro" : "Quero ser um Fundador");
+  // Listas filtradas para os 3 seletores geográficos
+  const filteredBairrosResidencia = BAIRROS_LIST.filter(b =>
+    !bairroResidenciaSearch.trim() || b.toLowerCase().includes(bairroResidenciaSearch.toLowerCase().trim())
+  );
+
+  const filteredBairrosAtuacao = BAIRROS_LIST.filter(b =>
+    !bairrosAtuacaoSearch.trim() || b.toLowerCase().includes(bairrosAtuacaoSearch.toLowerCase().trim())
+  );
+
+  const filteredPraias = PRAIAS_LIST.filter(p =>
+    !praiasSearch.trim() || p.toLowerCase().includes(praiasSearch.toLowerCase().trim())
+  );
 
   return (
     <div className={`w-full ${className}`}>
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate className="flex flex-col gap-6 text-left">
         {submitError && (
-          <div className="p-3.5 rounded-xl bg-destructive/10 border border-destructive/20 text-xs text-destructive font-semibold leading-relaxed text-center animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs sm:text-sm text-red-400 font-sans leading-relaxed text-center animate-in fade-in">
             {submitError}
           </div>
         )}
 
-        {/* BIFURCAÇÃO (O 'Y' do Cadastro): PF vs PJ */}
+        {/* ========================================================================= */}
+        {/* SELETOR PRINCIPAL: PESSOA FÍSICA (PF) VS EMPRESA / ASSOCIAÇÃO (PJ) */}
+        {/* ========================================================================= */}
         <div className="flex flex-col gap-2">
           <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
             Tipo de Cadastro <span className="text-red-500">*</span>
@@ -911,10 +1075,10 @@ export default function FounderForm({
             <button
               type="button"
               onClick={() => setValue("tipoPessoa", "PF", { shouldValidate: true })}
-              className={`flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+              className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PF"
                   ? "bg-green text-navy shadow-lg shadow-green/20"
-                  : "bg-transparent text-white/60 hover:text-white hover:bg-white/5"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
               <User className="w-4 h-4" />
@@ -924,14 +1088,14 @@ export default function FounderForm({
             <button
               type="button"
               onClick={() => setValue("tipoPessoa", "PJ", { shouldValidate: true })}
-              className={`flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+              className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PJ"
                   ? "bg-green text-navy shadow-lg shadow-green/20"
-                  : "bg-transparent text-white/60 hover:text-white hover:bg-white/5"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
               <Building2 className="w-4 h-4" />
-              <span>Associação / CNPJ (PJ)</span>
+              <span>Associação / Empresa (PJ)</span>
             </button>
           </div>
         </div>
@@ -941,7 +1105,6 @@ export default function FounderForm({
         {/* ========================================================================= */}
         {tipoPessoa === "PF" && (
           <>
-            {/* Nome Completo e CPF */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label htmlFor="form-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
@@ -950,7 +1113,7 @@ export default function FounderForm({
                 <input
                   id="form-input-nome"
                   type="text"
-                  placeholder="Ex: Carlos da Silva"
+                  placeholder="Seu nome completo"
                   {...register("nome")}
                   className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
                     errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
@@ -989,205 +1152,34 @@ export default function FounderForm({
               </div>
             </div>
 
-            {/* WhatsApp e E-mail */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div>
-                <label htmlFor="form-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  WhatsApp <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="form-input-telefone"
-                  type="tel"
-                  placeholder="Ex: (12) 99999-9999"
-                  {...register("telefone", {
-                    onChange: (e) => {
-                      setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
-                    }
-                  })}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-sm sm:text-base font-mono transition-all`}
-                />
-                {errors.telefone && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.telefone.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="form-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  E-mail <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="form-input-email"
-                  type="email"
-                  placeholder="Ex: seuemail@exemplo.com"
-                  {...register("email")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-sm sm:text-base transition-all`}
-                />
-                {errors.email && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.email.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Multi-seleção de Perfil PF */}
-            <div id="form-input-perfil">
-              <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                Seu Perfil (selecione uma ou mais opções) <span className="text-red-500">*</span>
+            {/* Perfis de Atuação PF */}
+            <div className="flex flex-col gap-2">
+              <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
+                Como você atuará na UBT? <span className="text-red-500">*</span>
               </label>
-              <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 p-4 rounded-2xl bg-white/5 border ${
-                errors.perfil ? "border-red-500/70" : "border-white/10"
-              }`}>
-                {PERFIS_PF_LIST.map((perf) => {
-                  const isChecked = perfil.includes(perf.id);
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {PERFIS_PF_LIST.map((item) => {
+                  const isSelected = perfil.includes(item.id);
                   return (
                     <button
-                      key={perf.id}
+                      key={item.id}
                       type="button"
-                      onClick={() => {
-                        const next = isChecked
-                          ? perfil.filter((p) => p !== perf.id)
-                          : [...perfil, perf.id];
-                        setValue("perfil", next, { shouldValidate: true });
-                      }}
-                      className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer select-none ${
-                        isChecked
-                          ? "bg-green/10 border-green text-green"
-                          : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
+                      onClick={() => togglePerfil(item.id)}
+                      className={`p-3 sm:p-3.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-green/10 border-green text-green shadow-sm"
+                          : "bg-white/5 border-white/10 text-white/70 hover:border-white/20 hover:text-white"
                       }`}
                     >
-                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                        isChecked ? "bg-green border-green text-navy" : "border-white/30 bg-transparent"
-                      }`}>
-                        {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      </div>
-                      <span className="text-base shrink-0">{perf.icon}</span>
-                      <span className="text-sm font-sans font-medium">{perf.label}</span>
+                      <span className="text-xl shrink-0">{item.icon}</span>
+                      <span className="text-xs sm:text-sm font-sans font-medium truncate">{item.label}</span>
                     </button>
                   );
                 })}
               </div>
               {errors.perfil && (
-                <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <p className="mt-1 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
                   <span>⚠</span> {errors.perfil.message}
-                </p>
-              )}
-            </div>
-
-            {/* Condicionais PF: Mototaxista / Diarista -> Área de Atuação */}
-            {perfil.some((p) => p === "mototaxista" || p === "diarista") && (
-              <div className="w-full" id="form-input-regiao_atuacao_pf">
-                <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Região de Atuação <span className="text-red-500">*</span>
-                </label>
-                <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-2xl bg-white/5 border ${
-                  errors.regiao_atuacao_pf ? "border-red-500/70" : "border-white/10"
-                }`}>
-                  {REGIOES_UBATUBA.map((reg) => {
-                    const checked = regiaoAtuacaoPf.includes(reg);
-                    return (
-                      <button
-                        key={reg}
-                        type="button"
-                        onClick={() => {
-                          const next = checked
-                            ? regiaoAtuacaoPf.filter((r) => r !== reg)
-                            : [...regiaoAtuacaoPf, reg];
-                          setValue("regiao_atuacao_pf", next, { shouldValidate: true });
-                        }}
-                        className={`flex items-center justify-center p-3.5 rounded-xl border text-sm font-sans font-medium transition-all cursor-pointer ${
-                          checked
-                            ? "bg-green/10 border-green text-green font-bold"
-                            : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                        }`}
-                      >
-                        <span>{reg}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {errors.regiao_atuacao_pf && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.regiao_atuacao_pf.message}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* SELEÇÃO RESPONSIVA DE BAIRROS E PRAIAS (MODAL / FULLSCREEN) */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <div>
-                  <span className="text-xs font-mono text-green uppercase tracking-wider block font-semibold">
-                    Bairros e Praias de Atuação / Residência *
-                  </span>
-                  <p className="text-[11px] text-white/50 font-sans">
-                    Escolha as localidades onde você mora, trabalha ou frequenta em Ubatuba.
-                  </p>
-                </div>
-                <span className="text-[11px] font-mono text-white/60 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10 self-start sm:self-auto">
-                  {(bairros?.length || 0) + (praias?.length || 0)} selecionado(s)
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsLocationModalOpen(true)}
-                className="w-full py-4 px-5 rounded-xl bg-black/50 hover:bg-black/70 border border-white/15 hover:border-green text-white text-xs sm:text-sm font-sans flex items-center justify-between gap-3 transition-all cursor-pointer shadow-inner group active:scale-98"
-              >
-                <div className="flex items-center gap-2.5 truncate">
-                  <div className="w-8 h-8 rounded-lg bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
-                    <MapPin className="w-4 h-4 text-green" />
-                  </div>
-                  <span className="font-semibold text-white truncate">
-                    {(bairros?.length || 0) + (praias?.length || 0) === 0
-                      ? "Selecionar Bairros e Praias..."
-                      : `Selecionar Bairros e Praias (${(bairros?.length || 0) + (praias?.length || 0)} selecionados)`}
-                  </span>
-                </div>
-                <span className="text-[11px] text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0">
-                  Abrir Seleção →
-                </span>
-              </button>
-
-              {/* Preview dos Itens Selecionados */}
-              {((bairros?.length || 0) + (praias?.length || 0)) > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {bairros.slice(0, 5).map((b) => (
-                    <span
-                      key={`preview-b-${b}`}
-                      className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white/80 font-sans flex items-center gap-1.5"
-                    >
-                      <span className="text-white/40 text-[9px] font-mono uppercase">Bairro</span>
-                      <span>{b}</span>
-                    </span>
-                  ))}
-                  {praias.slice(0, 5).map((p) => (
-                    <span
-                      key={`preview-p-${p}`}
-                      className="px-2.5 py-1 rounded-lg bg-green/10 border border-green/20 text-[11px] text-green font-sans flex items-center gap-1.5"
-                    >
-                      <span className="text-green/60 text-[9px] font-mono uppercase">Praia</span>
-                      <span>{p}</span>
-                    </span>
-                  ))}
-                  {((bairros?.length || 0) + (praias?.length || 0)) > 10 && (
-                    <span className="px-2 py-1 rounded-lg bg-white/5 text-[10px] text-white/50 font-mono">
-                      + {((bairros?.length || 0) + (praias?.length || 0)) - 10} outros
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {(errors.bairros || errors.praias) && (
-                <p className="text-[11px] text-red-400 mt-0.5">
-                  {errors.bairros?.message || errors.praias?.message}
                 </p>
               )}
             </div>
@@ -1202,7 +1194,7 @@ export default function FounderForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label htmlFor="form-input-nome_empresa" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Nome da Associação / Empresa <span className="text-red-500">*</span>
+                  Razão Social / Nome da Empresa <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="form-input-nome_empresa"
@@ -1249,12 +1241,12 @@ export default function FounderForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label htmlFor="form-input-responsavel_legal" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Responsável Legal <span className="text-red-500">*</span>
+                  Nome do Responsável Legal <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="form-input-responsavel_legal"
                   type="text"
-                  placeholder="Ex: Mariana Oliveira"
+                  placeholder="Nome completo do responsável"
                   {...register("responsavel_legal")}
                   className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
                     errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
@@ -1269,7 +1261,7 @@ export default function FounderForm({
 
               <div>
                 <label htmlFor="form-input-cpf_responsavel" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  CPF do Responsável <span className="text-red-500">*</span>
+                  CPF do Responsável Legal <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="form-input-cpf_responsavel"
@@ -1292,99 +1284,437 @@ export default function FounderForm({
                 )}
               </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <div>
-                <label htmlFor="form-input-telefone-pj" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  WhatsApp <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="form-input-telefone-pj"
-                  type="tel"
-                  placeholder="Ex: (12) 99999-9999"
-                  {...register("telefone", {
-                    onChange: (e) => {
-                      setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
-                    }
-                  })}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-sm sm:text-base font-mono transition-all`}
-                />
-                {errors.telefone && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.telefone.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="form-input-email-pj" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  E-mail <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="form-input-email-pj"
-                  type="email"
-                  placeholder="Ex: contato@associacao.org.br"
-                  {...register("email")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
-                    errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-sm sm:text-base transition-all`}
-                />
-                {errors.email && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.email.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div id="form-input-regiao_atuacao_pj">
-              <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                Região de Atuação (selecione uma ou mais) <span className="text-red-500">*</span>
-              </label>
-              <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-2xl bg-white/5 border ${
-                errors.regiao_atuacao_pj ? "border-red-500/70" : "border-white/10"
-              }`}>
-                {REGIOES_UBATUBA.map((reg) => {
-                  const checked = regiaoAtuacaoPj.includes(reg);
-                  return (
-                    <button
-                      key={reg}
-                      type="button"
-                      onClick={() => {
-                        const next = checked
-                          ? regiaoAtuacaoPj.filter((r) => r !== reg)
-                          : [...regiaoAtuacaoPj, reg];
-                        setValue("regiao_atuacao_pj", next, { shouldValidate: true });
-                      }}
-                      className={`flex items-center justify-center p-3.5 rounded-xl border text-sm font-sans font-medium transition-all cursor-pointer ${
-                        checked
-                          ? "bg-green/10 border-green text-green font-bold"
-                          : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                      }`}
-                    >
-                      <span>{reg}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {errors.regiao_atuacao_pj && (
-                <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                  <span>⚠</span> {errors.regiao_atuacao_pj.message}
-                </p>
-              )}
-            </div>
           </>
         )}
 
         {/* ========================================================================= */}
-        {/* CAMPOS COMUNS (SENHA, MERCADO PAGO, PIX E TERMOS)                         */}
+        {/* CAMPOS COMUNS: WHATSAPP E E-MAIL */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 border-t border-white/5 pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div>
+            <label htmlFor="form-input-telefone" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+              WhatsApp Oficial <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="form-input-telefone"
+              type="tel"
+              placeholder="(12) 99999-9999"
+              {...register("telefone", {
+                onChange: (e) => {
+                  setValue("telefone", maskPhone(e.target.value), { shouldValidate: true });
+                }
+              })}
+              maxLength={15}
+              className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
+                errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+              } outline-none text-white text-sm sm:text-base font-mono transition-all`}
+            />
+            {errors.telefone && (
+              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <span>⚠</span> {errors.telefone.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="form-input-email" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+              E-mail Principal <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="form-input-email"
+              type="email"
+              placeholder="seu@email.com"
+              {...register("email")}
+              className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
+                errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+              } outline-none text-white text-sm sm:text-base transition-all`}
+            />
+            {errors.email && (
+              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <span>⚠</span> {errors.email.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 1. ESTRUTURAÇÃO DOS CAMPOS GEOGRÁFICOS (ISOLADOS E MODULARES) */}
+        {/* ========================================================================= */}
+        <div className="p-5 sm:p-7 rounded-3xl bg-[#0B1329]/90 border border-white/10 shadow-xl flex flex-col gap-6">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-white/10">
+            <div className="w-8 h-8 rounded-xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
+              <MapPin className="w-4 h-4 text-green" />
+            </div>
+            <div>
+              <h4 className="font-display font-extrabold text-sm sm:text-base text-white tracking-wide">
+                Localização e Atuação em Ubatuba
+              </h4>
+              <p className="text-[11px] text-white/50 font-sans">
+                Campos organizados de forma independente para residência, trabalho e praias.
+              </p>
+            </div>
+          </div>
+
+          {/* 1.1 ZONA / REGIÃO DE ATUAÇÃO (MÚLTIPLA SELEÇÃO) */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
+                Zona / Região de Atuação
+              </label>
+              <span className="text-[11px] font-mono text-green">
+                {regioes.length === 0 ? "Selecione as zonas" : `${regioes.length} selecionada(s)`}
+              </span>
+            </div>
+            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+              Marque uma ou mais regiões de Ubatuba onde você reside ou pretende atuar.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {REGIOES_UBATUBA.map((reg) => {
+                const isSelected = regioes.includes(reg);
+                return (
+                  <button
+                    key={`zona-${reg}`}
+                    type="button"
+                    onClick={() => toggleRegiao(reg)}
+                    className={`py-3 px-3.5 rounded-xl border font-display font-bold text-xs uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-98 ${
+                      isSelected
+                        ? "bg-green text-navy border-green shadow-lg shadow-green/20"
+                        : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <span>Região {reg}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                        isSelected ? "bg-navy text-green" : "border border-white/20 bg-white/5"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {errors.regioes && (
+              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                <span>⚠</span> {errors.regioes.message}
+              </p>
+            )}
+          </div>
+
+          {/* 1.2 BAIRRO DE RESIDÊNCIA (DROPLIST / SELECT ÚNICO - OBRIGATÓRIO) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="bairro_residencia_button" className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
+                Bairro de Residência <span className="text-red-500">*</span>
+              </label>
+              {bairroResidencia && (
+                <span className="text-[11px] font-mono text-green flex items-center gap-1">
+                  <Check className="w-3 h-3 text-green" /> Bairro Selecionado
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+              Selecione apenas 1 bairro oficial de Ubatuba onde você mora atualmente.
+            </p>
+
+            <button
+              id="bairro_residencia_button"
+              type="button"
+              onClick={() => setIsBairroResidenciaModalOpen(true)}
+              className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border ${
+                errors.bairro_residencia
+                  ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20"
+                  : "border-white/10 hover:border-green/50 focus:border-green"
+              } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
+            >
+              <div className="flex items-center gap-3 truncate">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  bairroResidencia ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
+                }`}>
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <span className={`text-sm sm:text-base font-sans truncate ${
+                  bairroResidencia ? "text-white font-semibold" : "text-white/40"
+                }`}>
+                  {bairroResidencia || "Selecione seu bairro de moradia (ex: Centro, Itaguá, Perequê-Açu)..."}
+                </span>
+              </div>
+              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                <span>{bairroResidencia ? "Alterar" : "Escolher"}</span>
+                <ChevronDown className="w-4 h-4" />
+              </span>
+            </button>
+            {errors.bairro_residencia && (
+              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                <span>⚠</span> {errors.bairro_residencia.message}
+              </p>
+            )}
+          </div>
+
+          {/* 1.3 BAIRROS DE TRABALHO / FREQUÊNCIA (DROPLIST / MODAL MÚLTIPLA ESCOLHA - OPCIONAL) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
+                Bairros de Trabalho / Frequência <span className="text-white/40 font-normal lowercase">(opcional)</span>
+              </label>
+              {bairrosAtuacao.length > 0 && (
+                <span className="text-[11px] font-mono text-green">
+                  {bairrosAtuacao.length} bairro(s)
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+              Bairros onde você costuma trabalhar, prestar serviços ou frequentar.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setIsBairrosAtuacaoModalOpen(true)}
+              className="w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border border-white/10 hover:border-green/50 text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98"
+            >
+              <div className="flex items-center gap-3 truncate">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  bairrosAtuacao.length > 0 ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
+                }`}>
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <span className={`text-sm sm:text-base font-sans truncate ${
+                  bairrosAtuacao.length > 0 ? "text-white font-semibold" : "text-white/40"
+                }`}>
+                  {bairrosAtuacao.length === 0
+                    ? "Selecionar bairros de trabalho (opcional)..."
+                    : `${bairrosAtuacao.length} bairro(s) de trabalho selecionado(s)`}
+                </span>
+              </div>
+              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                <span>{bairrosAtuacao.length > 0 ? "Gerenciar" : "Adicionar"}</span>
+                <ChevronDown className="w-4 h-4" />
+              </span>
+            </button>
+
+            {/* Chips dos Bairros de Trabalho Selecionados */}
+            {bairrosAtuacao.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {bairrosAtuacao.map((b) => (
+                  <span
+                    key={`chip-trab-${b}`}
+                    className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/15 text-[11px] text-white font-sans flex items-center gap-1.5"
+                  >
+                    <span>{b}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBairroAtuacao(b);
+                      }}
+                      className="hover:text-red-400 p-0.5"
+                      title={`Remover ${b}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 1.4 PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO - INDEPENDENTE) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
+                Praias que Costuma Frequentar / Atuar
+                {perfil.includes("ambulante") && <span className="text-red-500"> *</span>}
+              </label>
+              {praias.length > 0 && (
+                <span className="text-[11px] font-mono text-green">
+                  {praias.length} praia(s)
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
+              Lista oficial das praias de Ubatuba onde você atua, trabalha ou frequenta.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setIsPraiasModalOpen(true)}
+              className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-white/5 border ${
+                errors.praias ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-green/50"
+              } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
+            >
+              <div className="flex items-center gap-3 truncate">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  praias.length > 0 ? "bg-green/10 text-green border border-green/30" : "bg-white/5 text-white/40 border border-white/10"
+                }`}>
+                  <span className="text-sm">🏖️</span>
+                </div>
+                <span className={`text-sm sm:text-base font-sans truncate ${
+                  praias.length > 0 ? "text-white font-semibold" : "text-white/40"
+                }`}>
+                  {praias.length === 0
+                    ? "Selecionar praias de Ubatuba..."
+                    : `${praias.length} praia(s) selecionada(s)`}
+                </span>
+              </div>
+              <span className="text-xs text-green font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
+                <span>{praias.length > 0 ? "Gerenciar" : "Selecionar"}</span>
+                <ChevronDown className="w-4 h-4" />
+              </span>
+            </button>
+
+            {/* Chips das Praias Selecionadas */}
+            {praias.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {praias.map((p) => (
+                  <span
+                    key={`chip-praia-${p}`}
+                    className="px-2.5 py-1 rounded-lg bg-green/10 border border-green/30 text-[11px] text-green font-sans flex items-center gap-1.5"
+                  >
+                    <span>{p}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePraia(p);
+                      }}
+                      className="hover:text-red-400 p-0.5"
+                      title={`Remover ${p}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {errors.praias && (
+              <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
+                <span>⚠</span> {errors.praias.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* SEÇÃO MERCADO PAGO E CHAVE PIX */}
+        {/* ========================================================================= */}
+        <div className="p-5 sm:p-7 rounded-3xl bg-white/5 border border-white/10 flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-mono text-white/70 uppercase tracking-widest mb-1 pl-1 font-semibold">
+              Você possui conta no Mercado Pago? <span className="text-red-500">*</span>
+            </label>
+            <p className="text-[11px] text-white/50 font-sans pl-1 mb-3">
+              Usamos a infraestrutura do Mercado Pago para splits imediatos e repasses instantâneos via Pix.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleMercadoPagoToggle(true)}
+                className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  possuiContaMercadoPago === true
+                    ? "bg-green text-navy border-green shadow-md shadow-green/20"
+                    : "bg-white/5 border border-white/10 text-white/60 hover:text-white"
+                }`}
+              >
+                <Check className="w-4 h-4" />
+                <span>Sim, possuo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleMercadoPagoToggle(false)}
+                className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  possuiContaMercadoPago === false
+                    ? "bg-white/20 text-white border border-white/30"
+                    : "bg-white/5 border border-white/10 text-white/60 hover:text-white"
+                }`}
+              >
+                <span>Não possuo ainda</span>
+              </button>
+            </div>
+            {errors.possuiContaMercadoPago && (
+              <p className="mt-1 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <span>⚠</span> {errors.possuiContaMercadoPago.message}
+              </p>
+            )}
+          </div>
+
+          {/* Campos condicionais da Chave Pix com Preenchimento Inteligente */}
+          {possuiContaMercadoPago === true && (
+            <div className="pt-4 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+              <div>
+                <label htmlFor="form-select-tipo_pix" className="block text-xs font-mono text-white/70 uppercase tracking-widest mb-2 pl-1 font-semibold">
+                  Tipo de Chave Pix <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="form-select-tipo_pix"
+                    value={tipoChavePix}
+                    onChange={handleTipoChavePixChange}
+                    className="w-full px-4 py-3.5 rounded-xl bg-black/60 border border-white/10 focus:border-green text-white text-xs sm:text-sm font-mono outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled className="bg-navy text-white/40">Selecione o tipo de chave...</option>
+                    <option value="cpf" className="bg-navy text-white">CPF</option>
+                    <option value="cnpj" className="bg-navy text-white">CNPJ</option>
+                    <option value="email" className="bg-navy text-white">E-mail</option>
+                    <option value="telefone" className="bg-navy text-white">Telefone / Celular</option>
+                    <option value="aleatoria" className="bg-navy text-white">Chave Aleatória (EVP)</option>
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-white/40 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {errors.tipo_chave_pix && (
+                  <p className="mt-1 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.tipo_chave_pix.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="form-input-chave_pix" className="block text-xs font-mono text-white/70 uppercase tracking-widest pl-1 font-semibold">
+                    Chave Pix Cadastrada <span className="text-red-500">*</span>
+                  </label>
+                  {tipoChavePix && (
+                    <button
+                      type="button"
+                      onClick={() => applySmartPixAutofill(tipoChavePix)}
+                      className="text-[10px] text-green hover:underline font-mono uppercase"
+                    >
+                      Preencher Auto
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="form-input-chave_pix"
+                  type="text"
+                  placeholder={getPixPlaceholder(tipoChavePix)}
+                  maxLength={getPixMaxLength(tipoChavePix)}
+                  {...register("chave_pix", {
+                    onChange: (e) => {
+                      setValue("chave_pix", applyPixMask(e.target.value, tipoChavePix), { shouldValidate: true });
+                    }
+                  })}
+                  className={`w-full px-4 py-3.5 rounded-xl bg-black/60 border ${
+                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                  } text-white text-xs sm:text-sm font-mono outline-none transition-all`}
+                />
+                {errors.chave_pix && (
+                  <p className="mt-1 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                    <span>⚠</span> {errors.chave_pix.message}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================================= */}
+        {/* SEGURANÇA: DEFINIÇÃO DE SENHA DO MEMBRO FUNDADOR */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label htmlFor="form-input-senha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-              Senha <span className="text-red-500">*</span>
+              Senha de Acesso <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -1392,14 +1722,14 @@ export default function FounderForm({
                 type={showSenha ? "text" : "password"}
                 placeholder="Mínimo 6 caracteres"
                 {...register("senha")}
-                className={`w-full pl-5 pr-14 py-4 rounded-2xl bg-white/5 border ${
+                className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
                   errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                } outline-none text-white text-sm sm:text-base transition-all font-mono`}
+                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
                 type="button"
                 onClick={() => setShowSenha(!showSenha)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-2 cursor-pointer"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
                 aria-label={showSenha ? "Ocultar senha" : "Ver senha"}
               >
                 {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -1414,23 +1744,23 @@ export default function FounderForm({
 
           <div>
             <label htmlFor="form-input-confirmarSenha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-              Confirme sua Senha <span className="text-red-500">*</span>
+              Confirmar Senha <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
                 id="form-input-confirmarSenha"
                 type={showConfirmarSenha ? "text" : "password"}
-                placeholder="Digite a senha novamente"
+                placeholder="Repita sua senha"
                 {...register("confirmarSenha")}
-                className={`w-full pl-5 pr-14 py-4 rounded-2xl bg-white/5 border ${
+                className={`w-full px-5 py-4 rounded-2xl bg-white/5 border ${
                   errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                } outline-none text-white text-sm sm:text-base transition-all font-mono`}
+                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmarSenha(!showConfirmarSenha)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-2 cursor-pointer"
-                aria-label={showConfirmarSenha ? "Ocultar senha" : "Ver senha"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
+                aria-label={showConfirmarSenha ? "Ocultar confirmação" : "Ver confirmação"}
               >
                 {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -1443,144 +1773,30 @@ export default function FounderForm({
           </div>
         </div>
 
-        {/* Mercado Pago (Sim / Não) */}
-        <div id="form-input-possuiContaMercadoPago">
-          <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-3 pl-1">
-            Você já possui uma conta no Mercado Pago? <span className="text-red-500">*</span>
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { value: true, label: "Sim" },
-              { value: false, label: "Não" }
-            ].map((opt) => {
-              const selected = possuiContaMercadoPago === opt.value;
-              return (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => handleMercadoPagoToggle(opt.value)}
-                  className={`flex items-center justify-center p-4 rounded-xl border font-sans font-medium text-sm transition-all cursor-pointer ${
-                    selected
-                      ? "bg-green/10 border-green text-green font-bold shadow-md shadow-green/10"
-                      : "bg-white/5 border-white/5 hover:border-white/20 text-white/70"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-          {errors.possuiContaMercadoPago && (
-            <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-              <span>⚠</span> {errors.possuiContaMercadoPago.message}
-            </p>
-          )}
-        </div>
-
-        {/* Condicional Chave Pix Mercado Pago (com preenchimento inteligente e editabilidade) */}
-        {possuiContaMercadoPago === true && (
-          <div className="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-300" id="form-input-pix">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green animate-pulse" />
-              <span className="font-display font-bold text-xs uppercase tracking-wider text-green">
-                Dados da sua Chave Pix (Mercado Pago)
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="form-select-tipo-chave-pix" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Tipo de Chave Pix <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    id="form-select-tipo-chave-pix"
-                    {...register("tipo_chave_pix")}
-                    onChange={handleTipoChavePixChange}
-                    className={`w-full px-5 py-4 rounded-xl bg-[#132348] border ${
-                      errors.tipo_chave_pix ? "border-red-500/70" : "border-white/10"
-                    } outline-none text-white text-sm hover:border-white/20 transition-all appearance-none cursor-pointer`}
-                  >
-                    <option value="" className="bg-[#0B1B3E] text-white/50">Selecione o tipo de chave...</option>
-                    <option value="cpf" className="bg-[#0B1B3E] text-white">CPF</option>
-                    <option value="cnpj" className="bg-[#0B1B3E] text-white">CNPJ</option>
-                    <option value="telefone" className="bg-[#0B1B3E] text-white">Telefone (WhatsApp)</option>
-                    <option value="email" className="bg-[#0B1B3E] text-white">E-mail</option>
-                    <option value="aleatoria" className="bg-[#0B1B3E] text-white">Chave Aleatória (EVP)</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-white/40 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-                {errors.tipo_chave_pix && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.tipo_chave_pix.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="form-input-chave-pix" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Chave Pix <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="form-input-chave-pix"
-                  type="text"
-                  {...register("chave_pix")}
-                  value={chavePix || ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    // Se telefone/celular, mantém estritamente dígitos conforme a regra oficial
-                    const formatted = (tipoChavePix === "telefone" || tipoChavePix === "celular")
-                      ? val.replace(/\D/g, "").slice(0, 11)
-                      : applyPixMask(val, tipoChavePix);
-                    setValue("chave_pix", formatted, { shouldValidate: true });
-                  }}
-                  placeholder={getPixPlaceholder(tipoChavePix)}
-                  maxLength={getPixMaxLength(tipoChavePix)}
-                  className={`w-full px-5 py-4 rounded-xl bg-white/5 border ${
-                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-sm transition-all font-mono`}
-                />
-                {errors.chave_pix && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.chave_pix.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <p className="text-[11px] text-white/50 leading-relaxed font-sans pl-1">
-              ℹ️ <strong>Chave editável:</strong> O campo é pré-preenchido automaticamente, mas você pode alterá-lo se a sua chave cadastrada no Mercado Pago for diferente.
-            </p>
-          </div>
-        )}
-
-        {/* Termos & LGPD */}
-        <div className="flex flex-col gap-1 mt-2" id="form-input-acceptTerms">
-          <div className="flex gap-3 items-start">
+        {/* Termos de Uso e LGPD */}
+        <div className="flex flex-col gap-1 pt-1">
+          <label className="flex items-start gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
-              id="form-consent-lgpd"
               {...register("acceptTerms")}
-              className="mt-1 h-5 w-5 shrink-0 accent-green cursor-pointer"
+              className="mt-1 h-5 w-5 accent-green rounded cursor-pointer shrink-0"
             />
-            <label htmlFor="form-consent-lgpd" className="text-xs text-white/60 leading-relaxed font-sans cursor-pointer select-none">
-              Declaro que as informações são verdadeiras e concordo com os{" "}
-              <span className="text-green underline">Termos de Uso</span> e a{" "}
-              <span className="text-green underline">Política de Privacidade (LGPD)</span> da UBT Serviços. <span className="text-red-500">*</span>
-            </label>
-          </div>
+            <span className="text-xs text-white/60 font-sans leading-relaxed">
+              Aceito os Termos de Uso e autorizo a coleta dos meus dados para validação pioneira da UBT em Ubatuba, conforme a LGPD. <span className="text-red-500">*</span>
+            </span>
+          </label>
           {errors.acceptTerms && (
-            <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-1">
+            <p className="text-red-500 text-xs pl-1 font-medium flex items-center gap-1 mt-0.5">
               <span>⚠</span> {errors.acceptTerms.message}
             </p>
           )}
         </div>
 
-        {/* Botão Principal de Envio */}
+        {/* Botão de Envio com Rótulo Configurável */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className={`w-full py-5 mt-4 rounded-2xl font-display font-extrabold text-sm tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
+          className={`w-full py-5 rounded-2xl font-display font-extrabold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-3 transition-all ${
             isSubmitting
               ? "bg-white/10 text-white/30 cursor-not-allowed border border-white/5"
               : "bg-green hover:bg-green-dark active:scale-[0.98] text-navy shadow-lg shadow-green/25 cursor-pointer"
@@ -1588,23 +1804,19 @@ export default function FounderForm({
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin text-white/60" />
-              <span>{isUpdateMode ? "Concluindo cadastro..." : "Processando Inscrição..."}</span>
+              <Loader2 className="w-5 h-5 animate-spin text-navy" />
+              <span>Processando Cadastro...</span>
             </>
           ) : (
             <>
-              <span>{finalButtonLabel}</span>
-              {isUpdateMode ? (
-                <ShieldCheck className="w-5 h-5" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
+              <span>{finalButtonText}</span>
+              <Send className="w-5 h-5" />
             </>
           )}
         </button>
 
-        {/* Botão Secundário para Landing Page */}
-        {!hideAlreadyRegisteredButton && !isUpdateMode && (
+        {/* Botão Secundário: Já sou Fundador */}
+        {!hideAlreadyRegisteredButton && (
           <button
             type="button"
             onClick={() => navigate("/sou-fundador")}
@@ -1618,194 +1830,283 @@ export default function FounderForm({
       </form>
 
       {/* ========================================================================= */}
-      {/* MODAL RESPONSIVO DE SELEÇÃO MÚLTIPLA DE BAIRROS E PRAIAS                  */}
+      {/* MODAL 1: BAIRRO DE RESIDÊNCIA (SELECT ÚNICO COM BUSCA) */}
       {/* ========================================================================= */}
-      {isLocationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-xl rounded-none sm:rounded-3xl bg-[#0B1329] border-0 sm:border border-white/15 shadow-2xl flex flex-col overflow-hidden text-left">
-            {/* Header do Modal */}
-            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#0E1733] shrink-0">
+      {isBairroResidenciaModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
-                  <MapPin className="w-4 h-4 text-green" />
-                </div>
-                <div>
-                  <h3 className="font-display font-bold text-base text-white leading-tight">
-                    Bairros e Praias de Ubatuba
-                  </h3>
-                  <p className="text-[11px] text-white/50 font-sans">
-                    {(bairros?.length || 0) + (praias?.length || 0)} localidade(s) selecionada(s)
-                  </p>
-                </div>
+                <MapPin className="w-5 h-5 text-green" />
+                <h3 className="font-display font-extrabold text-base text-white">
+                  Selecione seu Bairro de Residência
+                </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setIsLocationModalOpen(false)}
-                className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                aria-label="Fechar seleção de bairros e praias"
+                onClick={() => {
+                  setIsBairroResidenciaModalOpen(false);
+                  setBairroResidenciaSearch("");
+                }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Barra de Pesquisa e Filtros */}
-            <div className="p-3 sm:p-4 border-b border-white/5 flex flex-col gap-2.5 bg-[#080D1F] shrink-0">
+            {/* Busca */}
+            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  value={locationSearch}
-                  onChange={(e) => setLocationSearch(e.target.value)}
-                  placeholder="Buscar por bairro ou praia..."
-                  className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-black/60 border border-white/10 focus:border-green text-white text-xs sm:text-sm font-sans outline-none placeholder:text-white/30"
+                  placeholder="Buscar bairro oficial de Ubatuba..."
+                  value={bairroResidenciaSearch}
+                  onChange={(e) => setBairroResidenciaSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
                   autoFocus
                 />
-                {locationSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setLocationSearch("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white p-1 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Tabs de Filtro */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                <button
-                  type="button"
-                  onClick={() => setLocationTab("todos")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
-                    locationTab === "todos"
-                      ? "bg-white/15 text-white font-bold"
-                      : "text-white/50 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Todos ({filteredBairros.length + filteredPraias.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocationTab("bairros")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
-                    locationTab === "bairros"
-                      ? "bg-white/15 text-white font-bold"
-                      : "text-white/50 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Bairros ({filteredBairros.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocationTab("praias")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer shrink-0 ${
-                    locationTab === "praias"
-                      ? "bg-white/15 text-white font-bold"
-                      : "text-white/50 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Praias ({filteredPraias.length})
-                </button>
               </div>
             </div>
 
-            {/* Lista com Rolagem Vertical */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-3 divide-y divide-white/5">
-              {(locationTab === "todos" || locationTab === "bairros") && (
-                <div className="mb-2">
-                  {locationTab === "todos" && filteredBairros.length > 0 && (
-                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-white/40 bg-white/[0.02] rounded-md mb-1">
-                      Bairros ({filteredBairros.length})
+            {/* Lista com Scroll Suave */}
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+              {filteredBairrosResidencia.map((b) => {
+                const isSelected = bairroResidencia === b;
+                return (
+                  <button
+                    key={`b-res-${b}`}
+                    type="button"
+                    onClick={() => selectBairroResidencia(b)}
+                    className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors text-left cursor-pointer ${
+                      isSelected ? "bg-green/15 text-white" : "hover:bg-white/5 text-white/80"
+                    }`}
+                  >
+                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                        isSelected ? "bg-green text-navy" : "border border-white/20 bg-white/5"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                  )}
-                  {filteredBairros.map((b) => {
-                    const isSelected = bairros.includes(b);
-                    return (
-                      <div
-                        key={`modal-b-${b}`}
-                        onClick={() => toggleLocationItem(b, "bairro")}
-                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl cursor-pointer transition-colors ${
-                          isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors shrink-0 ${
-                              isSelected ? "bg-green border-green text-navy" : "border-white/20 bg-black/40"
-                            }`}
-                          >
-                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                          </div>
-                          <span className="text-xs sm:text-sm font-sans font-medium">{b}</span>
-                        </div>
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-white/5 text-white/50 border border-white/5 shrink-0">
-                          Bairro
-                        </span>
-                      </div>
-                    );
-                  })}
+                  </button>
+                );
+              })}
+              {filteredBairrosResidencia.length === 0 && (
+                <div className="py-12 text-center text-white/40 text-xs font-mono">
+                  Nenhum bairro localizado com &quot;{bairroResidenciaSearch}&quot;.
                 </div>
               )}
+            </div>
 
-              {(locationTab === "todos" || locationTab === "praias") && (
-                <div>
-                  {locationTab === "todos" && filteredPraias.length > 0 && (
-                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-widest text-green/60 bg-green/[0.02] rounded-md mb-1">
-                      Praias ({filteredPraias.length})
+            {/* Footer */}
+            <div className="p-3 border-t border-white/10 bg-[#0E1733] flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBairroResidenciaModalOpen(false);
+                  setBairroResidenciaSearch("");
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: BAIRROS DE TRABALHO / ATUAÇÃO (MÚLTIPLA SELEÇÃO) */}
+      {/* ========================================================================= */}
+      {isBairrosAtuacaoModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-5 h-5 text-green" />
+                <h3 className="font-display font-extrabold text-base text-white">
+                  Bairros de Trabalho / Frequência
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBairrosAtuacaoModalOpen(false);
+                  setBairrosAtuacaoSearch("");
+                }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Busca */}
+            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
+              <div className="relative">
+                <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar bairro de trabalho..."
+                  value={bairrosAtuacaoSearch}
+                  onChange={(e) => setBairrosAtuacaoSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Lista com Checkboxes */}
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+              {filteredBairrosAtuacao.map((b) => {
+                const isSelected = bairrosAtuacao.includes(b);
+                return (
+                  <div
+                    key={`b-trab-${b}`}
+                    onClick={() => toggleBairroAtuacao(b)}
+                    className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                      isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                    }`}
+                  >
+                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
+                        isSelected ? "bg-green text-navy border-green" : "border border-white/20 bg-black/40"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                     </div>
-                  )}
-                  {filteredPraias.map((p) => {
-                    const isSelected = praias.includes(p);
-                    return (
-                      <div
-                        key={`modal-p-${p}`}
-                        onClick={() => toggleLocationItem(p, "praia")}
-                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl cursor-pointer transition-colors ${
-                          isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors shrink-0 ${
-                              isSelected ? "bg-green border-green text-navy" : "border-white/20 bg-black/40"
-                            }`}
-                          >
-                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                          </div>
-                          <span className="text-xs sm:text-sm font-sans font-medium">{p}</span>
-                        </div>
-                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-green/10 text-green/80 border border-green/20 shrink-0">
-                          Praia
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {filteredBairros.length === 0 && filteredPraias.length === 0 && (
-                <div className="py-12 text-center text-xs font-mono text-white/40">
-                  Nenhum bairro ou praia localizado para &quot;{locationSearch}&quot;.
+                  </div>
+                );
+              })}
+              {filteredBairrosAtuacao.length === 0 && (
+                <div className="py-12 text-center text-white/40 text-xs font-mono">
+                  Nenhum bairro localizado com &quot;{bairrosAtuacaoSearch}&quot;.
                 </div>
               )}
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-3 sm:p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
-                onClick={clearAllLocations}
-                className="px-3 py-2 text-xs font-mono text-white/50 hover:text-white transition-colors cursor-pointer"
+                onClick={() => {
+                  setValue("bairros_atuacao", [], { shouldValidate: true });
+                  setValue("bairro_trabalho", []);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer"
               >
-                Limpar Seleção
+                Limpar
               </button>
 
               <button
                 type="button"
-                onClick={() => setIsLocationModalOpen(false)}
-                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20 active:scale-98"
+                onClick={() => {
+                  setIsBairrosAtuacaoModalOpen(false);
+                  setBairrosAtuacaoSearch("");
+                }}
+                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20"
               >
-                Confirmar Seleção ({(bairros?.length || 0) + (praias?.length || 0)})
+                Confirmar ({bairrosAtuacao.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO) */}
+      {/* ========================================================================= */}
+      {isPraiasModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-[#0B1329] border border-white/15 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#0E1733]">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🏖️</span>
+                <h3 className="font-display font-extrabold text-base text-white">
+                  Praias de Ubatuba
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPraiasModalOpen(false);
+                  setPraiasSearch("");
+                }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Busca */}
+            <div className="p-4 border-b border-white/10 shrink-0 bg-[#080E21]">
+              <div className="relative">
+                <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Buscar praia (ex: Praia Grande, Itamambuca)..."
+                  value={praiasSearch}
+                  onChange={(e) => setPraiasSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-green text-white text-sm font-sans outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Lista de Praias com Checkboxes */}
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+              {filteredPraias.map((p) => {
+                const isSelected = praias.includes(p);
+                return (
+                  <div
+                    key={`p-${p}`}
+                    onClick={() => togglePraia(p)}
+                    className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                      isSelected ? "bg-green/10 text-white" : "hover:bg-white/5 text-white/80"
+                    }`}
+                  >
+                    <span className="text-sm font-sans font-medium">{p}</span>
+                    <div
+                      className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
+                        isSelected ? "bg-green text-navy border-green" : "border border-white/20 bg-black/40"
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredPraias.length === 0 && (
+                <div className="py-12 text-center text-white/40 text-xs font-mono">
+                  Nenhuma praia localizada com &quot;{praiasSearch}&quot;.
+                </div>
+              )}
+            </div>
+
+            {/* Footer com Ações */}
+            <div className="p-4 border-t border-white/10 bg-[#0E1733] flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setValue("praias", [], { shouldValidate: true })}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Limpar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPraiasModalOpen(false);
+                  setPraiasSearch("");
+                }}
+                className="px-5 py-3 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-green/20"
+              >
+                Confirmar ({praias.length})
               </button>
             </div>
           </div>

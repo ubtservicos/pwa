@@ -100,17 +100,22 @@ export default function AtualizacaoCadastral() {
       // Regiões salvas
       const regioesList = leadData.regiao_atuacao
         ? leadData.regiao_atuacao.split(",").map((s: string) => s.trim()).filter(Boolean)
-        : [];
+        : (Array.isArray(leadData.regioes) ? leadData.regioes : []);
 
-      // Bairros trabalho
+      // Bairro de residência salvo
+      const bResidenciaSalvo = leadData.bairro_residencia
+        || leadData.bairro_moradia
+        || (Array.isArray(leadData.bairros) && leadData.bairros.length > 0 ? leadData.bairros[0] : (leadData.bairro_hospedagem || ""));
+
+      // Bairros trabalho salvos
       const bairrosTrabList = leadData.bairro_trabalho
         ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
-        : [];
+        : (Array.isArray(leadData.bairros_atuacao) ? leadData.bairros_atuacao : []);
 
       // Praias salvas
       const praiasList = Array.isArray(leadData.praias_frequenta)
         ? leadData.praias_frequenta
-        : [];
+        : (Array.isArray(leadData.praias) ? leadData.praias : []);
 
       setInitialFormValues({
         tipoPessoa: isPJ ? "PJ" : "PF",
@@ -130,8 +135,11 @@ export default function AtualizacaoCadastral() {
         tipo_chave_pix: leadData.tipo_chave_pix || "",
         chave_pix: leadData.chave_pix ? applyPixMask(leadData.chave_pix, leadData.tipo_chave_pix) : "",
         regiao_atuacao_pf: !isPJ ? regioesList : [],
+        regioes: regioesList,
+        bairro_residencia: bResidenciaSalvo,
+        bairros_atuacao: bairrosTrabList,
         praias: praiasList,
-        bairros: leadData.bairro_moradia ? [leadData.bairro_moradia] : (leadData.bairro_hospedagem ? [leadData.bairro_hospedagem] : []),
+        bairros: [bResidenciaSalvo, ...bairrosTrabList].filter(Boolean),
         bairro_trabalho: bairrosTrabList,
         acceptTerms: true,
       });
