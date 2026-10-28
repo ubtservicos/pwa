@@ -13,12 +13,23 @@ import { trackEvent } from "@/services/AnalyticsService";
 import FounderForm, {
   FounderFormData,
   BAIRROS_LIST,
+  BAIRROS_COM_OUTRA_CIDADE_LIST,
   BAIRROS_RESIDENCIA_LIST,
+  BAIRROS_ATUACAO_LIST,
+  BAIRROS_HOSPEDAGEM_LIST,
   PRAIAS_LIST,
   REGIOES_UBATUBA
 } from "@/components/FounderForm";
 
-export { BAIRROS_LIST, BAIRROS_RESIDENCIA_LIST, PRAIAS_LIST, REGIOES_UBATUBA };
+export {
+  BAIRROS_LIST,
+  BAIRROS_COM_OUTRA_CIDADE_LIST,
+  BAIRROS_RESIDENCIA_LIST,
+  BAIRROS_ATUACAO_LIST,
+  BAIRROS_HOSPEDAGEM_LIST,
+  PRAIAS_LIST,
+  REGIOES_UBATUBA
+};
 
 export default function AtualizacaoCadastral() {
   const navigate = useNavigate();
@@ -182,13 +193,13 @@ export default function AtualizacaoCadastral() {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen bg-[#060B18] text-white flex flex-col selection:bg-green selection:text-navy pb-28 md:pb-8">
+    <div className="min-h-screen bg-black text-white flex flex-col selection:bg-green selection:text-navy pb-28 md:pb-8">
       {/* Glows de Fundo */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#00FF66]/10 blur-[140px] pointer-events-none rounded-full" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-[#005BFF]/10 blur-[140px] pointer-events-none rounded-full" />
 
       {/* Barra de Navegação Superior */}
-      <header className="relative z-30 border-b border-white/10 bg-[#0B1329]/80 backdrop-blur-md sticky top-0 px-4 sm:px-8 py-4 flex items-center justify-between">
+      <header className="relative z-30 border-b border-zinc-800 bg-black/90 backdrop-blur-md sticky top-0 px-4 sm:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
             to="/"
@@ -198,7 +209,7 @@ export default function AtualizacaoCadastral() {
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Início</span>
           </Link>
-          <div className="h-4 w-px bg-white/10 hidden sm:block" />
+          <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
           <Link to="/" className="flex items-center gap-2">
             <span className="font-display font-extrabold text-lg tracking-wider text-white">
               UBT <span className="text-green text-sm font-sans font-semibold">SERVIÇOS</span>
@@ -248,7 +259,7 @@ export default function AtualizacaoCadastral() {
               </p>
             </div>
 
-            <div className="p-6 sm:p-8 rounded-3xl bg-[#0B1329] border border-white/10 shadow-2xl flex flex-col gap-4">
+            <div className="p-6 sm:p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-4">
               <div>
                 <label className="text-xs font-mono text-white/70 uppercase tracking-wider block mb-2">
                   Número de WhatsApp:
@@ -264,7 +275,7 @@ export default function AtualizacaoCadastral() {
                     }}
                     placeholder="(12) 99999-9999"
                     maxLength={15}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-black/60 border border-white/10 focus:border-green text-white text-sm font-mono outline-none"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none"
                   />
                 </div>
               </div>
@@ -323,7 +334,7 @@ export default function AtualizacaoCadastral() {
                 Faltam poucos detalhes para liberar a sua aprovação.
               </h1>
 
-              <div className="p-5 sm:p-6 rounded-2xl bg-[#0B1329]/90 border border-white/10 text-left max-w-2xl text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed backdrop-blur-sm">
+              <div className="p-5 sm:p-6 rounded-2xl bg-zinc-950 border border-zinc-800 text-left max-w-2xl text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed backdrop-blur-sm">
                 Obrigado por apoiar a UBT desde o início! Atualizamos nossa infraestrutura para garantir repasses automáticos via Pix, segurança por senha e separação entre prestadores e tomadores. Revise seus dados abaixo, selecione suas regiões de atuação e crie sua senha de acesso para ativar seu perfil e seu link de apadrinhamento.
               </div>
             </div>

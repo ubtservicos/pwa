@@ -167,12 +167,16 @@ export const PRAIAS_LIST = [
   "Vermelha do Sul"
 ].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-export const BAIRROS_RESIDENCIA_LIST = [
+export const BAIRROS_COM_OUTRA_CIDADE_LIST = [
   "Em outra cidade",
   ...BAIRROS_LIST
 ];
 
-export const REGIOES_UBATUBA = ["Sul", "Centro", "Norte", "Oeste"];
+export const BAIRROS_RESIDENCIA_LIST = BAIRROS_COM_OUTRA_CIDADE_LIST;
+export const BAIRROS_ATUACAO_LIST = BAIRROS_COM_OUTRA_CIDADE_LIST;
+export const BAIRROS_HOSPEDAGEM_LIST = BAIRROS_COM_OUTRA_CIDADE_LIST;
+
+export const REGIOES_UBATUBA = ["Sul", "Centro", "Norte", "Oeste", "Em outra cidade"];
 
 export const PERFIS_PF_LIST = [
   { id: "morador", label: "Morador / Consumidor", icon: "🏡" },
@@ -875,7 +879,23 @@ export default function FounderForm({
             }
           }
         } else {
-          throw authError;
+          if (!isUpdateMode) {
+            throw authError;
+          } else {
+            console.warn("[FounderForm] UpdateMode Auth SignUp aviso:", authError);
+            // Tenta login com a senha informada
+            try {
+              const { data: signInData } = await supabase.auth.signInWithPassword({
+                email: values.email.trim().toLowerCase(),
+                password: values.senha,
+              });
+              if (signInData?.user) {
+                authUserId = signInData.user.id;
+              }
+            } catch (e) {
+              authUserId = leadRecord?.user_id || leadRecord?.id || null;
+            }
+          }
         }
       } else {
         authUserId = authData?.user?.id || null;
@@ -916,6 +936,10 @@ export default function FounderForm({
       // MODO ATUALIZAÇÃO CADASTRAL
       // =====================================================================
       if (isUpdateMode) {
+        const targetLeadId = leadRecord?.id ? String(leadRecord.id) : null;
+        const cleanPhone = (values.telefone || leadRecord?.telefone || "").replace(/\D/g, "");
+        const rpcIdentifier = targetLeadId || cleanPhone || values.telefone.trim();
+
         const waitlistUpdateData: any = {
           user_id: authUserId,
           tipo_pessoa: values.tipoPessoa,
@@ -949,10 +973,30 @@ export default function FounderForm({
           updated_at: new Date().toISOString(),
         };
 
+        const rpcPayload: any = {
+          ...waitlistUpdateData,
+          p_id: targetLeadId || cleanPhone,
+          id: targetLeadId,
+          telefone: values.telefone.trim(),
+          senha: values.senha,
+          perfil: perfilArray,
+          regiao_atuacao: regiaoStr,
+          regioes: regioesArr,
+          bairro_moradia: values.bairro_residencia,
+          bairro_residencia: values.bairro_residencia,
+          bairros_atuacao: values.bairros_atuacao,
+          bairro_trabalho: bairroTrabStr,
+          bairros_hospedagem: values.bairros_hospedagem,
+          bairro_hospedagem: bairroHospStr,
+          possui_conta_mercado_pago: values.possuiContaMercadoPago,
+          chave_pix: chavePixFinal,
+          tipo_chave_pix: tipoChavePixFinal,
+        };
+
         try {
           const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
-            p_lead_id: leadRecord?.id || null,
-            p_dados: waitlistUpdateData,
+            p_lead_id: rpcIdentifier,
+            p_dados: rpcPayload,
           });
 
           if (rpcErr) {
@@ -1149,11 +1193,11 @@ export default function FounderForm({
     !bairroResidenciaSearch.trim() || b.toLowerCase().includes(bairroResidenciaSearch.toLowerCase().trim())
   );
 
-  const filteredBairrosAtuacao = BAIRROS_LIST.filter(b =>
+  const filteredBairrosAtuacao = BAIRROS_ATUACAO_LIST.filter(b =>
     !bairrosAtuacaoSearch.trim() || b.toLowerCase().includes(bairrosAtuacaoSearch.toLowerCase().trim())
   );
 
-  const filteredBairrosHospedagem = BAIRROS_LIST.filter(b =>
+  const filteredBairrosHospedagem = BAIRROS_HOSPEDAGEM_LIST.filter(b =>
     !bairrosHospedagemSearch.trim() || b.toLowerCase().includes(bairrosHospedagemSearch.toLowerCase().trim())
   );
 
@@ -1162,11 +1206,11 @@ export default function FounderForm({
   );
 
   return (
-    <div className={`w-full max-w-4xl mx-auto bg-slate-950 text-white rounded-3xl border border-emerald-500/20 shadow-2xl shadow-emerald-950/40 relative flex flex-col pb-24 md:pb-0 ${className}`}>
+    <div className={`w-full max-w-4xl mx-auto bg-black text-white rounded-3xl border border-zinc-800 shadow-2xl shadow-black/80 relative flex flex-col pb-24 md:pb-0 ${className}`}>
       {/* ========================================================================= */}
       {/* 2. HEADER FIXO (STICKY TOP) */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md px-5 sm:px-8 py-3.5 border-b border-emerald-500/20 flex items-center justify-between rounded-t-3xl">
+      <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md px-5 sm:px-8 py-3.5 border-b border-zinc-800 flex items-center justify-between rounded-t-3xl">
         <div className="flex items-center gap-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-[#00FF66] animate-pulse shadow-[0_0_10px_#00FF66]" />
           <span className="font-display font-black text-xs sm:text-sm tracking-wider uppercase text-white">
@@ -1205,13 +1249,13 @@ export default function FounderForm({
           <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
             Tipo de Cadastro <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 rounded-2xl bg-zinc-950 border border-zinc-800">
             <button
               type="button"
               onClick={() => setValue("tipoPessoa", "PF", { shouldValidate: true })}
               className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PF"
-                  ? "bg-[#00FF66] text-slate-950 shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                  ? "bg-[#00FF66] text-black shadow-[0_0_15px_rgba(0,255,102,0.35)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -1224,7 +1268,7 @@ export default function FounderForm({
               onClick={() => setValue("tipoPessoa", "PJ", { shouldValidate: true })}
               className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
                 tipoPessoa === "PJ"
-                  ? "bg-[#00FF66] text-slate-950 shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                  ? "bg-[#00FF66] text-black shadow-[0_0_15px_rgba(0,255,102,0.35)]"
                   : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -1249,8 +1293,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Seu nome completo"
                   {...register("nome")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.nome && (
@@ -1274,8 +1318,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={14}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cpf && (
@@ -1302,7 +1346,7 @@ export default function FounderForm({
                       className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer select-none active:scale-[0.99] ${
                         isSelected
                           ? "bg-emerald-500/15 border-[#00FF66] text-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.25)]"
-                          : "bg-slate-900/80 border-white/10 text-white/80 hover:border-white/20 hover:text-white"
+                          : "bg-zinc-950 border-zinc-800 text-white/80 hover:border-zinc-700 hover:text-white"
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -1313,7 +1357,7 @@ export default function FounderForm({
                       </div>
                       <div
                         className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                          isSelected ? "bg-[#00FF66] text-slate-950" : "border border-white/20 bg-white/5"
+                          isSelected ? "bg-[#00FF66] text-black" : "border border-zinc-700 bg-zinc-900"
                         }`}
                       >
                         {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -1346,8 +1390,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Ex: Associação dos Quiosques de Ubatuba"
                   {...register("nome_empresa")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.nome_empresa ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.nome_empresa ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.nome_empresa && (
@@ -1371,8 +1415,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={18}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.cnpj ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.cnpj ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cnpj && (
@@ -1393,8 +1437,8 @@ export default function FounderForm({
                   type="text"
                   placeholder="Nome completo do responsável"
                   {...register("responsavel_legal")}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.responsavel_legal ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base transition-all`}
                 />
                 {errors.responsavel_legal && (
@@ -1418,8 +1462,8 @@ export default function FounderForm({
                     }
                   })}
                   maxLength={14}
-                  className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                    errors.cpf_responsavel ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                    errors.cpf_responsavel ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } outline-none text-white text-sm sm:text-base font-mono transition-all`}
                 />
                 {errors.cpf_responsavel && (
@@ -1450,8 +1494,8 @@ export default function FounderForm({
                 }
               })}
               maxLength={15}
-              className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+              className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                errors.telefone ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
               } outline-none text-white text-sm sm:text-base font-mono transition-all`}
             />
             {errors.telefone && (
@@ -1470,8 +1514,8 @@ export default function FounderForm({
               type="email"
               placeholder="seu@email.com"
               {...register("email")}
-              className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+              className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                errors.email ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
               } outline-none text-white text-sm sm:text-base transition-all`}
             />
             {errors.email && (
@@ -1486,8 +1530,8 @@ export default function FounderForm({
         {/* 1. SEÇÃO GEOGRÁFICA CONDICIONAL POR PERFIL (UNIÃO LÓGICA SEM DUPLICAÇÃO) */}
         {/* ========================================================================= */}
         {(showRegioes || showBairroResidencia || showBairrosTrabalho || showBairrosHospedagem || showPraias) && (
-          <div className="p-5 sm:p-7 rounded-3xl bg-slate-900/60 border border-emerald-500/20 shadow-2xl flex flex-col gap-6 relative overflow-hidden backdrop-blur-md">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-emerald-500/15">
+          <div className="p-5 sm:p-7 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-6 relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-zinc-800">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
                 <Compass className="w-4 h-4 text-[#00FF66]" />
               </div>
@@ -1501,7 +1545,7 @@ export default function FounderForm({
               </div>
             </div>
 
-            {/* CONDICIONAL A: ZONA / REGIÃO DE ATUAÇÃO (SUL, CENTRO, NORTE, OESTE) */}
+            {/* CONDICIONAL A: ZONA / REGIÃO DE ATUAÇÃO (SUL, CENTRO, NORTE, OESTE, EM OUTRA CIDADE) */}
             {showRegioes && (
               <div className="flex flex-col gap-2.5 animate-in fade-in">
                 <div className="flex items-center justify-between">
@@ -1513,29 +1557,48 @@ export default function FounderForm({
                   </span>
                 </div>
                 <p className="text-[11px] text-white/50 font-sans pl-1 -mt-1">
-                  Marque uma ou mais regiões de Ubatuba onde você pretende atender ou circular.
+                  Marque uma ou mais regiões onde você pretende atender ou circular.
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-1 gap-2.5 w-full">
                   {REGIOES_UBATUBA.map((reg) => {
                     const isSelected = regioes.includes(reg);
+                    const isOutraCidade = reg === "Em outra cidade";
                     return (
                       <button
                         key={`zona-${reg}`}
                         type="button"
                         onClick={() => toggleRegiao(reg)}
-                        className={`py-3.5 px-3.5 rounded-xl border font-display font-bold text-xs uppercase tracking-wider flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-98 ${
+                        className={`w-full py-4 px-4 sm:px-5 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer select-none active:scale-[0.99] ${
                           isSelected
-                            ? "bg-[#00FF66] text-slate-950 border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.35)]"
-                            : "bg-slate-900/80 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+                            ? "bg-[#00FF66]/15 text-white border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.25)]"
+                            : "bg-black/60 border-zinc-800 text-white/80 hover:border-zinc-700 hover:text-white"
                         }`}
                       >
-                        <span>Região {reg}</span>
+                        <div className="flex items-center gap-3">
+                          {isOutraCidade ? (
+                            <span className="text-xl shrink-0">🏙️</span>
+                          ) : (
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                              isSelected ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-white/5 text-white/40"
+                            }`}>
+                              <Compass className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                            <span className="font-display font-bold text-sm tracking-wide text-white">
+                              {isOutraCidade ? "Em outra cidade" : `Região ${reg}`}
+                            </span>
+                            <span className="text-[11px] text-white/50 font-sans">
+                              {isOutraCidade ? "Atuação e atendimento fora de Ubatuba" : `Atuação na Região ${reg} de Ubatuba`}
+                            </span>
+                          </div>
+                        </div>
                         <div
-                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
-                            isSelected ? "bg-slate-950 text-[#00FF66]" : "border border-white/20 bg-white/5"
+                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                            isSelected ? "bg-[#00FF66] text-black shadow-[0_0_8px_#00FF66]" : "border border-zinc-700 bg-zinc-900"
                           }`}
                         >
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                         </div>
                       </button>
                     );
@@ -1570,15 +1633,15 @@ export default function FounderForm({
                   id="bairro_residencia_button"
                   type="button"
                   onClick={() => setIsBairroResidenciaModalOpen(true)}
-                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-black border ${
                     errors.bairro_residencia
                       ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20"
-                      : "border-white/10 hover:border-[#00FF66]/50 focus:border-[#00FF66]"
+                      : "border-zinc-800 hover:border-[#00FF66]/50 focus:border-[#00FF66]"
                   } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      bairroResidencia ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                      bairroResidencia ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-zinc-800"
                     }`}>
                       <MapPin className="w-4 h-4" />
                     </div>
@@ -1621,11 +1684,11 @@ export default function FounderForm({
                 <button
                   type="button"
                   onClick={() => setIsBairrosAtuacaoModalOpen(true)}
-                  className="w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border border-white/10 hover:border-[#00FF66]/50 text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98"
+                  className="w-full py-4 px-4 sm:px-5 rounded-2xl bg-black border border-zinc-800 hover:border-[#00FF66]/50 text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98"
                 >
                   <div className="flex items-center gap-3 truncate">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      bairrosAtuacao.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                      bairrosAtuacao.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-zinc-800"
                     }`}>
                       <Building2 className="w-4 h-4" />
                     </div>
@@ -1648,7 +1711,7 @@ export default function FounderForm({
                     {bairrosAtuacao.map((b) => (
                       <span
                         key={`chip-trab-${b}`}
-                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/30 text-[11px] text-white font-sans flex items-center gap-1.5"
+                        className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-white font-sans flex items-center gap-1.5"
                       >
                         <span>{b}</span>
                         <button
@@ -1690,13 +1753,13 @@ export default function FounderForm({
                 <button
                   type="button"
                   onClick={() => setIsBairrosHospedagemModalOpen(true)}
-                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
-                    errors.bairros_hospedagem ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-[#00FF66]/50"
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-black border ${
+                    errors.bairros_hospedagem ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 hover:border-[#00FF66]/50"
                   } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      bairrosHospedagem.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                      bairrosHospedagem.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-zinc-800"
                     }`}>
                       <MapPin className="w-4 h-4" />
                     </div>
@@ -1719,7 +1782,7 @@ export default function FounderForm({
                     {bairrosHospedagem.map((b) => (
                       <span
                         key={`chip-hosp-${b}`}
-                        className="px-2.5 py-1 rounded-lg bg-slate-900 border border-emerald-500/30 text-[11px] text-white font-sans flex items-center gap-1.5"
+                        className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-white font-sans flex items-center gap-1.5"
                       >
                         <span>{b}</span>
                         <button
@@ -1766,13 +1829,13 @@ export default function FounderForm({
                 <button
                   type="button"
                   onClick={() => setIsPraiasModalOpen(true)}
-                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-slate-900/90 border ${
-                    errors.praias ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 hover:border-[#00FF66]/50"
+                  className={`w-full py-4 px-4 sm:px-5 rounded-2xl bg-black border ${
+                    errors.praias ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 hover:border-[#00FF66]/50"
                   } text-left flex items-center justify-between gap-3 transition-all cursor-pointer group shadow-inner active:scale-98`}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      praias.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-white/10"
+                      praias.length > 0 ? "bg-emerald-500/10 text-[#00FF66] border border-[#00FF66]/30" : "bg-white/5 text-white/40 border border-zinc-800"
                     }`}>
                       <span className="text-sm">🏖️</span>
                     </div>
@@ -1837,8 +1900,8 @@ export default function FounderForm({
                 type={showSenha ? "text" : "password"}
                 placeholder="Mínimo 6 caracteres"
                 {...register("senha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                 } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
@@ -1867,8 +1930,8 @@ export default function FounderForm({
                 type={showConfirmarSenha ? "text" : "password"}
                 placeholder="Repita sua senha"
                 {...register("confirmarSenha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                className={`w-full px-5 py-4 rounded-2xl bg-zinc-950 border ${
+                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                 } outline-none text-white text-sm sm:text-base transition-all pr-12`}
               />
               <button
@@ -1891,7 +1954,7 @@ export default function FounderForm({
         {/* ========================================================================= */}
         {/* SEÇÃO MERCADO PAGO E CHAVE PIX */}
         {/* ========================================================================= */}
-        <div className="p-5 sm:p-7 rounded-3xl bg-slate-900/60 border border-emerald-500/20 shadow-xl flex flex-col gap-4 backdrop-blur-md">
+        <div className="p-5 sm:p-7 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-xl flex flex-col gap-4 backdrop-blur-md">
           <div>
             <label className="block text-xs font-mono text-white/80 uppercase tracking-widest mb-1 pl-1 font-semibold">
               Você possui conta no Mercado Pago? <span className="text-red-500">*</span>
@@ -1906,8 +1969,8 @@ export default function FounderForm({
                 onClick={() => handleMercadoPagoToggle(true)}
                 className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   possuiContaMercadoPago === true
-                    ? "bg-[#00FF66] text-slate-950 border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.35)]"
-                    : "bg-slate-900 border border-white/10 text-white/60 hover:text-white"
+                    ? "bg-[#00FF66] text-black border-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                    : "bg-black border border-zinc-800 text-white/60 hover:text-white"
                 }`}
               >
                 <Check className="w-4 h-4 stroke-[3]" />
@@ -1920,7 +1983,7 @@ export default function FounderForm({
                 className={`py-3.5 px-4 rounded-xl font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   possuiContaMercadoPago === false
                     ? "bg-white/20 text-white border border-white/30"
-                    : "bg-slate-900 border border-white/10 text-white/60 hover:text-white"
+                    : "bg-black border border-zinc-800 text-white/60 hover:text-white"
                 }`}
               >
                 <span>Não possuo ainda</span>
@@ -1935,7 +1998,7 @@ export default function FounderForm({
 
           {/* Campos condicionais da Chave Pix com Preenchimento Inteligente */}
           {possuiContaMercadoPago === true && (
-            <div className="pt-4 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+            <div className="pt-4 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
               <div>
                 <label htmlFor="form-select-tipo_pix" className="block text-xs font-mono text-white/70 uppercase tracking-widest mb-2 pl-1 font-semibold">
                   Tipo de Chave Pix <span className="text-red-500">*</span>
@@ -1945,14 +2008,14 @@ export default function FounderForm({
                     id="form-select-tipo_pix"
                     value={tipoChavePix}
                     onChange={handleTipoChavePixChange}
-                    className="w-full px-4 py-3.5 rounded-xl bg-slate-950 border border-white/10 focus:border-[#00FF66] text-white text-xs sm:text-sm font-mono outline-none appearance-none cursor-pointer"
+                    className="w-full px-4 py-3.5 rounded-xl bg-black border border-zinc-800 focus:border-[#00FF66] text-white text-xs sm:text-sm font-mono outline-none appearance-none cursor-pointer"
                   >
-                    <option value="" disabled className="bg-slate-950 text-white/40">Selecione o tipo de chave...</option>
-                    <option value="cpf" className="bg-slate-950 text-white">CPF</option>
-                    <option value="cnpj" className="bg-slate-950 text-white">CNPJ</option>
-                    <option value="email" className="bg-slate-950 text-white">E-mail</option>
-                    <option value="telefone" className="bg-slate-950 text-white">Telefone / Celular</option>
-                    <option value="aleatoria" className="bg-slate-950 text-white">Chave Aleatória (EVP)</option>
+                    <option value="" disabled className="bg-black text-white/40">Selecione o tipo de chave...</option>
+                    <option value="cpf" className="bg-black text-white">CPF</option>
+                    <option value="cnpj" className="bg-black text-white">CNPJ</option>
+                    <option value="email" className="bg-black text-white">E-mail</option>
+                    <option value="telefone" className="bg-black text-white">Telefone / Celular</option>
+                    <option value="aleatoria" className="bg-black text-white">Chave Aleatória (EVP)</option>
                   </select>
                   <ChevronDown className="w-4 h-4 text-white/40 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -1988,8 +2051,8 @@ export default function FounderForm({
                       setValue("chave_pix", applyPixMask(e.target.value, tipoChavePix), { shouldValidate: true });
                     }
                   })}
-                  className={`w-full px-4 py-3.5 rounded-xl bg-slate-950 border ${
-                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                  className={`w-full px-4 py-3.5 rounded-xl bg-black border ${
+                    errors.chave_pix ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-zinc-800 focus:border-[#00FF66]"
                   } text-white text-xs sm:text-sm font-mono outline-none transition-all`}
                 />
                 {errors.chave_pix && (
@@ -2025,16 +2088,16 @@ export default function FounderForm({
       {/* ========================================================================= */}
       {/* 2. FOOTER FIXO DE AÇÃO (STICKY BOTTOM - NEON GAMER UBT) */}
       {/* ========================================================================= */}
-      <footer className="sticky bottom-[70px] md:bottom-0 z-40 p-4 sm:p-5 bg-slate-950/95 border-t border-emerald-500/20 backdrop-blur-md rounded-b-3xl flex flex-col gap-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+      <footer className="sticky bottom-[70px] md:bottom-0 z-40 p-4 sm:p-5 bg-black/95 border-t border-zinc-800 backdrop-blur-md rounded-b-3xl flex flex-col gap-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.9)]">
         <button
           type="button"
           onClick={handleSubmit(onSubmit, onInvalid)}
           disabled={isSubmitting}
-          className={`w-full py-4 sm:py-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-display font-extrabold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-3 transition-all cursor-pointer shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:shadow-[0_0_30px_rgba(0,255,102,0.6)] disabled:opacity-50 disabled:cursor-not-allowed`}
+          className={`w-full py-4 sm:py-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-black font-display font-extrabold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-3 transition-all cursor-pointer shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:shadow-[0_0_30px_rgba(0,255,102,0.6)] disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           {isSubmitting ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin text-slate-950" />
+              <Loader2 className="w-5 h-5 animate-spin text-black" />
               <span>Processando Cadastro...</span>
             </>
           ) : (
@@ -2061,10 +2124,10 @@ export default function FounderForm({
       {/* MODAL 1: BAIRRO DE RESIDÊNCIA (SELECT ÚNICO COM BUSCA) */}
       {/* ========================================================================= */}
       {isBairroResidenciaModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-black border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(0,255,102,0.15)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950">
               <div className="flex items-center gap-2.5">
                 <MapPin className="w-5 h-5 text-[#00FF66]" />
                 <h3 className="font-display font-extrabold text-base text-white">
@@ -2084,7 +2147,7 @@ export default function FounderForm({
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
+            <div className="p-4 border-b border-zinc-800 shrink-0 bg-black">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2092,14 +2155,14 @@ export default function FounderForm({
                   placeholder="Buscar bairro oficial de Ubatuba..."
                   value={bairroResidenciaSearch}
                   onChange={(e) => setBairroResidenciaSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Lista com Scroll Suave */}
-            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-zinc-900">
               {filteredBairrosResidencia.map((b) => {
                 const isSelected = bairroResidencia === b;
                 const isOutraCidade = b === "Em outra cidade";
@@ -2110,10 +2173,10 @@ export default function FounderForm({
                     onClick={() => selectBairroResidencia(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors text-left cursor-pointer ${
                       isSelected
-                        ? "bg-emerald-500/15 text-white border border-[#00FF66]/40"
+                        ? "bg-[#00FF66]/15 text-white border border-[#00FF66]/40"
                         : isOutraCidade
-                        ? "bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 font-semibold"
-                        : "hover:bg-white/5 text-white/80"
+                        ? "bg-zinc-900/80 hover:bg-zinc-800 text-emerald-400 font-semibold"
+                        : "hover:bg-zinc-900/60 text-white/80"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 truncate">
@@ -2127,7 +2190,7 @@ export default function FounderForm({
                     </div>
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-[#00FF66] text-slate-950" : "border border-white/20 bg-white/5"
+                        isSelected ? "bg-[#00FF66] text-black" : "border border-zinc-700 bg-zinc-900"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2143,7 +2206,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer */}
-            <div className="p-3 border-t border-emerald-500/15 bg-slate-900/90 flex justify-end shrink-0">
+            <div className="p-3 border-t border-zinc-800 bg-zinc-950 flex justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -2163,10 +2226,10 @@ export default function FounderForm({
       {/* MODAL 2: BAIRROS DE TRABALHO / ATUAÇÃO (MÚLTIPLA SELEÇÃO) */}
       {/* ========================================================================= */}
       {isBairrosAtuacaoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-black border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(0,255,102,0.15)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950">
               <div className="flex items-center gap-2.5">
                 <Building2 className="w-5 h-5 text-[#00FF66]" />
                 <h3 className="font-display font-extrabold text-base text-white">
@@ -2186,7 +2249,7 @@ export default function FounderForm({
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
+            <div className="p-4 border-b border-zinc-800 shrink-0 bg-black">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2194,28 +2257,41 @@ export default function FounderForm({
                   placeholder="Buscar bairro de trabalho..."
                   value={bairrosAtuacaoSearch}
                   onChange={(e) => setBairrosAtuacaoSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Lista com Checkboxes */}
-            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-zinc-900">
               {filteredBairrosAtuacao.map((b) => {
                 const isSelected = bairrosAtuacao.includes(b);
+                const isOutraCidade = b === "Em outra cidade";
                 return (
                   <div
                     key={`b-trab-${b}`}
                     onClick={() => toggleBairroAtuacao(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected
+                        ? "bg-[#00FF66]/15 text-white border border-[#00FF66]/40"
+                        : isOutraCidade
+                        ? "bg-zinc-900/80 hover:bg-zinc-800 text-emerald-400 font-semibold"
+                        : "hover:bg-zinc-900/60 text-white/80"
                     }`}
                   >
-                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div className="flex items-center gap-2.5 truncate">
+                      {isOutraCidade && <span className="text-base shrink-0">🏙️</span>}
+                      <span className="text-sm font-sans font-medium">{b}</span>
+                      {isOutraCidade && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider font-semibold">
+                          Outro Município
+                        </span>
+                      )}
+                    </div>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
+                        isSelected ? "bg-[#00FF66] text-black border-[#00FF66]" : "border border-zinc-700 bg-zinc-900"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2231,7 +2307,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -2249,7 +2325,7 @@ export default function FounderForm({
                   setIsBairrosAtuacaoModalOpen(false);
                   setBairrosAtuacaoSearch("");
                 }}
-                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
               >
                 Confirmar ({bairrosAtuacao.length})
               </button>
@@ -2262,10 +2338,10 @@ export default function FounderForm({
       {/* MODAL 3: BAIRROS DE HOSPEDAGEM (MÚLTIPLA SELEÇÃO - TURISTA) */}
       {/* ========================================================================= */}
       {isBairrosHospedagemModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-black border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(0,255,102,0.15)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950">
               <div className="flex items-center gap-2.5">
                 <MapPin className="w-5 h-5 text-[#00FF66]" />
                 <h3 className="font-display font-extrabold text-base text-white">
@@ -2285,7 +2361,7 @@ export default function FounderForm({
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
+            <div className="p-4 border-b border-zinc-800 shrink-0 bg-black">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2293,28 +2369,41 @@ export default function FounderForm({
                   placeholder="Buscar bairro de hospedagem..."
                   value={bairrosHospedagemSearch}
                   onChange={(e) => setBairrosHospedagemSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Lista com Checkboxes */}
-            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-zinc-900">
               {filteredBairrosHospedagem.map((b) => {
                 const isSelected = bairrosHospedagem.includes(b);
+                const isOutraCidade = b === "Em outra cidade";
                 return (
                   <div
                     key={`b-hosp-${b}`}
                     onClick={() => toggleBairroHospedagem(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected
+                        ? "bg-[#00FF66]/15 text-white border border-[#00FF66]/40"
+                        : isOutraCidade
+                        ? "bg-zinc-900/80 hover:bg-zinc-800 text-emerald-400 font-semibold"
+                        : "hover:bg-zinc-900/60 text-white/80"
                     }`}
                   >
-                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div className="flex items-center gap-2.5 truncate">
+                      {isOutraCidade && <span className="text-base shrink-0">🏙️</span>}
+                      <span className="text-sm font-sans font-medium">{b}</span>
+                      {isOutraCidade && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider font-semibold">
+                          Outro Município
+                        </span>
+                      )}
+                    </div>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
+                        isSelected ? "bg-[#00FF66] text-black border-[#00FF66]" : "border border-zinc-700 bg-zinc-900"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2330,7 +2419,7 @@ export default function FounderForm({
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -2347,7 +2436,7 @@ export default function FounderForm({
                   setIsBairrosHospedagemModalOpen(false);
                   setBairrosHospedagemSearch("");
                 }}
-                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
               >
                 Confirmar ({bairrosHospedagem.length})
               </button>
@@ -2360,10 +2449,10 @@ export default function FounderForm({
       {/* MODAL 4: PRAIAS QUE COSTUMA FREQUENTAR / ATUAR (MÚLTIPLA SELEÇÃO) */}
       {/* ========================================================================= */}
       {isPraiasModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="w-full sm:max-w-lg bg-slate-950 border border-emerald-500/30 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.25)] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="w-full sm:max-w-lg bg-black border border-zinc-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(0,255,102,0.15)] overflow-hidden">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-emerald-500/20 flex items-center justify-between shrink-0 bg-slate-900/90">
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-950">
               <div className="flex items-center gap-2.5">
                 <span className="text-xl">🏖️</span>
                 <h3 className="font-display font-extrabold text-base text-white">
@@ -2383,7 +2472,7 @@ export default function FounderForm({
             </div>
 
             {/* Busca */}
-            <div className="p-4 border-b border-emerald-500/15 shrink-0 bg-slate-950">
+            <div className="p-4 border-b border-zinc-800 shrink-0 bg-black">
               <div className="relative">
                 <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -2391,14 +2480,14 @@ export default function FounderForm({
                   placeholder="Buscar praia (ex: Praia Grande, Itamambuca)..."
                   value={praiasSearch}
                   onChange={(e) => setPraiasSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-[#00FF66] text-white text-sm font-sans outline-none"
                   autoFocus
                 />
               </div>
             </div>
 
             {/* Lista de Praias com Checkboxes */}
-            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
+            <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-zinc-900">
               {filteredPraias.map((p) => {
                 const isSelected = praias.includes(p);
                 return (
@@ -2406,13 +2495,13 @@ export default function FounderForm({
                     key={`p-${p}`}
                     onClick={() => togglePraia(p)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected ? "bg-[#00FF66]/15 text-white border border-[#00FF66]/40" : "hover:bg-zinc-900/60 text-white/80"
                     }`}
                   >
                     <span className="text-sm font-sans font-medium">{p}</span>
                     <div
                       className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                        isSelected ? "bg-[#00FF66] text-slate-950 border-[#00FF66]" : "border border-white/20 bg-black/40"
+                        isSelected ? "bg-[#00FF66] text-black border-[#00FF66]" : "border border-zinc-700 bg-zinc-900"
                       }`}
                     >
                       {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -2422,16 +2511,18 @@ export default function FounderForm({
               })}
               {filteredPraias.length === 0 && (
                 <div className="py-12 text-center text-white/40 text-xs font-mono">
-                  Nenhuma praia localizada com &quot;{praiasSearch}&quot;.
+                  Nenhum praia localizada com &quot;{praiasSearch}&quot;.
                 </div>
               )}
             </div>
 
             {/* Footer com Ações */}
-            <div className="p-4 border-t border-emerald-500/15 bg-slate-900/90 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => setValue("praias", [], { shouldValidate: true })}
+                onClick={() => {
+                  setValue("praias", [], { shouldValidate: true });
+                }}
                 className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer"
               >
                 Limpar
@@ -2443,7 +2534,7 @@ export default function FounderForm({
                   setIsPraiasModalOpen(false);
                   setPraiasSearch("");
                 }}
-                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
+                className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.35)]"
               >
                 Confirmar ({praias.length})
               </button>
