@@ -13,11 +13,12 @@ import { trackEvent } from "@/services/AnalyticsService";
 import FounderForm, {
   FounderFormData,
   BAIRROS_LIST,
+  BAIRROS_RESIDENCIA_LIST,
   PRAIAS_LIST,
   REGIOES_UBATUBA
 } from "@/components/FounderForm";
 
-export { BAIRROS_LIST, PRAIAS_LIST, REGIOES_UBATUBA };
+export { BAIRROS_LIST, BAIRROS_RESIDENCIA_LIST, PRAIAS_LIST, REGIOES_UBATUBA };
 
 export default function AtualizacaoCadastral() {
   const navigate = useNavigate();
@@ -181,7 +182,7 @@ export default function AtualizacaoCadastral() {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen bg-[#060B18] text-white flex flex-col selection:bg-green selection:text-navy">
+    <div className="min-h-screen bg-[#060B18] text-white flex flex-col selection:bg-green selection:text-navy pb-28 md:pb-8">
       {/* Glows de Fundo */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#00FF66]/10 blur-[140px] pointer-events-none rounded-full" />
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-[#005BFF]/10 blur-[140px] pointer-events-none rounded-full" />

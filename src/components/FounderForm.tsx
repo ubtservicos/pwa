@@ -167,12 +167,17 @@ export const PRAIAS_LIST = [
   "Vermelha do Sul"
 ].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
+export const BAIRROS_RESIDENCIA_LIST = [
+  "Em outra cidade",
+  ...BAIRROS_LIST
+];
+
 export const REGIOES_UBATUBA = ["Sul", "Centro", "Norte", "Oeste"];
 
 export const PERFIS_PF_LIST = [
   { id: "morador", label: "Morador / Consumidor", icon: "🏡" },
   { id: "turista", label: "Turista / Visitante", icon: "🧳" },
-  { id: "ambulante", label: "Ambulante de Praia", icon: "🏖️" },
+  { id: "ambulante", label: "Ambulante", icon: "🏖️" },
   { id: "mototaxista", label: "Mototaxista", icon: "🏍️" },
   { id: "diarista", label: "Diarista / Faxina", icon: "🧹" },
 ];
@@ -1140,7 +1145,7 @@ export default function FounderForm({
   };
 
   // Listas filtradas para busca
-  const filteredBairrosResidencia = BAIRROS_LIST.filter(b =>
+  const filteredBairrosResidencia = BAIRROS_RESIDENCIA_LIST.filter(b =>
     !bairroResidenciaSearch.trim() || b.toLowerCase().includes(bairroResidenciaSearch.toLowerCase().trim())
   );
 
@@ -1157,7 +1162,7 @@ export default function FounderForm({
   );
 
   return (
-    <div className={`w-full max-w-4xl mx-auto bg-slate-950 text-white rounded-3xl border border-emerald-500/20 shadow-2xl shadow-emerald-950/40 relative flex flex-col ${className}`}>
+    <div className={`w-full max-w-4xl mx-auto bg-slate-950 text-white rounded-3xl border border-emerald-500/20 shadow-2xl shadow-emerald-950/40 relative flex flex-col pb-24 md:pb-0 ${className}`}>
       {/* ========================================================================= */}
       {/* 2. HEADER FIXO (STICKY TOP) */}
       {/* ========================================================================= */}
@@ -1282,11 +1287,11 @@ export default function FounderForm({
             </div>
 
             {/* Perfis de Atuação PF */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2.5">
               <label className="block text-xs font-mono text-white/50 uppercase tracking-widest pl-1">
                 Como você atuará na UBT? <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {PERFIS_PF_LIST.map((item) => {
                   const isSelected = perfil.includes(item.id);
                   return (
@@ -1294,14 +1299,25 @@ export default function FounderForm({
                       key={item.id}
                       type="button"
                       onClick={() => togglePerfil(item.id)}
-                      className={`p-3 sm:p-3.5 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer select-none active:scale-98 ${
+                      className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer select-none active:scale-[0.99] ${
                         isSelected
-                          ? "bg-emerald-500/15 border-[#00FF66] text-[#00FF66] shadow-[0_0_12px_rgba(0,255,102,0.2)]"
-                          : "bg-slate-900/80 border-white/10 text-white/70 hover:border-white/20 hover:text-white"
+                          ? "bg-emerald-500/15 border-[#00FF66] text-[#00FF66] shadow-[0_0_15px_rgba(0,255,102,0.25)]"
+                          : "bg-slate-900/80 border-white/10 text-white/80 hover:border-white/20 hover:text-white"
                       }`}
                     >
-                      <span className="text-xl shrink-0">{item.icon}</span>
-                      <span className="text-xs sm:text-sm font-sans font-medium truncate">{item.label}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-2xl shrink-0">{item.icon}</span>
+                        <span className="text-sm font-sans font-semibold whitespace-normal leading-snug">
+                          {item.label}
+                        </span>
+                      </div>
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                          isSelected ? "bg-[#00FF66] text-slate-950" : "border border-white/20 bg-white/5"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
                     </button>
                   );
                 })}
@@ -1569,7 +1585,7 @@ export default function FounderForm({
                     <span className={`text-sm sm:text-base font-sans truncate ${
                       bairroResidencia ? "text-white font-semibold" : "text-white/40"
                     }`}>
-                      {bairroResidencia || "Selecione seu bairro (Centro, Itaguá, Perequê-Açu, Estufa I...)"}
+                      {bairroResidencia || "Selecione seu bairro ou 'Em outra cidade'..."}
                     </span>
                   </div>
                   <span className="text-xs text-[#00FF66] font-mono uppercase tracking-wider font-semibold group-hover:underline shrink-0 flex items-center gap-1">
@@ -1808,6 +1824,71 @@ export default function FounderForm({
         )}
 
         {/* ========================================================================= */}
+        {/* SEGURANÇA: DEFINIÇÃO DE SENHA DO MEMBRO FUNDADOR */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div>
+            <label htmlFor="form-input-senha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+              Senha de Acesso <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                id="form-input-senha"
+                type={showSenha ? "text" : "password"}
+                placeholder="Mínimo 6 caracteres"
+                {...register("senha")}
+                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowSenha(!showSenha)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
+                aria-label={showSenha ? "Ocultar senha" : "Ver senha"}
+              >
+                {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {errors.senha && (
+              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <span>⚠</span> {errors.senha.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="form-input-confirmarSenha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+              Confirmar Senha <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                id="form-input-confirmarSenha"
+                type={showConfirmarSenha ? "text" : "password"}
+                placeholder="Repita sua senha"
+                {...register("confirmarSenha")}
+                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
+                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
+                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmarSenha(!showConfirmarSenha)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
+                aria-label={showConfirmarSenha ? "Ocultar confirmação" : "Ver confirmação"}
+              >
+                {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {errors.confirmarSenha && (
+              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                <span>⚠</span> {errors.confirmarSenha.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
         {/* SEÇÃO MERCADO PAGO E CHAVE PIX */}
         {/* ========================================================================= */}
         <div className="p-5 sm:p-7 rounded-3xl bg-slate-900/60 border border-emerald-500/20 shadow-xl flex flex-col gap-4 backdrop-blur-md">
@@ -1921,71 +2002,6 @@ export default function FounderForm({
           )}
         </div>
 
-        {/* ========================================================================= */}
-        {/* SEGURANÇA: DEFINIÇÃO DE SENHA DO MEMBRO FUNDADOR */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <div>
-            <label htmlFor="form-input-senha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-              Senha de Acesso <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="form-input-senha"
-                type={showSenha ? "text" : "password"}
-                placeholder="Mínimo 6 caracteres"
-                {...register("senha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                  errors.senha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
-                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowSenha(!showSenha)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
-                aria-label={showSenha ? "Ocultar senha" : "Ver senha"}
-              >
-                {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.senha && (
-              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                <span>⚠</span> {errors.senha.message}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="form-input-confirmarSenha" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-              Confirmar Senha <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="form-input-confirmarSenha"
-                type={showConfirmarSenha ? "text" : "password"}
-                placeholder="Repita sua senha"
-                {...register("confirmarSenha")}
-                className={`w-full px-5 py-4 rounded-2xl bg-slate-900/90 border ${
-                  errors.confirmarSenha ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-[#00FF66]"
-                } outline-none text-white text-sm sm:text-base transition-all pr-12`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmarSenha(!showConfirmarSenha)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer p-1"
-                aria-label={showConfirmarSenha ? "Ocultar confirmação" : "Ver confirmação"}
-              >
-                {showConfirmarSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.confirmarSenha && (
-              <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                <span>⚠</span> {errors.confirmarSenha.message}
-              </p>
-            )}
-          </div>
-        </div>
-
         {/* Termos de Uso e LGPD */}
         <div className="flex flex-col gap-1 pt-1">
           <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -2009,7 +2025,7 @@ export default function FounderForm({
       {/* ========================================================================= */}
       {/* 2. FOOTER FIXO DE AÇÃO (STICKY BOTTOM - NEON GAMER UBT) */}
       {/* ========================================================================= */}
-      <footer className="sticky bottom-0 z-40 p-4 sm:p-5 bg-slate-950/95 border-t border-emerald-500/20 backdrop-blur-md rounded-b-3xl flex flex-col gap-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+      <footer className="sticky bottom-[70px] md:bottom-0 z-40 p-4 sm:p-5 bg-slate-950/95 border-t border-emerald-500/20 backdrop-blur-md rounded-b-3xl flex flex-col gap-2.5 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
         <button
           type="button"
           onClick={handleSubmit(onSubmit, onInvalid)}
@@ -2086,16 +2102,29 @@ export default function FounderForm({
             <div className="p-3 sm:p-4 overflow-y-auto flex-1 divide-y divide-white/5">
               {filteredBairrosResidencia.map((b) => {
                 const isSelected = bairroResidencia === b;
+                const isOutraCidade = b === "Em outra cidade";
                 return (
                   <button
                     key={`b-res-${b}`}
                     type="button"
                     onClick={() => selectBairroResidencia(b)}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-between gap-3 transition-colors text-left cursor-pointer ${
-                      isSelected ? "bg-emerald-500/15 text-white" : "hover:bg-white/5 text-white/80"
+                      isSelected
+                        ? "bg-emerald-500/15 text-white border border-[#00FF66]/40"
+                        : isOutraCidade
+                        ? "bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 font-semibold"
+                        : "hover:bg-white/5 text-white/80"
                     }`}
                   >
-                    <span className="text-sm font-sans font-medium">{b}</span>
+                    <div className="flex items-center gap-2.5 truncate">
+                      {isOutraCidade && <span className="text-base shrink-0">🏙️</span>}
+                      <span className="text-sm font-sans font-medium">{b}</span>
+                      {isOutraCidade && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider font-semibold">
+                          Outro Município
+                        </span>
+                      )}
+                    </div>
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
                         isSelected ? "bg-[#00FF66] text-slate-950" : "border border-white/20 bg-white/5"
