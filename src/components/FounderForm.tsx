@@ -902,90 +902,6 @@ export default function FounderForm({
       const chavePixFinal = values.possuiContaMercadoPago ? (values.chave_pix?.trim() || null) : null;
       const tipoChavePixFinal = values.possuiContaMercadoPago ? (values.tipo_chave_pix?.trim() || null) : null;
 
-      // 1. Criação ou Autenticação na Sessão do Supabase Auth
-      let authUserId: string | null = null;
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: values.email.trim().toLowerCase(),
-        password: values.senha,
-        options: {
-          data: {
-            nome: nomeFinal,
-            tipo_pessoa: values.tipoPessoa,
-            cpf: cleanCpf,
-            cnpj: cleanCnpj,
-            telefone: values.telefone.trim(),
-            perfil: perfilArray,
-            role: userRole,
-            responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
-            cpf_responsavel: cleanCpfResp,
-            regiao_atuacao: regiaoStr,
-            regioes: regioesArr,
-            bairro_residencia: values.bairro_residencia,
-            bairros_atuacao: values.bairros_atuacao,
-            bairros_hospedagem: values.bairros_hospedagem,
-            praias: values.praias,
-            chave_pix: chavePixFinal,
-            tipo_chave_pix: tipoChavePixFinal,
-          }
-        }
-      });
-
-      if (authError) {
-        console.warn("[FounderForm] Auth SignUp:", authError);
-        const authMsg = authError.message?.toLowerCase() || "";
-        const isDuplicate = authMsg.includes("already registered") ||
-          authMsg.includes("already exists") ||
-          authMsg.includes("user already exists");
-
-        if (isDuplicate) {
-          if (!isUpdateMode) {
-            const cleanTel = (values.telefone || "").replace(/\D/g, "");
-            const redirectParam = cleanTel || cleanCpf || encodeURIComponent(values.email.trim());
-            toast.info("Você já possui uma inscrição! Redirecionando para atualizar seu cadastro e ativar sua senha...", { duration: 4000 });
-            setTimeout(() => {
-              navigate(`/atualizacao-cadastral?tel=${redirectParam}`);
-            }, 1200);
-            setIsSubmitting(false);
-            return;
-          } else {
-            const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-              email: values.email.trim().toLowerCase(),
-              password: values.senha,
-            });
-            if (!signInErr && signInData?.user) {
-              authUserId = signInData.user.id;
-            } else {
-              authUserId = leadRecord?.user_id || leadRecord?.id || null;
-            }
-          }
-        } else {
-          if (!isUpdateMode) {
-            throw authError;
-          } else {
-            console.warn("[FounderForm] UpdateMode Auth SignUp aviso:", authError);
-            // Tenta login com a senha informada
-            try {
-              const { data: signInData } = await supabase.auth.signInWithPassword({
-                email: values.email.trim().toLowerCase(),
-                password: values.senha,
-              });
-              if (signInData?.user) {
-                authUserId = signInData.user.id;
-              }
-            } catch (e) {
-              authUserId = leadRecord?.user_id || leadRecord?.id || null;
-            }
-          }
-        }
-      } else {
-        authUserId = authData?.user?.id || null;
-      }
-
-      if (!authUserId && leadRecord?.id) {
-        authUserId = leadRecord.user_id || leadRecord.id;
-      }
-
       // Observações descritivas
       const obsParts: string[] = [];
       obsParts.push(`Tipo: ${values.tipoPessoa}`);
@@ -1013,13 +929,30 @@ export default function FounderForm({
       }
       const obsText = obsParts.join(" | ");
 
+      let authUserId: string | null = null;
+      let authenticatedUser: any = null;
+
       // =====================================================================
-      // MODO ATUALIZAÇÃO CADASTRAL
+      // MODO 1: ATUALIZAÇÃO CADASTRAL (/atualizacao-cadastral)
       // =====================================================================
       if (isUpdateMode) {
-        const targetLeadId = leadRecord?.id ? String(leadRecord.id) : null;
-        const cleanPhone = (values.telefone || leadRecord?.telefone || "").replace(/\D/g, "");
-        const rpcIdentifier = targetLeadId || cleanPhone || values.telefone.trim();
+        // Resolve o UUID do lead na waitlist
+        let targetLeadUuid: string | null = null;
+        if (leadRecord?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(leadRecord.id))) {
+          targetLeadUuid = String(leadRecord.id);
+        } else {
+          const cleanPhone = (values.telefone || leadRecord?.telefone || "").replace(/\D/g, "");
+          const { data: foundLead } = await supabase
+            .from("waitlist")
+            .select("id, user_id")
+            .or(`telefone.eq.${cleanPhone},telefone.eq.${values.telefone.trim()},email.eq.${values.email.trim().toLowerCase()}`)
+            .limit(1)
+            .maybeSingle();
+          if (foundLead?.id) {
+            targetLeadUuid = foundLead.id;
+            if (foundLead.user_id) authUserId = foundLead.user_id;
+          }
+        }
 
         const waitlistUpdateData: any = {
           user_id: authUserId,
@@ -1040,14 +973,15 @@ export default function FounderForm({
           bairro: bairroCanonical,
           bairro_residencia: bairroCanonical,
           bairro_moradia: bairroCanonical,
-          bairros_atuacao: values.bairros_atuacao,
+          bairros_atuacao: values.bairros_atuacao || [],
           bairro_trabalho: bairroTrabStr,
           bairro_hospedagem: bairroHospStr,
-          bairros_hospedagem: values.bairros_hospedagem,
+          bairros_hospedagem: values.bairros_hospedagem || [],
           bairros: bairrosCanonical,
-          praias: values.praias,
+          praias: values.praias || [],
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
+          possui_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
           chave_pix: chavePixFinal,
           tipo_chave_pix: tipoChavePixFinal,
           observacoes: obsText,
@@ -1056,78 +990,84 @@ export default function FounderForm({
           updated_at: new Date().toISOString(),
         };
 
-        const rpcPayload: any = {
-          ...waitlistUpdateData,
-          p_id: targetLeadId || cleanPhone,
-          id: targetLeadId,
-          telefone: values.telefone.trim(),
-          senha: values.senha,
-          perfil: perfilArray,
-          perfis: perfilArray,
-          regiao_atuacao: regiaoStr,
-          regioes: regioesArr,
-          bairro: bairroCanonical,
-          bairro_moradia: bairroCanonical,
-          bairro_residencia: bairroCanonical,
-          bairros_atuacao: values.bairros_atuacao,
-          bairro_trabalho: bairroTrabStr,
-          bairros_hospedagem: values.bairros_hospedagem,
-          bairro_hospedagem: bairroHospStr,
-          bairros: bairrosCanonical,
-          praias: values.praias,
-          praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
-          possui_conta_mercado_pago: values.possuiContaMercadoPago,
-          chave_pix: chavePixFinal,
-          tipo_chave_pix: tipoChavePixFinal,
-        };
+        // Invocação canônica da RPC unificada
+        if (targetLeadUuid) {
+          try {
+            const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
+              p_lead_id: targetLeadUuid,
+              p_senha: values.senha,
+              p_bairro_residencia: bairroCanonical,
+              p_regioes: regioesArr,
+              p_bairros_atuacao: values.bairros_atuacao || [],
+              p_praias: values.praias || [],
+              p_possui_mp: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : false,
+              p_tipo_chave_pix: tipoChavePixFinal || "",
+              p_chave_pix: chavePixFinal || "",
+            });
 
-        try {
-          const { error: rpcErr } = await supabase.rpc("concluir_atualizacao_cadastral", {
-            p_lead_id: rpcIdentifier,
-            p_dados: rpcPayload,
-          });
-
-          if (rpcErr) {
-            console.warn("[FounderForm] RPC concluir_atualizacao_cadastral fallback direto:", rpcErr);
-            if (leadRecord?.id) {
-              const { error: directUpdateErr } = await supabase
+            if (rpcErr) {
+              console.warn("[FounderForm] RPC concluir_atualizacao_cadastral aviso, executando update direto na waitlist:", rpcErr);
+              await supabase
                 .from("waitlist")
                 .update(waitlistUpdateData)
-                .eq("id", leadRecord.id);
+                .eq("id", targetLeadUuid);
+            }
+          } catch (rpcCatch) {
+            console.warn("[FounderForm] Exceção RPC, executando update direto na waitlist:", rpcCatch);
+            await supabase
+              .from("waitlist")
+              .update(waitlistUpdateData)
+              .eq("id", targetLeadUuid);
+          }
+        } else {
+          const cleanPhone = (values.telefone || leadRecord?.telefone || "").replace(/\D/g, "");
+          await supabase
+            .from("waitlist")
+            .update(waitlistUpdateData)
+            .or(`telefone.eq.${cleanPhone},telefone.eq.${values.telefone.trim()},email.eq.${values.email.trim().toLowerCase()}`);
+        }
 
-              if (directUpdateErr) {
-                console.warn("[FounderForm] Fallback direto falhou, aplicando fallback sanitizado estrito:", directUpdateErr);
-                const safeUpdateData: any = {
-                  user_id: authUserId,
-                  tipo_pessoa: values.tipoPessoa,
-                  nome: nomeFinal,
-                  cpf: cleanCpf,
-                  cnpj: cleanCnpj,
-                  email: values.email.trim().toLowerCase(),
-                  telefone: values.telefone.trim(),
-                  bairro_moradia: bairroCanonical,
-                  bairro_trabalho: bairroTrabStr,
-                  bairro_hospedagem: bairroHospStr,
-                  bairros: bairrosCanonical,
-                  chave_pix: chavePixFinal,
-                  tipo_chave_pix: tipoChavePixFinal,
-                  cadastro_completo: true,
-                  status: "completo",
-                  updated_at: new Date().toISOString(),
-                };
-                await supabase
-                  .from("waitlist")
-                  .update(safeUpdateData)
-                  .eq("id", leadRecord.id);
+        // Auth desacoplado e não-bloqueante (protegido contra HTTP 429 rate limit)
+        try {
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+            email: values.email.trim().toLowerCase(),
+            password: values.senha,
+            options: {
+              data: {
+                nome: nomeFinal,
+                tipo_pessoa: values.tipoPessoa,
+                cpf: cleanCpf,
+                cnpj: cleanCnpj,
+                telefone: values.telefone.trim(),
+                perfil: perfilArray,
+                role: userRole,
               }
             }
+          });
+
+          if (signUpData?.user) {
+            authUserId = signUpData.user.id;
+            authenticatedUser = signUpData.user;
+          } else if (signUpErr) {
+            console.warn("[FounderForm] Auth signUp em atualização (não-bloqueante):", signUpErr);
+            const { data: signInData } = await supabase.auth.signInWithPassword({
+              email: values.email.trim().toLowerCase(),
+              password: values.senha,
+            });
+            if (signInData?.user) {
+              authUserId = signInData.user.id;
+              authenticatedUser = signInData.user;
+            }
           }
-        } catch (saveErr) {
-          console.warn("[FounderForm] Exceção ao persistir waitlist:", saveErr);
+        } catch (authErr) {
+          console.warn("[FounderForm] Auth não-bloqueante:", authErr);
         }
 
         if (authUserId) {
           try {
+            if (targetLeadUuid) {
+              await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", targetLeadUuid);
+            }
             await supabase.from("usuarios").upsert({
               id: authUserId,
               nome: nomeFinal,
@@ -1153,25 +1093,16 @@ export default function FounderForm({
           }
         }
 
-        try {
-          await supabase.auth.signInWithPassword({
-            email: values.email.trim().toLowerCase(),
-            password: values.senha,
-          });
-        } catch (loginErr) {
-          // Sessão já pode estar ativa
-        }
-
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         toast.success("Cadastro ativado com sucesso! 🎉");
 
         trackEvent("atualizacao_cadastral_success", "onboarding", {
-          lead_id: leadRecord?.id,
+          lead_id: targetLeadUuid || leadRecord?.id,
           user_id: authUserId
         });
 
         if (onSuccess) {
-          onSuccess({ user: authData?.user, waitlistData: waitlistUpdateData });
+          onSuccess({ user: authenticatedUser || { id: authUserId, email: values.email }, waitlistData: waitlistUpdateData });
         }
 
         setTimeout(() => {
@@ -1191,7 +1122,7 @@ export default function FounderForm({
         const parsedUA = parseUserAgent(ua);
 
         const newWaitlistPayload: any = {
-          user_id: authUserId,
+          user_id: null,
           tipo_pessoa: values.tipoPessoa,
           nome: nomeFinal,
           cpf: cleanCpf,
@@ -1218,14 +1149,15 @@ export default function FounderForm({
           bairro: bairroCanonical,
           bairro_residencia: bairroCanonical,
           bairro_moradia: bairroCanonical,
-          bairros_atuacao: values.bairros_atuacao,
+          bairros_atuacao: values.bairros_atuacao || [],
           bairro_trabalho: bairroTrabStr,
           bairro_hospedagem: bairroHospStr,
-          bairros_hospedagem: values.bairros_hospedagem,
+          bairros_hospedagem: values.bairros_hospedagem || [],
           bairros: bairrosCanonical,
-          praias: values.praias,
+          praias: values.praias || [],
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
+          possui_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
           chave_pix: chavePixFinal,
           tipo_chave_pix: tipoChavePixFinal,
           observacoes: obsText || null
@@ -1240,7 +1172,6 @@ export default function FounderForm({
         if (insertError && (insertError.code === "PGRST204" || insertError.message?.toLowerCase().includes("schema cache") || insertError.message?.toLowerCase().includes("bairro_residencia"))) {
           console.warn("[FounderForm] Fallback de inserção ativado devido a divergência no schema cache:", insertError);
           const safeInsertPayload: any = {
-            user_id: authUserId,
             tipo_pessoa: values.tipoPessoa,
             nome: nomeFinal,
             cpf: cleanCpf,
@@ -1307,8 +1238,43 @@ export default function FounderForm({
           throw insertError;
         }
 
-        if (authUserId) {
-          try {
+        const newLeadId = insertData?.[0]?.id || null;
+
+        // 2º Passo: Auth signUp desacoplado em bloco try/catch não-bloqueante
+        // Falhas como HTTP 429 (email rate limit exceeded) NÃO cancelam o cadastro concluído
+        try {
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: values.email.trim().toLowerCase(),
+            password: values.senha,
+            options: {
+              data: {
+                nome: nomeFinal,
+                tipo_pessoa: values.tipoPessoa,
+                cpf: cleanCpf,
+                cnpj: cleanCnpj,
+                telefone: values.telefone.trim(),
+                perfil: perfilArray,
+                role: userRole,
+                responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
+                cpf_responsavel: cleanCpfResp,
+                regiao_atuacao: regiaoStr,
+                regioes: regioesArr,
+                bairro_residencia: bairroCanonical,
+                bairros_atuacao: values.bairros_atuacao,
+                bairros_hospedagem: values.bairros_hospedagem,
+                praias: values.praias,
+                chave_pix: chavePixFinal,
+                tipo_chave_pix: tipoChavePixFinal,
+              }
+            }
+          });
+
+          if (!authError && authData?.user) {
+            authenticatedUser = authData.user;
+            authUserId = authData.user.id;
+            if (newLeadId && authUserId) {
+              await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", newLeadId);
+            }
             await supabase.from("usuarios").upsert({
               id: authUserId,
               nome: nomeFinal,
@@ -1329,9 +1295,23 @@ export default function FounderForm({
               bairro_trabalho: bairroTrabStr,
               praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
             } as any);
-          } catch (syncErr) {
-            console.warn("[FounderForm] Sincronização usuarios:", syncErr);
+          } else if (authError) {
+            console.warn("[FounderForm] Auth SignUp capturado de forma não-bloqueante (429/email limit):", authError);
+            const authMsg = authError.message?.toLowerCase() || "";
+            if (authMsg.includes("already registered") || authMsg.includes("already exists")) {
+              const { data: signInData } = await supabase.auth.signInWithPassword({
+                email: values.email.trim().toLowerCase(),
+                password: values.senha,
+              });
+              if (signInData?.user?.id && newLeadId) {
+                authUserId = signInData.user.id;
+                authenticatedUser = signInData.user;
+                await supabase.from("waitlist").update({ user_id: authUserId }).eq("id", newLeadId);
+              }
+            }
           }
+        } catch (authCatchErr) {
+          console.warn("[FounderForm] Exceção Auth não-bloqueante capturada com sucesso:", authCatchErr);
         }
 
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
@@ -1341,7 +1321,7 @@ export default function FounderForm({
 
         if (onSuccess) {
           onSuccess({
-            user: authData?.user,
+            user: authenticatedUser,
             waitlistData: insertData && insertData[0] ? insertData[0] : newWaitlistPayload
           });
         }
