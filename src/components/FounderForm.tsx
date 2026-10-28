@@ -271,7 +271,9 @@ export const founderFormSchema = z.object({
   bairros_hospedagem: z.array(z.string()).default([]),
   praias: z.array(z.string()).default([]),
 
-  // Compatibilidade Legada
+  // Compatibilidade Legada & Sanitização de Colunas
+  bairro: z.string().optional().default(""),
+  perfis: z.array(z.string()).optional().default([]),
   bairros: z.array(z.string()).default([]),
   bairro_trabalho: z.array(z.string()).default([]),
   regiao_atuacao_pf: z.array(z.string()).default([]),
@@ -888,7 +890,14 @@ export default function FounderForm({
       const regiaoStr = regioesArr.length > 0 ? regioesArr.join(", ") : null;
       const bairroTrabStr = values.bairros_atuacao && values.bairros_atuacao.length > 0 ? values.bairros_atuacao.join(", ") : null;
       const bairroHospStr = values.bairros_hospedagem && values.bairros_hospedagem.length > 0 ? values.bairros_hospedagem.join(", ") : null;
-      const bairrosCombined = [values.bairro_residencia, ...(values.bairros_atuacao || []), ...(values.bairros_hospedagem || [])].filter(Boolean);
+      
+      const bairroCanonical = values.bairro_residencia || values.bairro || "";
+      const bairrosCanonical = Array.from(new Set([
+        bairroCanonical,
+        ...(values.bairros_atuacao || []),
+        ...(values.bairros_hospedagem || [])
+      ])).filter(Boolean);
+      const perfilPrincipal = perfilArray[0] || "morador";
 
       const chavePixFinal = values.possuiContaMercadoPago ? (values.chave_pix?.trim() || null) : null;
       const tipoChavePixFinal = values.possuiContaMercadoPago ? (values.tipo_chave_pix?.trim() || null) : null;
@@ -1025,15 +1034,17 @@ export default function FounderForm({
           telefone: values.telefone.trim(),
           cidade: "Ubatuba",
           perfil: perfilArray,
+          perfis: perfilArray,
           regiao_atuacao: regiaoStr,
           regioes: regioesArr,
-          bairro_residencia: values.bairro_residencia,
-          bairro_moradia: values.bairro_residencia,
+          bairro: bairroCanonical,
+          bairro_residencia: bairroCanonical,
+          bairro_moradia: bairroCanonical,
           bairros_atuacao: values.bairros_atuacao,
           bairro_trabalho: bairroTrabStr,
           bairro_hospedagem: bairroHospStr,
           bairros_hospedagem: values.bairros_hospedagem,
-          bairros: bairrosCombined,
+          bairros: bairrosCanonical,
           praias: values.praias,
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
@@ -1052,14 +1063,19 @@ export default function FounderForm({
           telefone: values.telefone.trim(),
           senha: values.senha,
           perfil: perfilArray,
+          perfis: perfilArray,
           regiao_atuacao: regiaoStr,
           regioes: regioesArr,
-          bairro_moradia: values.bairro_residencia,
-          bairro_residencia: values.bairro_residencia,
+          bairro: bairroCanonical,
+          bairro_moradia: bairroCanonical,
+          bairro_residencia: bairroCanonical,
           bairros_atuacao: values.bairros_atuacao,
           bairro_trabalho: bairroTrabStr,
           bairros_hospedagem: values.bairros_hospedagem,
           bairro_hospedagem: bairroHospStr,
+          bairros: bairrosCanonical,
+          praias: values.praias,
+          praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: values.possuiContaMercadoPago,
           chave_pix: chavePixFinal,
           tipo_chave_pix: tipoChavePixFinal,
@@ -1074,10 +1090,36 @@ export default function FounderForm({
           if (rpcErr) {
             console.warn("[FounderForm] RPC concluir_atualizacao_cadastral fallback direto:", rpcErr);
             if (leadRecord?.id) {
-              await supabase
+              const { error: directUpdateErr } = await supabase
                 .from("waitlist")
                 .update(waitlistUpdateData)
                 .eq("id", leadRecord.id);
+
+              if (directUpdateErr) {
+                console.warn("[FounderForm] Fallback direto falhou, aplicando fallback sanitizado estrito:", directUpdateErr);
+                const safeUpdateData: any = {
+                  user_id: authUserId,
+                  tipo_pessoa: values.tipoPessoa,
+                  nome: nomeFinal,
+                  cpf: cleanCpf,
+                  cnpj: cleanCnpj,
+                  email: values.email.trim().toLowerCase(),
+                  telefone: values.telefone.trim(),
+                  bairro_moradia: bairroCanonical,
+                  bairro_trabalho: bairroTrabStr,
+                  bairro_hospedagem: bairroHospStr,
+                  bairros: bairrosCanonical,
+                  chave_pix: chavePixFinal,
+                  tipo_chave_pix: tipoChavePixFinal,
+                  cadastro_completo: true,
+                  status: "completo",
+                  updated_at: new Date().toISOString(),
+                };
+                await supabase
+                  .from("waitlist")
+                  .update(safeUpdateData)
+                  .eq("id", leadRecord.id);
+              }
             }
           }
         } catch (saveErr) {
@@ -1099,7 +1141,9 @@ export default function FounderForm({
               regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
               tipo_chave_pix: tipoChavePixFinal,
-              bairro_moradia: values.bairro_residencia,
+              bairro: bairroCanonical,
+              bairro_residencia: bairroCanonical,
+              bairro_moradia: bairroCanonical,
               bairro_trabalho: bairroTrabStr,
               praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
               status: "completo",
@@ -1146,7 +1190,7 @@ export default function FounderForm({
         const ipHashVal = await sha256(seed);
         const parsedUA = parseUserAgent(ua);
 
-        const newWaitlistPayload = {
+        const newWaitlistPayload: any = {
           user_id: authUserId,
           tipo_pessoa: values.tipoPessoa,
           nome: nomeFinal,
@@ -1159,6 +1203,7 @@ export default function FounderForm({
           telefone: values.telefone.trim(),
           cidade: "Ubatuba",
           perfil: perfilArray,
+          perfis: perfilArray,
           consentimento_lgpd: true,
           status: "novo",
           created_at_local: createdLocal,
@@ -1170,13 +1215,14 @@ export default function FounderForm({
           os: parsedUA.os,
           regiao_atuacao: regiaoStr,
           regioes: regioesArr,
-          bairro_residencia: values.bairro_residencia,
-          bairro_moradia: values.bairro_residencia,
+          bairro: bairroCanonical,
+          bairro_residencia: bairroCanonical,
+          bairro_moradia: bairroCanonical,
           bairros_atuacao: values.bairros_atuacao,
           bairro_trabalho: bairroTrabStr,
           bairro_hospedagem: bairroHospStr,
           bairros_hospedagem: values.bairros_hospedagem,
-          bairros: bairrosCombined,
+          bairros: bairrosCanonical,
           praias: values.praias,
           praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
           possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
@@ -1185,10 +1231,58 @@ export default function FounderForm({
           observacoes: obsText || null
         };
 
-        const { data: insertData, error: insertError } = await supabase
+        let { data: insertData, error: insertError } = await supabase
           .from("waitlist")
-          .insert(newWaitlistPayload as any)
+          .insert(newWaitlistPayload)
           .select();
+
+        // Se falhar por erro de cache de schema PostgREST (código PGRST204)
+        if (insertError && (insertError.code === "PGRST204" || insertError.message?.toLowerCase().includes("schema cache") || insertError.message?.toLowerCase().includes("bairro_residencia"))) {
+          console.warn("[FounderForm] Fallback de inserção ativado devido a divergência no schema cache:", insertError);
+          const safeInsertPayload: any = {
+            user_id: authUserId,
+            tipo_pessoa: values.tipoPessoa,
+            nome: nomeFinal,
+            cpf: cleanCpf,
+            cnpj: cleanCnpj,
+            razao_social: !isPFMode ? values.nome_empresa?.trim() : null,
+            responsavel_legal: !isPFMode ? values.responsavel_legal?.trim() : null,
+            cpf_responsavel: cleanCpfResp,
+            email: values.email.trim().toLowerCase(),
+            telefone: values.telefone.trim(),
+            cidade: "Ubatuba",
+            perfil: perfilArray,
+            bairro_moradia: bairroCanonical,
+            bairro_trabalho: bairroTrabStr,
+            bairro_hospedagem: bairroHospStr,
+            bairros: bairrosCanonical,
+            praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
+            chave_pix: chavePixFinal,
+            tipo_chave_pix: tipoChavePixFinal,
+            consentimento_lgpd: true,
+            status: "novo",
+            created_at_local: createdLocal,
+            origem: "direto",
+            referer: document.referrer || null,
+            ip_hash: ipHashVal,
+            device_type: parsedUA.device_type,
+            browser: parsedUA.browser,
+            os: parsedUA.os,
+            observacoes: obsText || null
+          };
+
+          const retryResult = await supabase
+            .from("waitlist")
+            .insert(safeInsertPayload)
+            .select();
+
+          if (!retryResult.error) {
+            insertError = null;
+            insertData = retryResult.data;
+          } else {
+            insertError = retryResult.error;
+          }
+        }
 
         if (insertError) {
           const errMsg = insertError.message?.toLowerCase() || "";
@@ -1229,7 +1323,9 @@ export default function FounderForm({
               regiao_atuacao: regiaoStr,
               chave_pix: chavePixFinal,
               tipo_chave_pix: tipoChavePixFinal,
-              bairro_moradia: values.bairro_residencia,
+              bairro: bairroCanonical,
+              bairro_residencia: bairroCanonical,
+              bairro_moradia: bairroCanonical,
               bairro_trabalho: bairroTrabStr,
               praias_frequenta: values.praias && values.praias.length > 0 ? values.praias : null,
             } as any);

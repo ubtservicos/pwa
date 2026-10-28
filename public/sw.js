@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ubt-v4-prod';
+const CACHE_VERSION = 'ubt-v5-prod-20261028';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
