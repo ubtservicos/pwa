@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { founderFormSchema } from "@/components/FounderForm";
 
 // Port of sha256 and User-Agent parsing logic from Index.tsx for testing validation
 async function sha256(message: string): Promise<string> {
@@ -58,5 +59,195 @@ describe("Waitlist Helpers & Data Sanitization", () => {
     expect(parsed.device_type).toBe("Desktop");
     expect(parsed.browser).toBe("Chrome");
     expect(parsed.os).toBe("Windows");
+  });
+});
+
+describe("FounderForm Schema Validation (PF & PJ)", () => {
+  describe("Pessoa Física (PF)", () => {
+    it("should accept valid PF registration data", () => {
+      const validPf = {
+        tipoPessoa: "PF",
+        nome: "Felipe Santander",
+        cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "felipe@exemplo.com",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(validPf);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject PF with invalid CPF", () => {
+      const invalidPf = {
+        tipoPessoa: "PF",
+        nome: "Felipe Santander",
+        cpf: "111.222.333-44",
+        telefone: "(12) 99822-6782",
+        email: "felipe@exemplo.com",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPf);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const cpfError = result.error.issues.find((i) => i.path.includes("cpf"));
+        expect(cpfError).toBeDefined();
+        expect(cpfError?.message).toContain("CPF inválido");
+      }
+    });
+
+    it("should reject PF with name shorter than 3 characters", () => {
+      const invalidPf = {
+        tipoPessoa: "PF",
+        nome: "Al",
+        cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "al@exemplo.com",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPf);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const nameError = result.error.issues.find((i) => i.path.includes("nome"));
+        expect(nameError).toBeDefined();
+      }
+    });
+
+    it("should reject password mismatch", () => {
+      const invalidPf = {
+        tipoPessoa: "PF",
+        nome: "Felipe Santander",
+        cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "felipe@exemplo.com",
+        senha: "senhaSegura123",
+        confirmarSenha: "outraSenhaDiferente",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPf);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const passError = result.error.issues.find((i) => i.path.includes("confirmarSenha"));
+        expect(passError).toBeDefined();
+        expect(passError?.message).toContain("As senhas não conferem");
+      }
+    });
+
+    it("should reject when LGPD consent is not accepted", () => {
+      const invalidPf = {
+        tipoPessoa: "PF",
+        nome: "Felipe Santander",
+        cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "felipe@exemplo.com",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: false,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPf);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const lgpdError = result.error.issues.find((i) => i.path.includes("consentimento_lgpd"));
+        expect(lgpdError).toBeDefined();
+      }
+    });
+  });
+
+  describe("Pessoa Jurídica (PJ)", () => {
+    it("should accept valid PJ registration data", () => {
+      const validPj = {
+        tipoPessoa: "PJ",
+        razao_social: "Associação Comercial de Ubatuba",
+        cnpj: "11.222.333/0001-81",
+        responsavel_nome: "Maria Silva",
+        responsavel_cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "contato@associacao.org.br",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(validPj);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject PJ with invalid CNPJ", () => {
+      const invalidPj = {
+        tipoPessoa: "PJ",
+        razao_social: "Associação Comercial de Ubatuba",
+        cnpj: "00.000.000/0000-00",
+        responsavel_nome: "Maria Silva",
+        responsavel_cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "contato@associacao.org.br",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPj);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const cnpjError = result.error.issues.find((i) => i.path.includes("cnpj"));
+        expect(cnpjError).toBeDefined();
+        expect(cnpjError?.message).toContain("CNPJ inválido");
+      }
+    });
+
+    it("should reject PJ without responsible person name", () => {
+      const invalidPj = {
+        tipoPessoa: "PJ",
+        razao_social: "Associação Comercial de Ubatuba",
+        cnpj: "11.222.333/0001-81",
+        responsavel_nome: "",
+        responsavel_cpf: "529.982.247-25",
+        telefone: "(12) 99822-6782",
+        email: "contato@associacao.org.br",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPj);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const respError = result.error.issues.find((i) => i.path.includes("responsavel_nome"));
+        expect(respError).toBeDefined();
+      }
+    });
+
+    it("should reject PJ with invalid responsible person CPF", () => {
+      const invalidPj = {
+        tipoPessoa: "PJ",
+        razao_social: "Associação Comercial de Ubatuba",
+        cnpj: "11.222.333/0001-81",
+        responsavel_nome: "Maria Silva",
+        responsavel_cpf: "000.000.000-00",
+        telefone: "(12) 99822-6782",
+        email: "contato@associacao.org.br",
+        senha: "senhaSegura123",
+        confirmarSenha: "senhaSegura123",
+        consentimento_lgpd: true,
+      };
+
+      const result = founderFormSchema.safeParse(invalidPj);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const respCpfError = result.error.issues.find((i) => i.path.includes("responsavel_cpf"));
+        expect(respCpfError).toBeDefined();
+        expect(respCpfError?.message).toContain("CPF do responsável legal inválido");
+      }
+    });
   });
 });

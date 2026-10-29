@@ -1118,7 +1118,7 @@ export default function Index() {
 
               <FounderForm
                 isUpdateMode={false}
-                submitButtonText="Quero ser um Fundador"
+                submitButtonText="Cadastrar"
                 onSuccess={(data) => {
                   const wData = data.waitlistData;
                   const refCode = wData?.referral_code || generateReferralSlug(wData?.nome || "", wData?.id || data?.user?.id);
