@@ -32,6 +32,7 @@ export default function AdminClientesPage() {
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbProfiles, setDbProfiles] = useState<any[]>([]);
   const [dbPedidos, setDbPedidos] = useState<any[]>([]);
+  const [dbWaitlist, setDbWaitlist] = useState<any[]>([]);
   const [mototaxisMap, setMototaxisMap] = useState<Map<string, any>>(new Map());
   const [diaristasMap, setDiaristasMap] = useState<Map<string, any>>(new Map());
   const [caminhoesMap, setCaminhoesMap] = useState<Map<string, any>>(new Map());
@@ -148,6 +149,8 @@ export default function AdminClientesPage() {
           .from("pedidos")
           .select("tomador_id, prestador_id, total, status, created_at");
 
+        const { data: rawWaitlist } = await supabase.from("waitlist").select("id, email, telefone, user_id, cadastro_completo, status");
+        if (rawWaitlist) setDbWaitlist(rawWaitlist);
         setDbUsers(rawUsers || []);
         setDbProfiles(rawProfiles || []);
         setMototaxisMap(motoMap);
@@ -171,6 +174,17 @@ export default function AdminClientesPage() {
     
     const profMap = new Map<string, any>();
     dbProfiles.forEach((p) => profMap.set(p.id, p));
+
+    const cleanPhone = (p: string) => String(p || "").replace(/\D/g, "");
+    const wlPhoneMap = new Map<string, any>();
+    const wlEmailMap = new Map<string, any>();
+    const wlUserIdMap = new Map<string, any>();
+    dbWaitlist.forEach((w) => {
+      if (w.telefone) wlPhoneMap.set(cleanPhone(w.telefone), w);
+      if (w.email) wlEmailMap.set(String(w.email).toLowerCase().trim(), w);
+      if (w.user_id) wlUserIdMap.set(w.user_id, w);
+      if (w.id) wlUserIdMap.set(w.id, w);
+    });
 
     const now = new Date();
     const filteredPedidos = dbPedidos.filter((p: any) => {
@@ -252,6 +266,11 @@ export default function AdminClientesPage() {
       const phone = u.telefone || prof?.phone || u.phone || "Não cadastrado";
       const rawCpf = u.cpf || prof?.cpf || null;
       const cpf = rawCpf ? maskCPF(rawCpf) : "Não informado";
+      const userPhoneDigits = cleanPhone(u.telefone || prof?.phone || u.phone || "");
+      const userEmailClean = String(u.email || prof?.email || "").toLowerCase().trim();
+      const matchedWl = wlUserIdMap.get(u.id) || (userPhoneDigits ? wlPhoneMap.get(userPhoneDigits) : null) || (userEmailClean ? wlEmailMap.get(userEmailClean) : null);
+      const isCadastroCompleto = u.cadastro_completo === true || u.metadata?.cadastro_completo === true || matchedWl?.cadastro_completo === true;
+      const isPendente = u.status === "pendente_aprovacao" || u.status === "pending" || matchedWl?.status === "pendente_aprovacao" || matchedWl?.status === "pending";
 
       return {
         id: u.id,
@@ -274,9 +293,11 @@ export default function AdminClientesPage() {
         ticketsConsumidor,
         ticketsTrabalhador,
         contribComunidade,
+        cadastroCompleto: isCadastroCompleto,
+        isPendente,
       };
     });
-  }, [dbUsers, dbProfiles, dbPedidos, mototaxisMap, diaristasMap, caminhoesMap, userAssocMap, filterPeriod]);
+  }, [dbUsers, dbProfiles, dbPedidos, mototaxisMap, diaristasMap, caminhoesMap, userAssocMap, dbWaitlist, filterPeriod]);
 
   const filtered = useMemo(() => {
     const ql = q.toLowerCase();
@@ -559,12 +580,18 @@ export default function AdminClientesPage() {
                       </div>
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      {u.kycStatus ? (
-                        <Pill {...KYC_PILL[u.kycStatus]} size="sm">
-                          {KYC_PILL[u.kycStatus].label}
-                        </Pill>
+                      {u.isPendente ? (
+                        <span className="bg-zinc-800/80 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          Pendente
+                        </span>
+                      ) : u.cadastroCompleto ? (
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          Completo
+                        </span>
                       ) : (
-                        <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          Incompleto
+                        </span>
                       )}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
@@ -724,17 +751,17 @@ export default function AdminClientesPage() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {u.kycStatus && (
-                  <span style={{
-                    fontFamily: "DM Sans",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: u.kycStatus === "approved" ? "rgba(13, 184, 126, 0.1)" : "rgba(245, 166, 35, 0.1)",
-                    color: u.kycStatus === "approved" ? "#0DB87E" : "#F5A623",
-                    borderRadius: 99,
-                    padding: "2px 10px"
-                  }}>
-                    {u.kycStatus === "approved" ? "Aprovado" : "Pendente"}
+                {u.isPendente ? (
+                  <span className="bg-zinc-800/80 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold">
+                    Pendente
+                  </span>
+                ) : u.cadastroCompleto ? (
+                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                    Completo
+                  </span>
+                ) : (
+                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                    Incompleto
                   </span>
                 )}
                 <ChevronRight size={18} color="var(--admin-muted)" />
@@ -1186,6 +1213,24 @@ export default function AdminClientesPage() {
                 <div>
                   <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Associação</span>
                   <div style={{ fontSize: 13, color: "var(--admin-subtle)", marginTop: 2 }}>{selectedUserModal.associacao || "Nenhuma"}</div>
+                </div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Status do Cadastro</span>
+                  <div style={{ marginTop: 4 }}>
+                    {selectedUserModal.isPendente ? (
+                      <span className="bg-zinc-800/80 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                        Pendente de Aprovação
+                      </span>
+                    ) : selectedUserModal.cadastroCompleto ? (
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded text-xs font-semibold inline-flex items-center gap-1.5">
+                        ✓ Cadastro Completo (Aprovado)
+                      </span>
+                    ) : (
+                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded text-xs font-semibold inline-flex items-center gap-1.5">
+                        ⚠ Incompleto (Aguardando dados complementares)
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
