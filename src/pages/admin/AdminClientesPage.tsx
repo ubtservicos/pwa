@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2 } from "lucide-react";
+import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2, Eye, Copy, Check } from "lucide-react";
+import { getAppOrigin } from "@/lib/appUrl";
+import { maskCPF } from "@/utils/masks";
 import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -44,6 +46,20 @@ export default function AdminClientesPage() {
   const [pageSize, setPageSize] = useState(10);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [rules, setRules] = useState<StatusRule[]>([]);
+  const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+
+  const handleCopyLink = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedLink(type);
+      toast.show("Link copiado para a área de transferência! ✓");
+      setTimeout(() => setCopiedLink(null), 2500);
+    } catch (err) {
+      console.error("Erro ao copiar link:", err);
+      toast.show("Erro ao copiar link.");
+    }
+  };
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -231,9 +247,11 @@ export default function AdminClientesPage() {
       
       const contribComunidade = (pagos + recebidos) * 0.01;
       const status = u.status || (prof?.is_active === false ? "inactive" : "active");
-      const name = u.nome || prof?.name || "Sem nome";
-      const email = prof?.email || u.email || "Não informado";
-      const phone = prof?.phone || u.phone || "Não cadastrado";
+      const name = u.nome || u.razao_social || prof?.name || "Sem nome";
+      const email = u.email || prof?.email || "Não informado";
+      const phone = u.telefone || prof?.phone || u.phone || "Não cadastrado";
+      const rawCpf = u.cpf || prof?.cpf || null;
+      const cpf = rawCpf ? maskCPF(rawCpf) : "Não informado";
 
       return {
         id: u.id,
@@ -241,6 +259,7 @@ export default function AdminClientesPage() {
         role: (u.role && (u.role.startsWith("cocoecia") || u.role === "prestador")) || services.length > 0 ? "prestador" : "tomador",
         email,
         phone,
+        cpf,
         createdAt: u.created_at || prof?.created_at || new Date().toISOString(),
         kycStatus,
         services,
@@ -480,7 +499,7 @@ export default function AdminClientesPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
-                  {["Nome", "Papel", "Cadastro", "Serviços", "Prêmio 1/5", "Prêmio 1/11", "Associação", "Coletivo", "Recebidos", "Pagos"]
+                  {["Nome", "Papel", "Cadastro", "Serviços", "Prêmio 1/5", "Prêmio 1/11", "Associação", "Coletivo", "Recebidos", "Pagos", "Ações"]
                     .map((h) => (
                       <th
                         key={h}
@@ -590,11 +609,35 @@ export default function AdminClientesPage() {
                     <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#E84040" }}>
                       {formatBR(u.pagos || 0)}
                     </td>
+                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedUserModal(u);
+                        }}
+                        style={{
+                          padding: "5px 10px",
+                          borderRadius: 6,
+                          border: "1px solid var(--admin-border)",
+                          background: "var(--admin-bg)",
+                          color: "#2B6EE8",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Eye size={13} /> Detalhes
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {paged.length === 0 && (
                   <tr>
-                    <td colSpan={10} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
+                    <td colSpan={11} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                       Nenhum usuário encontrado.
                     </td>
                   </tr>
@@ -1077,6 +1120,303 @@ export default function AdminClientesPage() {
           </button>
         </div>
       </div>
+
+      {/* Modal de Detalhes do Cliente com Link de Atualização Cadastral */}
+      {selectedUserModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedUserModal(null);
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.70)",
+            backdropFilter: "blur(4px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <Card
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 540, maxHeight: "90vh", overflowY: "auto", padding: 24, position: "relative" }}
+          >
+            <button
+              onClick={() => setSelectedUserModal(null)}
+              style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
+            >
+              <X size={20} color="var(--admin-subtle)" />
+            </button>
+
+            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
+              Detalhes do Cliente
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: "DM Sans" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Avatar name={selectedUserModal.name} size={42} />
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--admin-text)" }}>{selectedUserModal.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--admin-subtle)", marginTop: 2 }}>
+                    {selectedUserModal.email} | {selectedUserModal.phone}
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 2 colunas com dados principais */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8 }}>
+                <div>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Papel / Perfil</span>
+                  <div style={{ fontSize: 13, color: "var(--admin-text)", fontWeight: 600, marginTop: 2 }}>{selectedUserModal.role}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>CPF / Documento</span>
+                  <div style={{ fontSize: 13, color: "var(--admin-subtle)", fontWeight: 600, marginTop: 2 }}>{selectedUserModal.cpf || "Não informado"}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Status</span>
+                  <div style={{ fontSize: 13, color: "#0DB87E", fontWeight: 600, marginTop: 2 }}>{selectedUserModal.status || "ativo"}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Associação</span>
+                  <div style={{ fontSize: 13, color: "var(--admin-subtle)", marginTop: 2 }}>{selectedUserModal.associacao || "Nenhuma"}</div>
+                </div>
+              </div>
+
+              {/* Links de Acesso e Atualização Cadastral */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>
+                  Ações e Links Operacionais
+                </div>
+
+                {/* Link de Atualização Cadastral */}
+                {(() => {
+                  const telLimpo = String(selectedUserModal.phone ?? "").replace(/\D/g, "");
+                  const linkAtualizacao = `${getAppOrigin()}/atualizacao-cadastral?tel=${telLimpo}`;
+                  const firstName = String(selectedUserModal.name ?? "Cliente").trim().split(" ")[0];
+                  const waMsg = `Olá, ${firstName}! Aqui é da equipe UBT Serviços. Para dar continuidade ao seu cadastro e configuração de localização, acesse este link seguro: ${linkAtualizacao}`;
+                  const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
+                  const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
+
+                  return (
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Link de Atualização Cadastral (Fluxo Geográfico):</span>
+                        {telLimpo ? (
+                          <span style={{ fontSize: 10, color: "#0DB87E", fontWeight: 600 }}>Pronto para envio</span>
+                        ) : (
+                          <span style={{ fontSize: 10, color: "#E84040", fontWeight: 600 }}>Telefone não cadastrado</span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <input
+                          readOnly
+                          type="text"
+                          value={telLimpo ? linkAtualizacao : "Telefone do usuário não informado"}
+                          style={{
+                            flex: 1,
+                            minWidth: 200,
+                            background: "var(--admin-bg)",
+                            border: "1px solid var(--admin-border)",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                            fontSize: 12,
+                            fontFamily: "monospace",
+                            color: "var(--admin-text)",
+                            outline: "none",
+                            cursor: telLimpo ? "text" : "not-allowed",
+                            opacity: telLimpo ? 1 : 0.6,
+                          }}
+                          onClick={(e) => telLimpo && (e.target as HTMLInputElement).select()}
+                        />
+                        <button
+                          type="button"
+                          disabled={!telLimpo}
+                          onClick={() => handleCopyLink(linkAtualizacao, "atualizacao")}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            border: "1px solid var(--admin-border)",
+                            background: copiedLink === "atualizacao" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                            color: copiedLink === "atualizacao" ? "#0DB87E" : "var(--admin-text)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: telLimpo ? "pointer" : "not-allowed",
+                            opacity: telLimpo ? 1 : 0.5,
+                            whiteSpace: "nowrap",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {copiedLink === "atualizacao" ? (
+                            <>
+                              <Check size={13} color="#0DB87E" /> Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={13} /> Copiar
+                            </>
+                          )}
+                        </button>
+                        {telLimpo && (
+                          <>
+                            <a
+                              href={linkAtualizacao}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: "6px 10px",
+                                borderRadius: 6,
+                                border: "1px solid var(--admin-border)",
+                                background: "var(--admin-bg)",
+                                color: "#2B6EE8",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                textDecoration: "none",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Abrir
+                            </a>
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                padding: "6px 12px",
+                                borderRadius: 6,
+                                background: "#25D366",
+                                color: "#000000",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                textDecoration: "none",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14 }}>
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                              </svg>
+                              <span>WhatsApp</span>
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Link de Onboarding */}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                    Link de Onboarding:
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      readOnly
+                      type="text"
+                      value={`${getAppOrigin()}/onboarding?token=${selectedUserModal.id}`}
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                        cursor: "text",
+                      }}
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${selectedUserModal.id}`, "onboarding")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: copiedLink === "onboarding" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                        color: copiedLink === "onboarding" ? "#0DB87E" : "var(--admin-text)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {copiedLink === "onboarding" ? (
+                        <>
+                          <Check size={13} color="#0DB87E" /> Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} /> Copiar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões do Rodapé do Modal */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", marginTop: 8, paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/clientes/${selectedUserModal.id}`)}
+                  style={{
+                    padding: "7px 14px",
+                    borderRadius: 6,
+                    border: "1px solid var(--admin-border)",
+                    background: "var(--admin-surface)",
+                    color: "var(--admin-text)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Ver Perfil Financeiro Completo →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserModal(null)}
+                  style={{
+                    padding: "7px 14px",
+                    borderRadius: 6,
+                    border: "1px solid var(--admin-border)",
+                    background: "var(--admin-bg)",
+                    color: "var(--admin-subtle)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
