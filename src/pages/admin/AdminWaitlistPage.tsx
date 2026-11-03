@@ -30,7 +30,7 @@ import {
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { getAppOrigin } from "@/lib/appUrl";
-import { maskCPF } from "@/utils/masks";
+import { maskCPF, maskCNPJ } from "@/utils/masks";
 
 export interface WaitlistItem {
   id: string;
@@ -38,10 +38,18 @@ export interface WaitlistItem {
   created_at_local: string;
   nome: string;
   cpf?: string | null;
+  cnpj?: string | null;
+  razao_social?: string | null;
+  nome_fantasia?: string | null;
+  responsavel_nome?: string | null;
+  responsavel_legal?: string | null;
+  cpf_responsavel?: string | null;
+  tipo_pessoa?: string | null;
   email: string;
   telefone: string;
   cidade: string;
   perfil: string | string[];
+  perfis?: string[] | null;
   origem: string | null;
   utm_source: string | null;
   utm_medium: string | null;
@@ -59,8 +67,11 @@ export interface WaitlistItem {
   cep_moradia?: string | null;
   bairro_moradia?: string | null;
   bairro_trabalho?: string | null;
+  bairros_hospedagem?: string[] | null;
   referral_code?: string | null;
   user_id?: string | null;
+  cadastro_completo?: boolean | null;
+  possui_conta_mercado_pago?: boolean | null;
 }
 
 interface WaitlistStats {
@@ -74,15 +85,18 @@ interface WaitlistStats {
 const PAGE_SIZE = 15;
 
 const extractPraiasFromObservacoes = (obs: string | null): string | null => {
-  if (!obs) return null;
+  if (!obs || typeof obs !== "string") return null;
   const praiasMatch = obs.match(/Praias:\s*([^|]+)/i);
   if (praiasMatch && praiasMatch[1]?.trim()) {
     return praiasMatch[1].trim();
   }
   const partsWithoutBairros = obs
     .split("|")
-    .map((p) => p.trim())
-    .filter((p) => !p.toLowerCase().startsWith("bairro:") && !p.toLowerCase().startsWith("bairros:"))
+    .map((p) => String(p ?? "").trim())
+    .filter((p) => {
+      const lower = String(p ?? "").toLowerCase();
+      return !lower.startsWith("bairro:") && !lower.startsWith("bairros:");
+    })
     .join(" | ")
     .trim();
   return partsWithoutBairros.length > 0 ? partsWithoutBairros : null;
@@ -129,7 +143,7 @@ export default function AdminWaitlistPage() {
 
   const handleSaveReferralSlug = async () => {
     if (!selectedLeadModal) return;
-    const cleanSlug = customSlug.trim().toLowerCase();
+    const cleanSlug = String(customSlug ?? "").trim().toLowerCase();
 
     if (!cleanSlug) {
       setSlugError("Informe o código de indicação desejado.");
@@ -165,7 +179,7 @@ export default function AdminWaitlistPage() {
 
       if (existingUser) {
         const isSameEmail = selectedLeadModal.email && 
-          existingUser.email?.toLowerCase() === selectedLeadModal.email.toLowerCase();
+          String(existingUser.email ?? "").toLowerCase() === String(selectedLeadModal.email ?? "").toLowerCase();
 
         if (!isSameEmail) {
           setSlugError("Este código já está em uso por outro usuário.");
@@ -209,7 +223,7 @@ export default function AdminWaitlistPage() {
         await supabase
           .from("usuarios")
           .update({ referral_code: cleanSlug })
-          .ilike("email", selectedLeadModal.email.trim().toLowerCase());
+          .ilike("email", String(selectedLeadModal.email ?? "").trim().toLowerCase());
       }
 
       // 5. Atualização reativa dos estados locais
@@ -301,7 +315,7 @@ export default function AdminWaitlistPage() {
             approved_by: adminId,
             onboarding_url: lead.onboarding_url,
             recipient: {
-              nome: lead.nome,
+              nome: lead.nome || (lead as any).razao_social || (lead as any).responsavel_nome || "Fundador",
               email: lead.email,
               telefone: lead.telefone
             }
@@ -373,19 +387,35 @@ export default function AdminWaitlistPage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from("waitlist").select("perfil, origem");
+      const { data, error } = await supabase.from("waitlist").select("perfil, origem, tipo_pessoa");
       if (error) throw error;
       
       if (data) {
         const aggregated = data.reduce(
-          (acc, item) => {
+          (acc, item: any) => {
             acc.total++;
-            const perfilArr = Array.isArray(item.perfil) ? item.perfil : [item.perfil];
-            if (perfilArr.includes("morador")) acc.moradores++;
-            if (perfilArr.includes("prestador")) acc.prestadores++;
-            if (perfilArr.includes("visitante") || perfilArr.includes("visitantes")) acc.visitantes++;
+            let raw: any[] = [];
+            if (Array.isArray(item.perfil)) raw = item.perfil;
+            else if (typeof item.perfil === "string") {
+              try {
+                const parsed = JSON.parse(item.perfil);
+                raw = Array.isArray(parsed) ? parsed : [item.perfil];
+              } catch {
+                raw = item.perfil.split(",").map((p: string) => p.trim());
+              }
+            } else if (item.perfil) {
+              raw = [item.perfil];
+            }
+            const perfilArr = raw.map((p) => String(p ?? "").trim().toLowerCase()).filter(Boolean);
+            if (perfilArr.length === 0 && String(item.tipo_pessoa ?? "").toUpperCase() === "PJ") {
+              perfilArr.push("associacao");
+            }
+
+            if (perfilArr.some((p) => p.includes("morador"))) acc.moradores++;
+            if (perfilArr.some((p) => p.includes("prestador") || p.includes("diarista") || p.includes("mototaxista") || p.includes("ambulante") || p.includes("associacao"))) acc.prestadores++;
+            if (perfilArr.some((p) => p.includes("visitante") || p.includes("turista"))) acc.visitantes++;
             
-            if (item.origem && item.origem !== "direto") acc.com_referral++;
+            if (item.origem && String(item.origem).toLowerCase() !== "direto") acc.com_referral++;
             return acc;
           },
           { total: 0, moradores: 0, prestadores: 0, visitantes: 0, com_referral: 0 }
@@ -425,7 +455,7 @@ export default function AdminWaitlistPage() {
 
       if (searchQuery.trim()) {
         const term = `%${searchQuery.trim()}%`;
-        query = query.or(`nome.ilike.${term},email.ilike.${term},telefone.ilike.${term},observacoes.ilike.${term}`);
+        query = query.or(`nome.ilike.${term},razao_social.ilike.${term},email.ilike.${term},telefone.ilike.${term},cpf.ilike.${term},cnpj.ilike.${term},observacoes.ilike.${term}`);
       }
 
       const { data, count, error } = await query;
@@ -583,6 +613,7 @@ export default function AdminWaitlistPage() {
               style={{ width: "100%", height: 38, borderRadius: 8, padding: "0 10px", fontFamily: "DM Sans", fontSize: 13, outline: "none", color: "var(--admin-text)", background: "var(--admin-bg)" }}
             >
               <option value="pendentes">Pendentes (Não-Aprovados)</option>
+              <option value="pendente_aprovacao">Pendente Aprovação (Fundadores)</option>
               <option value="novo">Novo</option>
               <option value="contatado">Contatado</option>
               <option value="rejeitado">Rejeitado</option>
@@ -717,7 +748,7 @@ export default function AdminWaitlistPage() {
                       style={{ cursor: "pointer" }}
                     />
                   </th>
-                  <th style={{ padding: "12px 16px" }}>Nome</th>
+                  <th style={{ padding: "12px 16px" }}>Nome / Razão Social</th>
                   <th style={{ padding: "12px 16px" }}>Cidade</th>
                   <th style={{ padding: "12px 16px" }}>Perfil</th>
                   <th style={{ padding: "12px 16px" }}>Mercado Pago?</th>
@@ -748,28 +779,71 @@ export default function AdminWaitlistPage() {
                       />
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>{lead.nome}</div>
-                      <div style={{ fontSize: 11, color: "var(--admin-subtle)" }}>{lead.email} | {lead.telefone}</div>
+                      {(() => {
+                        const isPJ = String(lead.tipo_pessoa ?? "").toUpperCase() === "PJ" || Boolean(lead.cnpj) || Boolean(lead.razao_social);
+                        const displayName = lead.nome || lead.razao_social || (lead as any).responsavel_nome || "Sem nome";
+                        return (
+                          <>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                                {displayName}
+                              </span>
+                              {isPJ ? (
+                                <Pill bg="rgba(59,130,246,0.15)" color="#3B82F6" size="sm" style={{ fontSize: 10, padding: "1px 6px", fontWeight: 700 }}>
+                                  PJ
+                                </Pill>
+                              ) : (
+                                <Pill bg="rgba(148,163,184,0.12)" color="var(--admin-subtle)" size="sm" style={{ fontSize: 10, padding: "1px 6px" }}>
+                                  PF
+                                </Pill>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginTop: 2 }}>
+                              {lead.email || "Sem e-mail"} | {lead.telefone || "Sem telefone"}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--admin-muted)", marginTop: 1 }}>
+                              {isPJ ? (
+                                lead.cnpj ? `CNPJ: ${maskCNPJ(lead.cnpj)}` : "CNPJ não informado"
+                              ) : (
+                                lead.cpf ? `CPF: ${maskCPF(lead.cpf)}` : "CPF não informado"
+                              )}
+                              {isPJ && ((lead as any).responsavel_nome || (lead as any).responsavel_legal) && (
+                                <span style={{ marginLeft: 6 }}>• Resp: {(lead as any).responsavel_nome || (lead as any).responsavel_legal}</span>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 13, color: "var(--admin-subtle)" }}>
                       {lead.cidade}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       {(() => {
-                        let perfilArr: string[] = [];
-                        if (Array.isArray(lead.perfil)) {
-                          perfilArr = lead.perfil;
+                        const isPJ = String(lead.tipo_pessoa ?? "").toUpperCase() === "PJ" || Boolean(lead.cnpj) || Boolean(lead.razao_social);
+                        let rawList: any[] = [];
+                        if (Array.isArray((lead as any).perfis)) {
+                          rawList = (lead as any).perfis;
+                        } else if (Array.isArray(lead.perfil)) {
+                          rawList = lead.perfil;
                         } else if (typeof lead.perfil === "string") {
                           try {
                             const parsed = JSON.parse(lead.perfil);
-                            perfilArr = Array.isArray(parsed) ? parsed : [lead.perfil];
+                            rawList = Array.isArray(parsed) ? parsed : [lead.perfil];
                           } catch {
-                            perfilArr = lead.perfil.split(",").map((p) => p.trim());
+                            rawList = lead.perfil.split(",").map((p) => p.trim());
                           }
+                        } else if (lead.perfil) {
+                          rawList = [lead.perfil];
                         }
-                        const cleanList = perfilArr.filter(Boolean);
+
+                        const cleanList = rawList
+                          .filter(Boolean)
+                          .map((p) => String(p ?? "").trim())
+                          .filter(Boolean);
+
                         if (cleanList.length === 0) {
-                          cleanList.push("morador");
+                          cleanList.push(isPJ ? "associacao" : "morador");
                         }
 
                         const mapPerfil: Record<string, { label: string; color: string; bg: string }> = {
@@ -782,19 +856,23 @@ export default function AdminWaitlistPage() {
                           turista: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
                           visitante: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
                           empresa: { label: "Empresa", color: "#EC4899", bg: "rgba(236,72,153,0.12)" },
+                          pj: { label: "PJ", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                          usuario: { label: "Usuário", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                          comprador: { label: "Comprador", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                          vendedor: { label: "Vendedor", color: "#2B6EE8", bg: "rgba(43,110,232,0.12)" },
                         };
 
                         return (
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            {cleanList.map((p) => {
-                              const lower = p.toLowerCase();
+                            {cleanList.map((p, idx) => {
+                              const lower = String(p ?? "").toLowerCase();
                               const conf = mapPerfil[lower] || { 
-                                label: p.charAt(0).toUpperCase() + p.slice(1), 
+                                label: p.length > 0 ? p.charAt(0).toUpperCase() + p.slice(1) : "Perfil", 
                                 color: "var(--admin-subtle)", 
                                 bg: "rgba(255,255,255,0.06)" 
                               };
                               return (
-                                <Pill key={p} bg={conf.bg} color={conf.color} size="sm">
+                                <Pill key={`lead-${lead.id}-${idx}-${lower}`} bg={conf.bg} color={conf.color} size="sm">
                                   {conf.label}
                                 </Pill>
                               );
@@ -823,14 +901,36 @@ export default function AdminWaitlistPage() {
                       {lead.utm_source || "—"}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      {((lead as any).cadastro_completo === true || lead.status === "completo" || lead.status === "approved") ? (
+                      {lead.status === "pendente_aprovacao" ? (
+                        <Pill 
+                          bg="rgba(245,166,35,0.15)" 
+                          color="#F5A623" 
+                          size="sm" 
+                          style={{ 
+                            fontWeight: 800, 
+                            border: "1px solid rgba(245,166,35,0.5)", 
+                            boxShadow: "0 0 10px rgba(245,166,35,0.3)" 
+                          }}
+                        >
+                          EM APROVAÇÃO
+                        </Pill>
+                      ) : ((lead as any).cadastro_completo === true || lead.status === "completo" || lead.status === "approved" || lead.status === "aprovado") ? (
                         <Pill 
                           bg="rgba(0,255,102,0.15)" 
                           color="#00FF66" 
                           size="sm" 
                           style={{ fontWeight: 800, border: "1px solid rgba(0,255,102,0.4)", textShadow: "0 0 8px rgba(0,255,102,0.5)" }}
                         >
-                          COMPLETO
+                          {lead.status === "approved" || lead.status === "aprovado" ? "APROVADO" : "COMPLETO"}
+                        </Pill>
+                      ) : lead.status === "rejeitado" ? (
+                        <Pill 
+                          bg="rgba(239,68,68,0.15)" 
+                          color="#EF4444" 
+                          size="sm" 
+                          style={{ fontWeight: 700, border: "1px solid rgba(239,68,68,0.3)" }}
+                        >
+                          REJEITADO
                         </Pill>
                       ) : (
                         <Pill 
@@ -839,7 +939,7 @@ export default function AdminWaitlistPage() {
                           size="sm" 
                           style={{ fontWeight: 700, border: "1px solid var(--admin-border)" }}
                         >
-                          PENDENTE
+                          {String(lead.status || "PENDENTE").toUpperCase()}
                         </Pill>
                       )}
                     </td>
@@ -902,7 +1002,11 @@ export default function AdminWaitlistPage() {
       </Card>
 
       {/* Detail Modal */}
-      {selectedLeadModal && (
+      {selectedLeadModal && (() => {
+        const isModalPJ = String(selectedLeadModal.tipo_pessoa ?? "").toUpperCase() === "PJ" || Boolean(selectedLeadModal.cnpj) || Boolean(selectedLeadModal.razao_social);
+        const modalDisplayName = selectedLeadModal.nome || selectedLeadModal.razao_social || (selectedLeadModal as any).responsavel_nome || "Sem nome";
+
+        return (
         <div
           role="dialog"
           aria-modal="true"
@@ -934,23 +1038,53 @@ export default function AdminWaitlistPage() {
               <X size={20} color="var(--admin-subtle)" />
             </button>
 
-            <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-              Detalhes do Fundador
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, margin: "0 0 16px" }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                Detalhes do Fundador
+              </h3>
+              {selectedLeadModal.status === "pendente_aprovacao" && (
+                <Pill 
+                  bg="rgba(245,166,35,0.15)" 
+                  color="#F5A623" 
+                  size="sm" 
+                  style={{ fontWeight: 800, border: "1px solid rgba(245,166,35,0.5)", boxShadow: "0 0 10px rgba(245,166,35,0.3)" }}
+                >
+                  EM APROVAÇÃO
+                </Pill>
+              )}
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: "DM Sans" }}>
               <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Nome Completo</span>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{selectedLeadModal.nome}</div>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>
+                  {isModalPJ ? "Razão Social / Nome da Entidade" : "Nome Completo"}
+                </span>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--admin-text)", display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                  {modalDisplayName}
+                  {isModalPJ ? (
+                    <Pill bg="rgba(59,130,246,0.15)" color="#3B82F6" size="sm" style={{ fontSize: 10, padding: "1px 6px", fontWeight: 700 }}>
+                      PJ
+                    </Pill>
+                  ) : (
+                    <Pill bg="rgba(148,163,184,0.12)" color="var(--admin-subtle)" size="sm" style={{ fontSize: 10, padding: "1px 6px" }}>
+                      PF
+                    </Pill>
+                  )}
+                </div>
               </div>
 
               {/* Grid 2 colunas com distribuição exata */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                {/* Linha 1: CPF | E-mail */}
+                {/* Linha 1: Documento (CPF / CNPJ) | E-mail */}
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>CPF</span>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>
+                    {isModalPJ ? "CNPJ" : "CPF"}
+                  </span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)", fontWeight: 500 }}>
-                    {selectedLeadModal.cpf ? maskCPF(selectedLeadModal.cpf) : "—"}
+                    {isModalPJ 
+                      ? (selectedLeadModal.cnpj ? maskCNPJ(selectedLeadModal.cnpj) : "—")
+                      : (selectedLeadModal.cpf ? maskCPF(selectedLeadModal.cpf) : "—")
+                    }
                   </div>
                 </div>
                 <div>
@@ -965,27 +1099,81 @@ export default function AdminWaitlistPage() {
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Cidade</span>
-                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cidade}</div>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cidade || "—"}</div>
                 </div>
+
+                {/* Linha adicional para PJ: Responsável Legal */}
+                {isModalPJ && (
+                  <div style={{ gridColumn: "span 2" }}>
+                    <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Responsável Legal</span>
+                    <div style={{ fontSize: 14, color: "var(--admin-subtle)", fontWeight: 500 }}>
+                      {(selectedLeadModal as any).responsavel_nome || (selectedLeadModal as any).responsavel_legal || "Não informado"}
+                      {(selectedLeadModal as any).cpf_responsavel && (
+                        <span style={{ marginLeft: 8, color: "var(--admin-muted)" }}>
+                          (CPF: {maskCPF((selectedLeadModal as any).cpf_responsavel)})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Linha 3: Perfil Selecionado | Possui Conta Mercado Pago? */}
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)", display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                     {(() => {
-                      const perfilArr = Array.isArray(selectedLeadModal.perfil) ? selectedLeadModal.perfil : [selectedLeadModal.perfil];
-                      return (
-                        <>
-                          {perfilArr.includes("morador") && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Morador</Pill>}
-                          {perfilArr.includes("diarista") && <Pill bg="rgba(147,51,234,0.08)" color="#9333EA">Diarista</Pill>}
-                          {perfilArr.includes("mototaxista") && <Pill bg="rgba(59,130,246,0.08)" color="#3B82F6">Mototaxista</Pill>}
-                          {perfilArr.includes("ambulante") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Ambulante</Pill>}
-                          {perfilArr.includes("associacao") && <Pill bg="rgba(16,185,129,0.08)" color="#10B981">Associação</Pill>}
-                          {perfilArr.includes("prestador") && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8">Prestador</Pill>}
-                          {perfilArr.includes("visitante") && <Pill bg="rgba(245,166,35,0.08)" color="#F5A623">Turista</Pill>}
-                          {perfilArr.includes("empresa") && <Pill bg="rgba(236,72,153,0.08)" color="#EC4899">Empresa</Pill>}
-                        </>
-                      );
+                      let rawTags: any[] = [];
+                      if (Array.isArray((selectedLeadModal as any).perfis)) {
+                        rawTags = (selectedLeadModal as any).perfis;
+                      } else if (Array.isArray(selectedLeadModal.perfil)) {
+                        rawTags = selectedLeadModal.perfil;
+                      } else if (typeof selectedLeadModal.perfil === "string") {
+                        try {
+                          const parsed = JSON.parse(selectedLeadModal.perfil);
+                          rawTags = Array.isArray(parsed) ? parsed : [selectedLeadModal.perfil];
+                        } catch {
+                          rawTags = selectedLeadModal.perfil.split(",").map((p: string) => p.trim());
+                        }
+                      } else if (selectedLeadModal.perfil) {
+                        rawTags = [selectedLeadModal.perfil];
+                      }
+                      const perfis = rawTags
+                        .filter(Boolean)
+                        .map((tag: any) => String(tag ?? "").trim().toLowerCase())
+                        .filter(Boolean);
+
+                      if (perfis.length === 0) {
+                        perfis.push(isModalPJ ? "associacao" : "morador");
+                      }
+
+                      const mapPerfil: Record<string, { label: string; color: string; bg: string }> = {
+                        morador: { label: "Morador", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                        prestador: { label: "Prestador", color: "#2B6EE8", bg: "rgba(43,110,232,0.12)" },
+                        diarista: { label: "Diarista", color: "#9333EA", bg: "rgba(147,51,234,0.12)" },
+                        mototaxista: { label: "Mototaxista", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                        ambulante: { label: "Ambulante", color: "#EC4899", bg: "rgba(236,72,153,0.12)" },
+                        associacao: { label: "Associação", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+                        turista: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
+                        visitante: { label: "Turista", color: "#F5A623", bg: "rgba(245,166,35,0.12)" },
+                        empresa: { label: "Empresa", color: "#EC4899", bg: "rgba(236,72,153,0.12)" },
+                        pj: { label: "PJ", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+                        usuario: { label: "Usuário", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                        comprador: { label: "Comprador", color: "#0DB87E", bg: "rgba(13,184,126,0.12)" },
+                        vendedor: { label: "Vendedor", color: "#2B6EE8", bg: "rgba(43,110,232,0.12)" },
+                      };
+
+                      return perfis.map((p, idx) => {
+                        const conf = mapPerfil[p] || {
+                          label: p.length > 0 ? p.charAt(0).toUpperCase() + p.slice(1) : "Perfil",
+                          color: "var(--admin-subtle)",
+                          bg: "rgba(255,255,255,0.06)",
+                        };
+                        return (
+                          <Pill key={`modal-${idx}-${p}`} bg={conf.bg} color={conf.color} size="sm">
+                            {conf.label}
+                          </Pill>
+                        );
+                      });
                     })()}
                   </div>
                 </div>
@@ -1329,7 +1517,8 @@ export default function AdminWaitlistPage() {
                 {(() => {
                   const telLimpo = (selectedLeadModal.telefone || "").replace(/\D/g, "");
                   const linkAtualizacao = `${getAppOrigin()}/atualizacao-cadastral?tel=${telLimpo}`;
-                  const firstName = selectedLeadModal.nome ? selectedLeadModal.nome.trim().split(" ")[0] : "Fundador(a)";
+                  const rawName = selectedLeadModal.nome || selectedLeadModal.razao_social || (selectedLeadModal as any).responsavel_nome || "";
+                  const firstName = String(rawName).trim().split(" ")[0] || "Fundador(a)";
                   const waMsg = `Olá, ${firstName}! Aqui é da equipe UBT Serviços. Estamos nos preparativos finais de aprovação do seu cadastro de Fundador em Ubatuba. Para liberar seu acesso e link de comissões, conclua seus dados pendentes e crie sua senha neste link seguro: ${linkAtualizacao}`;
                   const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
                   const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
@@ -1467,7 +1656,8 @@ export default function AdminWaitlistPage() {
             </div>
           </Card>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
