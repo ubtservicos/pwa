@@ -36,7 +36,6 @@ import {
   generateReferralSlug
 } from "@/utils/masks";
 import { trackEvent } from "@/services/AnalyticsService";
-import { logSystem } from "@/services/LoggingService";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
 import {
@@ -118,6 +117,18 @@ export default function AtualizacaoCadastral() {
   const [referralSlug, setReferralSlug] = useState("");
   const [copiedReferral, setCopiedReferral] = useState(false);
   const [step4Error, setStep4Error] = useState("");
+
+  // URL Base Oficial para Links de Apadrinhamento
+  const getReferralBaseUrl = () => {
+    const origin = typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://ubtservicos.vercel.app";
+    return `${origin}/r/`;
+  };
+
+  const getFullReferralLink = () => {
+    return `${getReferralBaseUrl()}${referralSlug || "fundador-ubatuba"}`;
+  };
 
   // Função auxiliar para carregar lead por telefone
   const searchLeadByPhone = async (rawPhone: string) => {
@@ -295,15 +306,62 @@ export default function AtualizacaoCadastral() {
   };
 
   const copyReferralLink = async () => {
-    const link = `https://ubt.app/r/${referralSlug}`;
+    const link = getFullReferralLink();
     try {
       await navigator.clipboard.writeText(link);
       setCopiedReferral(true);
-      toast.success("Link de apadrinhamento copiado!");
+      toast.success("Link de apadrinhamento copiado com sucesso! ✓");
       setTimeout(() => setCopiedReferral(false), 2500);
     } catch (e) {
       toast.error("Não foi possível copiar o link.");
     }
+  };
+
+  // Disparo Exagerado de Confetes em Primeiro Plano
+  const triggerMegaConfetti = () => {
+    const count = 250;
+    const defaults = {
+      origin: { y: 0.6 },
+      zIndex: 999999,
+    };
+
+    const fire = (particleRatio: number, opts: confetti.Options) => {
+      try {
+        confetti({
+          ...defaults,
+          ...opts,
+          particleCount: Math.floor(count * particleRatio),
+        });
+      } catch (e) {}
+    };
+
+    fire(0.25, {
+      spread: 26,
+      startVelocity: 55,
+      colors: ["#00FF66", "#005BFF", "#FFFFFF"],
+    });
+    fire(0.2, {
+      spread: 60,
+      colors: ["#00FF66", "#FFD700", "#FF6B00"],
+    });
+    fire(0.35, {
+      spread: 100,
+      decay: 0.91,
+      scalar: 0.8,
+      colors: ["#00FF66", "#00E5FF", "#FFFFFF"],
+    });
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 25,
+      decay: 0.92,
+      scalar: 1.2,
+      colors: ["#00FF66", "#FF007A"],
+    });
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 45,
+      colors: ["#00FF66", "#FFFFFF", "#FFD700"],
+    });
   };
 
   // Validação do Passo 1
@@ -367,7 +425,6 @@ export default function AtualizacaoCadastral() {
     setStep4Error("");
 
     if (possuiMercadoPago && chavePix) {
-      // Validação básica de chave Pix se informada
       const cleanPix = chavePix.replace(/\D/g, "");
       if (tipoChavePix === "cpf" && !isValidCPF(chavePix)) {
         setStep4Error("Chave Pix CPF inválida.");
@@ -394,6 +451,7 @@ export default function AtualizacaoCadastral() {
       const rawDigitsTel = (telefone || "").replace(/\D/g, "");
       const cleanCpf = (cpf || "").replace(/\D/g, "");
       const cleanCnpj = (cnpj || "").replace(/\D/g, "");
+      const finalSlug = referralSlug || generateReferralSlug(nome || razaoSocial, cleanCpf || cleanCnpj);
 
       const updatePayload: Record<string, any> = {
         bairro_residencia: bairroResidencia,
@@ -407,7 +465,7 @@ export default function AtualizacaoCadastral() {
         possui_mercado_pago: possuiMercadoPago,
         tipo_chave_pix: tipoChavePix,
         chave_pix: chavePix,
-        referral_code: referralSlug || generateReferralSlug(nome || razaoSocial, cleanCpf || cleanCnpj),
+        referral_code: finalSlug,
         cadastro_completo: true,
         status: (leadRecord?.status === "aprovado" || leadRecord?.status === "approved") ? "aprovado" : "completo",
       };
@@ -440,15 +498,18 @@ export default function AtualizacaoCadastral() {
         }
       }
 
-      // 2. Atualiza ou sincroniza na tabela usuarios
+      // 2. Atualiza e sincroniza na tabela usuarios (status='ativo', cadastro_completo=true)
       try {
         const userUpdates: Record<string, any> = {
+          status: "ativo",
           cadastro_completo: true,
+          referral_code: finalSlug,
           metadata: {
+            ...(leadRecord?.metadata || {}),
             bairro_residencia: bairroResidencia,
             bairros_atuacao: bairrosAtuacao,
             praias: praias,
-            referral_code: updatePayload.referral_code,
+            referral_code: finalSlug,
             cadastro_completo: true,
           }
         };
@@ -457,6 +518,12 @@ export default function AtualizacaoCadastral() {
             .from("usuarios")
             .update(userUpdates)
             .or(`telefone.eq.${rawDigitsTel},telefone.eq.${telefone}`);
+        }
+        if (updatePayload.email) {
+          await supabase
+            .from("usuarios")
+            .update(userUpdates)
+            .ilike("email", updatePayload.email);
         }
       } catch (uErr) {
         console.warn("[AtualizacaoCadastral] Falha não impeditiva ao atualizar usuarios:", uErr);
@@ -479,7 +546,7 @@ export default function AtualizacaoCadastral() {
           p_bairro_residencia: bairroResidencia,
           p_bairros_atuacao: bairrosAtuacao,
           p_praias: praias,
-          p_referral_code: updatePayload.referral_code,
+          p_referral_code: finalSlug,
         });
       } catch (rpcErr) {
         // Fallback silencioso
@@ -491,26 +558,18 @@ export default function AtualizacaoCadastral() {
         praias_count: praias.length,
       });
 
-      // Efeito festivo exagerado no primeiro plano (zIndex 999999)
-      try {
-        confetti({
-          particleCount: 260,
-          spread: 120,
-          origin: { y: 0.6 },
-          zIndex: 999999,
-          colors: ["#00FF66", "#005BFF", "#FFDD00", "#FFFFFF"],
-        });
-      } catch (confettiErr) {
-        // Confetti silencioso se indisponível
-      }
+      // Dispara chuva de confetes exagerada em primeiro plano (zIndex 999999)
+      triggerMegaConfetti();
 
+      // Toast de Sucesso Verde
       toast.success("Atualização cadastral concluída com sucesso! Bem-vindo à UBT!", {
-        duration: 4000,
+        duration: 4500,
       });
 
+      // Redireciona imediatamente para a página exclusiva de compartilhamento do link de apadrinhamento
       setTimeout(() => {
-        navigate("/sou-fundador");
-      }, 1600);
+        navigate(`/app/indicacao?ref=${encodeURIComponent(finalSlug)}&nome=${encodeURIComponent(nome || razaoSocial)}&tel=${rawDigitsTel}`);
+      }, 1500);
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao concluir atualização:", err);
       setStep4Error("Ocorreu um erro ao gravar suas informações. Por favor, tente novamente.");
@@ -667,7 +726,7 @@ export default function AtualizacaoCadastral() {
               </p>
             </div>
 
-            {/* Stepper Progress Indicator on Top */}
+            {/* Stepper Progress Indicator on Top (Totalmente Clicável com Navegação Direta) */}
             <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800 shadow-xl">
               <div className="flex items-center justify-between relative">
                 {/* Linha de conexão de fundo */}
@@ -676,26 +735,22 @@ export default function AtualizacaoCadastral() {
                 {STEPS.map((s) => {
                   const isDone = currentStep > s.id;
                   const isActive = currentStep === s.id;
-                  const isFuture = currentStep < s.id;
                   const StepIcon = s.icon;
 
                   return (
-                    <div
+                    <button
                       key={s.id}
-                      className="relative z-10 flex flex-col items-center gap-2"
+                      type="button"
+                      onClick={() => setCurrentStep(s.id as WizardStep)}
+                      className="relative z-10 flex flex-col items-center gap-2 group cursor-pointer focus:outline-none"
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isDone) setCurrentStep(s.id as WizardStep);
-                        }}
-                        disabled={isFuture}
+                      <div
                         className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-display font-bold text-xs sm:text-sm transition-all ${
                           isDone
-                            ? "bg-green text-navy shadow-[0_0_15px_rgba(0,255,102,0.4)] cursor-pointer"
+                            ? "bg-green text-navy shadow-[0_0_15px_rgba(0,255,102,0.4)] group-hover:scale-105"
                             : isActive
                             ? "bg-black border-2 border-green text-green shadow-[0_0_20px_rgba(0,255,102,0.5)] scale-110"
-                            : "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
+                            : "bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:text-white group-hover:border-zinc-700"
                         }`}
                       >
                         {isDone ? (
@@ -703,19 +758,19 @@ export default function AtualizacaoCadastral() {
                         ) : (
                           <StepIcon className="w-5 h-5" />
                         )}
-                      </button>
+                      </div>
                       <span
-                        className={`text-[10px] sm:text-xs font-mono uppercase tracking-wider text-center max-w-[80px] sm:max-w-none ${
+                        className={`text-[10px] sm:text-xs font-mono uppercase tracking-wider text-center max-w-[80px] sm:max-w-none transition-colors ${
                           isActive
                             ? "text-green font-bold"
                             : isDone
-                            ? "text-white/80 font-medium"
-                            : "text-zinc-500"
+                            ? "text-white/80 font-medium group-hover:text-white"
+                            : "text-zinc-500 group-hover:text-zinc-300"
                         }`}
                       >
                         {s.title}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -740,7 +795,7 @@ export default function AtualizacaoCadastral() {
                     <button
                       type="button"
                       onClick={() => setIsPersonalUnlocked((prev) => !prev)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                         isPersonalUnlocked
                           ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
                           : "bg-zinc-900 text-white/70 hover:text-white border border-zinc-800"
@@ -976,7 +1031,7 @@ export default function AtualizacaoCadastral() {
                           <button
                             type="button"
                             onClick={() => setShowSenha((prev) => !prev)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white cursor-pointer"
                           >
                             {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -998,7 +1053,7 @@ export default function AtualizacaoCadastral() {
                           <button
                             type="button"
                             onClick={() => setShowConfirmarSenha((prev) => !prev)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white cursor-pointer"
                           >
                             {showConfirmarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -1014,7 +1069,7 @@ export default function AtualizacaoCadastral() {
                     </div>
                   )}
 
-                  {/* Ação do Passo 1 */}
+                  {/* Ação do Passo 1: Continuar */}
                   <div className="flex justify-end pt-2">
                     <button
                       type="button"
@@ -1025,7 +1080,7 @@ export default function AtualizacaoCadastral() {
                       }}
                       className="px-6 py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-green/10"
                     >
-                      <span>Avançar para Bairros</span>
+                      <span>Continuar</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -1115,7 +1170,7 @@ export default function AtualizacaoCadastral() {
                             key={b}
                             type="button"
                             onClick={() => toggleBairroAtuacao(b)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
                               isSelected
                                 ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
                                 : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
@@ -1141,7 +1196,7 @@ export default function AtualizacaoCadastral() {
                     </div>
                   )}
 
-                  {/* Navegação do Passo 2 */}
+                  {/* Navegação do Passo 2: Voltar e Continuar */}
                   <div className="flex items-center justify-between pt-2">
                     <button
                       type="button"
@@ -1161,7 +1216,7 @@ export default function AtualizacaoCadastral() {
                       }}
                       className="px-6 py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-green/10"
                     >
-                      <span>Avançar para Praias</span>
+                      <span>Continuar</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -1227,7 +1282,7 @@ export default function AtualizacaoCadastral() {
                           key={p}
                           type="button"
                           onClick={() => togglePraia(p)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
                             isSelected
                               ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
                               : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
@@ -1245,7 +1300,7 @@ export default function AtualizacaoCadastral() {
                     )}
                   </div>
 
-                  {/* Navegação do Passo 3 */}
+                  {/* Navegação do Passo 3: Voltar e Continuar */}
                   <div className="flex items-center justify-between pt-2">
                     <button
                       type="button"
@@ -1261,7 +1316,7 @@ export default function AtualizacaoCadastral() {
                       onClick={() => setCurrentStep(4)}
                       className="px-6 py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-green/10"
                     >
-                      <span>Avançar para Financeiro</span>
+                      <span>Continuar</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -1351,7 +1406,7 @@ export default function AtualizacaoCadastral() {
                     </div>
                   </div>
 
-                  {/* Programa de Apadrinhamento & Link de Indicação */}
+                  {/* Programa de Apadrinhamento & Link de Indicação Oficial */}
                   <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-zinc-950 to-zinc-900 border border-green/30 shadow-[0_0_25px_rgba(0,255,102,0.06)] flex flex-col gap-4">
                     <div className="flex items-start gap-3">
                       <div className="w-9 h-9 rounded-xl bg-green/10 border border-green/30 flex items-center justify-center text-green shrink-0">
@@ -1372,22 +1427,22 @@ export default function AtualizacaoCadastral() {
                         Seu Link de Convite Personalizado:
                       </label>
 
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex-1 min-w-[240px] flex items-center bg-black border border-zinc-800 focus-within:border-green rounded-xl px-3 py-2 text-xs font-mono">
-                          <span className="text-zinc-500 select-none">ubt.app/r/</span>
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <div className="flex-1 min-w-[200px] max-w-full flex items-center bg-black border border-zinc-800 focus-within:border-green rounded-xl px-3 py-2 text-xs font-mono overflow-hidden">
+                          <span className="text-zinc-500 select-none text-[11px] sm:text-xs shrink-0">{getReferralBaseUrl()}</span>
                           <input
                             type="text"
                             value={referralSlug}
                             onChange={(e) => handleSlugChange(e.target.value)}
                             placeholder="seu-codigo"
-                            className="flex-1 bg-transparent text-green font-bold outline-none ml-0.5"
+                            className="flex-1 bg-transparent text-green font-bold outline-none ml-0.5 min-w-[60px]"
                           />
                         </div>
 
                         <button
                           type="button"
                           onClick={copyReferralLink}
-                          className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 text-xs font-mono flex items-center gap-1.5 cursor-pointer transition-all"
+                          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 text-xs font-mono flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0"
                         >
                           {copiedReferral ? (
                             <>
@@ -1415,13 +1470,13 @@ export default function AtualizacaoCadastral() {
                     </div>
                   )}
 
-                  {/* Ação Final: Concluir Atualização */}
-                  <div className="flex items-center justify-between pt-3">
+                  {/* Ação Final: Concluir (Adaptado Responsivamente para Viewports Mobile 393px) */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 w-full">
                     <button
                       type="button"
                       disabled={isSubmitting}
                       onClick={() => setCurrentStep(3)}
-                      className="px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white/80 font-display font-medium text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer border border-zinc-800 disabled:opacity-50"
+                      className="order-2 sm:order-1 px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white/80 font-display font-medium text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer border border-zinc-800 disabled:opacity-50"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       <span>Voltar</span>
@@ -1431,7 +1486,7 @@ export default function AtualizacaoCadastral() {
                       type="button"
                       disabled={isSubmitting}
                       onClick={handleFinalSubmit}
-                      className="px-8 py-4 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_30px_rgba(0,255,102,0.4)] disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                      className="order-1 sm:order-2 w-full sm:w-auto px-8 py-4 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_30px_rgba(0,255,102,0.4)] disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] text-center"
                     >
                       {isSubmitting ? (
                         <>
@@ -1440,8 +1495,8 @@ export default function AtualizacaoCadastral() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-5 h-5 text-navy" />
-                          <span>Concluir Atualização</span>
+                          <Sparkles className="w-5 h-5 text-navy shrink-0" />
+                          <span>Concluir</span>
                         </>
                       )}
                     </button>

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,6 +39,7 @@ import OnboardingPage from "./pages/OnboardingPage.tsx";
 import RecuperarSenha from "./pages/RecuperarSenha.tsx";
 import SouFundadorPage from "./pages/SouFundadorPage.tsx";
 import AtualizacaoCadastral from "./pages/AtualizacaoCadastral.tsx";
+import IndicacaoPage from "./pages/IndicacaoPage.tsx";
 import AppHome from "./pages/AppHome.tsx";
 import MototaxiTomador from "./pages/MototaxiTomador.tsx";
 import PrestadorHome from "./pages/PrestadorHome.tsx";
@@ -142,6 +144,29 @@ const associacaoGuard = (el: React.ReactNode) => (
 
 const queryClient = new QueryClient();
 
+const ReferralRedirect = () => {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (slug) {
+      try {
+        sessionStorage.setItem("ubt_ref", slug);
+        localStorage.setItem("ubt_ref", slug);
+      } catch (e) {}
+      navigate(`/?ref=${encodeURIComponent(slug)}#cadastro-fundadores-cap`, { replace: true });
+    } else {
+      navigate("/", { replace: true });
+    }
+  }, [slug, navigate]);
+
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center text-white">
+      <div className="w-8 h-8 rounded-full border-2 border-[#00FF66] border-t-transparent animate-spin" />
+    </div>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -160,6 +185,9 @@ const App = () => (
               <Route path="/recuperar-senha" element={<RecuperarSenha />} />
               <Route path="/sou-fundador" element={<SouFundadorPage />} />
               <Route path="/atualizacao-cadastral" element={<AtualizacaoCadastral />} />
+              <Route path="/app/indicacao" element={<IndicacaoPage />} />
+              <Route path="/indicacao" element={<IndicacaoPage />} />
+              <Route path="/r/:slug" element={<ReferralRedirect />} />
               <Route path="/app/consentimento" element={<LgpdConsentPage />} />
 
               <Route element={<LgpdGuard />}>
