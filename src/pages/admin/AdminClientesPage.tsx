@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2, Eye, Copy, Check } from "lucide-react";
 import { getAppOrigin } from "@/lib/appUrl";
-import { maskCPF } from "@/utils/masks";
+import { maskCPF, generateReferralSlug } from "@/utils/masks";
 import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -49,6 +49,49 @@ export default function AdminClientesPage() {
   const [rules, setRules] = useState<StatusRule[]>([]);
   const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [customSlugInput, setCustomSlugInput] = useState<string>("");
+  const [isSavingCustomSlug, setIsSavingCustomSlug] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (selectedUserModal) {
+      setCustomSlugInput(selectedUserModal.referralSlug || "");
+    }
+  }, [selectedUserModal]);
+
+  const handleSaveSlug = async () => {
+    if (!selectedUserModal) return;
+    const clean = customSlugInput.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
+    if (!clean || clean.length < 3) {
+      toast.show("O código deve ter pelo menos 3 caracteres.");
+      return;
+    }
+    setIsSavingCustomSlug(true);
+    try {
+      const cleanPhoneDigits = (p: string) => String(p || "").replace(/\D/g, "");
+      const phoneDigits = cleanPhoneDigits(selectedUserModal.phone);
+      if (selectedUserModal.waitlistId) {
+        await supabase.from("waitlist").update({ referral_code: clean, slug: clean }).eq("id", selectedUserModal.waitlistId);
+      } else if (phoneDigits) {
+        await supabase.from("waitlist").update({ referral_code: clean, slug: clean }).or(`telefone.eq.${phoneDigits},telefone.eq.${selectedUserModal.phone}`);
+      }
+
+      await supabase.from("usuarios").update({
+        referral_code: clean,
+        metadata: { ...(selectedUserModal.metadata || {}), referral_code: clean }
+      }).eq("id", selectedUserModal.id);
+
+      setSelectedUserModal((prev: any) => prev ? { ...prev, referralSlug: clean } : null);
+      setDbUsers((prev) => prev.map((usr) => usr.id === selectedUserModal.id ? { ...usr, referral_code: clean, metadata: { ...(usr.metadata || {}), referral_code: clean } } : usr));
+      setDbWaitlist((prev) => prev.map((w) => (w.id === selectedUserModal.waitlistId || (phoneDigits && cleanPhoneDigits(w.telefone) === phoneDigits)) ? { ...w, referral_code: clean, slug: clean } : w));
+
+      toast.show("Código de indicação (Vanity Slug) atualizado com sucesso! ✓");
+    } catch (err: any) {
+      console.error("Erro ao salvar slug:", err);
+      toast.show("Erro ao salvar código de indicação.");
+    } finally {
+      setIsSavingCustomSlug(false);
+    }
+  };
 
   const handleCopyLink = async (text: string, type: string) => {
     try {
@@ -149,7 +192,7 @@ export default function AdminClientesPage() {
           .from("pedidos")
           .select("tomador_id, prestador_id, total, status, created_at");
 
-        const { data: rawWaitlist } = await supabase.from("waitlist").select("id, email, telefone, user_id, cadastro_completo, status");
+        const { data: rawWaitlist } = await supabase.from("waitlist").select("id, email, telefone, user_id, cadastro_completo, status, referral_code, slug");
         if (rawWaitlist) setDbWaitlist(rawWaitlist);
         setDbUsers(rawUsers || []);
         setDbProfiles(rawProfiles || []);
@@ -271,6 +314,7 @@ export default function AdminClientesPage() {
       const matchedWl = wlUserIdMap.get(u.id) || (userPhoneDigits ? wlPhoneMap.get(userPhoneDigits) : null) || (userEmailClean ? wlEmailMap.get(userEmailClean) : null);
       const isCadastroCompleto = u.cadastro_completo === true || u.metadata?.cadastro_completo === true || matchedWl?.cadastro_completo === true;
       const isPendente = u.status === "pendente_aprovacao" || u.status === "pending" || matchedWl?.status === "pendente_aprovacao" || matchedWl?.status === "pending";
+      const referralSlug = matchedWl?.referral_code || matchedWl?.slug || u.referral_code || u.metadata?.referral_code || generateReferralSlug(name, u.cpf || u.id);
 
       return {
         id: u.id,
@@ -1418,6 +1462,153 @@ export default function AdminClientesPage() {
                           <Copy size={13} /> Copiar
                         </>
                       )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Link Padrinho/Madrinha (Indicação) */}
+                {(() => {
+                  const refSlug = selectedUserModal.referralSlug || customSlugInput || "fundador-ubatuba";
+                  const padrinhoLink = `${getAppOrigin()}/?ref=${refSlug}#cadastro-fundadores-cap`;
+                  const firstName = String(selectedUserModal.name ?? "Cliente").trim().split(" ")[0];
+                  const telLimpo = String(selectedUserModal.phone ?? "").replace(/\D/g, "");
+                  const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
+                  const waReferralMsg = `Olá, ${firstName}! Aqui está o seu Link Padrinho/Madrinha exclusivo da UBT Serviços para você convidar pessoas e receber comissões:
+${padrinhoLink}`;
+                  const waReferralLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waReferralMsg)}`;
+
+                  return (
+                    <div>
+                      <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>Link Padrinho/Madrinha (Indicação):</span>
+                        <span style={{ fontSize: 10, color: "#0DB87E", fontWeight: 600 }}>Slug: {refSlug}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <input
+                          readOnly
+                          type="text"
+                          value={padrinhoLink}
+                          style={{
+                            flex: 1,
+                            minWidth: 200,
+                            background: "var(--admin-bg)",
+                            border: "1px solid var(--admin-border)",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                            fontSize: 12,
+                            fontFamily: "monospace",
+                            color: "var(--admin-text)",
+                            outline: "none",
+                            cursor: "text",
+                          }}
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(padrinhoLink, "padrinho")}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            border: "1px solid var(--admin-border)",
+                            background: copiedLink === "padrinho" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                            color: copiedLink === "padrinho" ? "#0DB87E" : "var(--admin-text)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {copiedLink === "padrinho" ? (
+                            <>
+                              <Check size={13} color="#0DB87E" /> Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={13} /> Copiar
+                            </>
+                          )}
+                        </button>
+                        {telLimpo && (
+                          <a
+                            href={waReferralLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              background: "#25D366",
+                              color: "#000000",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              textDecoration: "none",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14 }}>
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                            </svg>
+                            <span>WhatsApp</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Código de Indicação Personalizado (Vanity Slug) */}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                    Código de Indicação Personalizado (Vanity Slug):
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="text"
+                      value={customSlugInput}
+                      onChange={(e) => setCustomSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      placeholder="ex: teste-03112026"
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedUserModal.referralSlug}
+                      onClick={handleSaveSlug}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: "#0DB87E",
+                        color: "#FFFFFF",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: (isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedUserModal.referralSlug) ? "not-allowed" : "pointer",
+                        opacity: (isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedUserModal.referralSlug) ? 0.5 : 1,
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {isSavingCustomSlug ? "Salvando..." : "Salvar Slug"}
                     </button>
                   </div>
                 </div>

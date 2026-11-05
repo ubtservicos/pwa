@@ -7,15 +7,14 @@ import {
   Sparkles,
   Share2,
   Award,
-  ShieldCheck,
   TrendingUp,
   QrCode,
-  ExternalLink,
   ChevronRight
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/services/AnalyticsService";
 
 const WhatsAppIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -33,20 +32,93 @@ export default function IndicacaoPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const slugParam = searchParams.get("ref") || searchParams.get("slug") || "";
-  const nomeParam = searchParams.get("nome") || "";
+  // 1. Sanitização prioritária dos parâmetros de URL
+  const initialSlug = (searchParams.get("ref") || searchParams.get("slug") || "").trim();
+  const initialNome = (searchParams.get("nome") || "").trim();
+  const telParam = (searchParams.get("tel") || "").trim();
+
+  const [slug, setSlug] = useState<string>(initialSlug);
+  const [nome, setNome] = useState<string>(initialNome);
   const [copied, setCopied] = useState(false);
 
-  const slug = slugParam || "fundador-ubatuba";
+  // Fallback defensivo para caso o usuário acesse sem slug direto na URL
+  useEffect(() => {
+    let isMounted = true;
 
-  // URL Base Oficial da UBT
+    const resolveLeadData = async () => {
+      // Se já temos o slug vindo da URL (ex: teste-03112026), ele tem prioridade absoluta!
+      if (initialSlug) return;
+
+      try {
+        // 1. Tenta recuperar por telefone se informado
+        if (telParam) {
+          const cleanTel = telParam.replace(/\D/g, "");
+          const last8 = cleanTel.slice(-8);
+
+          const { data: wlData } = await supabase
+            .from("waitlist")
+            .select("nome, razao_social, referral_code, slug")
+            .or(`telefone.eq.${cleanTel},telefone.ilike.%${last8}%`)
+            .order("created_at_utc", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (isMounted && wlData) {
+            const resolvedSlug = wlData.referral_code || wlData.slug;
+            if (resolvedSlug) setSlug(resolvedSlug);
+            const resolvedNome = wlData.nome || wlData.razao_social;
+            if (resolvedNome && !nome) setNome(resolvedNome);
+            return;
+          }
+        }
+
+        // 2. Tenta recuperar da sessão ativa (se houver, com try/catch seguro sem quebras)
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId) {
+          const { data: uData } = await supabase
+            .from("usuarios")
+            .select("nome, referral_code, metadata")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (isMounted && uData) {
+            const userSlug = uData.referral_code || uData.metadata?.referral_code;
+            if (userSlug) setSlug(userSlug);
+            if (uData.nome && !nome) setNome(uData.nome);
+            return;
+          }
+        }
+
+        // 3. Tenta recuperar do storage local
+        const stored = typeof window !== "undefined" ? localStorage.getItem("ubt_ref") : null;
+        if (isMounted && stored && !slug) {
+          setSlug(stored);
+        }
+      } catch (err) {
+        // Silencioso para não poluir console
+      }
+    };
+
+    resolveLeadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialSlug, telParam]);
+
+  // Slug final garantido
+  const cleanSlug = (slug || initialSlug || "fundador-ubatuba").trim();
+
+  // Origem da URL Oficial da UBT
   const origin = typeof window !== "undefined" && window.location.origin
     ? window.location.origin
     : "https://ubtservicos.vercel.app";
 
-  const fullShareUrl = `${origin}/r/${slug}`;
+  // Unificação Rigorosa do Link de Apadrinhamento (exatamente o mesmo para exibição, cópia, QR Code e WhatsApp)
+  const shareUrl = `${origin}/?ref=${cleanSlug}#cadastro-fundadores-cap`;
 
-  // Chuva de confetes inicial caso venha da conclusão
+  // Chuva de confetes inicial festiva em primeiro plano
   useEffect(() => {
     try {
       confetti({
@@ -58,22 +130,26 @@ export default function IndicacaoPage() {
       });
     } catch (e) {}
 
-    trackEvent("indicacao_page_view", "referral", { slug });
-  }, [slug]);
+    try {
+      trackEvent("indicacao_page_view", "referral", { slug: cleanSlug });
+    } catch (e) {}
+  }, [cleanSlug]);
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(fullShareUrl);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       toast.success("Link de apadrinhamento copiado com sucesso! ✓");
       setTimeout(() => setCopied(false), 3000);
-      trackEvent("referral_link_copied", "referral", { slug });
+      try {
+        trackEvent("referral_link_copied", "referral", { slug: cleanSlug });
+      } catch (e) {}
     } catch (err) {
       toast.error("Erro ao copiar link.");
     }
   };
 
-  const whatsAppMessage = `🚀 Olá! Acabei de ativar meu cadastro pioneiro como Membro Fundador na UBT Serviços em Ubatuba.\n\nCadastre-se pelo meu link exclusivo e garanta benefícios e acesso antecipado:\n${fullShareUrl}`;
+  const whatsAppMessage = `🚀 Olá! Acabei de ativar meu cadastro pioneiro como Membro Fundador na UBT Serviços em Ubatuba.\n\nCadastre-se pelo meu link exclusivo e garanta benefícios e acesso antecipado:\n${shareUrl}`;
   const whatsAppUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsAppMessage)}`;
 
   return (
@@ -120,11 +196,11 @@ export default function IndicacaoPage() {
           </div>
 
           <h1 className="font-display font-extrabold text-2xl sm:text-4xl text-white tracking-tight leading-tight max-w-xl mb-3">
-            {nomeParam ? `Parabéns, ${nomeParam.split(" ")[0]}!` : "Parabéns, Fundador!"} 🎉
+            {nome ? `Parabéns, ${nome.split(" ")[0]}!` : "Parabéns, Fundador!"} 🎉
           </h1>
 
           <p className="text-xs sm:text-sm text-zinc-400 font-sans max-w-xl leading-relaxed">
-            Sua atualização cadastral foi concluída com sucesso. Seu link exclusivo de apadrinhamento já está ativo para você convidar pessoas e formar sua rede em Ubatuba.
+            Sua atualização cadastral foi concluída com sucesso. Seu link exclusivo de apadrinhamento já está ativo para você convidar pessoas, formar sua rede em Ubatuba e receber até 1% de cashback e comissão contínua.
           </p>
         </div>
 
@@ -151,7 +227,7 @@ export default function IndicacaoPage() {
             </label>
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <div className="flex-1 min-w-[220px] max-w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-xs sm:text-sm font-mono text-green font-semibold truncate select-all">
-                {fullShareUrl}
+                {shareUrl}
               </div>
               <button
                 type="button"
@@ -178,7 +254,11 @@ export default function IndicacaoPage() {
             href={whatsAppUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackEvent("whatsapp_share_click", "referral", { slug })}
+            onClick={() => {
+              try {
+                trackEvent("whatsapp_share_click", "referral", { slug: cleanSlug });
+              } catch (e) {}
+            }}
             className="w-full py-4 px-6 rounded-2xl bg-[#25D366] hover:bg-[#20ba59] text-black font-display font-extrabold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-[0_0_25px_rgba(37,211,102,0.3)] transition-all cursor-pointer text-center"
           >
             <WhatsAppIcon className="w-5 h-5 fill-black shrink-0" />
@@ -189,7 +269,7 @@ export default function IndicacaoPage() {
           <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
             <div className="p-3 bg-black rounded-2xl border border-zinc-800 shrink-0 shadow-lg">
               <QRCodeSVG
-                value={fullShareUrl}
+                value={shareUrl}
                 size={140}
                 bgColor="#000000"
                 fgColor="#00FF66"
@@ -208,30 +288,20 @@ export default function IndicacaoPage() {
                 Mostre este QR Code na tela do seu celular para amigos e clientes escanearem diretamente na praia, no comércio ou na rua.
               </p>
               <span className="text-[11px] font-mono text-zinc-500">
-                Código: <strong className="text-white">{slug}</strong>
+                Código: <strong className="text-white">{cleanSlug}</strong>
               </span>
             </div>
           </div>
 
-          {/* Regras e Vantagens do Apadrinhamento */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          {/* Regras e Vantagens do Apadrinhamento (Sem Vínculo Permanente, Textos Ajustados) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <div className="p-4 rounded-xl bg-black border border-zinc-800/80 flex flex-col gap-1.5">
               <div className="w-7 h-7 rounded-lg bg-green/10 flex items-center justify-center text-green mb-1">
                 <TrendingUp className="w-4 h-4" />
               </div>
-              <h3 className="font-display font-bold text-xs text-white">1% de Comissão</h3>
+              <h3 className="font-display font-bold text-xs text-white">Até 1% de Comissão</h3>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Receba 1% sobre o valor das transações e serviços da sua rede em Ubatuba.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-black border border-zinc-800/80 flex flex-col gap-1.5">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 mb-1">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <h3 className="font-display font-bold text-xs text-white">Vínculo Permanente</h3>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                As indicações são gravadas definitivamente na infraestrutura da plataforma.
+                Receba até 1% sobre o valor das transações e serviços da sua rede em Ubatuba.
               </p>
             </div>
 
@@ -241,7 +311,7 @@ export default function IndicacaoPage() {
               </div>
               <h3 className="font-display font-bold text-xs text-white">Fundo Coletivo</h3>
               <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Cada serviço fortalece o fundo municipal e as associações da nossa cidade.
+                Cada serviço fortalece o fundo de premiações e as associações da nossa cidade.
               </p>
             </div>
           </div>

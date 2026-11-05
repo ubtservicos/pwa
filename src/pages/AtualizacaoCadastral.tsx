@@ -123,11 +123,14 @@ export default function AtualizacaoCadastral() {
     const origin = typeof window !== "undefined" && window.location.origin
       ? window.location.origin
       : "https://ubtservicos.vercel.app";
-    return `${origin}/r/`;
+    return `${origin}/?ref=`;
   };
 
   const getFullReferralLink = () => {
-    return `${getReferralBaseUrl()}${referralSlug || "fundador-ubatuba"}`;
+    const origin = typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://ubtservicos.vercel.app";
+    return `${origin}/?ref=${referralSlug || "fundador-ubatuba"}#cadastro-fundadores-cap`;
   };
 
   // Função auxiliar para carregar lead por telefone
@@ -1417,7 +1420,7 @@ export default function AtualizacaoCadastral() {
                           Programa de Apadrinhamento UBT
                         </h3>
                         <p className="text-xs text-zinc-300 mt-0.5 leading-relaxed">
-                          Ganhe 1% de cashback e comissão contínua sobre as corridas e serviços realizados por quem você convidar para a plataforma.
+                          Ganhe até 1% de cashback e comissão contínua sobre as corridas e serviços realizados por quem você convidar para a plataforma.
                         </p>
                       </div>
                     </div>
@@ -1437,6 +1440,7 @@ export default function AtualizacaoCadastral() {
                             placeholder="seu-codigo"
                             className="flex-1 bg-transparent text-green font-bold outline-none ml-0.5 min-w-[60px]"
                           />
+                          <span className="text-zinc-500 select-none text-[10px] sm:text-xs shrink-0">#cadastro-fundadores-cap</span>
                         </div>
 
                         <button
