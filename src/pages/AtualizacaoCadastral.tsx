@@ -100,15 +100,33 @@ export default function AtualizacaoCadastral() {
   const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
   const [step1Error, setStep1Error] = useState("");
 
-  // Etapa 2: Bairros
+  // Etapa 2: Bairros & Geografia
   const [bairroResidencia, setBairroResidencia] = useState("");
   const [bairrosAtuacao, setBairrosAtuacao] = useState<string[]>([]);
   const [searchBairroAtuacao, setSearchBairroAtuacao] = useState("");
+  // Novos estados PJ
+  const [bairroMatriz, setBairroMatriz] = useState("");
+  const [bairrosFiliais, setBairrosFiliais] = useState<string[]>([]);
+  const [searchBairroFilial, setSearchBairroFilial] = useState("");
+  const [regioesAtuacao, setRegioesAtuacao] = useState<string[]>([]);
   const [step2Error, setStep2Error] = useState("");
 
   // Etapa 3: Praias
   const [praias, setPraias] = useState<string[]>([]);
   const [searchPraia, setSearchPraia] = useState("");
+  const [naoAtuaPraias, setNaoAtuaPraias] = useState(false);
+
+  // Detecção se o cadastro atual é PJ
+  const isPJ = useMemo(() => {
+    return Boolean(
+      tipoPessoa === "PJ" ||
+      leadRecord?.cnpj ||
+      leadRecord?.tipo_cadastro === "pj" ||
+      leadRecord?.tipo_cadastro === "PJ" ||
+      leadRecord?.tipo_cadastro === "associacao" ||
+      leadRecord?.razao_social
+    );
+  }, [tipoPessoa, leadRecord]);
 
   // Etapa 4: Financeiro & Indicação
   const [possuiMercadoPago, setPossuiMercadoPago] = useState<boolean>(true);
@@ -208,6 +226,9 @@ export default function AtualizacaoCadastral() {
         || leadData.bairro_moradia
         || (Array.isArray(leadData.bairros) && leadData.bairros.length > 0 ? leadData.bairros[0] : (leadData.bairro_hospedagem || ""));
       setBairroResidencia(bResidenciaSalvo || "");
+      setBairroMatriz(leadData.bairro_matriz || bResidenciaSalvo || "");
+      setBairrosFiliais(Array.isArray(leadData.bairros_filiais) ? leadData.bairros_filiais : []);
+      setRegioesAtuacao(Array.isArray(leadData.regioes_atuacao) ? leadData.regioes_atuacao : (Array.isArray(leadData.regioes) ? leadData.regioes : []));
 
       const bairrosTrabList: string[] = leadData.bairro_trabalho
         ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
@@ -218,7 +239,9 @@ export default function AtualizacaoCadastral() {
       const praiasList: string[] = Array.isArray(leadData.praias_frequenta)
         ? leadData.praias_frequenta
         : (Array.isArray(leadData.praias) ? leadData.praias : []);
-      setPraias(praiasList);
+      const leadNaoAtuaPraias = Boolean(leadData.nao_atua_praias);
+      setNaoAtuaPraias(leadNaoAtuaPraias);
+      setPraias(leadNaoAtuaPraias ? [] : praiasList);
 
       // Financeiro
       setPossuiMercadoPago(
@@ -291,10 +314,40 @@ export default function AtualizacaoCadastral() {
     );
   };
 
+  // Lista filtrada de bairros para filiais (PJ)
+  const filteredBairrosFiliais = useMemo(() => {
+    const term = searchBairroFilial.toLowerCase().trim();
+    if (!term) return BAIRROS_LIST;
+    return BAIRROS_LIST.filter((b) => b.toLowerCase().includes(term));
+  }, [searchBairroFilial]);
+
+  const toggleBairroFilial = (bairro: string) => {
+    setBairrosFiliais((prev) =>
+      prev.includes(bairro) ? prev.filter((b) => b !== bairro) : [...prev, bairro]
+    );
+  };
+
+  const toggleRegiaoAtuacao = (regiao: string) => {
+    setRegioesAtuacao((prev) =>
+      prev.includes(regiao) ? prev.filter((r) => r !== regiao) : [...prev, regiao]
+    );
+  };
+
   const togglePraia = (praia: string) => {
+    if (naoAtuaPraias) return;
     setPraias((prev) =>
       prev.includes(praia) ? prev.filter((p) => p !== praia) : [...prev, praia]
     );
+  };
+
+  const handleToggleNaoAtuaPraias = () => {
+    setNaoAtuaPraias((prev) => {
+      const next = !prev;
+      if (next) {
+        setPraias([]);
+      }
+      return next;
+    });
   };
 
   // Sanitizador de Slug do Apadrinhamento (somente minúsculas, números e hífens)
@@ -416,9 +469,16 @@ export default function AtualizacaoCadastral() {
   // Validação do Passo 2
   const validateStep2 = (): boolean => {
     setStep2Error("");
-    if (!bairroResidencia) {
-      setStep2Error("Por favor, selecione onde você mora (ou 'Em outra cidade').");
-      return false;
+    if (isPJ) {
+      if (!bairroMatriz) {
+        setStep2Error("Por favor, selecione o Bairro da Matriz ou Sede (ou 'Fora do Município').");
+        return false;
+      }
+    } else {
+      if (!bairroResidencia) {
+        setStep2Error("Por favor, selecione onde você mora (ou 'Em outra cidade').");
+        return false;
+      }
     }
     return true;
   };
@@ -450,20 +510,25 @@ export default function AtualizacaoCadastral() {
     setIsSubmitting(true);
 
     try {
-      const allBairros = Array.from(new Set([bairroResidencia, ...bairrosAtuacao].filter(Boolean)));
+      const effectiveMatrizOrResidencia = isPJ ? (bairroMatriz || bairroResidencia) : bairroResidencia;
+      const allBairros = isPJ
+        ? Array.from(new Set([effectiveMatrizOrResidencia, ...bairrosFiliais, ...bairrosAtuacao].filter(Boolean)))
+        : Array.from(new Set([bairroResidencia, ...bairrosAtuacao].filter(Boolean)));
+
       const rawDigitsTel = (telefone || "").replace(/\D/g, "");
       const cleanCpf = (cpf || "").replace(/\D/g, "");
       const cleanCnpj = (cnpj || "").replace(/\D/g, "");
       const finalSlug = referralSlug || generateReferralSlug(nome || razaoSocial, cleanCpf || cleanCnpj);
+      const finalPraias = (isPJ && naoAtuaPraias) ? [] : praias;
 
       const updatePayload: Record<string, any> = {
-        bairro_residencia: bairroResidencia,
-        bairro_moradia: bairroResidencia,
+        bairro_residencia: effectiveMatrizOrResidencia,
+        bairro_moradia: effectiveMatrizOrResidencia,
         bairros_atuacao: bairrosAtuacao,
         bairros: allBairros,
         bairro_trabalho: bairrosAtuacao.join(", "),
-        praias: praias,
-        praias_frequenta: praias,
+        praias: finalPraias,
+        praias_frequenta: finalPraias,
         possui_conta_mercado_pago: possuiMercadoPago,
         possui_mercado_pago: possuiMercadoPago,
         tipo_chave_pix: tipoChavePix,
@@ -472,6 +537,13 @@ export default function AtualizacaoCadastral() {
         cadastro_completo: true,
         status: (leadRecord?.status === "aprovado" || leadRecord?.status === "approved") ? "aprovado" : "completo",
       };
+
+      if (isPJ) {
+        updatePayload.bairro_matriz = effectiveMatrizOrResidencia;
+        updatePayload.bairros_filiais = bairrosFiliais;
+        updatePayload.regioes_atuacao = regioesAtuacao;
+        updatePayload.nao_atua_praias = naoAtuaPraias;
+      }
 
       if (isPersonalUnlocked) {
         if (tipoPessoa === "PF") {
@@ -509,11 +581,17 @@ export default function AtualizacaoCadastral() {
           referral_code: finalSlug,
           metadata: {
             ...(leadRecord?.metadata || {}),
-            bairro_residencia: bairroResidencia,
+            bairro_residencia: effectiveMatrizOrResidencia,
             bairros_atuacao: bairrosAtuacao,
-            praias: praias,
+            praias: finalPraias,
             referral_code: finalSlug,
             cadastro_completo: true,
+            ...(isPJ ? {
+              bairro_matriz: effectiveMatrizOrResidencia,
+              bairros_filiais: bairrosFiliais,
+              regioes_atuacao: regioesAtuacao,
+              nao_atua_praias: naoAtuaPraias,
+            } : {})
           }
         };
         if (rawDigitsTel) {
@@ -1091,106 +1169,357 @@ export default function AtualizacaoCadastral() {
               )}
 
               {/* =================================================================== */}
-              {/* ETAPA 2: BAIRROS (RESIDÊNCIA & ATUAÇÃO) */}
+              {/* ETAPA 2: BAIRROS (PF) OU PRESENÇA GEOGRÁFICA (PJ) */}
               {/* =================================================================== */}
               {currentStep === 2 && (
                 <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-                  <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
-                    <MapPin className="w-5 h-5 text-green" />
-                    <h2 className="font-display font-bold text-lg text-white">
-                      2. Localização & Bairros
-                    </h2>
-                  </div>
+                  {isPJ ? (
+                    <>
+                      {/* Cabeçalho PJ */}
+                      <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+                        <Building2 className="w-5 h-5 text-green" />
+                        <h2 className="font-display font-bold text-lg text-white">
+                          2. Localização & Atuação da Entidade
+                        </h2>
+                      </div>
 
-                  {/* Onde Moro */}
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-mono text-white/80 uppercase tracking-wider">
-                      Onde você mora? (Residência):
-                    </label>
-                    <select
-                      value={bairroResidencia}
-                      onChange={(e) => {
-                        setBairroResidencia(e.target.value);
-                        setStep2Error("");
-                      }}
-                      className="w-full px-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-sans outline-none cursor-pointer"
-                    >
-                      <option value="">Selecione o seu bairro de moradia...</option>
-                      {BAIRROS_COM_OUTRA_CIDADE_LIST.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      {/* BLOCO 1: Bairro Matriz / Sede Principal (Obrigatório) */}
+                      <div className="flex flex-col gap-2 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-mono text-white/90 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                            <span>Bairro da Matriz / Sede Principal:</span>
+                            <span className="text-red-400">*</span>
+                          </label>
+                          <span className="text-[11px] font-mono text-zinc-400">Obrigatório</span>
+                        </div>
+                        <p className="text-xs text-zinc-400">
+                          Selecione o bairro onde fica a sede ou matriz da sua empresa / entidade em Ubatuba (ou "Fora do Município").
+                        </p>
+                        <select
+                          value={bairroMatriz}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setBairroMatriz(val);
+                            setBairroResidencia(val);
+                            setStep2Error("");
+                          }}
+                          className="w-full px-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-sans outline-none cursor-pointer"
+                        >
+                          <option value="">Selecione o bairro da sede / matriz...</option>
+                          <option value="Fora do Município">🌐 Fora do Município</option>
+                          {BAIRROS_LIST.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                  {/* Onde Trabalho / Atuação */}
-                  <div className="flex flex-col gap-3 pt-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <label className="text-xs font-mono text-white/80 uppercase tracking-wider">
-                        Onde você atua ou trabalha? (Selecione múltiplos):
-                      </label>
-                      <span className="text-[11px] font-mono text-green font-semibold">
-                        {bairrosAtuacao.length} selecionado(s)
-                      </span>
-                    </div>
+                      {/* BLOCO 2: Bairros Filiais / Pontos de Apoio (Opcional) */}
+                      <div className="flex flex-col gap-3 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <label className="text-xs font-mono text-white/90 uppercase tracking-wider font-semibold block">
+                              Filiais & Pontos de Apoio em Ubatuba:
+                            </label>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Caso possua filiais, quiosques, lojas ou bases em outros bairros do município (opcional).
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] font-mono text-green font-semibold">
+                              {bairrosFiliais.length} filial(is) selecionada(s)
+                            </span>
+                            {bairrosFiliais.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setBairrosFiliais([])}
+                                className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                              >
+                                Limpar
+                              </button>
+                            )}
+                          </div>
+                        </div>
 
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={searchBairroAtuacao}
-                        onChange={(e) => setSearchBairroAtuacao(e.target.value)}
-                        placeholder="Filtrar bairro por nome..."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
-                      />
-                    </div>
+                        <div className="relative">
+                          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={searchBairroFilial}
+                            onChange={(e) => setSearchBairroFilial(e.target.value)}
+                            placeholder="Buscar bairro da filial..."
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
+                          />
+                        </div>
 
-                    <div className="flex items-center gap-2 pb-1">
-                      <button
-                        type="button"
-                        onClick={() => setBairrosAtuacao(BAIRROS_LIST)}
-                        className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
-                      >
-                        Selecionar Todos
-                      </button>
-                      <span className="text-zinc-600">•</span>
-                      <button
-                        type="button"
-                        onClick={() => setBairrosAtuacao([])}
-                        className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
-                      >
-                        Limpar
-                      </button>
-                    </div>
+                        <div className="max-h-48 overflow-y-auto p-3 rounded-xl bg-black/60 border border-zinc-800 flex flex-wrap gap-2">
+                          {filteredBairrosFiliais.map((b) => {
+                            const isSelected = bairrosFiliais.includes(b);
+                            return (
+                              <button
+                                key={b}
+                                type="button"
+                                onClick={() => toggleBairroFilial(b)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
+                                  isSelected
+                                    ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
+                                    : "bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                <span>{b}</span>
+                              </button>
+                            );
+                          })}
+                          {filteredBairrosFiliais.length === 0 && (
+                            <span className="text-xs text-zinc-500 py-3 w-full text-center">
+                              Nenhum bairro encontrado com "{searchBairroFilial}".
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                    {/* Chips de Bairros */}
-                    <div className="max-h-56 overflow-y-auto p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-wrap gap-2">
-                      {filteredBairrosAtuacao.map((b) => {
-                        const isSelected = bairrosAtuacao.includes(b);
-                        return (
+                      {/* BLOCO 3: Regiões de Atuação Comercial */}
+                      <div className="flex flex-col gap-3 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <label className="text-xs font-mono text-white/90 uppercase tracking-wider font-semibold block">
+                              Regiões de Atuação no Município:
+                            </label>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Selecione as grandes macro-regiões onde sua entidade tem capacidade de atendimento.
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-mono text-green font-semibold">
+                            {regioesAtuacao.length} selecionada(s)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                          {[
+                            { id: "Sul", label: "Região Sul", desc: "Maringá a Perequê-Mirim" },
+                            { id: "Centro", label: "Região Centro", desc: "Itaguá, Centro e entorno" },
+                            { id: "Norte", label: "Região Norte", desc: "Ubatumirim ao Camburi" },
+                            { id: "Oeste", label: "Região Oeste", desc: "Horto, Ipiranguinha e interior" },
+                          ].map((reg) => {
+                            const isSelected = regioesAtuacao.includes(reg.id);
+                            return (
+                              <button
+                                key={reg.id}
+                                type="button"
+                                onClick={() => toggleRegiaoAtuacao(reg.id)}
+                                className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                                  isSelected
+                                    ? "bg-green/10 border-green text-white shadow-[0_0_15px_rgba(0,255,102,0.2)]"
+                                    : "bg-black border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isSelected ? "text-green" : "text-white"}`}>
+                                    {reg.label}
+                                  </span>
+                                  {isSelected && <Check className="w-4 h-4 text-green stroke-[3]" />}
+                                </div>
+                                <span className="text-[10px] text-zinc-500 leading-tight">
+                                  {reg.desc}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* BLOCO 4: Bairros de Atuação Direta */}
+                      <div className="flex flex-col gap-3 p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <label className="text-xs font-mono text-white/90 uppercase tracking-wider font-semibold block">
+                              Bairros Específicos de Atuação:
+                            </label>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Marque todos os bairros onde sua entidade atende clientes ou realiza entregas/serviços.
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-mono text-green font-semibold">
+                            {bairrosAtuacao.length} selecionado(s)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
-                            key={b}
                             type="button"
-                            onClick={() => toggleBairroAtuacao(b)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
-                              isSelected
+                            onClick={() => toggleBairroAtuacao("Fora do Município")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                              bairrosAtuacao.includes("Fora do Município")
                                 ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
-                                : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                                : "bg-black border border-zinc-700 text-zinc-300 hover:border-zinc-500"
                             }`}
                           >
-                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                            <span>{b}</span>
+                            {bairrosAtuacao.includes("Fora do Município") && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            <span>🌐 Fora do Município</span>
                           </button>
-                        );
-                      })}
-                      {filteredBairrosAtuacao.length === 0 && (
-                        <span className="text-xs text-zinc-500 py-4 w-full text-center">
-                          Nenhum bairro encontrado com "{searchBairroAtuacao}".
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                          <span className="text-zinc-600">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const combined = Array.from(new Set([...BAIRROS_LIST, ...bairrosAtuacao]));
+                              setBairrosAtuacao(combined);
+                            }}
+                            className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                          >
+                            Selecionar Todos Ubatuba
+                          </button>
+                          <span className="text-zinc-600">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setBairrosAtuacao([])}
+                            className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+
+                        <div className="relative">
+                          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={searchBairroAtuacao}
+                            onChange={(e) => setSearchBairroAtuacao(e.target.value)}
+                            placeholder="Filtrar bairro por nome..."
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
+                          />
+                        </div>
+
+                        {/* Chips de Bairros de Atuação */}
+                        <div className="max-h-56 overflow-y-auto p-3 rounded-xl bg-black/60 border border-zinc-800 flex flex-wrap gap-2">
+                          {filteredBairrosAtuacao.map((b) => {
+                            const isSelected = bairrosAtuacao.includes(b);
+                            return (
+                              <button
+                                key={b}
+                                type="button"
+                                onClick={() => toggleBairroAtuacao(b)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
+                                  isSelected
+                                    ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
+                                    : "bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                <span>{b}</span>
+                              </button>
+                            );
+                          })}
+                          {filteredBairrosAtuacao.length === 0 && (
+                            <span className="text-xs text-zinc-500 py-4 w-full text-center">
+                              Nenhum bairro encontrado com "{searchBairroAtuacao}".
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* BLOCO ORIGINAL PF (Zero Regressão) */}
+                      <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+                        <MapPin className="w-5 h-5 text-green" />
+                        <h2 className="font-display font-bold text-lg text-white">
+                          2. Localização & Bairros
+                        </h2>
+                      </div>
+
+                      {/* Onde Moro */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-mono text-white/80 uppercase tracking-wider">
+                          Onde você mora? (Residência):
+                        </label>
+                        <select
+                          value={bairroResidencia}
+                          onChange={(e) => {
+                            setBairroResidencia(e.target.value);
+                            setStep2Error("");
+                          }}
+                          className="w-full px-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-sans outline-none cursor-pointer"
+                        >
+                          <option value="">Selecione o seu bairro de moradia...</option>
+                          {BAIRROS_COM_OUTRA_CIDADE_LIST.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Onde Trabalho / Atuação */}
+                      <div className="flex flex-col gap-3 pt-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <label className="text-xs font-mono text-white/80 uppercase tracking-wider">
+                            Onde você atua ou trabalha? (Selecione múltiplos):
+                          </label>
+                          <span className="text-[11px] font-mono text-green font-semibold">
+                            {bairrosAtuacao.length} selecionado(s)
+                          </span>
+                        </div>
+
+                        <div className="relative">
+                          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={searchBairroAtuacao}
+                            onChange={(e) => setSearchBairroAtuacao(e.target.value)}
+                            placeholder="Filtrar bairro por nome..."
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 pb-1">
+                          <button
+                            type="button"
+                            onClick={() => setBairrosAtuacao(BAIRROS_LIST)}
+                            className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                          >
+                            Selecionar Todos
+                          </button>
+                          <span className="text-zinc-600">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setBairrosAtuacao([])}
+                            className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+
+                        {/* Chips de Bairros */}
+                        <div className="max-h-56 overflow-y-auto p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-wrap gap-2">
+                          {filteredBairrosAtuacao.map((b) => {
+                            const isSelected = bairrosAtuacao.includes(b);
+                            return (
+                              <button
+                                key={b}
+                                type="button"
+                                onClick={() => toggleBairroAtuacao(b)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
+                                  isSelected
+                                    ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
+                                    : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                <span>{b}</span>
+                              </button>
+                            );
+                          })}
+                          {filteredBairrosAtuacao.length === 0 && (
+                            <span className="text-xs text-zinc-500 py-4 w-full text-center">
+                              Nenhum bairro encontrado com "{searchBairroAtuacao}".
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {step2Error && (
                     <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-start gap-2">
@@ -1234,74 +1563,120 @@ export default function AtualizacaoCadastral() {
                   <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
                     <Waves className="w-5 h-5 text-green" />
                     <h2 className="font-display font-bold text-lg text-white">
-                      3. Praias que Frequenta ou Atua
+                      {isPJ ? "3. Praias que Atua" : "3. Praias que Frequenta ou Atua"}
                     </h2>
                   </div>
 
                   <p className="text-xs text-zinc-400">
-                    Indique as praias onde você costuma prestar serviços, passear ou consumir. Isso nos ajuda a direcionar demandas próximas a você.
+                    {isPJ
+                      ? "Indique as praias onde sua entidade/empresa presta serviços ou realiza atendimento comercial."
+                      : "Indique as praias onde você costuma prestar serviços, passear ou consumir. Isso nos ajuda a direcionar demandas próximas a você."}
                   </p>
 
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={searchPraia}
-                        onChange={(e) => setSearchPraia(e.target.value)}
-                        placeholder="Filtrar praia..."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
-                      />
+                  {/* Toggle Especial para PJ: Não atua em praias */}
+                  {isPJ && (
+                    <div
+                      onClick={handleToggleNaoAtuaPraias}
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                        naoAtuaPraias
+                          ? "bg-amber-500/10 border-amber-500/40 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                          : "bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
+                          naoAtuaPraias ? "bg-amber-500 text-black" : "bg-zinc-800 text-zinc-400"
+                        }`}>
+                          🌴
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-mono font-bold uppercase tracking-wider">
+                            Não atua em praias
+                          </span>
+                          <span className="text-[11px] text-zinc-400">
+                            Marque esta opção se sua entidade atua exclusivamente na área urbana, rural ou sede administrativa.
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                        naoAtuaPraias ? "bg-amber-500 border-amber-500 text-black" : "border-zinc-700 bg-black"
+                      }`}>
+                        {naoAtuaPraias && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
                     </div>
-                    <span className="text-[11px] font-mono text-green font-semibold">
-                      {praias.length} praia(s) selecionada(s)
-                    </span>
-                  </div>
+                  )}
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPraias(PRAIAS_LIST)}
-                      className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
-                    >
-                      Selecionar Todas
-                    </button>
-                    <span className="text-zinc-600">•</span>
-                    <button
-                      type="button"
-                      onClick={() => setPraias([])}
-                      className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  </div>
+                  {naoAtuaPraias ? (
+                    <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/80 text-center py-6 text-xs text-zinc-400">
+                      🌴 <strong className="text-white">Opção "Não atua em praias" selecionada.</strong>
+                      <p className="mt-1 text-[11px] text-zinc-500">
+                        Nenhuma praia será vinculada ao perfil da entidade. Caso deseje selecionar praias, desmarque a opção acima.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="relative flex-1 min-w-[200px]">
+                          <Search className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={searchPraia}
+                            onChange={(e) => setSearchPraia(e.target.value)}
+                            placeholder="Filtrar praia..."
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-xs font-sans outline-none"
+                          />
+                        </div>
+                        <span className="text-[11px] font-mono text-green font-semibold">
+                          {praias.length} praia(s) selecionada(s)
+                        </span>
+                      </div>
 
-                  {/* Chips de Praias */}
-                  <div className="max-h-64 overflow-y-auto p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-wrap gap-2">
-                    {filteredPraias.map((p) => {
-                      const isSelected = praias.includes(p);
-                      return (
+                      <div className="flex items-center gap-2">
                         <button
-                          key={p}
                           type="button"
-                          onClick={() => togglePraia(p)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
-                            isSelected
-                              ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
-                              : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
-                          }`}
+                          onClick={() => setPraias(PRAIAS_LIST)}
+                          className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                          <span>{p}</span>
+                          Selecionar Todas
                         </button>
-                      );
-                    })}
-                    {filteredPraias.length === 0 && (
-                      <span className="text-xs text-zinc-500 py-4 w-full text-center">
-                        Nenhuma praia encontrada com "{searchPraia}".
-                      </span>
-                    )}
-                  </div>
+                        <span className="text-zinc-600">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setPraias([])}
+                          className="text-[11px] font-mono text-zinc-400 hover:text-white underline cursor-pointer"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+
+                      {/* Chips de Praias */}
+                      <div className="max-h-64 overflow-y-auto p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-wrap gap-2">
+                        {filteredPraias.map((p) => {
+                          const isSelected = praias.includes(p);
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => togglePraia(p)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer ${
+                                isSelected
+                                  ? "bg-green text-navy font-bold shadow-[0_0_10px_rgba(0,255,102,0.3)]"
+                                  : "bg-black border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                              <span>{p}</span>
+                            </button>
+                          );
+                        })}
+                        {filteredPraias.length === 0 && (
+                          <span className="text-xs text-zinc-500 py-4 w-full text-center">
+                            Nenhuma praia encontrada com "{searchPraia}".
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                   {/* Navegação do Passo 3: Voltar e Continuar */}
                   <div className="flex items-center justify-between pt-2">

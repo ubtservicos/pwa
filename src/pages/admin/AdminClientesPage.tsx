@@ -1427,63 +1427,8 @@ export default function AdminClientesPage() {
                   );
                 })()}
 
-                {/* Link de Onboarding */}
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Link de Onboarding:
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      readOnly
-                      type="text"
-                      value={`${getAppOrigin()}/onboarding?token=${selectedUserModal.id}`}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                        cursor: "text",
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${selectedUserModal.id}`, "onboarding")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: copiedLink === "onboarding" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                        color: copiedLink === "onboarding" ? "#0DB87E" : "var(--admin-text)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {copiedLink === "onboarding" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copiar
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Link Padrinho/Madrinha (Indicação) */}
+                {
+                /* Link Padrinho/Madrinha (Indicação) */}
                 {(() => {
                   const refSlug = selectedUserModal.referralSlug || customSlugInput || "fundador-ubatuba";
                   const padrinhoLink = `${getAppOrigin()}/?ref=${refSlug}#cadastro-fundadores-cap`;
