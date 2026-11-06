@@ -242,7 +242,24 @@ export default function AdminClientesPage() {
       return true;
     });
 
-    return dbUsers.map((u: any) => {
+    return dbUsers
+      .filter((u: any) => {
+        // Regra de Negócio: Leads PJ / Entidade (CNPJ) nunca devem ser listados em /admin/clientes
+        const userPhoneDigits = cleanPhone(u.telefone || u.phone || "");
+        const userEmailClean = String(u.email || "").toLowerCase().trim();
+        const matchedWl = wlUserIdMap.get(u.id) || (userPhoneDigits ? wlPhoneMap.get(userPhoneDigits) : null) || (userEmailClean ? wlEmailMap.get(userEmailClean) : null);
+
+        const isPJ = u.role === "associacao" || 
+                     u.tipo_pessoa === "PJ" || 
+                     Boolean(u.cnpj) || 
+                     u.metadata?.tipo_cadastro === "pj" || 
+                     u.metadata?.tipo_cadastro === "PJ" ||
+                     matchedWl?.tipo_cadastro === "PJ" ||
+                     matchedWl?.tipo_cadastro === "pj" ||
+                     Boolean(matchedWl?.cnpj);
+        return !isPJ;
+      })
+      .map((u: any) => {
       const prof = profMap.get(u.id);
       const moto = mototaxisMap.get(u.id);
       const diarista = diaristasMap.get(u.id);
