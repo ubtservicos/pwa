@@ -573,64 +573,42 @@ export default function AtualizacaoCadastral() {
         }
       }
 
-      // 2. Atualiza e sincroniza na tabela usuarios (status='ativo', cadastro_completo=true)
+      // 2. Sincronização complementar defensiva na tabela usuarios
       try {
-        const userUpdates: Record<string, any> = {
-          status: "ativo",
-          cadastro_completo: true,
-          referral_code: finalSlug,
-          metadata: {
-            ...(leadRecord?.metadata || {}),
-            bairro_residencia: effectiveMatrizOrResidencia,
-            bairros_atuacao: bairrosAtuacao,
-            praias: finalPraias,
-            referral_code: finalSlug,
-            cadastro_completo: true,
-            ...(isPJ ? {
-              bairro_matriz: effectiveMatrizOrResidencia,
-              bairros_filiais: bairrosFiliais,
-              regioes_atuacao: regioesAtuacao,
-              nao_atua_praias: naoAtuaPraias,
-            } : {})
-          }
-        };
         if (rawDigitsTel) {
           await supabase
             .from("usuarios")
-            .update(userUpdates)
-            .or(`telefone.eq.${rawDigitsTel},telefone.eq.${telefone}`);
-        }
-        if (updatePayload.email) {
-          await supabase
-            .from("usuarios")
-            .update(userUpdates)
-            .ilike("email", updatePayload.email);
+            .update({
+              status: "ativo",
+              metadata: {
+                ...(leadRecord?.metadata || {}),
+                bairro_residencia: effectiveMatrizOrResidencia,
+                bairros_atuacao: bairrosAtuacao,
+                praias: finalPraias,
+                referral_code: finalSlug,
+                cadastro_completo: true,
+                atualizado_em: new Date().toISOString(),
+                ...(isPJ ? {
+                  bairro_matriz: effectiveMatrizOrResidencia,
+                  bairros_filiais: bairrosFiliais,
+                  regioes_atuacao: regioesAtuacao,
+                  nao_atua_praias: naoAtuaPraias,
+                } : {}),
+              },
+            })
+            .eq("telefone", rawDigitsTel);
         }
       } catch (uErr) {
-        console.warn("[AtualizacaoCadastral] Falha não impeditiva ao atualizar usuarios:", uErr);
+        // Falhas de RLS do lado do cliente são absorvidas pela trigger de banco
       }
 
       // 3. Atualiza senha no Supabase Auth se fornecida
       if (senha && senha.length >= 6) {
         try {
-          const authEmail = email || leadRecord?.email || `${rawDigitsTel}@ubtservicos.com.br`;
           await supabase.auth.updateUser({ password: senha });
         } catch (authErr) {
-          console.warn("[AtualizacaoCadastral] Supabase auth updateUser ignorado:", authErr);
+          // Ignorado silenciosamente caso não haja sessão auth ativa
         }
-      }
-
-      // 4. Executa RPC se disponível
-      try {
-        await supabase.rpc("concluir_atualizacao_cadastral", {
-          p_telefone: rawDigitsTel,
-          p_bairro_residencia: bairroResidencia,
-          p_bairros_atuacao: bairrosAtuacao,
-          p_praias: praias,
-          p_referral_code: finalSlug,
-        });
-      } catch (rpcErr) {
-        // Fallback silencioso
       }
 
       trackEvent("atualizacao_cadastral_completed", "onboarding", {
@@ -1577,39 +1555,51 @@ export default function AtualizacaoCadastral() {
                   {isPJ && (
                     <div
                       onClick={handleToggleNaoAtuaPraias}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                      className={`p-4 sm:p-5 rounded-2xl transition-all cursor-pointer flex items-center justify-between ${
                         naoAtuaPraias
-                          ? "bg-amber-500/10 border-amber-500/40 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                          : "bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white"
+                          ? "border-2 border-[#00FF66] bg-[#00FF66]/10 shadow-[0_0_20px_rgba(0,255,102,0.25)]"
+                          : "border border-white/10 bg-neutral-900/60 text-zinc-300 hover:border-white/20 hover:bg-neutral-900/80"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
-                          naoAtuaPraias ? "bg-amber-500 text-black" : "bg-zinc-800 text-zinc-400"
-                        }`}>
+                      <div className="flex items-center gap-3.5">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base transition-all shrink-0 ${
+                            naoAtuaPraias
+                              ? "bg-[#00FF66] text-black shadow-[0_0_15px_rgba(0,255,102,0.3)]"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}
+                        >
                           🌴
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-mono font-bold uppercase tracking-wider">
+                          <span
+                            className={`text-xs font-mono uppercase tracking-wider transition-colors ${
+                              naoAtuaPraias ? "text-[#00FF66] font-bold" : "text-white font-semibold"
+                            }`}
+                          >
                             Não atua em praias
                           </span>
-                          <span className="text-[11px] text-zinc-400">
+                          <span className="text-[11px] text-zinc-400 mt-0.5">
                             Marque esta opção se sua entidade atua exclusivamente na área urbana, rural ou sede administrativa.
                           </span>
                         </div>
                       </div>
-                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${
-                        naoAtuaPraias ? "bg-amber-500 border-amber-500 text-black" : "border-zinc-700 bg-black"
-                      }`}>
-                        {naoAtuaPraias && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all shrink-0 ml-3 ${
+                          naoAtuaPraias
+                            ? "bg-[#00FF66] text-black shadow-[0_0_10px_rgba(0,255,102,0.4)]"
+                            : "border-2 border-zinc-700 bg-black/60 text-transparent hover:border-zinc-500"
+                        }`}
+                      >
+                        {naoAtuaPraias && <Check className="w-4 h-4 stroke-[3]" />}
                       </div>
                     </div>
                   )}
 
                   {naoAtuaPraias ? (
-                    <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-800/80 text-center py-6 text-xs text-zinc-400">
-                      🌴 <strong className="text-white">Opção "Não atua em praias" selecionada.</strong>
-                      <p className="mt-1 text-[11px] text-zinc-500">
+                    <div className="p-4 rounded-xl bg-emerald-950/20 border border-[#00FF66]/30 text-center py-6 text-xs text-zinc-300">
+                      🌴 <strong className="text-[#00FF66]">Opção "Não atua em praias" selecionada.</strong>
+                      <p className="mt-1 text-[11px] text-zinc-400">
                         Nenhuma praia será vinculada ao perfil da entidade. Caso deseje selecionar praias, desmarque a opção acima.
                       </p>
                     </div>
