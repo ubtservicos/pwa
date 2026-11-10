@@ -218,6 +218,9 @@ export default function AdminClientesPage() {
     const profMap = new Map<string, any>();
     dbProfiles.forEach((p) => profMap.set(p.id, p));
 
+    const userMap = new Map<string, any>();
+    dbUsers.forEach((usr) => userMap.set(usr.id, usr));
+
     const cleanPhone = (p: string) => String(p || "").replace(/\D/g, "");
     const wlPhoneMap = new Map<string, any>();
     const wlEmailMap = new Map<string, any>();
@@ -332,6 +335,10 @@ export default function AdminClientesPage() {
       const isCadastroCompleto = u.cadastro_completo === true || u.metadata?.cadastro_completo === true || matchedWl?.cadastro_completo === true;
       const isPendente = u.status === "pendente_aprovacao" || u.status === "pending" || matchedWl?.status === "pendente_aprovacao" || matchedWl?.status === "pending";
       const referralSlug = matchedWl?.referral_code || matchedWl?.slug || u.referral_code || u.metadata?.referral_code || generateReferralSlug(name, u.cpf || u.id);
+      const padrinhoId = u.padrinho_id || matchedWl?.padrinho_id || null;
+      const padrinhoUser = padrinhoId ? userMap.get(padrinhoId) : null;
+      const padrinhoNome = padrinhoUser ? (padrinhoUser.nome || padrinhoUser.razao_social || "Padrinho") : null;
+      const padrinhoRole = padrinhoUser?.role === "associacao" || padrinhoUser?.tipo_pessoa === "PJ" ? "PJ" : "PF";
 
       return {
         id: u.id,
@@ -356,6 +363,9 @@ export default function AdminClientesPage() {
         contribComunidade,
         cadastroCompleto: isCadastroCompleto,
         isPendente,
+        padrinhoId,
+        padrinhoNome,
+        padrinhoRole,
       };
     });
   }, [dbUsers, dbProfiles, dbPedidos, mototaxisMap, diaristasMap, caminhoesMap, userAssocMap, dbWaitlist, filterPeriod]);
@@ -1274,6 +1284,20 @@ export default function AdminClientesPage() {
                 <div>
                   <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Associação</span>
                   <div style={{ fontSize: 13, color: "var(--admin-subtle)", marginTop: 2 }}>{selectedUserModal.associacao || "Nenhuma"}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Padrinho / Indicado por</span>
+                  <div style={{ marginTop: 2 }}>
+                    {selectedUserModal.padrinhoNome ? (
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1.5">
+                        🤝 {selectedUserModal.padrinhoNome} ({selectedUserModal.padrinhoRole})
+                      </span>
+                    ) : (
+                      <span className="text-zinc-500 text-xs italic">
+                        Direto (Sem Padrinho)
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ gridColumn: "span 2" }}>
                   <span style={{ fontSize: 10, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Status do Cadastro</span>

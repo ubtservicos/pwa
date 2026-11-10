@@ -9,7 +9,11 @@ import {
   Award,
   TrendingUp,
   QrCode,
-  ChevronRight
+  ChevronRight,
+  Handshake,
+  Users,
+  Building2,
+  User
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
@@ -41,13 +45,40 @@ export default function IndicacaoPage() {
   const [nome, setNome] = useState<string>(initialNome);
   const [copied, setCopied] = useState(false);
 
+  interface ApadrinhadoItem {
+    id: string;
+    nome: string;
+    tipo_cadastro: string;
+    status: string;
+    cadastro_completo: boolean;
+    criado_em: string;
+  }
+
+  const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
+  const [loadingApadrinhados, setLoadingApadrinhados] = useState<boolean>(true);
+
+  const fetchApadrinhados = async (padrinhoUserId: string) => {
+    try {
+      setLoadingApadrinhados(true);
+      const { data, error } = await supabase.rpc("obter_meus_apadrinhados", {
+        p_padrinho_id: padrinhoUserId,
+      });
+      if (!error && data) {
+        setApadrinhados(data as ApadrinhadoItem[]);
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar apadrinhados:", err);
+    } finally {
+      setLoadingApadrinhados(false);
+    }
+  };
+
   // Fallback defensivo para caso o usuário acesse sem slug direto na URL
   useEffect(() => {
     let isMounted = true;
 
     const resolveLeadData = async () => {
-      // Se já temos o slug vindo da URL (ex: teste-03112026), ele tem prioridade absoluta!
-      if (initialSlug) return;
+      let resolvedUserId: string | null = null;
 
       try {
         // 1. Tenta recuperar por telefone se informado
@@ -57,7 +88,7 @@ export default function IndicacaoPage() {
 
           const { data: wlData } = await supabase
             .from("waitlist")
-            .select("nome, razao_social, referral_code, slug")
+            .select("id, user_id, nome, razao_social, referral_code, slug")
             .or(`telefone.eq.${cleanTel},telefone.ilike.%${last8}%`)
             .order("created_at_utc", { ascending: false })
             .limit(1)
@@ -65,38 +96,55 @@ export default function IndicacaoPage() {
 
           if (isMounted && wlData) {
             const resolvedSlug = wlData.referral_code || wlData.slug;
-            if (resolvedSlug) setSlug(resolvedSlug);
+            if (resolvedSlug && !initialSlug) setSlug(resolvedSlug);
             const resolvedNome = wlData.nome || wlData.razao_social;
             if (resolvedNome && !nome) setNome(resolvedNome);
-            return;
+            if (wlData.user_id) resolvedUserId = wlData.user_id;
           }
         }
 
-        // 2. Tenta recuperar da sessão ativa (se houver, com try/catch seguro sem quebras)
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
-        if (userId) {
+        // 2. Tenta recuperar da sessão ativa (se houver)
+        if (!resolvedUserId) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          resolvedUserId = sessionData?.session?.user?.id || null;
+        }
+
+        if (resolvedUserId && isMounted) {
           const { data: uData } = await supabase
             .from("usuarios")
             .select("nome, referral_code, metadata")
-            .eq("id", userId)
+            .eq("id", resolvedUserId)
             .maybeSingle();
 
           if (isMounted && uData) {
             const userSlug = uData.referral_code || uData.metadata?.referral_code;
-            if (userSlug) setSlug(userSlug);
+            if (userSlug && !initialSlug) setSlug(userSlug);
             if (uData.nome && !nome) setNome(uData.nome);
-            return;
           }
         }
 
-        // 3. Tenta recuperar do storage local
+        // 3. Tenta fallback do usuário logado se ainda não encontrou
+        if (!resolvedUserId) {
+          const { data: authUser } = await supabase.auth.getUser();
+          if (authUser?.user?.id) {
+            resolvedUserId = authUser.user.id;
+          }
+        }
+
+        // 4. Se tiver userId, busca rede de apadrinhados
+        if (resolvedUserId && isMounted) {
+          fetchApadrinhados(resolvedUserId);
+        } else if (isMounted) {
+          setLoadingApadrinhados(false);
+        }
+
+        // 5. Tenta recuperar slug do storage local se ainda não definido
         const stored = typeof window !== "undefined" ? localStorage.getItem("ubt_ref") : null;
-        if (isMounted && stored && !slug) {
+        if (isMounted && stored && !slug && !initialSlug) {
           setSlug(stored);
         }
       } catch (err) {
-        // Silencioso para não poluir console
+        if (isMounted) setLoadingApadrinhados(false);
       }
     };
 
@@ -291,6 +339,99 @@ export default function IndicacaoPage() {
                 Código: <strong className="text-white">{cleanSlug}</strong>
               </span>
             </div>
+          </div>
+
+          {/* Seção: Sua Rede de Apadrinhados */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800 flex flex-col gap-5">
+            <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#00FF66]/10 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
+                  <Handshake className="w-5 h-5 text-[#00FF66]" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-base sm:text-lg text-white">
+                    Sua Rede de Apadrinhados
+                  </h2>
+                  <p className="text-xs text-zinc-400 font-sans">
+                    Acompanhe em tempo real quem ativou o cadastro com o seu link.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card de Métrica */}
+              <div className="px-3.5 py-1.5 rounded-xl bg-black border border-zinc-800 flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#00FF66]" />
+                <span className="text-xs font-mono text-zinc-300">
+                  Total de Membros: <strong className="text-[#00FF66] font-bold text-sm">{apadrinhados.length}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Lista ou Empty State */}
+            {loadingApadrinhados ? (
+              <div className="py-8 text-center text-zinc-500 text-xs font-mono">
+                Carregando rede de apadrinhados...
+              </div>
+            ) : apadrinhados.length === 0 ? (
+              <div className="py-8 px-4 rounded-2xl bg-zinc-900/30 border border-dashed border-zinc-800 text-center flex flex-col items-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-500">
+                  <Users className="w-5 h-5" />
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-400 max-w-md font-sans">
+                  Você ainda não possui apadrinhados cadastrados. Compartilhe seu link ou QR Code acima para iniciar sua rede de indicações!
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {apadrinhados.map((item) => {
+                  const isPJ = item.tipo_cadastro?.toLowerCase() === "pj";
+                  const dataFormatada = item.criado_em
+                    ? new Date(item.criado_em).toLocaleDateString("pt-BR")
+                    : "—";
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3.5 sm:p-4 rounded-2xl bg-black border border-zinc-800/80 hover:border-zinc-700 transition-all flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isPJ ? "bg-sky-950/60 text-sky-400 border border-sky-500/30" : "bg-emerald-950/60 text-emerald-400 border border-emerald-500/30"}`}>
+                          {isPJ ? <Building2 className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-bold text-white truncate">
+                            {item.nome}
+                          </div>
+                          <div className="text-[11px] text-zinc-500 flex items-center gap-2 mt-0.5">
+                            <span>Entrada: {dataFormatada}</span>
+                            <span>•</span>
+                            <span className="uppercase text-[10px] font-mono">
+                              {isPJ ? "Pessoa Jurídica" : "Pessoa Física"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {item.cadastro_completo ? (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-mono font-bold text-[#00FF66] uppercase">
+                            Cadastro Completo
+                          </span>
+                        ) : item.status === "aprovado" || item.status === "approved" ? (
+                          <span className="px-2.5 py-1 rounded-full bg-blue-950/60 border border-blue-500/40 text-[10px] font-mono font-bold text-sky-400 uppercase">
+                            Aprovado
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full bg-amber-950/60 border border-amber-500/40 text-[10px] font-mono font-bold text-amber-400 uppercase">
+                            Em Aprovação
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Regras e Vantagens do Apadrinhamento (Sem Vínculo Permanente, Textos Ajustados) */}

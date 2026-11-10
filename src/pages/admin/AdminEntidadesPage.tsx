@@ -37,6 +37,9 @@ export interface EntidadeItem {
   waitlistId?: string;
   metadata?: any;
   createdAt: string;
+  padrinhoId?: string | null;
+  padrinhoNome?: string | null;
+  padrinhoRole?: string | null;
 }
 
 const cleanPhoneDigits = (phone?: string | null) => {
@@ -92,6 +95,21 @@ export default function AdminEntidadesPage() {
 
       if (errWaitlist) throw errWaitlist;
 
+      // 3. Resolução de Padrinhos
+      const padrinhoIds = Array.from(new Set([
+        ...(rawUsers || []).map((u: any) => u.padrinho_id),
+        ...(rawWaitlist || []).map((w: any) => w.padrinho_id)
+      ].filter(Boolean)));
+
+      const padrinhoMap = new Map<string, any>();
+      if (padrinhoIds.length > 0) {
+        const { data: padrinhosData } = await supabase
+          .from("usuarios")
+          .select("id, nome, razao_social, role, tipo_pessoa")
+          .in("id", padrinhoIds);
+        (padrinhosData || []).forEach((p: any) => padrinhoMap.set(p.id, p));
+      }
+
       // Mapas auxiliares para correlação
       const wlPhoneMap = new Map<string, any>();
       const wlCnpjMap = new Map<string, any>();
@@ -123,6 +141,10 @@ export default function AdminEntidadesPage() {
         const statusVal = u.status === "ativo" || u.status === "active" ? "ativo" : (u.status || "ativo");
 
         const referralSlug = matchedWl?.referral_code || matchedWl?.referral_slug || matchedWl?.slug || u.referral_code || u.metadata?.referral_code || generateReferralSlug(nomeFantasia || razaoSocial, cnpjVal || u.id);
+        const padId = u.padrinho_id || matchedWl?.padrinho_id || null;
+        const pObj = padId ? padrinhoMap.get(padId) : null;
+        const padNome = pObj ? (pObj.nome || pObj.razao_social || "Padrinho") : null;
+        const padRole = pObj?.role === "associacao" || pObj?.tipo_pessoa === "PJ" ? "PJ" : "PF";
 
         return {
           id: u.id,
@@ -145,6 +167,9 @@ export default function AdminEntidadesPage() {
           waitlistId: matchedWl?.id,
           metadata: u.metadata || {},
           createdAt: u.created_at || matchedWl?.created_at_utc || new Date().toISOString(),
+          padrinhoId: padId,
+          padrinhoNome: padNome,
+          padrinhoRole: padRole,
         };
       });
 
@@ -164,6 +189,10 @@ export default function AdminEntidadesPage() {
           if (!alreadyExists) {
             const rSocial = w.razao_social || w.nome || "Entidade Sem Razão Social";
             const nFantasia = w.nome || w.nome_fantasia || rSocial;
+            const wPadId = w.padrinho_id || null;
+            const wPObj = wPadId ? padrinhoMap.get(wPadId) : null;
+            const wPadNome = wPObj ? (wPObj.nome || wPObj.razao_social || "Padrinho") : null;
+            const wPadRole = wPObj?.role === "associacao" || wPObj?.tipo_pessoa === "PJ" ? "PJ" : "PF";
             mappedList.push({
               id: w.user_id || w.id,
               name: nFantasia,
@@ -185,6 +214,9 @@ export default function AdminEntidadesPage() {
               waitlistId: w.id,
               metadata: w.metadata || {},
               createdAt: w.created_at_utc || new Date().toISOString(),
+              padrinhoId: wPadId,
+              padrinhoNome: wPadNome,
+              padrinhoRole: wPadRole,
             });
           }
         }
@@ -681,6 +713,23 @@ export default function AdminEntidadesPage() {
                   ) : (
                     <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
                       <AlertCircle size={12} /> Incompleto
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
+                  Padrinho / Indicado por
+                </span>
+                <div style={{ marginTop: 2 }}>
+                  {selectedEntidade.padrinhoNome ? (
+                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1.5">
+                      🤝 {selectedEntidade.padrinhoNome} ({selectedEntidade.padrinhoRole})
+                    </span>
+                  ) : (
+                    <span className="text-zinc-500 text-xs italic">
+                      Direto (Sem Padrinho)
                     </span>
                   )}
                 </div>

@@ -1190,9 +1190,17 @@ export default function FounderForm({
             </h3>
 
             {/* Descrição */}
-            <p className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed mb-6">
+            <p className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed mb-4">
               Sua solicitação de Membro Fundador foi registrada com sucesso e enviada para a fila de validação da <strong className="text-white">Alta Gestão da UBT</strong>. Em breve você receberá a confirmação de ativação do seu perfil pioneiro e o seu link oficial de apadrinhamento via WhatsApp.
             </p>
+
+            {/* Box de Destaque Esmeralda de Apadrinhamento */}
+            {padrinhoNome && (
+              <div className="w-full p-3.5 rounded-2xl bg-emerald-950/60 border border-[#00FF66]/30 mb-6 flex items-center justify-center gap-2 text-xs font-semibold text-[#00FF66] shadow-[0_0_20px_rgba(0,255,102,0.15)]">
+                <Handshake className="w-4 h-4 text-[#00FF66] shrink-0" />
+                <span>🤝 Apadrinhado com sucesso por: <strong className="text-white">{padrinhoNome}</strong></span>
+              </div>
+            )}
 
             {/* Botão de Fechamento */}
             <button

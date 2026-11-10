@@ -21,7 +21,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Handshake
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -90,6 +91,9 @@ export default function AtualizacaoCadastral() {
   const [lookupError, setLookupError] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [leadRecord, setLeadRecord] = useState<any>(null);
+
+  // Estado de Padrinho de Entrada
+  const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
 
   // Estados do Gatekeeper de Autenticação e Segurança
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -240,6 +244,20 @@ export default function AtualizacaoCadastral() {
         ? applyPixMask(leadData.chave_pix || leadData.pix_chave, leadData.tipo_chave_pix || leadData.pix_tipo || "telefone")
         : (leadData.telefone ? maskPhone(leadData.telefone) : "")
     );
+
+    // Resolução do Padrinho de Entrada
+    if (leadData.padrinho_id) {
+      supabase
+        .from("usuarios")
+        .select("nome")
+        .eq("id", leadData.padrinho_id)
+        .maybeSingle()
+        .then(({ data: padrinho }) => {
+          if (padrinho?.nome) setPadrinhoNome(padrinho.nome);
+        });
+    } else {
+      setPadrinhoNome(null);
+    }
 
     // Referral Slug
     const savedSlug = leadData.referral_code || leadData.referral_slug || leadData.slug || "";
@@ -1122,6 +1140,13 @@ export default function AtualizacaoCadastral() {
               <p className="text-xs sm:text-sm text-zinc-400 font-sans max-w-xl leading-relaxed">
                 Complete seus dados complementares para configurar suas áreas de atendimento em Ubatuba e ativar seu link de apadrinhamento.
               </p>
+
+              {padrinhoNome && (
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-950/60 border border-green/30 text-xs text-zinc-300 font-sans mt-3 shadow-[0_0_15px_rgba(0,255,102,0.1)]">
+                  <Handshake className="w-3.5 h-3.5 text-green" />
+                  <span>Padrinho de Entrada: <strong className="text-green font-semibold">{padrinhoNome}</strong></span>
+                </div>
+              )}
             </div>
 
             {/* Stepper Progress Indicator on Top (Totalmente Clicável com Navegação Direta) */}

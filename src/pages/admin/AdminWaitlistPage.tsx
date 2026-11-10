@@ -462,7 +462,37 @@ export default function AdminWaitlistPage() {
       if (error) throw error;
 
       if (data) {
-        setLeads(data as WaitlistItem[]);
+        // Enriquecer leads com informações do padrinho
+        const padrinhoIds = Array.from(new Set(data.map((l: any) => l.padrinho_id).filter(Boolean)));
+        const padrinhosMap: Record<string, { nome: string; role: string; telefone: string }> = {};
+
+        if (padrinhoIds.length > 0) {
+          try {
+            const { data: padrinhos } = await supabase
+              .from("usuarios")
+              .select("id, nome, role, telefone")
+              .in("id", padrinhoIds);
+
+            if (padrinhos) {
+              padrinhos.forEach((p: any) => {
+                padrinhosMap[p.id] = {
+                  nome: p.nome || "Padrinho UBT",
+                  role: p.role || "tomador",
+                  telefone: p.telefone || "",
+                };
+              });
+            }
+          } catch (e) {
+            console.warn("Erro ao enriquecer padrinhos na waitlist:", e);
+          }
+        }
+
+        const enriched = data.map((l: any) => ({
+          ...l,
+          padrinho_info: l.padrinho_id ? (padrinhosMap[l.padrinho_id] || null) : null,
+        }));
+
+        setLeads(enriched as WaitlistItem[]);
         setTotalCount(count || 0);
       }
     } catch (err: any) {
@@ -888,12 +918,19 @@ export default function AdminWaitlistPage() {
                         <Pill bg="rgba(239,68,68,0.15)" color="#EF4444" size="sm" style={{ fontWeight: 700 }}>NÃO</Pill>
                       )}
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "var(--admin-subtle)" }}>
-                      {lead.origem === "direto" ? (
-                        <span style={{ fontStyle: "italic", color: "var(--admin-muted)" }}>Direto</span>
+                    <td style={{ padding: "12px 16px", fontSize: 12 }}>
+                      {(lead as any).padrinho_info ? (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 8px", borderRadius: 6, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.25)" }}>
+                          <span style={{ color: "#00FF66", fontWeight: 600, fontSize: 11, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            🤝 {(lead as any).padrinho_info.nome}
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 4, background: (lead as any).padrinho_info.role === "associacao" ? "rgba(0,186,255,0.2)" : "rgba(255,255,255,0.1)", color: (lead as any).padrinho_info.role === "associacao" ? "#38BDF8" : "#E4E4E7" }}>
+                            {(lead as any).padrinho_info.role === "associacao" ? "PJ" : "PF"}
+                          </span>
+                        </div>
                       ) : (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#EC4899" }}>
-                          <Link size={12} /> {lead.origem?.slice(0, 8)}
+                        <span style={{ fontSize: 11, color: "var(--admin-muted)", fontStyle: "italic" }}>
+                          Direto (Sem Padrinho)
                         </span>
                       )}
                     </td>
@@ -1100,6 +1137,60 @@ export default function AdminWaitlistPage() {
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Cidade</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cidade || "—"}</div>
+                </div>
+
+                {/* Card de Padrinho Vinculado */}
+                <div style={{ gridColumn: "span 2", background: "var(--admin-bg)", padding: 12, borderRadius: 8, border: "1px solid var(--admin-border)", marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5, display: "block", marginBottom: 6 }}>
+                    Vínculo de Apadrinhamento
+                  </span>
+                  {(selectedLeadModal as any).padrinho_info ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,255,102,0.12)", border: "1px solid rgba(0,255,102,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#00FF66", fontSize: 14 }}>
+                          🤝
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                            {(selectedLeadModal as any).padrinho_info.nome}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--admin-subtle)", display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ padding: "1px 5px", borderRadius: 4, background: (selectedLeadModal as any).padrinho_info.role === "associacao" ? "rgba(0,186,255,0.2)" : "rgba(255,255,255,0.08)", color: (selectedLeadModal as any).padrinho_info.role === "associacao" ? "#38BDF8" : "var(--admin-muted)", fontWeight: 700, fontSize: 10 }}>
+                              {(selectedLeadModal as any).padrinho_info.role === "associacao" ? "Entidade / PJ" : "Pessoa Física"}
+                            </span>
+                            {(selectedLeadModal as any).padrinho_info.telefone && (
+                              <span>{(selectedLeadModal as any).padrinho_info.telefone}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {(selectedLeadModal as any).padrinho_info.telefone && (
+                        <a
+                          href={`https://api.whatsapp.com/send?phone=55${(selectedLeadModal as any).padrinho_info.telefone.replace(/\D/g, "")}&text=Ol%C3%A1!`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "5px 10px",
+                            borderRadius: 6,
+                            background: "#25D366",
+                            color: "#000",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            textDecoration: "none",
+                          }}
+                        >
+                          WhatsApp Padrinho
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--admin-muted)", fontStyle: "italic" }}>
+                      Nenhum padrinho vinculado (Origem direta)
+                    </div>
+                  )}
                 </div>
 
                 {/* Linha adicional para PJ: Responsável Legal */}
@@ -1332,131 +1423,6 @@ export default function AdminWaitlistPage() {
                   Links de Acesso e Indicação
                 </div>
                 
-                {/* Link de Onboarding */}
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Link de Onboarding:
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      readOnly
-                      type="text"
-                      value={`${getAppOrigin()}/onboarding?token=${selectedLeadModal.id}`}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                        cursor: "text",
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${selectedLeadModal.id}`, "onboarding")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: copiedLink === "onboarding" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                        color: copiedLink === "onboarding" ? "#0DB87E" : "var(--admin-text)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {copiedLink === "onboarding" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copiar
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Código de Indicação Personalizado (Vanity Slug) */}
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Código de Indicação Personalizado (Vanity Slug):
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="text"
-                      placeholder="ex: pousada-brisa"
-                      value={customSlug}
-                      onChange={(e) => {
-                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-                        setCustomSlug(val);
-                        setSlugStatus("idle");
-                        setSlugError("");
-                      }}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: slugError ? "1px solid #E84040" : "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={isSavingSlug || !customSlug.trim()}
-                      onClick={handleSaveReferralSlug}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: slugStatus === "saved" ? "rgba(13,184,126,0.15)" : "#0DB87E",
-                        color: slugStatus === "saved" ? "#0DB87E" : "#0E0F12",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: isSavingSlug || !customSlug.trim() ? "not-allowed" : "pointer",
-                        opacity: isSavingSlug || !customSlug.trim() ? 0.6 : 1,
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {isSavingSlug ? (
-                        <>
-                          <Loader2 size={13} className="animate-spin" /> Salvando...
-                        </>
-                      ) : slugStatus === "saved" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Salvo!
-                        </>
-                      ) : (
-                        "Salvar Slug"
-                      )}
-                    </button>
-                  </div>
-                  {slugError && (
-                    <div style={{ fontSize: 11, color: "#E84040", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      <span>⚠</span> {slugError}
-                    </div>
-                  )}
-                </div>
-
                 {/* Link Padrinho/Madrinha */}
                 <div>
                   <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
@@ -1466,7 +1432,7 @@ export default function AdminWaitlistPage() {
                     <input
                       readOnly
                       type="text"
-                      value={`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.referral_code || selectedLeadModal.id}`}
+                      value={`${getAppOrigin()}/?ref=${encodeURIComponent(selectedLeadModal.referral_code || selectedLeadModal.id)}#cadastro-fundadores-cap`}
                       style={{
                         flex: 1,
                         background: "var(--admin-bg)",
@@ -1483,7 +1449,7 @@ export default function AdminWaitlistPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${selectedLeadModal.referral_code || selectedLeadModal.id}`, "padrinho")}
+                      onClick={() => handleCopyLink(`${getAppOrigin()}/?ref=${encodeURIComponent(selectedLeadModal.referral_code || selectedLeadModal.id)}#cadastro-fundadores-cap`, "padrinho")}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1629,7 +1595,7 @@ export default function AdminWaitlistPage() {
                       <div>Campaign: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_campaign || "—"}</span></div>
                       <div>Content: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_content || "—"}</span></div>
                       <div style={{ gridColumn: "span 2" }}>Referer: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.referer || "—"}</span></div>
-                      <div style={{ gridColumn: "span 2" }}>Indicação Padrinho: <span style={{ color: "#EC4899" }}>{selectedLeadModal.origem || "direto"}</span></div>
+                      
                     </div>
                   </AccordionContent>
                 </AccordionItem>
