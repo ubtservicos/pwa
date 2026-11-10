@@ -59,6 +59,18 @@ export {
   REGIOES_UBATUBA
 };
 
+// Helper seguro para hash SHA-256 no browser
+async function computeSha256(message: string): Promise<string> {
+  try {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "";
+  }
+}
+
 type WizardStep = 1 | 2 | 3 | 4;
 
 const STEPS = [
@@ -78,6 +90,22 @@ export default function AtualizacaoCadastral() {
   const [lookupError, setLookupError] = useState("");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [leadRecord, setLeadRecord] = useState<any>(null);
+
+  // Estados do Gatekeeper de Autenticação e Segurança
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [gatekeeperMeta, setGatekeeperMeta] = useState<{
+    id: string;
+    email: string;
+    is_pj: boolean;
+    tipo_documento: "CPF" | "CNPJ";
+    doc_hashes: string[];
+    telefone: string;
+  } | null>(null);
+  const [gatekeeperDoc, setGatekeeperDoc] = useState("");
+  const [gatekeeperPassword, setGatekeeperPassword] = useState("");
+  const [showGatekeeperPassword, setShowGatekeeperPassword] = useState(false);
+  const [isVerifyingGatekeeper, setIsVerifyingGatekeeper] = useState(false);
+  const [gatekeeperError, setGatekeeperError] = useState("");
 
   // Estado do Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -151,11 +179,84 @@ export default function AtualizacaoCadastral() {
     return `${origin}/?ref=${referralSlug || "fundador-ubatuba"}#cadastro-fundadores-cap`;
   };
 
-  // Função auxiliar para carregar lead por telefone
+  // Preenche todos os estados do Wizard a partir do lead completo
+  const populateWizardFromLead = (leadData: any, rawQueryPhone: string) => {
+    setLeadRecord(leadData);
+
+    const isPJLead = Boolean(
+      leadData.tipo_pessoa === "PJ" ||
+      leadData.cnpj ||
+      leadData.tipo_cadastro === "pj" ||
+      leadData.tipo_cadastro === "PJ" ||
+      leadData.tipo_cadastro === "associacao" ||
+      leadData.razao_social
+    );
+
+    setTipoPessoa(isPJLead ? "PJ" : "PF");
+    setNome(leadData.nome || "");
+    setCpf(leadData.cpf ? maskCPF(leadData.cpf) : "");
+    setRazaoSocial(leadData.razao_social || leadData.nome || "");
+    setCnpj(leadData.cnpj ? maskCNPJ(leadData.cnpj) : "");
+    setResponsavelLegal(leadData.responsavel_legal || "");
+    setCpfResponsavel(
+      leadData.cpf_responsavel 
+        ? maskCPF(leadData.cpf_responsavel) 
+        : (leadData.responsavel_cpf ? maskCPF(leadData.responsavel_cpf) : "")
+    );
+    setTelefone(leadData.telefone ? maskPhone(leadData.telefone) : maskPhone(rawQueryPhone));
+    setEmail(leadData.email || "");
+
+    // Bairros
+    const bResidenciaSalvo = leadData.bairro_residencia
+      || leadData.bairro_moradia
+      || (Array.isArray(leadData.bairros) && leadData.bairros.length > 0 ? leadData.bairros[0] : (leadData.bairro_hospedagem || ""));
+    setBairroResidencia(bResidenciaSalvo || "");
+    setBairroMatriz(leadData.bairro_matriz || bResidenciaSalvo || "");
+    setBairrosFiliais(Array.isArray(leadData.bairros_filiais) ? leadData.bairros_filiais : []);
+    setRegioesAtuacao(Array.isArray(leadData.regioes_atuacao) ? leadData.regioes_atuacao : (Array.isArray(leadData.regioes) ? leadData.regioes : []));
+
+    const bairrosTrabList: string[] = leadData.bairro_trabalho
+      ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
+      : (Array.isArray(leadData.bairros_atuacao) ? leadData.bairros_atuacao : []);
+    setBairrosAtuacao(bairrosTrabList);
+
+    // Praias
+    const praiasList: string[] = Array.isArray(leadData.praias_frequenta)
+      ? leadData.praias_frequenta
+      : (Array.isArray(leadData.praias) ? leadData.praias : []);
+    const leadNaoAtuaPraias = Boolean(leadData.nao_atua_praias);
+    setNaoAtuaPraias(leadNaoAtuaPraias);
+    setPraias(leadNaoAtuaPraias ? [] : praiasList);
+
+    // Financeiro
+    setPossuiMercadoPago(
+      typeof leadData.possui_conta_mercado_pago === "boolean"
+        ? leadData.possui_conta_mercado_pago
+        : (typeof leadData.possui_mercado_pago === "boolean" ? leadData.possui_mercado_pago : true)
+    );
+    setTipoChavePix(leadData.tipo_chave_pix || leadData.pix_tipo || "telefone");
+    setChavePix(
+      leadData.chave_pix || leadData.pix_chave
+        ? applyPixMask(leadData.chave_pix || leadData.pix_chave, leadData.tipo_chave_pix || leadData.pix_tipo || "telefone")
+        : (leadData.telefone ? maskPhone(leadData.telefone) : "")
+    );
+
+    // Referral Slug
+    const savedSlug = leadData.referral_code || leadData.referral_slug || leadData.slug || "";
+    if (savedSlug) {
+      setReferralSlug(savedSlug);
+    } else {
+      const generated = generateReferralSlug(leadData.nome || leadData.razao_social, leadData.cpf || leadData.cnpj || leadData.id);
+      setReferralSlug(generated);
+    }
+  };
+
+  // Função auxiliar para carregar lead por telefone com proteção do Gatekeeper
   const searchLeadByPhone = async (rawPhone: string) => {
     const telDigits = (rawPhone || "").replace(/\D/g, "");
     if (!telDigits || telDigits.length < 8) {
       setLookupError("Informe um número de telefone com DDD válido (ex: 12 99999-8888).");
+      setLookupState("lookup");
       return;
     }
 
@@ -167,28 +268,28 @@ export default function AtualizacaoCadastral() {
     setLookupError("");
 
     try {
-      let leadData: any = null;
+      let meta: any = null;
 
-      // 1. Tenta chamar RPC buscar_lead_waitlist
+      // 1. Tenta chamar a RPC segura obter_gatekeeper_lead (não expõe dados sensíveis)
       try {
         const { data: rpcData, error: rpcError } = await supabase
-          .rpc("buscar_lead_waitlist", { p_identificador: telQuery });
+          .rpc("obter_gatekeeper_lead", { p_identificador: telQuery });
 
-        if (!rpcError && rpcData) {
-          leadData = Array.isArray(rpcData) ? (rpcData[0] || null) : rpcData;
+        if (!rpcError && rpcData && rpcData.encontrado) {
+          meta = rpcData;
         }
       } catch (rpcErr) {
         // Fallback silencioso
       }
 
-      // 2. Fallback: Consulta direta comparando número limpo, com máscara e últimos 8 dígitos
-      if (!leadData) {
+      // 2. Fallback: Consulta direta mínima trazendo estritamente campos para conferência de segurança
+      if (!meta) {
         const mascaraTelefone = maskPhone(telQuery);
         const last8 = telQuery.slice(-8);
 
         const { data, error } = await supabase
           .from("waitlist")
-          .select("*")
+          .select("id, email, tipo_pessoa, tipo_cadastro, cnpj, cpf, responsavel_cpf, razao_social, telefone")
           .or(`telefone.eq.${telQuery},telefone.eq.${mascaraTelefone},telefone.ilike.%${last8}%`)
           .order("created_at_utc", { ascending: false })
           .limit(1)
@@ -197,76 +298,81 @@ export default function AtualizacaoCadastral() {
         if (error && error.code !== "PGRST116") {
           throw error;
         }
-        leadData = data;
+
+        if (data) {
+          const isPJLead = Boolean(
+            data.tipo_cadastro === "pj" ||
+            data.tipo_cadastro === "PJ" ||
+            data.tipo_cadastro === "associacao" ||
+            data.tipo_pessoa === "PJ" ||
+            data.cnpj ||
+            data.razao_social
+          );
+          const cClean = (data.cnpj || "").replace(/\D/g, "");
+          const fClean = (data.cpf || "").replace(/\D/g, "");
+          const rClean = (data.responsavel_cpf || "").replace(/\D/g, "");
+          const hashes: string[] = [];
+          if (cClean) hashes.push(await computeSha256(cClean));
+          if (fClean) hashes.push(await computeSha256(fClean));
+          if (rClean && rClean !== fClean) hashes.push(await computeSha256(rClean));
+
+          meta = {
+            encontrado: true,
+            id: data.id,
+            email: data.email,
+            is_pj: isPJLead,
+            tipo_documento: isPJLead ? "CNPJ" : "CPF",
+            doc_hashes: hashes,
+            telefone: data.telefone || telQuery
+          };
+        }
       }
 
-      if (!leadData) {
+      if (!meta || !meta.encontrado) {
         setLookupError("Nenhum cadastro de fundador encontrado com este número. Verifique os dígitos ou faça sua inscrição como novo fundador.");
         setIsLookingUp(false);
         setLookupState("lookup");
         return;
       }
 
-      // Lead localizado! Preenche os estados do Wizard
-      setLeadRecord(leadData);
+      meta.telefone = meta.telefone || telQuery;
+      setGatekeeperMeta(meta);
 
-      const isPJ = leadData.tipo_pessoa === "PJ" || !!leadData.cnpj;
-      setTipoPessoa(isPJ ? "PJ" : "PF");
-      setNome(leadData.nome || "");
-      setCpf(leadData.cpf ? maskCPF(leadData.cpf) : "");
-      setRazaoSocial(leadData.razao_social || leadData.nome || "");
-      setCnpj(leadData.cnpj ? maskCNPJ(leadData.cnpj) : "");
-      setResponsavelLegal(leadData.responsavel_legal || "");
-      setCpfResponsavel(leadData.cpf_responsavel ? maskCPF(leadData.cpf_responsavel) : "");
-      setTelefone(leadData.telefone ? maskPhone(leadData.telefone) : maskPhone(telQuery));
-      setEmail(leadData.email || "");
+      // 3. Verificação de Sessão Ativa do Supabase
+      let userIsAuthenticated = false;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email && meta.email) {
+          if (session.user.email.trim().toLowerCase() === meta.email.trim().toLowerCase()) {
+            userIsAuthenticated = true;
+          }
+        }
+      } catch (authSessionErr) {
+        // Fallback defensivo: exige desbloqueio via gatekeeper
+      }
 
-      // Bairros
-      const bResidenciaSalvo = leadData.bairro_residencia
-        || leadData.bairro_moradia
-        || (Array.isArray(leadData.bairros) && leadData.bairros.length > 0 ? leadData.bairros[0] : (leadData.bairro_hospedagem || ""));
-      setBairroResidencia(bResidenciaSalvo || "");
-      setBairroMatriz(leadData.bairro_matriz || bResidenciaSalvo || "");
-      setBairrosFiliais(Array.isArray(leadData.bairros_filiais) ? leadData.bairros_filiais : []);
-      setRegioesAtuacao(Array.isArray(leadData.regioes_atuacao) ? leadData.regioes_atuacao : (Array.isArray(leadData.regioes) ? leadData.regioes : []));
+      if (userIsAuthenticated) {
+        // Sessão ativa correspondente ao titular: desbloqueia imediatamente e carrega dados
+        setIsUnlocked(true);
+        const { data: fullLead } = await supabase
+          .from("waitlist")
+          .select("*")
+          .eq("id", meta.id)
+          .maybeSingle();
 
-      const bairrosTrabList: string[] = leadData.bairro_trabalho
-        ? leadData.bairro_trabalho.split(",").map((s: string) => s.trim()).filter(Boolean)
-        : (Array.isArray(leadData.bairros_atuacao) ? leadData.bairros_atuacao : []);
-      setBairrosAtuacao(bairrosTrabList);
-
-      // Praias
-      const praiasList: string[] = Array.isArray(leadData.praias_frequenta)
-        ? leadData.praias_frequenta
-        : (Array.isArray(leadData.praias) ? leadData.praias : []);
-      const leadNaoAtuaPraias = Boolean(leadData.nao_atua_praias);
-      setNaoAtuaPraias(leadNaoAtuaPraias);
-      setPraias(leadNaoAtuaPraias ? [] : praiasList);
-
-      // Financeiro
-      setPossuiMercadoPago(
-        typeof leadData.possui_conta_mercado_pago === "boolean"
-          ? leadData.possui_conta_mercado_pago
-          : (typeof leadData.possui_mercado_pago === "boolean" ? leadData.possui_mercado_pago : true)
-      );
-      setTipoChavePix(leadData.tipo_chave_pix || "telefone");
-      setChavePix(
-        leadData.chave_pix
-          ? applyPixMask(leadData.chave_pix, leadData.tipo_chave_pix || "telefone")
-          : (leadData.telefone ? maskPhone(leadData.telefone) : "")
-      );
-
-      // Referral Slug
-      const savedSlug = leadData.referral_code || leadData.slug || "";
-      if (savedSlug) {
-        setReferralSlug(savedSlug);
+        if (fullLead) {
+          populateWizardFromLead(fullLead, telQuery);
+          trackEvent("atualizacao_cadastral_lead_loaded_session", "onboarding", { lead_id: fullLead.id });
+        }
       } else {
-        const generated = generateReferralSlug(leadData.nome || leadData.razao_social, leadData.cpf || leadData.cnpj || leadData.id);
-        setReferralSlug(generated);
+        // Sem sessão autenticada: bloqueia e apresenta o desafio de identidade
+        setIsUnlocked(false);
+        setGatekeeperDoc("");
+        setGatekeeperPassword("");
+        setGatekeeperError("");
       }
 
       setLookupState("wizard");
-      trackEvent("atualizacao_cadastral_lead_loaded", "onboarding", { lead_id: leadData.id });
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao buscar lead:", err);
       setLookupError("Ocorreu um erro ao consultar os dados. Tente novamente.");
@@ -276,7 +382,81 @@ export default function AtualizacaoCadastral() {
     }
   };
 
-  // Inicialização: checa parâmetro tel ou telefone na URL
+  // Submissão do Gatekeeper (Desafio de Identidade: Documento + Senha)
+  const handleGatekeeperUnlock = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!gatekeeperMeta) return;
+
+    setGatekeeperError("");
+
+    const cleanInputDoc = gatekeeperDoc.replace(/\D/g, "");
+    if (!cleanInputDoc) {
+      setGatekeeperError(`Por favor, informe o seu ${gatekeeperMeta.tipo_documento || "documento"}.`);
+      return;
+    }
+
+    if (!gatekeeperPassword) {
+      setGatekeeperError("Por favor, digite sua senha de acesso.");
+      return;
+    }
+
+    setIsVerifyingGatekeeper(true);
+
+    try {
+      // 1. Validação de Documento (confere se hash do input confere com algum dos hashes do cadastro)
+      const inputHash = await computeSha256(cleanInputDoc);
+      const isDocValid = Array.isArray(gatekeeperMeta.doc_hashes) && gatekeeperMeta.doc_hashes.includes(inputHash);
+
+      if (!isDocValid) {
+        setGatekeeperError("Documento ou senha incorretos. Verifique suas credenciais.");
+        toast.error("Documento ou senha incorretos.");
+        setIsVerifyingGatekeeper(false);
+        return;
+      }
+
+      // 2. Autenticação Oficial via Supabase Auth
+      if (gatekeeperMeta.email) {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: gatekeeperMeta.email.trim(),
+          password: gatekeeperPassword
+        });
+
+        if (authError || !authData.user) {
+          console.warn("[Gatekeeper] Falha na autenticação Supabase:", authError?.message);
+          setGatekeeperError("Documento ou senha incorretos. Verifique suas credenciais.");
+          toast.error("Documento ou senha incorretos. Verifique suas credenciais.");
+          setIsVerifyingGatekeeper(false);
+          return;
+        }
+      }
+
+      // 3. Validação Concluída com Sucesso!
+      // Busca os dados completos somente após a autenticação bem-sucedida do usuário
+      const { data: fullLead, error: fullError } = await supabase
+        .from("waitlist")
+        .select("*")
+        .eq("id", gatekeeperMeta.id)
+        .maybeSingle();
+
+      if (fullError || !fullLead) {
+        throw new Error("Não foi possível carregar os dados cadastrais.");
+      }
+
+      populateWizardFromLead(fullLead, gatekeeperMeta.telefone || lookupPhone);
+      setIsUnlocked(true);
+      toast.success("Identidade confirmada com sucesso! Acesso liberado.");
+      trackEvent("atualizacao_cadastral_gatekeeper_unlocked", "security", { lead_id: fullLead.id });
+
+    } catch (err: any) {
+      console.error("[Gatekeeper] Erro durante desbloqueio:", err);
+      setGatekeeperError("Ocorreu um erro ao validar seus dados. Tente novamente ou contate o suporte.");
+      toast.error("Erro ao validar credenciais.");
+    } finally {
+      setIsVerifyingGatekeeper(false);
+    }
+  };
+
+    // Inicialização: checa parâmetro tel ou telefone na URL
   useEffect(() => {
     const rawParam = searchParams.get("tel") || searchParams.get("telefone") || "";
     const telDigits = decodeURIComponent(rawParam).replace(/\D/g, "");
@@ -767,7 +947,150 @@ export default function AtualizacaoCadastral() {
         {/* ========================================================================= */}
         {/* ESTADO 3: WIZARD DE ATUALIZAÇÃO CADASTRAL EM 4 ETAPAS */}
         {/* ========================================================================= */}
-        {lookupState === "wizard" && (
+        {lookupState === "wizard" && !isUnlocked && (
+          <div className="w-full max-w-md mx-auto flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="text-center flex flex-col items-center">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-950/40 border border-green/30 text-green text-[11px] font-mono uppercase tracking-widest font-semibold mb-4 shadow-[0_0_15px_rgba(0,255,102,0.15)]">
+                <ShieldCheck className="w-4 h-4 text-green" />
+                <span>AMBIENTE SEGURO • AUTENTICAÇÃO UBT</span>
+              </div>
+              
+              <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green/40 flex items-center justify-center text-green shadow-[0_0_25px_rgba(0,255,102,0.25)] mb-4">
+                <Lock className="w-8 h-8 text-green" />
+              </div>
+
+              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mb-2">
+                Confirmação de Segurança
+              </h1>
+              <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed max-w-sm">
+                Para proteger seus dados, confirme a titularidade da sua conta para continuar.
+              </p>
+            </div>
+
+            <form onSubmit={handleGatekeeperUnlock} className="p-6 sm:p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-5">
+              {/* Informação contextual do titular sem vazar dados */}
+              <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 flex items-center justify-between text-xs font-mono">
+                <span className="text-zinc-400">WhatsApp Vinculado:</span>
+                <span className="text-green font-bold">{maskPhone(lookupPhone || gatekeeperMeta?.telefone || "")}</span>
+              </div>
+
+              {/* Campo 1: Documento com máscara inteligente */}
+              <div>
+                <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2 flex items-center justify-between">
+                  <span>{gatekeeperMeta?.is_pj ? "CNPJ da Entidade:" : "CPF do Titular:"}</span>
+                  <span className="text-[10px] text-zinc-500 font-sans font-normal">
+                    {gatekeeperMeta?.is_pj ? "CNPJ ou CPF do responsável" : "11 dígitos"}
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={gatekeeperDoc}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const digits = val.replace(/\D/g, "");
+                      if (digits.length <= 11 && !gatekeeperMeta?.is_pj) {
+                        setGatekeeperDoc(maskCPF(val));
+                      } else if (digits.length <= 11 && gatekeeperMeta?.is_pj) {
+                        setGatekeeperDoc(maskCPF(val));
+                      } else {
+                        setGatekeeperDoc(maskCNPJ(val));
+                      }
+                      setGatekeeperError("");
+                    }}
+                    placeholder={gatekeeperMeta?.is_pj ? "00.000.000/0000-00 ou CPF" : "000.000.000-00"}
+                    maxLength={18}
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Campo 2: Senha com Toggle */}
+              <div>
+                <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2">
+                  Senha de Acesso:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showGatekeeperPassword ? "text" : "password"}
+                    value={gatekeeperPassword}
+                    onChange={(e) => {
+                      setGatekeeperPassword(e.target.value);
+                      setGatekeeperError("");
+                    }}
+                    placeholder="Digite sua senha cadastrada"
+                    className="w-full px-4 py-3 pr-10 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGatekeeperPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
+                    aria-label="Alternar visibilidade da senha"
+                  >
+                    {showGatekeeperPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {gatekeeperError && (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-start gap-2 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{gatekeeperError}</span>
+                </div>
+              )}
+
+              {/* Botão de Ação CTA */}
+              <button
+                type="submit"
+                disabled={isVerifyingGatekeeper}
+                className="w-full py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-green/20 disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+              >
+                {isVerifyingGatekeeper ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-navy" />
+                    <span>Verificando credenciais...</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>Desbloquear e Continuar</span>
+                  </>
+                )}
+              </button>
+
+              {/* Links Auxiliares */}
+              <div className="flex flex-col items-center gap-2 pt-2 border-t border-zinc-900 text-center">
+                <a
+                  href="https://wa.me/5512997168791?text=Ol%C3%A1%2C%20esqueci%20minha%20senha%20de%20acesso%20ao%20painel%20de%20Fundador%20da%20UBT"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-zinc-400 hover:text-green underline transition-colors font-sans"
+                >
+                  Esqueceu sua senha ou precisa de ajuda? Fale com o suporte UBT
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLookupState("lookup");
+                    setGatekeeperMeta(null);
+                    setGatekeeperDoc("");
+                    setGatekeeperPassword("");
+                    setGatekeeperError("");
+                  }}
+                  className="text-[11px] font-mono text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                >
+                  ← Informar outro número de WhatsApp
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* ESTADO 3: WIZARD DE ATUALIZAÇÃO CADASTRAL EM 4 ETAPAS (DESBLOQUEADO) */}
+        {/* ========================================================================= */}
+        {lookupState === "wizard" && isUnlocked && (
           <div className="flex flex-col gap-8 animate-in fade-in duration-300">
             {/* Header / Manifesto Institucional */}
             <div className="text-center flex flex-col items-center">
