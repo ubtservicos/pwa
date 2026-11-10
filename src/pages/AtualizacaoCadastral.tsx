@@ -416,12 +416,28 @@ export default function AtualizacaoCadastral() {
 
       // 2. Autenticação Oficial via Supabase Auth
       if (gatekeeperMeta.email) {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
           email: gatekeeperMeta.email.trim(),
           password: gatekeeperPassword
         });
 
-        if (authError || !authData.user) {
+        // Fallback defensivo: se o e-mail não estiver confirmado no Auth, auto-confirma via RPC e tenta novamente
+        if (authError && authError.message.toLowerCase().includes("email not confirmed")) {
+          console.info("[Gatekeeper] E-mail pendente de confirmação no Auth. Acionando confirmação automática...");
+          try {
+            await supabase.rpc("confirmar_email_lead", { p_email: gatekeeperMeta.email.trim() });
+            const retry = await supabase.auth.signInWithPassword({
+              email: gatekeeperMeta.email.trim(),
+              password: gatekeeperPassword
+            });
+            authData = retry.data;
+            authError = retry.error;
+          } catch (rpcErr) {
+            console.warn("[Gatekeeper] Falha ao executar fallback de confirmação de e-mail:", rpcErr);
+          }
+        }
+
+        if (authError || !authData?.user) {
           console.warn("[Gatekeeper] Falha na autenticação Supabase:", authError?.message);
           setGatekeeperError("Documento ou senha incorretos. Verifique suas credenciais.");
           toast.error("Documento ou senha incorretos. Verifique suas credenciais.");
