@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -15,7 +15,8 @@ import {
   Mail,
   Lock,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  Handshake
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -413,6 +414,53 @@ export default function FounderForm({
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [submittedData, setSubmittedData] = useState<{ user: any; waitlistData: any } | null>(null);
 
+  // Estados de Apadrinhamento (Referral)
+  const [padrinhoId, setPadrinhoId] = useState<string | null>(null);
+  const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
+  const [padrinhoTipo, setPadrinhoTipo] = useState<string | null>(null);
+  const [padrinhoTelefone, setPadrinhoTelefone] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+
+  // Resolução do Padrinho / Referral via RPC
+  useEffect(() => {
+    let isMounted = true;
+    const resolvePadrinho = async () => {
+      try {
+        const refFromUrl = searchParams.get("ref");
+        const refFromStorage =
+          (typeof window !== "undefined" && (localStorage.getItem("ubt_ref") || sessionStorage.getItem("ubt_ref"))) ||
+          null;
+        const refCode = (refFromUrl || refFromStorage || "").trim().replace(/[\\/\s]/g, "");
+
+        if (!refCode) return;
+
+        const { data, error } = await supabase.rpc("resolver_padrinho_slug", {
+          p_slug: refCode,
+        });
+
+        if (error) {
+          console.warn("[FounderForm] Erro ao resolver padrinho:", error.message);
+          return;
+        }
+
+        if (isMounted && data && data.length > 0 && data[0]?.padrinho_id) {
+          setPadrinhoId(data[0].padrinho_id);
+          setPadrinhoNome(data[0].nome_exibicao);
+          setPadrinhoTipo(data[0].tipo_padrinho);
+          setPadrinhoTelefone(data[0].padrinho_telefone || null);
+          console.info("[FounderForm] Padrinho resolvido com sucesso:", data[0].nome_exibicao);
+        }
+      } catch (err) {
+        console.warn("[FounderForm] Falha ao processar código de indicação:", err);
+      }
+    };
+
+    resolvePadrinho();
+    return () => {
+      isMounted = false;
+    };
+  }, [searchParams]);
+
   // Determina o tipo inicial (PF por padrão ou PJ se lead já tiver cnpj)
   const initialTipoPessoa = defaultValues?.tipoPessoa || (leadRecord?.cnpj ? "PJ" : "PF");
 
@@ -514,6 +562,19 @@ export default function FounderForm({
       const ipHashVal = await sha256(seed);
       const parsedUA = parseUserAgent(ua);
 
+      // Anti-fraude: auto-indicação
+      const cleanLeadPhone = values.telefone.replace(/\D/g, "");
+      const cleanPadrinhoPhone = (padrinhoTelefone || "").replace(/\D/g, "");
+      let finalPadrinhoId = padrinhoId;
+
+      if (finalPadrinhoId && cleanPadrinhoPhone && cleanLeadPhone === cleanPadrinhoPhone) {
+        console.warn("[FounderForm] Auto-indicação detectada pelo telefone. Anulando padrinho.");
+        finalPadrinhoId = null;
+        toast.info("Auto-indicação não é permitida. Seu cadastro foi registrado como direto.", {
+          duration: 4000,
+        });
+      }
+
       // Payload estrito para public.waitlist
       const waitlistPayload: any = {
         tipo_pessoa: values.tipoPessoa,
@@ -530,12 +591,13 @@ export default function FounderForm({
         role: userRole,
         perfil: perfilArray,
         perfis: perfilArray,
+        padrinho_id: finalPadrinhoId || null,
+        origem: finalPadrinhoId ? "indicacao" : "direto",
         consentimento_lgpd: true,
         aceita_termos: true,
         status: "pendente_aprovacao",
         cadastro_completo: false,
         created_at_local: createdLocal,
-        origem: "direto",
         referer: document.referrer || null,
         ip_hash: ipHashVal,
         device_type: parsedUA.device_type,
@@ -657,6 +719,26 @@ export default function FounderForm({
       </div>
 
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6" noValidate>
+        {/* BANNER DE INDICAÇÃO CONFIRMADA */}
+        {padrinhoNome && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-zinc-900 to-black border border-[#00FF66]/40 shadow-[0_0_20px_rgba(0,255,102,0.15)] flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00FF66]/15 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
+              <Handshake className="w-5 h-5 text-[#00FF66]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5 flex-wrap">
+                <span>🤝 Indicação confirmada:</span>
+                <span className="text-[#00FF66]">Convidado por {padrinhoNome}</span>
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                {padrinhoTipo === "associacao"
+                  ? `Entidade Madrinha: ${padrinhoNome}`
+                  : "Membro Fundador Padrinho UBT"}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SELETOR: TIPO DE CADASTRO */}
         <div className="space-y-2">
           <label className="text-[11px] font-mono font-bold text-zinc-400 tracking-wider uppercase block">

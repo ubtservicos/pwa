@@ -196,6 +196,23 @@ export default function Index() {
     { title: "Fogueira de Encerramento", file: "Cena13.mp4", description: "A união dos fundadores celebrando o futuro sustentável da UBT." }
   ];
 
+  // Captura e persistência redundante do parâmetro de indicação (?ref=...)
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const rawRef = searchParams.get("ref");
+      if (rawRef) {
+        const cleanRef = rawRef.trim().replace(/[\\/\s]/g, "");
+        if (cleanRef) {
+          localStorage.setItem("ubt_ref", cleanRef);
+          sessionStorage.setItem("ubt_ref", cleanRef);
+        }
+      }
+    } catch (e) {
+      // Storage inacessível em modo restrito
+    }
+  }, []);
+
   // Dynamic Ambient Canvas Animation Orchestrator
   useEffect(() => {
     const canvas = canvasRef.current;

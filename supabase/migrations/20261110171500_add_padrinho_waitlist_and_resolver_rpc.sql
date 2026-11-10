@@ -9,11 +9,14 @@ ALTER TABLE public.waitlist
 CREATE INDEX IF NOT EXISTS idx_waitlist_padrinho_id ON public.waitlist(padrinho_id);
 
 -- 2. RPC de Resolução de Slug (converte slug/código textual em UUID do padrinho sem expor PII)
+DROP FUNCTION IF EXISTS public.resolver_padrinho_slug(text);
+
 CREATE OR REPLACE FUNCTION public.resolver_padrinho_slug(p_slug text)
 RETURNS TABLE (
   padrinho_id uuid,
   nome_exibicao text,
-  tipo_padrinho text
+  tipo_padrinho text,
+  padrinho_telefone text
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -25,7 +28,8 @@ BEGIN
   SELECT 
     u.id AS padrinho_id,
     COALESCE(u.nome, 'Padrinho UBT')::text AS nome_exibicao,
-    u.role::text AS tipo_padrinho
+    u.role::text AS tipo_padrinho,
+    u.telefone::text AS padrinho_telefone
   FROM public.usuarios u
   LEFT JOIN public.waitlist w ON w.user_id = u.id OR w.telefone = u.telefone
   WHERE lower(w.referral_slug) = v_clean_slug
