@@ -136,93 +136,102 @@ export default function AdminClientesPage() {
 
   useEffect(() => {
     const fetchUsers = async () => {
+      setLoading(true);
       try {
-        // 1. Buscar usuários
+        // 1. Busca principal de usuários (essencial)
         const { data: rawUsers, error: errUsers } = await supabase
           .from("usuarios")
           .select("*");
-        if (errUsers) throw errUsers;
-
-        // 2. Buscar profiles para complementar dados
-        const { data: rawProfiles } = await supabase
-          .from("profiles")
-          .select("*");
         
-        // 3. Buscar mototaxi
-        const { data: rawMototaxis } = await supabase
-          .from("prestador_mototaxi")
-          .select("user_id, kyc_status, modalidade, plate, is_online");
+        if (errUsers) {
+          console.error("Erro ao buscar tabela usuarios:", errUsers);
+        }
+        setDbUsers(rawUsers || []);
+
+        // 2. Consultas auxiliares com isolamento estrito via Promise.allSettled
+        const [
+          profilesRes,
+          motoRes,
+          diaristasRes,
+          caminhoesRes,
+          assocsRes,
+          provAssocsRes,
+          membAssocsRes,
+          pedidosRes,
+          waitlistRes
+        ] = await Promise.allSettled([
+          supabase.from("profiles").select("*"),
+          supabase.from("prestador_mototaxi").select("user_id, kyc_status, modalidade, plate, is_online"),
+          supabase.from("diarista_perfis").select("user_id, rating, total_servicos, is_online"),
+          supabase.from("coco_caminhoes").select("prestador_id, plate, status_aprovacao, is_online"),
+          supabase.from("associations").select("id, name"),
+          supabase.from("provider_associations").select("provider_id, association_id"),
+          supabase.from("associacao_membros").select("*"),
+          supabase.from("pedidos").select("tomador_id, prestador_id, total, status, created_at"),
+          supabase.from("waitlist").select("id, email, telefone, user_id, cadastro_completo, status, referral_code, referral_slug, slug, padrinho_id, tipo_cadastro, cnpj")
+        ]);
+
+        // Processa Profiles
+        if (profilesRes.status === "fulfilled" && profilesRes.value.data) {
+          setDbProfiles(profilesRes.value.data);
+        }
+
+        // Processa Mototáxi
         const motoMap = new Map<string, any>();
-        if (rawMototaxis) {
-          rawMototaxis.forEach((m) => motoMap.set(m.user_id, m));
+        if (motoRes.status === "fulfilled" && motoRes.value.data) {
+          motoRes.value.data.forEach((m: any) => motoMap.set(m.user_id, m));
         }
+        setMototaxisMap(motoMap);
 
-        // 4. Buscar diarista_perfis
-        const { data: diaristas } = await supabase
-          .from("diarista_perfis")
-          .select("user_id, rating, total_servicos, is_online");
+        // Processa Diaristas
         const dMap = new Map<string, any>();
-        if (diaristas) {
-          diaristas.forEach((d) => dMap.set(d.user_id, d));
+        if (diaristasRes.status === "fulfilled" && diaristasRes.value.data) {
+          diaristasRes.value.data.forEach((d: any) => dMap.set(d.user_id, d));
         }
+        setDiaristasMap(dMap);
 
-        // 5. Buscar coco_caminhoes
-        const { data: caminhoes } = await supabase
-          .from("coco_caminhoes")
-          .select("prestador_id, plate, status_aprovacao, is_online");
+        // Processa Caminhões
         const cMap = new Map<string, any>();
-        if (caminhoes) {
-          caminhoes.forEach((c) => cMap.set(c.prestador_id, c));
+        if (caminhoesRes.status === "fulfilled" && caminhoesRes.value.data) {
+          caminhoesRes.value.data.forEach((c: any) => cMap.set(c.prestador_id, c));
         }
+        setCaminhoesMap(cMap);
 
-        // 6. Buscar associações reais
-        const { data: assocs } = await supabase
-          .from("associations")
-          .select("id, name");
+        // Processa Associações e vínculos
         const assocNames = new Map<string, string>();
-        if (assocs) {
-          assocs.forEach((a) => assocNames.set(a.id, a.name));
+        if (assocsRes.status === "fulfilled" && assocsRes.value.data) {
+          assocsRes.value.data.forEach((a: any) => assocNames.set(a.id, a.name));
         }
-
-        const { data: provAssocs } = await supabase
-          .from("provider_associations")
-          .select("provider_id, association_id");
-        const { data: membAssocs } = await supabase
-          .from("associacao_membros")
-          .select("prestador_id, associacao_id");
 
         const uAssocMap = new Map<string, string>();
-        if (provAssocs) {
-          provAssocs.forEach((pa) => {
+        if (provAssocsRes.status === "fulfilled" && provAssocsRes.value.data) {
+          provAssocsRes.value.data.forEach((pa: any) => {
             if (assocNames.has(pa.association_id)) {
               uAssocMap.set(pa.provider_id, assocNames.get(pa.association_id)!);
             }
           });
         }
-        if (membAssocs) {
-          membAssocs.forEach((ma) => {
-            if (assocNames.has(ma.association_id)) {
-              uAssocMap.set(ma.prestador_id, assocNames.get(ma.association_id)!);
+        if (membAssocsRes.status === "fulfilled" && membAssocsRes.value.data) {
+          membAssocsRes.value.data.forEach((ma: any) => {
+            const assocId = ma.associacao_id || ma.association_id;
+            if (assocId && assocNames.has(assocId)) {
+              uAssocMap.set(ma.prestador_id, assocNames.get(assocId)!);
             }
           });
         }
-
-        // 7. Buscar pedidos para cálculo financeiro
-        const { data: rawPedidos } = await supabase
-          .from("pedidos")
-          .select("tomador_id, prestador_id, total, status, created_at");
-
-        const { data: rawWaitlist } = await supabase.from("waitlist").select("id, email, telefone, user_id, cadastro_completo, status, referral_code, slug");
-        if (rawWaitlist) setDbWaitlist(rawWaitlist);
-        setDbUsers(rawUsers || []);
-        setDbProfiles(rawProfiles || []);
-        setMototaxisMap(motoMap);
-        setDiaristasMap(dMap);
-        setCaminhoesMap(cMap);
         setUserAssocMap(uAssocMap);
-        setDbPedidos(rawPedidos || []);
+
+        // Processa Pedidos
+        if (pedidosRes.status === "fulfilled" && pedidosRes.value.data) {
+          setDbPedidos(pedidosRes.value.data);
+        }
+
+        // Processa Waitlist
+        if (waitlistRes.status === "fulfilled" && waitlistRes.value.data) {
+          setDbWaitlist(waitlistRes.value.data);
+        }
       } catch (e) {
-        console.error("Erro ao buscar usuários no admin:", e);
+        console.error("Erro geral no carregamento de usuários:", e);
       } finally {
         setLoading(false);
       }

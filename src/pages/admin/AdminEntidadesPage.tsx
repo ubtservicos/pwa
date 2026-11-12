@@ -9,7 +9,10 @@ import {
   RefreshCw, 
   ExternalLink,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Users,
+  User,
+  Handshake
 } from "lucide-react";
 import { Card, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
