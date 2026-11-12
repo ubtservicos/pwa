@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { isValidUuid } from "@/services/AnalyticsService";
 
 export type LogSeverity = "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
 
@@ -77,11 +78,12 @@ class LoggingManager {
   private async listenToAuthChanges() {
     try {
       const { data } = await supabase.auth.getSession();
-      if (data?.session?.user) {
-        this.currentUserId = data.session.user.id;
-      }
+      const initialUid = data?.session?.user?.id;
+      this.currentUserId = isValidUuid(initialUid) ? initialUid : null;
+
       supabase.auth.onAuthStateChange((_event, session) => {
-        this.currentUserId = session?.user?.id || null;
+        const uid = session?.user?.id;
+        this.currentUserId = isValidUuid(uid) ? uid : null;
       });
     } catch (e) {
       console.warn("Erro ao ouvir autenticação no LoggingService:", e);
@@ -123,6 +125,8 @@ class LoggingManager {
       const maskedMetadata = this.maskSensitiveData(metadata);
       const maskedErrorMsg = errorMsg ? this.maskString(errorMsg) : undefined;
 
+      const cleanUserId = isValidUuid(this.currentUserId) ? this.currentUserId : null;
+
       const logEntry: SystemLogEntry = {
         severity,
         module,
@@ -130,7 +134,7 @@ class LoggingManager {
         operation,
         status,
         execution_time_ms: executionTimeMs,
-        user_id: this.currentUserId,
+        user_id: cleanUserId,
         request_id: this.generateUUID(),
         correlation_id: this.currentCorrelationId,
         error_code: errorCode,
@@ -225,8 +229,13 @@ class LoggingManager {
     const batch = [...this.buffer];
     this.buffer = [];
 
+    const sanitizedBatch = batch.map(entry => ({
+      ...entry,
+      user_id: isValidUuid(entry.user_id) ? entry.user_id : null
+    }));
+
     try {
-      const { error } = await supabase.from("system_logs").insert(batch);
+      const { error } = await supabase.from("system_logs").insert(sanitizedBatch);
       if (error) {
         console.warn("Erro ao enviar system logs:", error.message);
         this.buffer = [...batch, ...this.buffer].slice(0, 100);
@@ -242,9 +251,14 @@ class LoggingManager {
     const batch = [...this.buffer];
     this.buffer = [];
 
+    const sanitizedBatch = batch.map(entry => ({
+      ...entry,
+      user_id: isValidUuid(entry.user_id) ? entry.user_id : null
+    }));
+
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/system_logs`;
-      const blob = new Blob([JSON.stringify(batch)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(sanitizedBatch)], { type: "application/json" });
       try {
         navigator.sendBeacon(url, blob);
       } catch (e) {

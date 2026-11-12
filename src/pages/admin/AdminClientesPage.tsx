@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2, Eye, Copy, Check } from "lucide-react";
+import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2, Eye, Copy, Check, Users, User, Handshake } from "lucide-react";
 import { getAppOrigin } from "@/lib/appUrl";
 import { maskCPF, generateReferralSlug } from "@/utils/masks";
 import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
@@ -48,6 +48,26 @@ export default function AdminClientesPage() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [rules, setRules] = useState<StatusRule[]>([]);
   const [selectedUserModal, setSelectedUserModal] = useState<any | null>(null);
+  const [modalApadrinhados, setModalApadrinhados] = useState<any[]>([]);
+  const [loadingModalApadrinhados, setLoadingModalApadrinhados] = useState(false);
+
+  useEffect(() => {
+    if (selectedUserModal?.id) {
+      setLoadingModalApadrinhados(true);
+      supabase.rpc("obter_meus_apadrinhados", { p_padrinho_id: selectedUserModal.id })
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setModalApadrinhados(data);
+          } else {
+            setModalApadrinhados([]);
+          }
+        })
+        .catch(() => setModalApadrinhados([]))
+        .finally(() => setLoadingModalApadrinhados(false));
+    } else {
+      setModalApadrinhados([]);
+    }
+  }, [selectedUserModal?.id]);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [customSlugInput, setCustomSlugInput] = useState<string>("");
   const [isSavingCustomSlug, setIsSavingCustomSlug] = useState<boolean>(false);
@@ -1317,6 +1337,49 @@ export default function AdminClientesPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Rede de Apadrinhados deste Membro */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>
+                    🤝 Rede de Apadrinhados deste Membro
+                  </span>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)" }}>
+                    <Users size={12} color="#00FF66" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#00FF66" }}>
+                      Total: {modalApadrinhados.length}
+                    </span>
+                  </div>
+                </div>
+
+                {loadingModalApadrinhados ? (
+                  <div style={{ padding: "14px 0", textAlign: "center", color: "var(--admin-muted)", fontSize: 12 }}>
+                    Carregando apadrinhados...
+                  </div>
+                ) : modalApadrinhados.length === 0 ? (
+                  <div style={{ padding: "12px", textAlign: "center", color: "var(--admin-muted)", fontSize: 12, background: "var(--admin-bg)", borderRadius: 8, border: "1px dashed var(--admin-border)" }}>
+                    Este membro ainda não possui apadrinhados vinculados.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                    {modalApadrinhados.map((item: any) => (
+                      <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 8, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", gap: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text)" }}>
+                          {item.nome}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700, background: item.tipo_cadastro === "pj" ? "rgba(56,189,248,0.15)" : "rgba(13,184,126,0.12)", color: item.tipo_cadastro === "pj" ? "#38BDF8" : "#0DB87E" }}>
+                            {item.tipo_cadastro?.toUpperCase() || "PF"}
+                          </span>
+                          <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700, background: item.cadastro_completo ? "rgba(0,255,102,0.12)" : "rgba(245,166,35,0.12)", color: item.cadastro_completo ? "#00FF66" : "#F5A623" }}>
+                            {item.cadastro_completo ? "Completo" : "Em Aprovação"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Links de Acesso e Atualização Cadastral */}

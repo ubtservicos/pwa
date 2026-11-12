@@ -3,6 +3,9 @@ import { logSystem } from "@/services/LoggingService";
 
 export { logSystem };
 
+export const isValidUuid = (id: unknown): id is string => 
+  typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 export type AnalyticsEventName =
   | "landing_view"
   | "landing_cta"
@@ -102,10 +105,8 @@ class AnalyticsManager {
     }
   }
 
-  private isValidUUID(uuid: string | null): boolean {
-    if (!uuid) return false;
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
+  private isValidUUID(uuid: unknown): boolean {
+    return isValidUuid(uuid);
   }
 
   private initDeviceAndSession() {
@@ -253,22 +254,8 @@ class AnalyticsManager {
     explicitUserId?: string | null
   ) {
     try {
-      let userId: string | null = explicitUserId || this.currentUserId;
-      if (userId) {
-        const s = String(userId).trim();
-        if (
-          s === "" ||
-          s.toLowerCase() === "null" ||
-          s.toLowerCase() === "undefined" ||
-          !this.isValidUUID(s)
-        ) {
-          userId = null;
-        } else {
-          userId = s;
-        }
-      } else {
-        userId = null;
-      }
+      const candidateUser = explicitUserId !== undefined ? explicitUserId : this.currentUserId;
+      const userId: string | null = isValidUuid(candidateUser) ? candidateUser : null;
 
       const event: AnalyticsEvent = {
         event_name: eventName,
@@ -313,8 +300,13 @@ class AnalyticsManager {
       });
     });
 
+    const sanitizedBatch = batch.map(event => ({
+      ...event,
+      user_id: isValidUuid(event.user_id) ? event.user_id : null
+    }));
+
     try {
-      const { error } = await supabase.from("analytics_events").insert(batch);
+      const { error } = await supabase.from("analytics_events").insert(sanitizedBatch);
       if (error) {
         console.warn("Erro ao fazer flush do lote de analytics:", error.message);
         

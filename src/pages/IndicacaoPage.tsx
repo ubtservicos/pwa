@@ -56,18 +56,25 @@ export default function IndicacaoPage() {
 
   const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
   const [loadingApadrinhados, setLoadingApadrinhados] = useState<boolean>(true);
+  const [apadrinhadosError, setApadrinhadosError] = useState<string | null>(null);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
 
   const fetchApadrinhados = async (padrinhoUserId: string) => {
     try {
       setLoadingApadrinhados(true);
+      setApadrinhadosError(null);
       const { data, error } = await supabase.rpc("obter_meus_apadrinhados", {
         p_padrinho_id: padrinhoUserId,
       });
-      if (!error && data) {
+      if (error) {
+        console.warn("Erro ao buscar apadrinhados via RPC:", error.message);
+        setApadrinhadosError("Não foi possível carregar a rede no momento.");
+      } else if (data) {
         setApadrinhados(data as ApadrinhadoItem[]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Erro ao buscar apadrinhados:", err);
+      setApadrinhadosError("Erro de conexão ao carregar rede de apadrinhados.");
     } finally {
       setLoadingApadrinhados(false);
     }
@@ -103,13 +110,19 @@ export default function IndicacaoPage() {
           }
         }
 
-        // 2. Tenta recuperar da sessão ativa (se houver)
+        // 2. Autenticação Primária: getUser() e getSession()
         if (!resolvedUserId) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          resolvedUserId = sessionData?.session?.user?.id || null;
+          const { data: authUser } = await supabase.auth.getUser();
+          if (authUser?.user?.id) {
+            resolvedUserId = authUser.user.id;
+          } else {
+            const { data: sessionData } = await supabase.auth.getSession();
+            resolvedUserId = sessionData?.session?.user?.id || null;
+          }
         }
 
         if (resolvedUserId && isMounted) {
+          setActiveUserId(resolvedUserId);
           const { data: uData } = await supabase
             .from("usuarios")
             .select("nome, referral_code, metadata")
@@ -123,15 +136,7 @@ export default function IndicacaoPage() {
           }
         }
 
-        // 3. Tenta fallback do usuário logado se ainda não encontrou
-        if (!resolvedUserId) {
-          const { data: authUser } = await supabase.auth.getUser();
-          if (authUser?.user?.id) {
-            resolvedUserId = authUser.user.id;
-          }
-        }
-
-        // 4. Se tiver userId, busca rede de apadrinhados
+        // 3. Se tiver userId identificado, busca rede de apadrinhados
         if (resolvedUserId && isMounted) {
           fetchApadrinhados(resolvedUserId);
         } else if (isMounted) {
@@ -150,8 +155,17 @@ export default function IndicacaoPage() {
 
     resolveLeadData();
 
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const uId = session?.user?.id;
+      if (uId && isMounted) {
+        setActiveUserId(uId);
+        fetchApadrinhados(uId);
+      }
+    });
+
     return () => {
       isMounted = false;
+      authListener?.subscription?.unsubscribe();
     };
   }, [initialSlug, telParam]);
 
@@ -369,8 +383,37 @@ export default function IndicacaoPage() {
 
             {/* Lista ou Empty State */}
             {loadingApadrinhados ? (
-              <div className="py-8 text-center text-zinc-500 text-xs font-mono">
-                Carregando rede de apadrinhados...
+              <div className="flex flex-col gap-2.5">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="p-3.5 sm:p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 animate-pulse flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-zinc-800" />
+                      <div className="flex flex-col gap-1.5">
+                        <div className="w-32 h-3.5 bg-zinc-800 rounded" />
+                        <div className="w-24 h-2.5 bg-zinc-800/60 rounded" />
+                      </div>
+                    </div>
+                    <div className="w-20 h-5 bg-zinc-800 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : apadrinhadosError ? (
+              <div className="py-6 px-4 rounded-2xl bg-red-950/20 border border-red-800/30 text-center flex flex-col items-center gap-2">
+                <p className="text-xs text-red-400 font-sans">
+                  {apadrinhadosError}
+                </p>
+                {activeUserId && (
+                  <button
+                    type="button"
+                    onClick={() => fetchApadrinhados(activeUserId)}
+                    className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-mono text-zinc-300 border border-zinc-700 transition-all cursor-pointer"
+                  >
+                    Tentar Novamente
+                  </button>
+                )}
               </div>
             ) : apadrinhados.length === 0 ? (
               <div className="py-8 px-4 rounded-2xl bg-zinc-900/30 border border-dashed border-zinc-800 text-center flex flex-col items-center gap-2">

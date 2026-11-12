@@ -16,6 +16,9 @@ import {
   Waves,
   Home,
   Loader2,
+  Users,
+  User,
+  Handshake,
 } from "lucide-react";
 import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -94,6 +97,18 @@ export default function AdminClienteDetailPage() {
   const [isSavingRefCode, setIsSavingRefCode] = useState(false);
   const [refCodeStatus, setRefCodeStatus] = useState<"idle" | "saved">("idle");
   const [refCodeError, setRefCodeError] = useState("");
+
+  interface ApadrinhadoItem {
+    id: string;
+    nome: string;
+    tipo_cadastro: string;
+    status: string;
+    cadastro_completo: boolean;
+    criado_em: string;
+  }
+
+  const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
+  const [loadingApadrinhados, setLoadingApadrinhados] = useState(false);
 
   const handleCopyLink = async (text: string, type: string) => {
     try {
@@ -307,6 +322,21 @@ export default function AdminClienteDetailPage() {
       const initialRef = userData?.referral_code || waitlistRow?.referral_code || profileData?.referral_code || "";
       if (initialRef) {
         setCustomRefCode(initialRef);
+      }
+
+      // 8. Buscar apadrinhados deste usuário via RPC
+      try {
+        setLoadingApadrinhados(true);
+        const { data: apadData, error: apadErr } = await supabase.rpc("obter_meus_apadrinhados", {
+          p_padrinho_id: id,
+        });
+        if (!apadErr && apadData) {
+          setApadrinhados(apadData as ApadrinhadoItem[]);
+        }
+      } catch (errApad) {
+        console.warn("Erro ao buscar apadrinhados do cliente:", errApad);
+      } finally {
+        setLoadingApadrinhados(false);
       }
     } catch (err) {
       console.error("Erro ao carregar detalhes do usuário:", err);
@@ -1181,6 +1211,130 @@ export default function AdminClienteDetailPage() {
             </div>
           </Card>
         </div>
+
+        {/* Rede de Apadrinhados deste Membro */}
+        <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#00FF66" }}>
+                <Handshake size={20} />
+              </div>
+              <div>
+                <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+                  🤝 Rede de Apadrinhados deste Membro
+                </h2>
+                <span style={{ fontSize: 12, color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
+                  Membros cadastrados e vinculados através do link exclusivo deste usuário
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)" }}>
+              <Users size={14} color="#00FF66" />
+              <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>
+                Total de Indicados:
+              </span>
+              <strong style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 800, color: "#00FF66" }}>
+                {apadrinhados.length}
+              </strong>
+            </div>
+          </div>
+
+          {loadingApadrinhados ? (
+            <div style={{ padding: "30px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
+              Carregando apadrinhados...
+            </div>
+          ) : apadrinhados.length === 0 ? (
+            <div style={{ padding: "30px 16px", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13, background: "var(--admin-bg)", borderRadius: 12, border: "1px dashed var(--admin-border)" }}>
+              Este membro ainda não possui apadrinhados vinculados.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {apadrinhados.map((item) => {
+                const isPJ = item.tipo_cadastro?.toLowerCase() === "pj";
+                const dataFormatada = item.criado_em
+                  ? new Date(item.criado_em).toLocaleDateString("pt-BR")
+                  : "—";
+
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 200 }}>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: isPJ ? "rgba(56,189,248,0.15)" : "rgba(0,255,102,0.1)",
+                          color: isPJ ? "#38BDF8" : "#00FF66",
+                          border: `1px solid ${isPJ ? "rgba(56,189,248,0.3)" : "rgba(0,255,102,0.25)"}`,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isPJ ? <Building2 size={16} /> : <User size={16} />}
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
+                          {item.nome}
+                        </div>
+                        <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>Cadastro: {dataFormatada}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fontFamily: "monospace",
+                          textTransform: "uppercase",
+                          background: isPJ ? "rgba(56,189,248,0.15)" : "rgba(13,184,126,0.12)",
+                          color: isPJ ? "#38BDF8" : "#0DB87E",
+                          border: `1px solid ${isPJ ? "rgba(56,189,248,0.3)" : "rgba(13,184,126,0.25)"}`,
+                        }}
+                      >
+                        {isPJ ? "PJ" : "PF"}
+                      </span>
+
+                      {item.cadastro_completo ? (
+                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(0,255,102,0.12)", color: "#00FF66", border: "1px solid rgba(0,255,102,0.3)" }}>
+                          Cadastro Completo
+                        </span>
+                      ) : item.status === "aprovado" || item.status === "approved" ? (
+                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(43,110,232,0.12)", color: "#2B6EE8", border: "1px solid rgba(43,110,232,0.3)" }}>
+                          Aprovado
+                        </span>
+                      ) : (
+                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(245,166,35,0.12)", color: "#F5A623", border: "1px solid rgba(245,166,35,0.3)" }}>
+                          Em Aprovação
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
 
         {/* Transaction History Card */}
         <Card style={{ padding: 24, display: "flex", flexDirection: "column" }}>
