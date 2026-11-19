@@ -17,6 +17,7 @@ export const useGeolocation = (watch: boolean = false) => {
   });
 
   const watchIdRef = useRef<number | null>(null);
+  const lastCoordKeyRef = useRef<string>("");
 
   const getPosition = useCallback(async () => {
     if (!navigator.geolocation) {
@@ -70,6 +71,12 @@ export const useGeolocation = (watch: boolean = false) => {
         async (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
+          const coordKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+          if (lastCoordKeyRef.current === coordKey) {
+            setState((prev) => ({ ...prev, coords: { lat, lng }, loading: false }));
+            return;
+          }
+          lastCoordKeyRef.current = coordKey;
           try {
             const resolvedAddress = await reverseGeocode(lat, lng);
             setState((prev) => ({

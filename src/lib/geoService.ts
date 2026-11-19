@@ -1,5 +1,59 @@
 import { supabase } from './supabase';
-import { GOOGLE_MAPS_API_KEY, UBATUBA_BOUNDS, UBATUBA_CENTER } from './googleMapsConfig';
+import { GOOGLE_GEOCODING_ENABLED, GOOGLE_MAPS_API_KEY, UBATUBA_BOUNDS, UBATUBA_CENTER } from './googleMapsConfig';
+
+// Circuit-breaker em memória caso a Geocoding API retorne REQUEST_DENIED/indisponibilidade
+let googleGeocoderDisabled = !GOOGLE_GEOCODING_ENABLED;
+const reverseGeocodeCache = new Map<string, string>();
+
+const UBATUBA_FALLBACK_BAIRROS: Array<{ nome: string; lat: number; lng: number }> = [
+  { nome: "Centro", lat: -23.4336, lng: -45.0838 },
+  { nome: "Itaguá", lat: -23.4526, lng: -45.0631 },
+  { nome: "Perequê-Açu", lat: -23.4184, lng: -45.0659 },
+  { nome: "Praia Grande", lat: -23.4678, lng: -45.0642 },
+  { nome: "Toninhas", lat: -23.4892, lng: -45.0725 },
+  { nome: "Enseada", lat: -23.4956, lng: -45.0864 },
+  { nome: "Saco da Ribeira", lat: -23.5039, lng: -45.1258 },
+  { nome: "Lázaro", lat: -23.5048, lng: -45.1381 },
+  { nome: "Lagoinha", lat: -23.5161, lng: -45.1972 },
+  { nome: "Maranduba", lat: -23.5419, lng: -45.2314 },
+  { nome: "Sertão da Quina", lat: -23.5245, lng: -45.2268 },
+  { nome: "Itamambuca", lat: -23.3976, lng: -45.0085 },
+  { nome: "Estufa II", lat: -23.4472, lng: -45.0847 },
+  { nome: "Ipiranguinha", lat: -23.4292, lng: -45.1112 },
+  { nome: "Picinguaba", lat: -23.3761, lng: -44.8384 },
+];
+
+const findNearestUbatubaBairro = (lat: number, lng: number): string | null => {
+  const inBounds =
+    lat >= UBATUBA_BOUNDS.south &&
+    lat <= UBATUBA_BOUNDS.north &&
+    lng >= UBATUBA_BOUNDS.west &&
+    lng <= UBATUBA_BOUNDS.east;
+  if (!inBounds) return null;
+
+  let nearest = UBATUBA_FALLBACK_BAIRROS[0];
+  let minDist = Infinity;
+  for (const b of UBATUBA_FALLBACK_BAIRROS) {
+    const d = Math.hypot(lat - b.lat, lng - b.lng);
+    if (d < minDist) {
+      minDist = d;
+      nearest = b;
+    }
+  }
+  return `${nearest.nome}, Ubatuba - SP`;
+};
+
+const findUbatubaBairroCoords = (query: string): { lat: number; lng: number; label: string } | null => {
+  const norm = normalizeAddress(query);
+  if (!norm) return null;
+  for (const b of UBATUBA_FALLBACK_BAIRROS) {
+    const bNorm = normalizeAddress(b.nome);
+    if (norm.includes(bNorm) || bNorm.includes(norm)) {
+      return { lat: b.lat, lng: b.lng, label: `${b.nome}, Ubatuba - SP` };
+    }
+  }
+  return null;
+};
 
 const GOOGLE_KEY = GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -92,8 +146,9 @@ const saveToPersistentCache = async (
   }
 };
 
-// Geocodificação Direta com Google Maps Geocoding SDK
+// Geocodificação Direta com Google Maps Geocoding SDK (protegida por flag e circuit-breaker)
 export const geocodeGoogle = async (query: string): Promise<{ lat: number; lng: number } | null> => {
+  if (googleGeocoderDisabled) return null;
   if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
     try {
       const geocoder = new (window as any).google.maps.Geocoder();
@@ -109,6 +164,11 @@ export const geocodeGoogle = async (query: string): Promise<{ lat: number; lng: 
             },
           },
           (res: any, status: string) => {
+            if (status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT") {
+              googleGeocoderDisabled = true;
+              resolve([]);
+              return;
+            }
             if (status === "OK" && res && res.length > 0) resolve(res);
             else resolve([]);
           }
@@ -118,8 +178,8 @@ export const geocodeGoogle = async (query: string): Promise<{ lat: number; lng: 
         const loc = results[0].geometry.location;
         return { lat: typeof loc.lat === "function" ? loc.lat() : Number(loc.lat), lng: typeof loc.lng === "function" ? loc.lng() : Number(loc.lng) };
       }
-    } catch (err) {
-      console.warn("Google Geocode SDK error:", err);
+    } catch {
+      googleGeocoderDisabled = true;
     }
   }
   return null;
@@ -187,8 +247,8 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
       }
     }
 
-    // 4. Google Maps Geocoding
-    if (GOOGLE_KEY) {
+    // 4. Fallback por bairro conhecido em Ubatuba ou Google Maps Geocoding (se ativado)
+    if (GOOGLE_KEY && !googleGeocoderDisabled) {
       const coords = await geocodeGoogle(address);
       if (coords) {
         const elapsed = Date.now() - startTime;
@@ -198,6 +258,11 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
       }
     }
 
+    const bairroFallback = findUbatubaBairroCoords(address);
+    if (bairroFallback) {
+      return bairroFallback;
+    }
+
     return null;
   } catch (e: any) {
     logMetric('error', address, normalized, 'system', Date.now() - startTime, e.message);
@@ -205,31 +270,18 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
   }
 };
 
-// Geocoding Reverso Híbrido (Coordenadas -> Endereço)
+// Geocoding Reverso Híbrido Local-First (Cache -> ceps_ubatuba -> Google SDK se habilitado -> Bairro Ubatuba)
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  if (reverseGeocodeCache.has(cacheKey)) {
+    return reverseGeocodeCache.get(cacheKey)!;
+  }
+
   try {
     const startTime = Date.now();
-    // 1. Google Maps Reverse Geocode via SDK
-    if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
-      try {
-        const geocoder = new (window as any).google.maps.Geocoder();
-        const results = await new Promise<any[]>((resolve) => {
-          geocoder.geocode({ location: { lat, lng } }, (res: any, status: string) => {
-            if (status === "OK" && res && res.length > 0) resolve(res);
-            else resolve([]);
-          });
-        });
-        if (results.length > 0 && results[0]?.formatted_address) {
-          logMetric('fallback_usage', `${lat},${lng}`, 'reverse_geocode', 'google', Date.now() - startTime);
-          return results[0].formatted_address;
-        }
-      } catch (sdkErr) {
-        console.warn('Google Reverse Geocode SDK error:', sdkErr);
-      }
-    }
 
-    // 2. Fallback Banco Local ceps_ubatuba
-    const delta = 0.0015;
+    // 1. Banco Local ceps_ubatuba (prioritário, zero custo e sem erro de API)
+    const delta = 0.0025;
     const { data: closeItems } = await supabase
       .from('ceps_ubatuba')
       .select('*')
@@ -237,16 +289,58 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
       .lte('lat', lat + delta)
       .gte('lng', lng - delta)
       .lte('lng', lng + delta)
-      .not('lat', 'is', null);
+      .not('lat', 'is', null)
+      .limit(10);
 
     if (closeItems && closeItems.length > 0) {
-      const item = closeItems[0];
-      return `${item.logradouro}, ${item.bairro}, Ubatuba - CEP ${item.cep}`;
+      const nearest = closeItems.reduce((best, curr) => {
+        const dBest = Math.hypot(lat - Number(best.lat), lng - Number(best.lng));
+        const dCurr = Math.hypot(lat - Number(curr.lat), lng - Number(curr.lng));
+        return dCurr < dBest ? curr : best;
+      });
+      const label = `${nearest.logradouro}, ${nearest.bairro}, Ubatuba - CEP ${nearest.cep}`;
+      reverseGeocodeCache.set(cacheKey, label);
+      return label;
     }
 
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    // 2. Google Maps Reverse Geocode via SDK (somente se Geocoding API estiver explicitamente habilitada)
+    if (!googleGeocoderDisabled && typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
+      try {
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const results = await new Promise<any[]>((resolve) => {
+          geocoder.geocode({ location: { lat, lng } }, (res: any, status: string) => {
+            if (status === "REQUEST_DENIED" || status === "OVER_QUERY_LIMIT") {
+              googleGeocoderDisabled = true;
+              resolve([]);
+              return;
+            }
+            if (status === "OK" && res && res.length > 0) resolve(res);
+            else resolve([]);
+          });
+        });
+        if (results.length > 0 && results[0]?.formatted_address) {
+          const addr = results[0].formatted_address;
+          reverseGeocodeCache.set(cacheKey, addr);
+          logMetric('fallback_usage', `${lat},${lng}`, 'reverse_geocode', 'google', Date.now() - startTime);
+          return addr;
+        }
+      } catch {
+        googleGeocoderDisabled = true;
+      }
+    }
+
+    // 3. Fallback Estruturado por Bairro de Ubatuba
+    const bairroLabel = findNearestUbatubaBairro(lat, lng);
+    if (bairroLabel) {
+      reverseGeocodeCache.set(cacheKey, bairroLabel);
+      return bairroLabel;
+    }
+
+    const fallbackCoords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    reverseGeocodeCache.set(cacheKey, fallbackCoords);
+    return fallbackCoords;
   } catch {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    return findNearestUbatubaBairro(lat, lng) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
 };
 

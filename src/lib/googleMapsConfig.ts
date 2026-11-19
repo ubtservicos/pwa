@@ -2,6 +2,11 @@
 
 export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
+// A Geocoding API do Google Maps só é chamada se explicitamente habilitada via env
+// para evitar erros "Geocoding Service: This API is not activated on your API project" no console.
+export const GOOGLE_GEOCODING_ENABLED =
+  String(import.meta.env.VITE_GOOGLE_GEOCODING_ENABLED || '').toLowerCase() === 'true';
+
 export const UBATUBA_CENTER = { lat: -23.4336, lng: -45.0838 };
 
 // Bounding box rigorosa do município de Ubatuba-SP
