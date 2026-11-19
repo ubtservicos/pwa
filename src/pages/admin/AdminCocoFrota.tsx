@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { Card, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import DualListboxColaboradores, {
+  type DualListboxColaboradorOption,
+} from "@/components/admin/DualListboxColaboradores";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 
@@ -70,12 +73,7 @@ interface PrestadorInfo {
   telefone?: string;
 }
 
-interface ColaboradorOption {
-  id: string;
-  nome: string;
-  telefone?: string | null;
-  is_ativo?: boolean;
-}
+type ColaboradorOption = DualListboxColaboradorOption;
 
 export default function AdminCocoFrota() {
   const toast = useAdminToast();
@@ -114,10 +112,14 @@ export default function AdminCocoFrota() {
     try {
       const { data, error } = await supabase
         .from("coco_colaboradores")
-        .select("id, nome, telefone, is_ativo")
+        .select("id, nome, telefone, perfil, is_ativo, status_aprovacao")
         .order("nome", { ascending: true });
       if (!error && data) {
-        setColaboradoresList(data as ColaboradorOption[]);
+        setColaboradoresList(
+          (data as ColaboradorOption[]).filter(
+            (c) => c.status_aprovacao !== "rejeitado"
+          )
+        );
       }
     } catch (err) {
       console.warn("Erro ao buscar colaboradores da Côco & Cia:", err);
@@ -202,12 +204,6 @@ export default function AdminCocoFrota() {
       setExpectativaRetorno("17:00");
     }
     setIsModalOpen(true);
-  };
-
-  const toggleColaborador = (colabId: string) => {
-    setSelectedColaboradores((prev) =>
-      prev.includes(colabId) ? prev.filter((id) => id !== colabId) : [...prev, colabId]
-    );
   };
 
   const toggleBairro = (bairro: string) => {
@@ -968,58 +964,13 @@ export default function AdminCocoFrota() {
                 </div>
               </div>
 
-              {/* Colaboradores Vinculados */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <label style={{ ...labelStyle, marginBottom: 0 }}>
-                    Colaboradores Vinculados ao Caminhão ({selectedColaboradores.length})
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/admin/coco/colaboradores")}
-                    style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    + Gerenciar Colaboradores
-                  </button>
-                </div>
-
-                {colaboradoresList.length === 0 ? (
-                  <div style={{ padding: "12px", borderRadius: 10, border: "1px dashed var(--admin-border)", fontSize: 12, color: "var(--admin-muted)", textAlign: "center" }}>
-                    Nenhum colaborador cadastrado em /admin/coco/colaboradores ainda.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 110, overflowY: "auto", padding: 8, borderRadius: 10, background: "var(--admin-bg)", border: "1px solid var(--admin-border)" }}>
-                    {colaboradoresList.map((col) => {
-                      const sel = selectedColaboradores.includes(col.id);
-                      return (
-                        <button
-                          key={col.id}
-                          type="button"
-                          onClick={() => toggleColaborador(col.id)}
-                          style={{
-                            padding: "5px 10px",
-                            borderRadius: 8,
-                            border: "1px solid",
-                            borderColor: sel ? "#0DB87E" : "var(--admin-border)",
-                            background: sel ? "rgba(13,184,126,0.16)" : "transparent",
-                            color: sel ? "#0DB87E" : "var(--admin-subtle)",
-                            fontSize: 12,
-                            fontWeight: sel ? 700 : 500,
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                          }}
-                        >
-                          <Users size={12} />
-                          <span>{col.nome}</span>
-                          {sel && <Check size={12} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              {/* Colaboradores Vinculados (Dual Listbox) */}
+              <DualListboxColaboradores
+                colaboradores={colaboradoresList}
+                selectedIds={selectedColaboradores}
+                onChange={setSelectedColaboradores}
+                onManageClick={() => navigate("/admin/coco/colaboradores")}
+              />
 
               {/* Seleção de Bairros + Ordenação Sequencial */}
               <div>
@@ -1206,7 +1157,7 @@ const modalBoxStyle = {
   border: "1px solid var(--admin-border)",
   borderRadius: 20,
   padding: 24,
-  maxWidth: 560,
+  maxWidth: 680,
   width: "100%",
   maxHeight: "90vh",
   overflowY: "auto" as const,

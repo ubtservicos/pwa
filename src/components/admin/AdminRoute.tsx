@@ -39,6 +39,19 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
             role = dbUser?.role;
           }
 
+          if (!role || role === "tomador" || role === "prestador" || role === "user") {
+            const { data: cocoColab } = await supabase
+              .from("coco_colaboradores")
+              .select("perfil, status_aprovacao, is_ativo")
+              .eq("user_id", user.id)
+              .eq("status_aprovacao", "aprovado")
+              .eq("is_ativo", true)
+              .maybeSingle();
+            if (cocoColab) {
+              role = cocoColab.perfil === "alta_gestao" ? "cocoecia-dirigentes" : "cocoecia-colaborador";
+            }
+          }
+
           if (!role) {
             role = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
           }

@@ -11,6 +11,7 @@ import { formatDist, haversineKm } from "@/utils/geo";
 import UBTMap, { isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useSimpleToast } from "@/hooks/useToast2";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";

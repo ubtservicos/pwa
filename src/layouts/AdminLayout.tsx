@@ -40,27 +40,33 @@ import {
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
-const ALLOWED_COCO_ROLES = [
+// Superadmin UBT e Alta Gestão Côco & Cia têm visão completa do menu Côco & Cia
+const COCO_ALTA_GESTAO_ROLES = [
   "cocoecia",
-  "tomador",
   "admin",
   "super_admin",
+  "superadmin",
   "operator",
   "associacao",
   "associacao_lider",
-  "cocoecia-dirigentes",
+  "cocoecia-dirigentes"
+];
+
+// Colaboradores Administrativos têm acesso restrito às 5 páginas operacionais
+const COCO_OPERACIONAL_ROLES = [
+  ...COCO_ALTA_GESTAO_ROLES,
   "cocoecia-colaborador"
 ];
 
 export const COCO_NAV_ITEMS = [
-  { icon: BarChart3, label: "Indicadores (Dashboard)", path: "/admin/coco", roles: ALLOWED_COCO_ROLES },
-  { icon: MapPin, label: "Mapa Operacional", path: "/admin/coco/mapa-operacional", roles: ALLOWED_COCO_ROLES },
-  { icon: Calendar, label: "Escala de Bairros", path: "/admin/coco/agenda", roles: ALLOWED_COCO_ROLES },
-  { icon: BookOpen, label: "Dicas & Manuais", path: "/admin/coco/manuais", roles: ALLOWED_COCO_ROLES },
-  { icon: QrCode, label: "Captação & Afiliados", path: "/admin/coco/captacao", roles: ALLOWED_COCO_ROLES },
-  { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: ALLOWED_COCO_ROLES },
-  { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: ALLOWED_COCO_ROLES },
-  { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: ALLOWED_COCO_ROLES },
+  { icon: BarChart3, label: "Indicadores (Dashboard)", path: "/admin/coco", roles: COCO_ALTA_GESTAO_ROLES },
+  { icon: MapPin, label: "Mapa Operacional", path: "/admin/coco/mapa-operacional", roles: COCO_OPERACIONAL_ROLES },
+  { icon: Calendar, label: "Escala de Bairros", path: "/admin/coco/agenda", roles: COCO_OPERACIONAL_ROLES },
+  { icon: BookOpen, label: "Dicas & Manuais", path: "/admin/coco/manuais", roles: COCO_OPERACIONAL_ROLES },
+  { icon: QrCode, label: "Captação & Afiliados", path: "/admin/coco/captacao", roles: COCO_ALTA_GESTAO_ROLES },
+  { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: COCO_OPERACIONAL_ROLES },
+  { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: COCO_OPERACIONAL_ROLES },
+  { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: COCO_ALTA_GESTAO_ROLES },
 ];
 
 export const DIARISTAS_NAV_ITEMS = [
@@ -152,8 +158,21 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
             }
           }
 
+          if (!resolvedRole || resolvedRole === "tomador" || resolvedRole === "prestador" || resolvedRole === "user") {
+            const { data: cocoColab } = await supabase
+              .from("coco_colaboradores")
+              .select("perfil, status_aprovacao, is_ativo")
+              .eq("user_id", user.id)
+              .eq("status_aprovacao", "aprovado")
+              .eq("is_ativo", true)
+              .maybeSingle();
+            if (cocoColab) {
+              resolvedRole = cocoColab.perfil === "alta_gestao" ? "cocoecia-dirigentes" : "cocoecia-colaborador";
+            }
+          }
+
           if (!resolvedRole) {
-            resolvedRole = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "cocoecia";
+            resolvedRole = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
           }
 
           setRole(resolvedRole);
@@ -180,6 +199,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
 
   const filteredItems = NAV_ITEMS.filter((item) => {
     if (!item.roles) return true;
+    if (role === "super_admin" || role === "superadmin") return true;
     return item.roles.includes(role);
   });
 
