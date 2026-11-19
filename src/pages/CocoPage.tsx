@@ -47,7 +47,7 @@ const MapFallback = ({ pontos }: { pontos: PontoColeta[] }) => (
   <div
     className="absolute inset-0"
     style={{
-      background: "radial-gradient(circle at 50% 40%, #1C3261 0%, #132348 40%, #0B1B3E 100%)",
+      background: "radial-gradient(circle at 50% 40%, #1C3261 0%, #111827 40%, #0B0F14 100%)",
     }}
   >
     <div
@@ -110,6 +110,9 @@ const CocoPage = () => {
   const [selectedPonto, setSelectedPonto] = useState<PontoColeta | null>(null);
   const [selectedCaminhao, setSelectedCaminhao] = useState<CaminhaoCoco | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [recentCollectedBanner, setRecentCollectedBanner] = useState<{ address: string; at: string } | null>(null);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   const { coords: geoCoords, address: geoAddress, refresh: refreshGeo } = useGeolocation();
@@ -256,7 +259,23 @@ const CocoPage = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "coco_pontos" },
-        () => {
+        (payload: any) => {
+          if (
+            payload?.eventType === "UPDATE" &&
+            payload?.new?.tomador_id === user.uid &&
+            payload?.new?.status === "coletado"
+          ) {
+            const hora = payload.new.coletado_at
+              ? new Date(payload.new.coletado_at).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            setRecentCollectedBanner({
+              address: payload.new.address || "seu endereço informado",
+              at: hora,
+            });
+          }
           fetchPontos();
         }
       )
@@ -268,13 +287,40 @@ const CocoPage = () => {
     };
   }, [user.uid]);
 
-  const useGps = () => {
-    if (geoCoords) {
-      setCoordenadas(geoCoords);
-      mapRef.current?.panTo([geoCoords.lat, geoCoords.lng]);
-      if (geoAddress) setEndereco(geoAddress);
-    } else {
-      refreshGeo();
+  const useGps = async () => {
+    setLocatingGps(true);
+    try {
+      let targetCoords = geoCoords;
+
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        const fresh = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+          );
+        });
+        if (fresh) targetCoords = fresh;
+      }
+
+      if (!targetCoords) {
+        refreshGeo();
+        return;
+      }
+
+      setCoordenadas(targetCoords);
+      setCenter(targetCoords);
+      mapRef.current?.panTo([targetCoords.lat, targetCoords.lng]);
+
+      const resolvedFullAddress = await reverseGeocode(targetCoords.lat, targetCoords.lng);
+      setEndereco(resolvedFullAddress || geoAddress || "");
+
+      // Mantém o input totalmente editável e foca para o Tomador ajustar o número ou ponto de referência
+      window.setTimeout(() => {
+        addressInputRef.current?.focus();
+      }, 100);
+    } finally {
+      setLocatingGps(false);
     }
   };
 
@@ -363,14 +409,14 @@ const CocoPage = () => {
   return (
     <div
       className="relative overflow-hidden"
-      style={{ height: "100svh", background: "#0B1B3E" }}
+      style={{ height: "100svh", background: "#0B0F14" }}
     >
       {/* Top bar with Back Button and InApp Notification Bell */}
       <div className="absolute top-4 left-4 right-4 z-[1010] flex items-center justify-between pointer-events-none">
         <button
           onClick={() => navigate("/app/home")}
           aria-label="voltar"
-          className="pointer-events-auto flex items-center justify-center rounded-full w-10 h-10 bg-[#0B1B3E]/80 backdrop-blur-md border border-white/10 text-white hover:bg-[#0B1B3E] transition-colors cursor-pointer"
+          className="pointer-events-auto flex items-center justify-center rounded-full w-10 h-10 bg-[#0B0F14]/90 backdrop-blur-md border border-emerald-400/35 text-white hover:border-emerald-400/70 transition-colors cursor-pointer shadow-[0_0_16px_rgba(16,185,129,0.20)]"
         >
           <ArrowLeft size={20} />
         </button>
@@ -423,12 +469,13 @@ const CocoPage = () => {
       <div
         className="absolute left-0 right-0 bottom-0 z-[1010]"
         style={{
-          background: "#132348",
+          background: "linear-gradient(180deg, #111827 0%, #0B0F14 100%)",
+          borderTop: "1px solid rgba(16,185,129,0.38)",
           borderRadius: "24px 24px 0 0",
           padding: "12px 20px 96px",
-          maxHeight: "70svh",
+          maxHeight: "72svh",
           overflowY: "auto",
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.40)",
+          boxShadow: "0 -10px 32px rgba(0,0,0,0.65), 0 -2px 18px rgba(16,185,129,0.12)",
         }}
       >
         <div
@@ -440,6 +487,40 @@ const CocoPage = () => {
             margin: "0 auto 12px",
           }}
         />
+
+        {/* Confirmação em Tempo Real de Recolhimento ao Tomador */}
+        {recentCollectedBanner && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "12px 14px",
+              borderRadius: 14,
+              background: "rgba(16,185,129,0.14)",
+              border: "1px solid rgba(16,185,129,0.50)",
+              boxShadow: "0 0 20px rgba(16,185,129,0.18)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
+            <CheckCircle size={20} color="#10B981" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "#10B981" }}>
+                Pacote Recolhido pela Côco &amp; Cia · {recentCollectedBanner.at}
+              </span>
+              <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#ECFDF5", margin: "3px 0 0", lineHeight: 1.4 }}>
+                Confirmamos o recolhimento do seu reciclável em <strong>{recentCollectedBanner.address}</strong>.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRecentCollectedBanner(null)}
+              style={{ background: "none", border: "none", color: "#6EE7B7", cursor: "pointer", padding: 2 }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
 
         {/* Smart Scheduled Pickup Notification Banner */}
         <CocoSmartBanner currentAddress={endereco} onCtaClick={() => setActiveTab("informar")} />
@@ -468,11 +549,13 @@ const CocoPage = () => {
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                borderBottom: `2px solid ${activeTab === tab.key ? "#0DB87E" : "transparent"}`,
-                fontFamily: "DM Sans",
-                fontSize: 13,
-                fontWeight: activeTab === tab.key ? 600 : 400,
-                color: activeTab === tab.key ? "white" : "rgba(255,255,255,0.45)",
+                borderBottom: `2px solid ${activeTab === tab.key ? "#10B981" : "transparent"}`,
+                fontFamily: "Syne",
+                fontSize: 12,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontWeight: activeTab === tab.key ? 700 : 500,
+                color: activeTab === tab.key ? "#10B981" : "rgba(255,255,255,0.48)",
               }}
             >
               {tab.label}
@@ -506,18 +589,20 @@ const CocoPage = () => {
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.10)",
+                      background: "#0B0F14",
+                      border: "1px solid rgba(16,185,129,0.35)",
                       borderRadius: 12,
                       height: 48,
                       padding: "0 14px",
+                      boxShadow: "0 0 14px rgba(16,185,129,0.08)",
                     }}
                   >
-                    <MapPin size={16} color="#0DB87E" style={{ flexShrink: 0 }} />
+                    <MapPin size={16} color="#10B981" style={{ flexShrink: 0 }} />
                     <input
+                      ref={addressInputRef}
                       value={endereco}
                       onChange={(e) => setEndereco(e.target.value)}
-                      placeholder="Endereço do ponto de coleta"
+                      placeholder="Rua, número, bairro — Ubatuba, SP"
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -526,29 +611,38 @@ const CocoPage = () => {
                         outline: "none",
                         fontFamily: "DM Sans",
                         fontSize: 14,
-                        color: "white",
+                        color: "#FFFFFF",
                       }}
                     />
                   </div>
                   <button
+                    type="button"
                     onClick={useGps}
+                    disabled={locatingGps}
                     aria-label="Usar GPS"
+                    title="Preencher endereço completo via GPS (editável)"
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 999,
-                      background: "rgba(13,184,126,0.15)",
-                      border: "none",
-                      cursor: "pointer",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      background: "rgba(16,185,129,0.16)",
+                      border: "1px solid rgba(16,185,129,0.45)",
+                      boxShadow: "0 0 16px rgba(16,185,129,0.20)",
+                      cursor: locatingGps ? "wait" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
                     }}
                   >
-                    <Crosshair size={18} color="#0DB87E" />
+                    <Crosshair size={19} color="#10B981" className={locatingGps ? "animate-spin" : ""} />
                   </button>
                 </div>
+                <p style={{ fontFamily: "DM Sans", fontSize: 11, color: "rgba(167,243,208,0.75)", marginTop: 6 }}>
+                  {locatingGps
+                    ? "Buscando endereço completo pelo GPS..."
+                    : "Toque no alvo para preencher o endereço completo via GPS e ajuste o número ou referência se precisar."}
+                </p>
 
                 {/* 2. Tipo de material com Tooltip Educativo */}
                 <div style={{ marginTop: 16 }}>
@@ -939,7 +1033,7 @@ const CocoPage = () => {
                     border: "none",
                     cursor: endereco ? "pointer" : "not-allowed",
                     background: matchedBairroAgenda && !isBairroHoje ? "#F5A623" : "#0DB87E",
-                    color: matchedBairroAgenda && !isBairroHoje ? "#0B1B3E" : "white",
+                    color: matchedBairroAgenda && !isBairroHoje ? "#0B0F14" : "white",
                     fontFamily: "Syne",
                     fontSize: 15,
                     fontWeight: 700,
@@ -1216,15 +1310,43 @@ const CocoPage = () => {
             </div>
 
             <div style={{ marginTop: 14 }}>
+              {coletadosCount > 0 && (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    background: "rgba(16,185,129,0.12)",
+                    border: "1px solid rgba(16,185,129,0.40)",
+                    boxShadow: "0 0 18px rgba(16,185,129,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <CheckCircle size={20} color="#10B981" style={{ flexShrink: 0 }} />
+                  <div>
+                    <span style={{ display: "block", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.12em", color: "#10B981" }}>
+                      Confirmação de Recolhimento
+                    </span>
+                    <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#ECFDF5", margin: "2px 0 0" }}>
+                      {coletadosCount === 1
+                        ? "1 pacote seu já foi recolhido pela equipe Côco & Cia no endereço informado!"
+                        : `${coletadosCount} pacotes seus já foram recolhidos pela equipe Côco & Cia nos endereços informados!`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <p
                 style={{
-                  fontFamily: "DM Sans",
+                  fontFamily: "Syne",
                   fontSize: 11,
-                  fontWeight: 600,
+                  fontWeight: 700,
                   textTransform: "uppercase",
-                  color: "rgba(255,255,255,0.40)",
-                  letterSpacing: 1,
-                  marginBottom: 6,
+                  color: "#10B981",
+                  letterSpacing: "0.12em",
+                  marginBottom: 8,
                 }}
               >
                 Meus pontos
@@ -1270,12 +1392,23 @@ const CocoPage = () => {
                           marginTop: 2,
                         }}
                       >
-                        {new Date(p.createdAt).toLocaleTimeString("pt-BR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        · {m.nome}
-                        {p.horarioPrevisto && ` · Previsão: ${p.horarioPrevisto}`}
+                        {p.status === "coletado" ? (
+                          <span style={{ color: "#10B981", fontWeight: 600 }}>
+                            ✅ Recolhido pela Côco &amp; Cia
+                            {p.coletadoAt
+                              ? ` às ${new Date(p.coletadoAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                              : ""}
+                          </span>
+                        ) : (
+                          <>
+                            {new Date(p.createdAt).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}{" "}
+                            · {m.nome}
+                            {p.horarioPrevisto && ` · Previsão: ${p.horarioPrevisto}`}
+                          </>
+                        )}
                       </p>
                     </div>
                     <span
@@ -1780,7 +1913,7 @@ const CocoPage = () => {
                 padding: "14px",
                 borderRadius: 14,
                 background: "#0DB87E",
-                color: "#0B1B3E",
+                color: "#0B0F14",
                 border: "none",
                 fontFamily: "Syne",
                 fontWeight: 700,

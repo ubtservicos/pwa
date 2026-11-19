@@ -47,7 +47,7 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
               .eq("status_aprovacao", "aprovado")
               .eq("is_ativo", true)
               .maybeSingle();
-            if (cocoColab) {
+            if (cocoColab && (cocoColab.perfil === "alta_gestao" || cocoColab.perfil === "colaborador_administrativo")) {
               role = cocoColab.perfil === "alta_gestao" ? "cocoecia-dirigentes" : "cocoecia-colaborador";
             }
           }

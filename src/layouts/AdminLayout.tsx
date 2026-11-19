@@ -166,7 +166,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
               .eq("status_aprovacao", "aprovado")
               .eq("is_ativo", true)
               .maybeSingle();
-            if (cocoColab) {
+            if (cocoColab && (cocoColab.perfil === "alta_gestao" || cocoColab.perfil === "colaborador_administrativo")) {
               resolvedRole = cocoColab.perfil === "alta_gestao" ? "cocoecia-dirigentes" : "cocoecia-colaborador";
             }
           }

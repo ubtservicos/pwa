@@ -17,13 +17,15 @@ import {
   Shield,
   Link2,
   Mail,
+  Hash,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, PrimaryButton, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 
-export type ColaboradorPerfil = "colaborador_administrativo" | "alta_gestao";
+export type ColaboradorPerfil = "prestador" | "colaborador_administrativo" | "alta_gestao";
 export type ColaboradorStatusAprovacao = "pendente" | "aprovado" | "rejeitado";
 
 export interface ColaboradorCoco {
@@ -33,6 +35,7 @@ export interface ColaboradorCoco {
   status?: string | null;
   is_ativo: boolean;
   user_id?: string | null;
+  ubt_slug?: string | null;
   perfil: ColaboradorPerfil;
   status_aprovacao: ColaboradorStatusAprovacao;
   aprovado_em?: string | null;
@@ -44,6 +47,7 @@ interface UbtAccountOption {
   nome?: string | null;
   email?: string | null;
   telefone?: string | null;
+  referral_code?: string | null;
   role?: string | null;
 }
 
@@ -69,7 +73,34 @@ export function formatPhoneRegexMask(value: string): string {
 }
 
 const SELECT_COLS =
-  "id, nome, telefone, status, is_ativo, user_id, perfil, status_aprovacao, aprovado_em, created_at";
+  "id, nome, telefone, status, is_ativo, user_id, ubt_slug, perfil, status_aprovacao, aprovado_em, created_at";
+
+const PERFIL_META: Record<
+  ColaboradorPerfil,
+  { label: string; shortLabel: string; desc: string; bg: string; color: string }
+> = {
+  prestador: {
+    label: "Prestador",
+    shortLabel: "Prestador (Campo)",
+    desc: "Opera rotas e confirma coletas no app (/app/prestador/coco/online). Sem acesso ao painel /admin.",
+    bg: "rgba(16,185,129,0.16)",
+    color: "#10B981",
+  },
+  colaborador_administrativo: {
+    label: "Colaborador Administrativo",
+    shortLabel: "Colab. Administrativo",
+    desc: "Acesso operacional no painel: Mapa, Agenda, Manuais, Colaboradores e Frota.",
+    bg: "rgba(59,130,246,0.14)",
+    color: "#60A5FA",
+  },
+  alta_gestao: {
+    label: "Alta Gestão",
+    shortLabel: "Alta Gestão",
+    desc: "Visão completa do menu Côco & Cia (inclui Dashboard, Captação e Configurações).",
+    bg: "rgba(139,92,246,0.16)",
+    color: "#A78BFA",
+  },
+};
 
 export default function AdminCocoColaboradores() {
   const toast = useAdminToast();
@@ -87,9 +118,11 @@ export default function AdminCocoColaboradores() {
   // Form State
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [perfil, setPerfil] = useState<ColaboradorPerfil>("colaborador_administrativo");
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
-  const [userSearch, setUserSearch] = useState("");
+  const [perfil, setPerfil] = useState<ColaboradorPerfil>("prestador");
+  const [ubtSlugInput, setUbtSlugInput] = useState("");
+  const [resolvedAccount, setResolvedAccount] = useState<UbtAccountOption | null>(null);
+  const [resolvingSlug, setResolvingSlug] = useState(false);
+  const [slugLookupError, setSlugLookupError] = useState<string | null>(null);
   const [initialApproval, setInitialApproval] = useState<"aprovado" | "pendente">("aprovado");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -105,19 +138,6 @@ export default function AdminCocoColaboradores() {
     return map;
   }, [ubtAccounts]);
 
-  const filteredUbtAccounts = useMemo(() => {
-    const q = userSearch.toLowerCase().trim();
-    if (!q) return ubtAccounts.slice(0, 30);
-    return ubtAccounts
-      .filter(
-        (u) =>
-          (u.nome || "").toLowerCase().includes(q) ||
-          (u.email || "").toLowerCase().includes(q) ||
-          (u.telefone || "").toLowerCase().includes(q)
-      )
-      .slice(0, 30);
-  }, [ubtAccounts, userSearch]);
-
   const normalizeRow = (row: any): ColaboradorCoco => ({
     id: row.id,
     nome: row.nome || "",
@@ -128,7 +148,13 @@ export default function AdminCocoColaboradores() {
         ? row.is_ativo
         : String(row.status || "Ativo").toLowerCase() !== "inativo",
     user_id: row.user_id || null,
-    perfil: row.perfil === "alta_gestao" ? "alta_gestao" : "colaborador_administrativo",
+    ubt_slug: row.ubt_slug || null,
+    perfil:
+      row.perfil === "alta_gestao"
+        ? "alta_gestao"
+        : row.perfil === "prestador"
+          ? "prestador"
+          : "colaborador_administrativo",
     status_aprovacao:
       row.status_aprovacao === "pendente" || row.status_aprovacao === "rejeitado"
         ? row.status_aprovacao
@@ -162,9 +188,9 @@ export default function AdminCocoColaboradores() {
     try {
       const { data, error } = await supabase
         .from("usuarios")
-        .select("id, nome, email, telefone, role")
+        .select("id, nome, email, telefone, referral_code, role")
         .order("nome", { ascending: true })
-        .limit(300);
+        .limit(400);
 
       if (!error && data) {
         setUbtAccounts(data as UbtAccountOption[]);
@@ -179,22 +205,65 @@ export default function AdminCocoColaboradores() {
     fetchUbtAccounts();
   }, []);
 
+  const resolveSlugAccount = async (rawSlug: string): Promise<UbtAccountOption | null> => {
+    const clean = rawSlug.trim();
+    if (!clean) {
+      setResolvedAccount(null);
+      setSlugLookupError(null);
+      return null;
+    }
+
+    setResolvingSlug(true);
+    setSlugLookupError(null);
+    try {
+      const { data, error } = await supabase.rpc("resolver_usuario_por_slug_ubt", {
+        p_slug: clean,
+      });
+
+      if (error) throw error;
+      const found = Array.isArray(data) && data.length > 0 ? (data[0] as UbtAccountOption) : null;
+      if (!found) {
+        setResolvedAccount(null);
+        setSlugLookupError(`Nenhuma conta UBT encontrada com o ID/Slug "${clean}".`);
+        return null;
+      }
+
+      setResolvedAccount(found);
+      if (!nome.trim() && found.nome) {
+        setNome(found.nome);
+      }
+      if (!telefone.trim() && found.telefone) {
+        setTelefone(formatPhoneRegexMask(found.telefone));
+      }
+      return found;
+    } catch (err: any) {
+      setResolvedAccount(null);
+      setSlugLookupError(err?.message || "Erro ao validar o ID/Slug na Plataforma UBT.");
+      return null;
+    } finally {
+      setResolvingSlug(false);
+    }
+  };
+
   const handleOpenModal = (colab?: ColaboradorCoco) => {
     setFormError(null);
-    setUserSearch("");
+    setSlugLookupError(null);
     if (colab) {
       setEditingColab(colab);
       setNome(colab.nome);
       setTelefone(colab.telefone ? formatPhoneRegexMask(colab.telefone) : "");
-      setPerfil(colab.perfil || "colaborador_administrativo");
-      setSelectedUserId(colab.user_id || "");
+      setPerfil(colab.perfil || "prestador");
+      const acc = colab.user_id ? ubtAccountsMap[colab.user_id] || null : null;
+      setResolvedAccount(acc);
+      setUbtSlugInput(colab.ubt_slug || acc?.referral_code || "");
       setInitialApproval(colab.status_aprovacao === "pendente" ? "pendente" : "aprovado");
     } else {
       setEditingColab(null);
       setNome("");
       setTelefone("");
-      setPerfil("colaborador_administrativo");
-      setSelectedUserId("");
+      setPerfil("prestador");
+      setUbtSlugInput("");
+      setResolvedAccount(null);
       setInitialApproval("aprovado");
     }
     setIsModalOpen(true);
@@ -206,6 +275,7 @@ export default function AdminCocoColaboradores() {
 
     const cleanNome = nome.trim();
     const formattedTelefone = formatPhoneRegexMask(telefone);
+    const cleanSlug = ubtSlugInput.trim();
 
     if (!cleanNome) {
       setFormError("Informe o nome completo do colaborador.");
@@ -219,7 +289,32 @@ export default function AdminCocoColaboradores() {
 
     setSubmitting(true);
     try {
-      const linkedUserId = selectedUserId.trim() || null;
+      let targetUserId: string | null = resolvedAccount?.id || null;
+      let targetSlug: string | null = cleanSlug || null;
+
+      if (cleanSlug) {
+        const matchesCurrent =
+          resolvedAccount &&
+          ((resolvedAccount.referral_code || "").toLowerCase() === cleanSlug.toLowerCase() ||
+            resolvedAccount.id === cleanSlug);
+
+        if (!matchesCurrent) {
+          const found = await resolveSlugAccount(cleanSlug);
+          if (!found) {
+            setFormError(`ID/Slug "${cleanSlug}" não encontrado na Plataforma UBT. Verifique o código informado pelo colaborador.`);
+            setSubmitting(false);
+            return;
+          }
+          targetUserId = found.id;
+          targetSlug = found.referral_code || cleanSlug;
+        } else if (resolvedAccount) {
+          targetUserId = resolvedAccount.id;
+          targetSlug = resolvedAccount.referral_code || cleanSlug;
+        }
+      } else {
+        targetUserId = null;
+        targetSlug = null;
+      }
 
       if (editingColab) {
         const { data, error } = await supabase
@@ -228,7 +323,8 @@ export default function AdminCocoColaboradores() {
             nome: cleanNome,
             telefone: formattedTelefone,
             perfil,
-            user_id: linkedUserId,
+            user_id: targetUserId,
+            ubt_slug: targetSlug,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingColab.id)
@@ -240,8 +336,7 @@ export default function AdminCocoColaboradores() {
           throw new Error("Nenhuma alteração aplicada. Verifique suas permissões.");
         }
 
-        // Se está aprovado e tem conta UBT vinculada, sincroniza role via RPC
-        if (data.status_aprovacao === "aprovado" && linkedUserId) {
+        if (data.status_aprovacao === "aprovado" && targetUserId) {
           const { error: rpcError } = await supabase.rpc("gerenciar_vinculo_colaborador_coco", {
             p_colaborador_id: editingColab.id,
             p_acao: "alterar_perfil",
@@ -266,7 +361,8 @@ export default function AdminCocoColaboradores() {
               nome: cleanNome,
               telefone: formattedTelefone,
               perfil,
-              user_id: linkedUserId,
+              user_id: targetUserId,
+              ubt_slug: targetSlug,
               status_aprovacao: initialApproval,
               status: isApproved ? "Ativo" : "Pendente",
               is_ativo: isApproved,
@@ -280,7 +376,7 @@ export default function AdminCocoColaboradores() {
           throw new Error("Não foi possível confirmar o cadastro do colaborador.");
         }
 
-        if (isApproved && linkedUserId) {
+        if (isApproved && targetUserId) {
           const { error: rpcError } = await supabase.rpc("gerenciar_vinculo_colaborador_coco", {
             p_colaborador_id: data.id,
             p_acao: "aprovar",
@@ -294,7 +390,7 @@ export default function AdminCocoColaboradores() {
         setColaboradores((prev) => [normalizeRow(data), ...prev]);
         toast.show(
           isApproved
-            ? "Colaborador cadastrado e aprovado com sucesso!"
+            ? "Colaborador cadastrado e vinculado com sucesso!"
             : "Requerimento registrado como pendente de aprovação!"
         );
       }
@@ -448,18 +544,19 @@ export default function AdminCocoColaboradores() {
     if (!q) return true;
     const cleanQ = q.replace(/\D/g, "");
     const ubtAcc = c.user_id ? ubtAccountsMap[c.user_id] : null;
+    const slugStr = (c.ubt_slug || ubtAcc?.referral_code || "").toLowerCase();
     const matchName = c.nome.toLowerCase().includes(q);
     const matchPhone =
       (c.telefone || "").toLowerCase().includes(q) ||
       (cleanQ.length > 0 && (c.telefone || "").replace(/\D/g, "").includes(cleanQ));
-    const matchPerfil =
-      (c.perfil === "alta_gestao" ? "alta gestao" : "colaborador administrativo").includes(q);
+    const matchPerfil = (PERFIL_META[c.perfil]?.label || "").toLowerCase().includes(q);
     const matchEmail = (ubtAcc?.email || "").toLowerCase().includes(q);
-    return matchName || matchPhone || matchPerfil || matchEmail;
+    const matchSlug = slugStr.includes(q);
+    return matchName || matchPhone || matchPerfil || matchEmail || matchSlug;
   });
 
   return (
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "24px 20px" }}>
+    <div style={{ maxWidth: 1260, margin: "0 auto", padding: "24px 20px" }}>
       {/* Header */}
       <div
         style={{
@@ -496,11 +593,11 @@ export default function AdminCocoColaboradores() {
                 color: "var(--admin-text)",
               }}
             >
-              Colaboradores & Aprovações — Côco & Cia
+              Colaboradores &amp; Aprovações — Côco &amp; Cia
             </h1>
           </div>
           <p style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)", margin: 0 }}>
-            Gerencie a equipe credenciada, aprove requerimentos de contas UBT e defina perfis de acesso.
+            Vincule colaboradores pelo ID/Slug da Plataforma UBT e gerencie os perfis Prestador, Colaborador Administrativo e Alta Gestão.
           </p>
         </div>
 
@@ -626,7 +723,7 @@ export default function AdminCocoColaboradores() {
                 Requerimentos Pendentes de Aprovação ({pendingRequests.length})
               </h3>
               <span style={{ fontSize: 12, color: "var(--admin-subtle)", fontFamily: "DM Sans" }}>
-                Solicitações de vínculo à Côco & Cia aguardando validação. Ao aprovar, o acesso ao menu é liberado conforme o perfil.
+                Solicitações de vínculo aguardando validação. Ao aprovar, o acesso é liberado conforme o perfil selecionado.
               </span>
             </div>
           </div>
@@ -635,6 +732,7 @@ export default function AdminCocoColaboradores() {
             {pendingRequests.map((req) => {
               const ubtAcc = req.user_id ? ubtAccountsMap[req.user_id] : null;
               const isBusy = processingId === req.id;
+              const pMeta = PERFIL_META[req.perfil] || PERFIL_META.colaborador_administrativo;
 
               return (
                 <Card
@@ -660,15 +758,12 @@ export default function AdminCocoColaboradores() {
                           fontWeight: 700,
                           padding: "3px 8px",
                           borderRadius: 999,
-                          background:
-                            req.perfil === "alta_gestao"
-                              ? "rgba(139,92,246,0.16)"
-                              : "rgba(13,184,126,0.14)",
-                          color: req.perfil === "alta_gestao" ? "#A78BFA" : "#0DB87E",
+                          background: pMeta.bg,
+                          color: pMeta.color,
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {req.perfil === "alta_gestao" ? "Alta Gestão" : "Colab. Administrativo"}
+                        {pMeta.shortLabel}
                       </span>
                     </div>
 
@@ -690,16 +785,15 @@ export default function AdminCocoColaboradores() {
                           <Phone size={12} color="#0DB87E" /> {formatPhoneRegexMask(req.telefone) || req.telefone}
                         </div>
                       )}
-                      {ubtAcc?.email ? (
+                      {(req.ubt_slug || ubtAcc?.referral_code) && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "monospace", color: "#10B981" }}>
+                          <Hash size={12} /> ID UBT: {req.ubt_slug || ubtAcc?.referral_code}
+                        </div>
+                      )}
+                      {ubtAcc?.email && (
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <Mail size={12} color="#F5A623" /> Conta UBT: {ubtAcc.email}
+                          <Mail size={12} color="#F5A623" /> {ubtAcc.email}
                         </div>
-                      ) : req.user_id ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "monospace" }}>
-                          <Link2 size={12} color="#F5A623" /> Conta UBT: {req.user_id.slice(0, 8)}...
-                        </div>
-                      ) : (
-                        <div style={{ color: "var(--admin-muted)" }}>Sem conta UBT vinculada</div>
                       )}
                     </div>
                   </div>
@@ -765,7 +859,7 @@ export default function AdminCocoColaboradores() {
           <Search size={17} color="var(--admin-muted)" />
           <input
             type="text"
-            placeholder="Buscar por nome, telefone, perfil ou e-mail UBT..."
+            placeholder="Buscar por nome, telefone, ID/Slug UBT, perfil ou e-mail..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -826,6 +920,7 @@ export default function AdminCocoColaboradores() {
             <thead>
               <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", color: "var(--admin-subtle)", fontSize: 12, textTransform: "uppercase" }}>
                 <th style={{ padding: "16px 20px" }}>Colaborador</th>
+                <th style={{ padding: "16px 20px" }}>ID UBT (Slug)</th>
                 <th style={{ padding: "16px 20px" }}>Telefone / WhatsApp</th>
                 <th style={{ padding: "16px 20px" }}>Perfil</th>
                 <th style={{ padding: "16px 20px" }}>Vínculo / Aprovação</th>
@@ -836,13 +931,13 @@ export default function AdminCocoColaboradores() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
+                  <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
                     Carregando colaboradores...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
+                  <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center", color: "var(--admin-muted)" }}>
                     {search || statusFilter !== "todos"
                       ? "Nenhum colaborador encontrado para este filtro."
                       : "Nenhum colaborador cadastrado ainda."}
@@ -854,7 +949,8 @@ export default function AdminCocoColaboradores() {
                   const isToggling = togglingId === c.id;
                   const isBusy = processingId === c.id;
                   const ubtAcc = c.user_id ? ubtAccountsMap[c.user_id] : null;
-                  const isAltaGestao = c.perfil === "alta_gestao";
+                  const slugDisplay = c.ubt_slug || ubtAcc?.referral_code || null;
+                  const pMeta = PERFIL_META[c.perfil] || PERFIL_META.colaborador_administrativo;
 
                   return (
                     <tr key={c.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
@@ -886,6 +982,31 @@ export default function AdminCocoColaboradores() {
                         </div>
                       </td>
 
+                      {/* Coluna ID UBT (Slug) */}
+                      <td style={{ padding: "16px 20px", whiteSpace: "nowrap" }}>
+                        {slugDisplay ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "4px 9px",
+                              borderRadius: 8,
+                              background: "rgba(16,185,129,0.10)",
+                              border: "1px solid rgba(16,185,129,0.30)",
+                              color: "#10B981",
+                              fontFamily: "monospace",
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            <Hash size={11} /> {slugDisplay}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--admin-muted)", fontSize: 12 }}>Não vinculado</span>
+                        )}
+                      </td>
+
                       <td style={{ padding: "16px 20px", color: "var(--admin-subtle)", whiteSpace: "nowrap" }}>
                         {c.telefone ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "monospace", fontSize: 13 }}>
@@ -907,14 +1028,12 @@ export default function AdminCocoColaboradores() {
                             borderRadius: 999,
                             fontSize: 12,
                             fontWeight: 700,
-                            background: isAltaGestao
-                              ? "rgba(139,92,246,0.16)"
-                              : "rgba(59,130,246,0.14)",
-                            color: isAltaGestao ? "#A78BFA" : "#60A5FA",
+                            background: pMeta.bg,
+                            color: pMeta.color,
                           }}
                         >
                           <Shield size={12} />
-                          {isAltaGestao ? "Alta Gestão" : "Colaborador Administrativo"}
+                          {pMeta.label}
                         </span>
                       </td>
 
@@ -1066,7 +1185,7 @@ export default function AdminCocoColaboradores() {
         </div>
       </Card>
 
-      {/* Modal de Cadastro / Edição (Nome, Telefone REGEX, Perfil e Vínculo com Conta UBT) */}
+      {/* Modal de Cadastro / Edição (ID/Slug UBT, Nome, Telefone REGEX e Perfil) */}
       {isModalOpen && (
         <div
           style={{
@@ -1087,7 +1206,7 @@ export default function AdminCocoColaboradores() {
               border: "1px solid var(--admin-border)",
               borderRadius: 16,
               width: "100%",
-              maxWidth: 520,
+              maxWidth: 560,
               maxHeight: "90vh",
               overflowY: "auto",
               padding: 24,
@@ -1129,6 +1248,103 @@ export default function AdminCocoColaboradores() {
             )}
 
             <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* ID do Colaborador na Plataforma UBT (Slug) */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontFamily: "DM Sans",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "var(--admin-subtle)",
+                    marginBottom: 6,
+                  }}
+                >
+                  ID do Colaborador na Plataforma UBT (Slug)
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="Ex: felipe-123 ou 8d019d (copiado em /app/config/perfil)"
+                    value={ubtSlugInput}
+                    onChange={(e) => {
+                      setUbtSlugInput(e.target.value);
+                      setSlugLookupError(null);
+                      setFormError(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      background: "var(--admin-bg)",
+                      border: "1px solid var(--admin-border)",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      color: "var(--admin-text)",
+                      fontFamily: "monospace",
+                      fontSize: 13,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={resolvingSlug || !ubtSlugInput.trim()}
+                    onClick={() => resolveSlugAccount(ubtSlugInput)}
+                    style={{
+                      padding: "0 14px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(16,185,129,0.45)",
+                      background: "rgba(16,185,129,0.14)",
+                      color: "#10B981",
+                      fontFamily: "Syne",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: resolvingSlug ? "wait" : "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {resolvingSlug ? "Buscando..." : "Validar ID"}
+                  </button>
+                </div>
+
+                {resolvedAccount && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      background: "rgba(16,185,129,0.10)",
+                      border: "1px solid rgba(16,185,129,0.30)",
+                      color: "#10B981",
+                      fontSize: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <CheckCircle2 size={14} />
+                      <strong>{resolvedAccount.nome || "Usuário UBT"}</strong> ({resolvedAccount.email || resolvedAccount.id.slice(0, 8)})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResolvedAccount(null);
+                        setUbtSlugInput("");
+                      }}
+                      style={{ background: "none", border: "none", color: "#E84040", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Desvincular
+                    </button>
+                  </div>
+                )}
+
+                {slugLookupError && (
+                  <p style={{ fontSize: 11, color: "#E84040", margin: "6px 0 0" }}>{slugLookupError}</p>
+                )}
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", marginTop: 4, display: "block" }}>
+                  O colaborador encontra este ID em <strong>/app/config/perfil</strong>. Ao vincular, o app habilita automaticamente o módulo Côco &amp; Cia.
+                </span>
+              </div>
+
               <div>
                 <label
                   style={{
@@ -1204,7 +1420,7 @@ export default function AdminCocoColaboradores() {
                 </span>
               </div>
 
-              {/* Campo Perfil (Editável na criação e na edição) */}
+              {/* Campo Perfil (3 opções: Prestador, Colaborador Administrativo, Alta Gestão) */}
               <div>
                 <label
                   style={{
@@ -1218,115 +1434,32 @@ export default function AdminCocoColaboradores() {
                 >
                   Perfil de Acesso *
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setPerfil("colaborador_administrativo")}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid",
-                      borderColor:
-                        perfil === "colaborador_administrativo" ? "#60A5FA" : "var(--admin-border)",
-                      background:
-                        perfil === "colaborador_administrativo"
-                          ? "rgba(59,130,246,0.14)"
-                          : "var(--admin-bg)",
-                      color:
-                        perfil === "colaborador_administrativo" ? "#60A5FA" : "var(--admin-subtle)",
-                      textAlign: "left",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>Colaborador Administrativo</div>
-                    <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-                      Mapa, Agenda, Manuais, Colaboradores e Frota
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPerfil("alta_gestao")}
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 10,
-                      border: "1px solid",
-                      borderColor: perfil === "alta_gestao" ? "#A78BFA" : "var(--admin-border)",
-                      background:
-                        perfil === "alta_gestao" ? "rgba(139,92,246,0.16)" : "var(--admin-bg)",
-                      color: perfil === "alta_gestao" ? "#A78BFA" : "var(--admin-subtle)",
-                      textAlign: "left",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>Alta Gestão</div>
-                    <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-                      Visão completa (inclui Dashboard, Captação e Config.)
-                    </div>
-                  </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(["prestador", "colaborador_administrativo", "alta_gestao"] as ColaboradorPerfil[]).map((pKey) => {
+                    const meta = PERFIL_META[pKey];
+                    const selected = perfil === pKey;
+                    return (
+                      <button
+                        key={pKey}
+                        type="button"
+                        onClick={() => setPerfil(pKey)}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid",
+                          borderColor: selected ? meta.color : "var(--admin-border)",
+                          background: selected ? meta.bg : "var(--admin-bg)",
+                          color: selected ? meta.color : "var(--admin-subtle)",
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{meta.label}</div>
+                        <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>{meta.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
-
-              {/* Vínculo opcional com Conta UBT */}
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontFamily: "DM Sans",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "var(--admin-subtle)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Conta UBT Vinculada (opcional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Filtrar conta UBT por nome ou e-mail..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "var(--admin-bg)",
-                    border: "1px solid var(--admin-border)",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                    color: "var(--admin-text)",
-                    fontFamily: "DM Sans",
-                    fontSize: 12,
-                    marginBottom: 6,
-                  }}
-                />
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "var(--admin-bg)",
-                    border: "1px solid var(--admin-border)",
-                    borderRadius: 8,
-                    padding: "9px 12px",
-                    color: "var(--admin-text)",
-                    fontFamily: "DM Sans",
-                    fontSize: 13,
-                  }}
-                >
-                  <option value="">Sem conta UBT vinculada</option>
-                  {selectedUserId && !filteredUbtAccounts.some((u) => u.id === selectedUserId) && (
-                    <option value={selectedUserId}>
-                      {ubtAccountsMap[selectedUserId]?.nome || ubtAccountsMap[selectedUserId]?.email || selectedUserId}
-                    </option>
-                  )}
-                  {filteredUbtAccounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {(acc.nome || "Sem nome")} — {acc.email || acc.id.slice(0, 8)}
-                    </option>
-                  ))}
-                </select>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", marginTop: 4, display: "block" }}>
-                  Ao vincular uma conta UBT e aprovar, o acesso ao menu Côco & Cia é sincronizado automaticamente.
-                </span>
               </div>
 
               {!editingColab && (

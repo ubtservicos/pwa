@@ -182,6 +182,8 @@ const ConfigPerfilPage = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedSlug, setCopiedSlug] = useState(false);
+  const [colaboradorSlug, setColaboradorSlug] = useState<string>("");
   const [showQrModal, setShowQrModal] = useState(false);
   const [showPraiasModal, setShowPraiasModal] = useState(false);
   const [searchPraia, setSearchPraia] = useState("");
@@ -210,9 +212,12 @@ const ConfigPerfilPage = () => {
 
         const { data: usuarioData } = await supabase
           .from("usuarios")
-          .select("nome, bairro_moradia, bairro_trabalho, praias_frequenta")
+          .select("nome, bairro_moradia, bairro_trabalho, praias_frequenta, referral_code")
           .eq("id", user.uid)
           .maybeSingle();
+
+        const resolvedSlug = usuarioData?.referral_code || user.uid.slice(0, 8);
+        setColaboradorSlug(resolvedSlug);
 
         const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -250,6 +255,15 @@ const ConfigPerfilPage = () => {
   const [saving, setSaving] = useState(false);
 
   const { toast, showToast } = useSimpleToast();
+
+  const handleCopySlug = () => {
+    const slugToCopy = colaboradorSlug || user.uid;
+    if (!slugToCopy) return;
+    navigator.clipboard.writeText(slugToCopy);
+    setCopiedSlug(true);
+    showToast("ID do Colaborador copiado! ✓");
+    setTimeout(() => setCopiedSlug(false), 2000);
+  };
 
   const handleShareLink = () => {
     const referralLink = `${window.location.origin}/cadastro?ref=${user.uid}`;
@@ -569,6 +583,85 @@ const ConfigPerfilPage = () => {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Card ID do Colaborador na Plataforma UBT (Slug) */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(16,185,129,0.10) 0%, rgba(11,15,20,0.65) 100%)",
+            border: "1px solid rgba(16,185,129,0.35)",
+            borderRadius: 16,
+            padding: 18,
+            marginTop: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            boxShadow: "0 0 20px rgba(16,185,129,0.08)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div>
+              <span
+                style={{
+                  fontFamily: "DM Sans",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#10B981",
+                  display: "block",
+                }}
+              >
+                ID do Colaborador na Plataforma UBT
+              </span>
+              <p
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: t.text,
+                  margin: "4px 0 0",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {colaboradorSlug || "Carregando..."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopySlug}
+              disabled={!colaboradorSlug}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "10px 14px",
+                borderRadius: 12,
+                background: copiedSlug ? "#059669" : "#10B981",
+                border: "none",
+                color: "#0B0F14",
+                fontFamily: "Syne",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              {copiedSlug ? <Check size={15} /> : <Copy size={15} />}
+              {copiedSlug ? "Copiado!" : "Copiar ID"}
+            </button>
+          </div>
+          <p
+            style={{
+              fontFamily: "DM Sans",
+              fontSize: 12,
+              color: t.subtle,
+              margin: 0,
+              lineHeight: 1.45,
+            }}
+          >
+            Informe este ID (slug) ao administrativo da <strong>Côco &amp; Cia</strong> para vincular sua conta à equipe e habilitar o acesso às rotas de coleta.
+          </p>
         </div>
 
         {/* Card Padrinho/Madrinha (Indicação) */}

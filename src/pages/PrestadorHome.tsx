@@ -147,23 +147,49 @@ const PrestadorHome = () => {
 
     const fetchAllServiceStatuses = async () => {
       try {
-        // 1. Mototáxi (Sessão e Perfil de prestador)
+        // 1. Mototáxi, Ambulante, Diarista e Vínculo Administrativo Côco & Cia
         const [
           { data: motoData },
           { data: motoPerfil },
           { data: ambData },
-          { data: diaData }
+          { data: diaData },
+          { data: cocoColab }
         ] = await Promise.all([
           supabase.from("mototaxi_sessoes").select("is_online").eq("prestador_id", user.uid).maybeSingle(),
           supabase.from("prestador_mototaxi").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
           supabase.from("ambulante_sessions").select("is_online").eq("id", user.uid).maybeSingle(),
-          supabase.from("diarista_perfis").select("is_online").eq("user_id", user.uid).maybeSingle()
+          supabase.from("diarista_perfis").select("is_online").eq("user_id", user.uid).maybeSingle(),
+          supabase
+            .from("coco_colaboradores")
+            .select("id, perfil, is_ativo, status_aprovacao")
+            .eq("user_id", user.uid)
+            .eq("is_ativo", true)
+            .eq("status_aprovacao", "aprovado")
+            .maybeSingle()
         ]);
 
         const hasMoto = !!motoPerfil || !!motoData || user.role === "mototaxista" || user.role === "mototaxi" || user.kycStatus === "approved" || localStorage.getItem(`moto_session_${user.uid}`) === "1";
         const hasAmb = !!ambData || user.role === "ambulante" || localStorage.getItem(`amb_session_${user.uid}`) === "1";
         const hasDia = !!diaData || user.role === "diarista" || localStorage.getItem(`diarista_perfil_${user.uid}`) === "1";
-        const hasCc = user.role === "cocoecia" || user.role === "cocoecia-colaborador" || user.role === "cocoecia-dirigentes" || !!localStorage.getItem("caminhaoId");
+        // Botão Côco & Cia só aparece para usuários efetivamente cadastrados e ativos em coco_colaboradores
+        const hasCc = Boolean(cocoColab);
+
+        if (cocoColab && !localStorage.getItem("caminhaoId")) {
+          const { data: linkedTrucks } = await supabase
+            .from("coco_caminhoes")
+            .select("id, is_online, colaboradores_ids, prestador_id")
+            .eq("status_aprovacao", "approved");
+          const matchTruck = (linkedTrucks || []).find(
+            (tr: any) =>
+              tr.prestador_id === user.uid ||
+              (Array.isArray(tr.colaboradores_ids) && tr.colaboradores_ids.includes(cocoColab.id))
+          );
+          if (matchTruck) {
+            localStorage.setItem("caminhaoId", matchTruck.id);
+            setActiveCaminhao(matchTruck);
+            setActiveServices((prev) => ({ ...prev, coco: !!matchTruck.is_online }));
+          }
+        }
 
         setRegisteredServices({
           mototaxi: hasMoto,
@@ -741,13 +767,7 @@ const PrestadorHome = () => {
               <ChevronRight size={18} color={theme.border} />
             </button>
           )}
-          {!hasCoco && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/coco/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Recycle size={20} color={theme.muted} /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Côco & Cia</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Tornar-se coletor</p></div>
-              <ChevronRight size={18} color={theme.border} />
-            </button>
-          )}
+
         </div>
       </section>
 

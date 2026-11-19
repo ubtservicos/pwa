@@ -164,7 +164,11 @@ export default function DualListboxColaboradores({
                         {col.nome}
                       </div>
                       <div style={{ fontSize: 10, color: "var(--admin-muted)" }}>
-                        {col.perfil === "alta_gestao" ? "Alta Gestão" : "Colab. Administrativo"}
+                        {col.perfil === "alta_gestao"
+                          ? "Alta Gestão"
+                          : col.perfil === "prestador"
+                            ? "Prestador (Campo)"
+                            : "Colab. Administrativo"}
                       </div>
                     </div>
                     <button
@@ -239,7 +243,11 @@ export default function DualListboxColaboradores({
                         {col.nome}
                       </div>
                       <div style={{ fontSize: 10, color: "#0DB87E" }}>
-                        {col.perfil === "alta_gestao" ? "Alta Gestão" : "Colab. Administrativo"}
+                        {col.perfil === "alta_gestao"
+                          ? "Alta Gestão"
+                          : col.perfil === "prestador"
+                            ? "Prestador (Campo)"
+                            : "Colab. Administrativo"}
                       </div>
                     </div>
                     <button

@@ -270,9 +270,9 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
   }
 };
 
-// Geocoding Reverso Híbrido Local-First (Cache -> ceps_ubatuba -> Google SDK se habilitado -> Bairro Ubatuba)
+// Geocoding Reverso Híbrido Preciso (Cache -> ceps_ubatuba -> OpenStreetMap Nominatim -> Google SDK se habilitado -> Bairro + Coords)
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
-  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  const cacheKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
   if (reverseGeocodeCache.has(cacheKey)) {
     return reverseGeocodeCache.get(cacheKey)!;
   }
@@ -280,8 +280,8 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
   try {
     const startTime = Date.now();
 
-    // 1. Banco Local ceps_ubatuba (prioritário, zero custo e sem erro de API)
-    const delta = 0.0025;
+    // 1. Banco Local ceps_ubatuba (prioritário se houver logradouro bem próximo < ~350m)
+    const delta = 0.003;
     const { data: closeItems } = await supabase
       .from('ceps_ubatuba')
       .select('*')
@@ -298,12 +298,49 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
         const dCurr = Math.hypot(lat - Number(curr.lat), lng - Number(curr.lng));
         return dCurr < dBest ? curr : best;
       });
-      const label = `${nearest.logradouro}, ${nearest.bairro}, Ubatuba - CEP ${nearest.cep}`;
+      const label = `${nearest.logradouro}, ${nearest.bairro}, Ubatuba - SP (CEP ${nearest.cep})`;
       reverseGeocodeCache.set(cacheKey, label);
       return label;
     }
 
-    // 2. Google Maps Reverse Geocode via SDK (somente se Geocoding API estiver explicitamente habilitada)
+    // 2. OpenStreetMap Nominatim (gratuito, sem erro de API no console, retorna rua + número + bairro)
+    if (typeof fetch === "function") {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&accept-language=pt-BR`;
+        const res = await fetch(nomUrl, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          const addr = data?.address || {};
+          const road = addr.road || addr.pedestrian || addr.residential || addr.path || addr.footway || "";
+          const houseNumber = addr.house_number ? `, ${addr.house_number}` : "";
+          const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.village || "";
+          const city = addr.city || addr.town || addr.municipality || "Ubatuba";
+
+          if (road) {
+            const parts = [
+              `${road}${houseNumber}`,
+              suburb || undefined,
+              `${city} - SP`,
+            ].filter(Boolean);
+            const fullLabel = parts.join(", ");
+            reverseGeocodeCache.set(cacheKey, fullLabel);
+            logMetric('fallback_usage', `${lat},${lng}`, 'reverse_geocode', 'nominatim', Date.now() - startTime);
+            return fullLabel;
+          }
+        }
+      } catch {
+        // Silencioso: segue para próximos fallbacks
+      }
+    }
+
+    // 3. Google Maps Reverse Geocode via SDK (somente se Geocoding API estiver explicitamente habilitada)
     if (!googleGeocoderDisabled && typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
       try {
         const geocoder = new (window as any).google.maps.Geocoder();
@@ -329,11 +366,12 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
       }
     }
 
-    // 3. Fallback Estruturado por Bairro de Ubatuba
+    // 4. Fallback Estruturado por Bairro de Ubatuba + Coordenadas detalhadas
     const bairroLabel = findNearestUbatubaBairro(lat, lng);
     if (bairroLabel) {
-      reverseGeocodeCache.set(cacheKey, bairroLabel);
-      return bairroLabel;
+      const detailed = `${bairroLabel} (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      reverseGeocodeCache.set(cacheKey, detailed);
+      return detailed;
     }
 
     const fallbackCoords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
