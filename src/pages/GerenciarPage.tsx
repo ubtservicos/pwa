@@ -34,7 +34,6 @@ import {
 } from "@/utils/dateFilter";
 import { supabase } from "@/lib/supabase";
 import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
-import PixContingencyBanner from "@/components/finance/PixContingencyBanner";
 import MercadoPagoOnboardingCard from "@/components/finance/MercadoPagoOnboardingCard";
 
 const GREEN = "#0DB87E";
@@ -501,6 +500,23 @@ const GerenciarPage = () => {
           })}
         </div>
 
+        {/* Alert Gamer/Bets Expansível no Topo — Mercado Pago & Chave PIX */}
+        {user.uid && referralSummary && (
+          <MercadoPagoOnboardingCard
+            userId={user.uid}
+            possuiMercadoPago={Boolean(referralSummary.possui_mercadopago)}
+            possuiChavePix={Boolean(referralSummary.possui_chave_pix)}
+            chavePixAtual={referralSummary.chave_pix_atual}
+            tipoChavePix={referralSummary.tipo_chave_pix}
+            saldoContingenciado={Number(referralSummary.total_contingenciado || 0)}
+            isDarkTheme={t.isDark}
+            onStatusChange={(possui) =>
+              setReferralSummary((prev) => (prev ? { ...prev, possui_mercadopago: possui } : prev))
+            }
+            onPixSaved={() => reloadReferralSummary(user.uid!)}
+          />
+        )}
+
         {/* Summary grid */}
         <div
           style={{
@@ -518,31 +534,6 @@ const GerenciarPage = () => {
 
         <MiniBars border={t.border} transactions={dbTransactions} />
 
-        {/* Fase 3: Alerta PIX & Conta Digital Mercado Pago */}
-        {user.uid && referralSummary && (
-          <div style={{ marginTop: 14 }}>
-            {!referralSummary.possui_chave_pix && (
-              <PixContingencyBanner
-                userId={user.uid}
-                possuiChavePix={referralSummary.possui_chave_pix}
-                chavePixAtual={referralSummary.chave_pix_atual}
-                tipoChavePix={referralSummary.tipo_chave_pix}
-                saldoContingenciado={Number(referralSummary.total_contingenciado || 0)}
-                variant="adaptive"
-                isDarkTheme={t.isDark}
-                onSaved={() => reloadReferralSummary(user.uid!)}
-              />
-            )}
-            <MercadoPagoOnboardingCard
-              userId={user.uid}
-              possuiMercadoPago={Boolean(referralSummary.possui_mercadopago)}
-              isDarkTheme={t.isDark}
-              onStatusChange={(possui) =>
-                setReferralSummary((prev) => (prev ? { ...prev, possui_mercadopago: possui } : prev))
-              }
-            />
-          </div>
-        )}
 
         {/* Tabs */}
         <div

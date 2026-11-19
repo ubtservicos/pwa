@@ -44,6 +44,7 @@ export default function AdminClientesPage() {
   const [filterMonth, setFilterMonth] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
+  const [filterSemPix, setFilterSemPix] = useState<boolean>(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -132,8 +133,9 @@ export default function AdminClientesPage() {
     if (filterMonth !== "all") count++;
     if (filterCategory !== "all") count++;
     if (filterPeriod !== "all") count++;
+    if (filterSemPix) count++;
     return count;
-  }, [q, filterMonth, filterCategory, filterPeriod]);
+  }, [q, filterMonth, filterCategory, filterPeriod, filterSemPix]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -411,9 +413,10 @@ export default function AdminClientesPage() {
       const okQ = !ql || u.name.toLowerCase().includes(ql) || u.email.toLowerCase().includes(ql);
       const okMonth = filterMonth === "all" || u.birthMonth === Number(filterMonth);
       const okCategory = filterCategory === "all" || (u.services ?? []).includes(filterCategory);
-      return okTab && okQ && okMonth && okCategory;
+      const okPix = !filterSemPix || !String(u.chavePix || "").trim();
+      return okTab && okQ && okMonth && okCategory && okPix;
     });
-  }, [users, tab, q, filterMonth, filterCategory]);
+  }, [users, tab, q, filterMonth, filterCategory, filterSemPix]);
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "todos", label: "Todos" },
@@ -545,6 +548,29 @@ export default function AdminClientesPage() {
             <option value={50}>Exibir 50 por página</option>
             <option value={100}>Exibir 100 por página</option>
           </select>
+
+          <button
+            type="button"
+            onClick={() => { setFilterSemPix((v) => !v); setPage(0); }}
+            style={{
+              height: 40,
+              padding: "0 14px",
+              borderRadius: 10,
+              border: filterSemPix ? "1px solid rgba(245, 166, 35, 0.7)" : "1px solid var(--admin-border)",
+              background: filterSemPix ? "rgba(245, 166, 35, 0.16)" : "var(--admin-bg)",
+              color: filterSemPix ? "#F5A623" : "var(--admin-subtle)",
+              fontFamily: "DM Sans",
+              fontSize: 13,
+              fontWeight: filterSemPix ? 700 : 500,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>⚠️ Sem chave PIX</span>
+          </button>
         </div>
       </div>
 
@@ -659,7 +685,7 @@ export default function AdminClientesPage() {
                           <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>{u.name}</div>
                           {!u.chavePix && (
                             <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", marginTop: 2 }}>
-                              ⚠️ Sem chave PIX — repasses contingenciados
+                              ⚠️ Sem chave PIX
                             </div>
                           )}
                           {u.status !== "active" && (() => {
@@ -1164,6 +1190,18 @@ export default function AdminClientesPage() {
                   <option value={100}>100 Clientes</option>
                 </select>
               </div>
+
+              {/* Flag Sem Chave PIX */}
+              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: filterSemPix ? "rgba(245, 166, 35, 0.12)" : "var(--admin-bg)", border: filterSemPix ? "1px solid rgba(245, 166, 35, 0.5)" : "1px solid var(--admin-border)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={filterSemPix}
+                  onChange={(e) => { setFilterSemPix(e.target.checked); setPage(0); }}
+                />
+                <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: filterSemPix ? "#F5A623" : "var(--admin-text)" }}>
+                  ⚠️ Apenas clientes sem chave PIX
+                </span>
+              </label>
             </div>
 
             <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
@@ -1173,6 +1211,7 @@ export default function AdminClientesPage() {
                   setFilterCategory("all");
                   setFilterMonth("all");
                   setFilterPeriod("all");
+                  setFilterSemPix(false);
                   setPageSize(10);
                   setPage(0);
                 }}

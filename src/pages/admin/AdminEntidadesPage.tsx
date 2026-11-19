@@ -64,6 +64,7 @@ export default function AdminEntidadesPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "completo" | "incompleto">("all");
+  const [filterSemPix, setFilterSemPix] = useState<boolean>(false);
 
   // Modal de Detalhes
   const [selectedEntidade, setSelectedEntidade] = useState<EntidadeItem | null>(null);
@@ -269,6 +270,7 @@ export default function AdminEntidadesPage() {
         (filterStatus === "incompleto" && !e.cadastroCompleto);
 
       if (!matchStatus) return false;
+      if (filterSemPix && String(e.chavePix || "").trim()) return false;
       if (!ql) return true;
 
       const cleanQ = ql.replace(/\D/g, "");
@@ -283,7 +285,7 @@ export default function AdminEntidadesPage() {
 
       return matchCnpj || matchTel || matchText;
     });
-  }, [entidades, q, filterStatus]);
+  }, [entidades, q, filterStatus, filterSemPix]);
 
   // Função para copiar links com feedback
   const handleCopyLink = async (text: string, type: string) => {
@@ -435,6 +437,24 @@ export default function AdminEntidadesPage() {
               {st === "all" ? "Todos os Cadastros" : st === "completo" ? "Completos" : "Incompletos"}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setFilterSemPix((v) => !v)}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 8,
+              border: filterSemPix ? "1px solid rgba(245, 166, 35, 0.7)" : "1px solid var(--admin-border)",
+              background: filterSemPix ? "rgba(245, 166, 35, 0.16)" : "var(--admin-bg)",
+              color: filterSemPix ? "#F5A623" : "var(--admin-subtle)",
+              fontWeight: filterSemPix ? 700 : 500,
+              fontSize: 12,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⚠️ Sem chave PIX
+          </button>
         </div>
       </div>
 
@@ -523,7 +543,7 @@ export default function AdminEntidadesPage() {
                       </div>
                       {!e.chavePix && (
                         <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", marginTop: 2 }}>
-                          ⚠️ Sem chave PIX — repasses contingenciados
+                          ⚠️ Sem chave PIX
                         </div>
                       )}
                     </td>

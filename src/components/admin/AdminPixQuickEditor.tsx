@@ -100,7 +100,7 @@ export default function AdminPixQuickEditor({
             <div style={{ fontSize: 12, fontWeight: 700, color: hasPix ? "#0DB87E" : "#F5A623" }}>
               {hasPix
                 ? `Chave PIX Ativa (${(tipoChavePix || tipo).toUpperCase()})`
-                : "⚠️ Sem chave PIX — repasses contingenciados"}
+                : "⚠️ Sem chave PIX"}
             </div>
             {hasPix ? (
               <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--admin-text)", marginTop: 2 }}>
