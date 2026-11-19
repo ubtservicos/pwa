@@ -1,26 +1,25 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Truck, 
-  Plus, 
-  Search, 
-  Check, 
-  X, 
-  ShieldAlert, 
-  Trash2, 
-  ArrowLeft, 
-  DollarSign, 
-  MapPin, 
-  Layers,
-  Settings,
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Truck,
+  Plus,
+  Search,
+  Check,
+  X,
+  Trash2,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  MapPin,
   Edit3,
   Clock,
   UserCheck,
   UserX,
   Phone,
   Mail,
-  RotateCcw
+  RotateCcw,
+  Users,
 } from "lucide-react";
-import { Card, PrimaryButton, GhostButton, Pill } from "@/components/admin/ui";
+import { Card, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
@@ -40,7 +39,10 @@ const BAIRROS_UBATUBA = [
   "Taquaral",
   "Itamambuca",
   "Praia do Félix",
-  "Praia do Lázaro"
+  "Praia do Lázaro",
+  "Lagoinha",
+  "Saco da Ribeira",
+  "Sertão da Quina",
 ];
 
 interface CaminhaoFrota {
@@ -48,8 +50,10 @@ interface CaminhaoFrota {
   plate: string;
   apelido: string;
   prestador_id?: string | null;
-  pix_key?: string | null;
-  areas_atendidas?: string[];
+  colaboradores_ids?: string[] | null;
+  areas_atendidas?: string[] | null;
+  hora_saida?: string | null;
+  expectativa_retorno?: string | null;
   status_aprovacao: "approved" | "pending" | "rejected";
   role_solicitada?: string;
   is_online?: boolean;
@@ -66,37 +70,73 @@ interface PrestadorInfo {
   telefone?: string;
 }
 
+interface ColaboradorOption {
+  id: string;
+  nome: string;
+  telefone?: string | null;
+  is_ativo?: boolean;
+}
+
 export default function AdminCocoFrota() {
   const toast = useAdminToast();
   const navigate = useNavigate();
 
   const [caminhoes, setCaminhoes] = useState<CaminhaoFrota[]>([]);
   const [prestadorsMap, setPrestadorsMap] = useState<Record<string, PrestadorInfo>>({});
+  const [colaboradoresList, setColaboradoresList] = useState<ColaboradorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"todos" | "online" | "pending" | "approved" | "rejected">("todos");
+  const [statusFilter, setStatusFilter] = useState<
+    "todos" | "online" | "pending" | "approved" | "rejected"
+  >("todos");
 
-  // Modal State
+  // Modal State (Criar / Editar Caminhão)
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCaminhao, setEditingCaminhao] = useState<CaminhaoFrota | null>(null);
   const [plate, setPlate] = useState("");
   const [apelido, setApelido] = useState("");
-  const [pixKey, setPixKey] = useState("");
   const [roleSolicitada, setRoleSolicitada] = useState("cocoecia-colaborador");
-  const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
+  const [selectedColaboradores, setSelectedColaboradores] = useState<string[]>([]);
+  const [orderedBairros, setOrderedBairros] = useState<string[]>([]);
+  const [horaSaida, setHoraSaida] = useState("07:30");
+  const [expectativaRetorno, setExpectativaRetorno] = useState("17:00");
   const [submitting, setSubmitting] = useState(false);
+
+  const colaboradoresMap = useMemo(() => {
+    const map: Record<string, ColaboradorOption> = {};
+    colaboradoresList.forEach((c) => {
+      map[c.id] = c;
+    });
+    return map;
+  }, [colaboradoresList]);
+
+  const fetchColaboradores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("coco_colaboradores")
+        .select("id, nome, telefone, is_ativo")
+        .order("nome", { ascending: true });
+      if (!error && data) {
+        setColaboradoresList(data as ColaboradorOption[]);
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar colaboradores da Côco & Cia:", err);
+    }
+  };
 
   const fetchCaminhoes = async () => {
     try {
       const { data, error } = await supabase
         .from("coco_caminhoes")
-        .select("*")
+        .select(
+          "id, plate, apelido, prestador_id, colaboradores_ids, areas_atendidas, hora_saida, expectativa_retorno, status_aprovacao, role_solicitada, is_online, collections_today, total_collections, created_at, updated_at"
+        )
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       if (data) {
-        setCaminhoes(data);
+        setCaminhoes(data as CaminhaoFrota[]);
 
-        // Fetch prestadores details for linked trucks
         const prestadorIds = data
           .map((c: any) => c.prestador_id)
           .filter((id: any): id is string => Boolean(id));
@@ -125,6 +165,7 @@ export default function AdminCocoFrota() {
 
   useEffect(() => {
     fetchCaminhoes();
+    fetchColaboradores();
 
     const channel = supabase
       .channel("admin-frota-realtime")
@@ -140,7 +181,53 @@ export default function AdminCocoFrota() {
     };
   }, []);
 
-  const handleCreateCaminhao = async (e: React.FormEvent) => {
+  const openModal = (caminhao?: CaminhaoFrota) => {
+    if (caminhao) {
+      setEditingCaminhao(caminhao);
+      setPlate(caminhao.plate || "");
+      setApelido(caminhao.apelido || "");
+      setRoleSolicitada(caminhao.role_solicitada || "cocoecia-colaborador");
+      setSelectedColaboradores(Array.isArray(caminhao.colaboradores_ids) ? caminhao.colaboradores_ids : []);
+      setOrderedBairros(Array.isArray(caminhao.areas_atendidas) ? caminhao.areas_atendidas : []);
+      setHoraSaida(caminhao.hora_saida || "");
+      setExpectativaRetorno(caminhao.expectativa_retorno || "");
+    } else {
+      setEditingCaminhao(null);
+      setPlate("");
+      setApelido("");
+      setRoleSolicitada("cocoecia-colaborador");
+      setSelectedColaboradores([]);
+      setOrderedBairros([]);
+      setHoraSaida("07:30");
+      setExpectativaRetorno("17:00");
+    }
+    setIsModalOpen(true);
+  };
+
+  const toggleColaborador = (colabId: string) => {
+    setSelectedColaboradores((prev) =>
+      prev.includes(colabId) ? prev.filter((id) => id !== colabId) : [...prev, colabId]
+    );
+  };
+
+  const toggleBairro = (bairro: string) => {
+    setOrderedBairros((prev) =>
+      prev.includes(bairro) ? prev.filter((b) => b !== bairro) : [...prev, bairro]
+    );
+  };
+
+  const moveBairro = (index: number, direction: -1 | 1) => {
+    setOrderedBairros((prev) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const [item] = copy.splice(index, 1);
+      copy.splice(targetIndex, 0, item);
+      return copy;
+    });
+  };
+
+  const handleSaveCaminhao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!plate.trim() || !apelido.trim()) {
       toast.show("Informe a placa e o apelido do veículo.");
@@ -148,71 +235,101 @@ export default function AdminCocoFrota() {
     }
 
     setSubmitting(true);
+    const payload = {
+      plate: plate.trim().toUpperCase(),
+      apelido: apelido.trim(),
+      role_solicitada: roleSolicitada,
+      colaboradores_ids: selectedColaboradores,
+      areas_atendidas: orderedBairros.length > 0 ? orderedBairros : ["Centro"],
+      hora_saida: horaSaida.trim() || null,
+      expectativa_retorno: expectativaRetorno.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
-      const { error } = await supabase
-        .from("coco_caminhoes")
-        .insert({
-          plate: plate.trim().toUpperCase(),
-          apelido: apelido.trim(),
-          pix_key: pixKey.trim() || null,
-          role_solicitada: roleSolicitada,
-          areas_atendidas: selectedBairros.length > 0 ? selectedBairros : ["Centro", "Itaguá"],
-          status_aprovacao: "approved",
-          is_online: false,
-          collections_today: 0,
-          total_collections: 0,
-        });
+      if (editingCaminhao) {
+        const { data, error } = await supabase
+          .from("coco_caminhoes")
+          .update(payload)
+          .eq("id", editingCaminhao.id)
+          .select(
+            "id, plate, apelido, prestador_id, colaboradores_ids, areas_atendidas, hora_saida, expectativa_retorno, status_aprovacao, role_solicitada, is_online, collections_today, total_collections, created_at, updated_at"
+          )
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
+        setCaminhoes((prev) =>
+          prev.map((c) => (c.id === editingCaminhao.id ? (data as CaminhaoFrota) : c))
+        );
+        toast.show(`Caminhão "${payload.apelido}" atualizado com sucesso!`);
+      } else {
+        const { data, error } = await supabase
+          .from("coco_caminhoes")
+          .insert({
+            ...payload,
+            status_aprovacao: "approved",
+            is_online: false,
+            collections_today: 0,
+            total_collections: 0,
+          })
+          .select(
+            "id, plate, apelido, prestador_id, colaboradores_ids, areas_atendidas, hora_saida, expectativa_retorno, status_aprovacao, role_solicitada, is_online, collections_today, total_collections, created_at, updated_at"
+          )
+          .single();
 
-      toast.show(`Caminhão "${apelido}" cadastrado na frota oficial!`);
+        if (error) throw error;
+        setCaminhoes((prev) => [data as CaminhaoFrota, ...prev]);
+        toast.show(`Caminhão "${payload.apelido}" cadastrado na frota oficial!`);
+      }
+
       setIsModalOpen(false);
-      setPlate("");
-      setApelido("");
-      setPixKey("");
-      setSelectedBairros([]);
-      fetchCaminhoes();
+      setEditingCaminhao(null);
     } catch (err: any) {
-      toast.show(`Erro ao cadastrar caminhão: ${err.message}`);
+      toast.show(`Erro ao salvar caminhão: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleToggleOnline = async (id: string, currentOnline: boolean, apelido: string) => {
+  const handleToggleOnline = async (id: string, currentOnline: boolean, truckName: string) => {
     try {
       const { error } = await supabase
         .from("coco_caminhoes")
         .update({ is_online: !currentOnline })
         .eq("id", id);
       if (error) throw error;
-      toast.show(`Caminhão "${apelido}" agora está ${!currentOnline ? "ONLINE 🟢" : "OFFLINE ⚪"}.`);
+      toast.show(`Caminhão "${truckName}" agora está ${!currentOnline ? "ONLINE 🟢" : "OFFLINE ⚪"}.`);
       fetchCaminhoes();
     } catch (err: any) {
       toast.show(`Erro ao atualizar status: ${err.message}`);
     }
   };
 
-  const handleDeleteCaminhao = async (id: string, apelido: string) => {
-    if (!window.confirm(`Tem certeza que deseja remover o caminhão "${apelido}" da frota?`)) return;
+  const handleDeleteCaminhao = async (id: string, truckName: string) => {
+    if (!window.confirm(`Tem certeza que deseja remover o caminhão "${truckName}" da frota?`)) return;
     try {
       const { error } = await supabase.from("coco_caminhoes").delete().eq("id", id);
       if (error) throw error;
-      toast.show(`Caminhão "${apelido}" removido da frota.`);
-      fetchCaminhoes();
+      setCaminhoes((prev) => prev.filter((c) => c.id !== id));
+      toast.show(`Caminhão "${truckName}" removido da frota.`);
     } catch (err: any) {
       toast.show(`Erro ao excluir: ${err.message}`);
     }
   };
 
-  const handleAprovar = async (id: string, prestadorId: string | null | undefined, apelido: string, role?: string) => {
+  const handleAprovar = async (
+    id: string,
+    prestadorId: string | null | undefined,
+    truckName: string,
+    role?: string
+  ) => {
     const finalRole = role || "cocoecia-colaborador";
     try {
       const { error } = await supabase
         .from("coco_caminhoes")
-        .update({ 
+        .update({
           status_aprovacao: "approved",
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq("id", id);
       if (error) throw error;
@@ -221,40 +338,44 @@ export default function AdminCocoFrota() {
         await supabase.from("usuarios").update({ role: finalRole }).eq("id", prestadorId);
         await supabase.from("profiles").update({ role: finalRole }).eq("id", prestadorId);
       }
-      toast.show(`Vinculação do caminhão "${apelido}" aprovada com sucesso!`);
+      toast.show(`Vinculação do caminhão "${truckName}" aprovada com sucesso!`);
       fetchCaminhoes();
     } catch (err: any) {
       toast.show(`Erro ao aprovar: ${err.message}`);
     }
   };
 
-  const handleRejeitar = async (id: string, apelido: string) => {
-    if (!window.confirm(`Tem certeza que deseja rejeitar a vinculação do veículo "${apelido}"?`)) return;
+  const handleRejeitar = async (id: string, truckName: string) => {
+    if (!window.confirm(`Tem certeza que deseja rejeitar a vinculação do veículo "${truckName}"?`)) return;
     try {
       const { error } = await supabase
         .from("coco_caminhoes")
-        .update({ 
+        .update({
           status_aprovacao: "rejected",
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq("id", id);
       if (error) throw error;
 
-      toast.show(`Solicitação do caminhão "${apelido}" rejeitada.`);
+      toast.show(`Solicitação do caminhão "${truckName}" rejeitada.`);
       fetchCaminhoes();
     } catch (err: any) {
       toast.show(`Erro ao rejeitar: ${err.message}`);
     }
   };
 
-  // Pending trucks
   const pendingRequests = caminhoes.filter((c) => c.status_aprovacao === "pending");
 
   const filteredCaminhoes = caminhoes.filter((c) => {
-    const matchesSearch = 
-      c.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.apelido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.areas_atendidas?.some((a: string) => a.toLowerCase().includes(searchTerm.toLowerCase()));
+    const q = searchTerm.toLowerCase();
+    const matchesSearch =
+      !q ||
+      c.plate?.toLowerCase().includes(q) ||
+      c.apelido?.toLowerCase().includes(q) ||
+      c.areas_atendidas?.some((a: string) => a.toLowerCase().includes(q)) ||
+      c.colaboradores_ids?.some((cid) =>
+        (colaboradoresMap[cid]?.nome || "").toLowerCase().includes(q)
+      );
 
     if (!matchesSearch) return false;
 
@@ -268,9 +389,10 @@ export default function AdminCocoFrota() {
   return (
     <div style={{ padding: 32 }}>
       {/* Header & Actions */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
+            type="button"
             onClick={() => navigate("/admin/coco")}
             style={{
               width: 38,
@@ -282,7 +404,7 @@ export default function AdminCocoFrota() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: "pointer"
+              cursor: "pointer",
             }}
             title="Voltar ao Painel"
           >
@@ -290,17 +412,18 @@ export default function AdminCocoFrota() {
           </button>
           <div>
             <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-              Gestão de Frota & Aprovação de Prestadores
+              Gestão de Frota & Rotas de Coleta
             </h1>
             <p style={{ margin: "2px 0 0", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
-              Gerencie os veículos oficiais da Côco & Cia e aprove/rejeite pedidos de vinculação de motoristas parceiros.
+              Gerencie os caminhões da Côco & Cia, equipe vinculada, ordem de coleta bairro a bairro e horários de saída/retorno.
             </p>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
           <button
-            onClick={() => setIsModalOpen(true)}
+            type="button"
+            onClick={() => openModal()}
             style={{
               padding: "10px 18px",
               borderRadius: 10,
@@ -314,7 +437,7 @@ export default function AdminCocoFrota() {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              boxShadow: "0 4px 14px rgba(13,184,126,0.25)"
+              boxShadow: "0 4px 14px rgba(13,184,126,0.25)",
             }}
           >
             <Plus size={16} /> Cadastrar Caminhão Oficial
@@ -330,7 +453,7 @@ export default function AdminCocoFrota() {
               background: "rgba(245,166,35,0.08)",
               border: "1px solid rgba(245,166,35,0.3)",
               borderRadius: 16,
-              padding: 20
+              padding: 20,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -368,7 +491,6 @@ export default function AdminCocoFrota() {
                         </span>
                       </div>
 
-                      {/* Dados do Prestador */}
                       <div style={{ background: "var(--admin-bg)", padding: 12, borderRadius: 8, marginBottom: 12, fontSize: 12, fontFamily: "DM Sans", display: "flex", flexDirection: "column", gap: 4 }}>
                         <div style={{ color: "var(--admin-text)", fontWeight: 600 }}>
                           Prestador: {prestador?.nome || (req.prestador_id ? `ID: ${req.prestador_id.slice(0, 8)}...` : "Não identificado")}
@@ -388,12 +510,11 @@ export default function AdminCocoFrota() {
                         </div>
                       </div>
 
-                      {/* Áreas */}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
                         {req.areas_atendidas && req.areas_atendidas.length > 0 ? (
-                          req.areas_atendidas.map((b) => (
-                            <span key={b} style={{ fontSize: 11, background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, color: "var(--admin-subtle)" }}>
-                              {b}
+                          req.areas_atendidas.map((b, idx) => (
+                            <span key={`${b}-${idx}`} style={{ fontSize: 11, background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, color: "var(--admin-subtle)" }}>
+                              {idx + 1}º {b}
                             </span>
                           ))
                         ) : (
@@ -402,7 +523,6 @@ export default function AdminCocoFrota() {
                       </div>
                     </div>
 
-                    {/* Botões Diretos de Aprovação e Rejeição */}
                     <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid var(--admin-border)" }}>
                       <button
                         type="button"
@@ -421,7 +541,7 @@ export default function AdminCocoFrota() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: 6
+                          gap: 6,
                         }}
                       >
                         <UserCheck size={14} /> Aprovar
@@ -444,7 +564,7 @@ export default function AdminCocoFrota() {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: 6
+                          gap: 6,
                         }}
                       >
                         <UserX size={14} /> Rejeitar
@@ -460,13 +580,12 @@ export default function AdminCocoFrota() {
 
       {/* Filters & Search */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
-        {/* Search */}
         <div style={{ position: "relative", maxWidth: 360, width: "100%" }}>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por placa, apelido ou bairro..."
+            placeholder="Buscar por placa, apelido, colaborador ou bairro..."
             style={{
               width: "100%",
               background: "var(--admin-card-bg)",
@@ -477,13 +596,12 @@ export default function AdminCocoFrota() {
               fontFamily: "DM Sans",
               fontSize: 13,
               color: "var(--admin-text)",
-              outline: "none"
+              outline: "none",
             }}
           />
           <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
         </div>
 
-        {/* Status Filters */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
             { id: "todos", label: "Todos" },
@@ -494,6 +612,7 @@ export default function AdminCocoFrota() {
           ].map((f) => (
             <button
               key={f.id}
+              type="button"
               onClick={() => setStatusFilter(f.id as any)}
               style={{
                 padding: "6px 12px",
@@ -505,7 +624,7 @@ export default function AdminCocoFrota() {
                 fontFamily: "DM Sans",
                 fontSize: 12,
                 fontWeight: statusFilter === f.id ? 700 : 500,
-                cursor: "pointer"
+                cursor: "pointer",
               }}
             >
               {f.label}
@@ -514,296 +633,513 @@ export default function AdminCocoFrota() {
         </div>
       </div>
 
-      {/* Fleet Table Card */}
+      {/* Fleet Table Card (Sem Chave PIX; com Colaboradores, Rota Ordenada e Saída/Retorno) */}
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans", fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", color: "var(--admin-subtle)", fontSize: 12, textTransform: "uppercase" }}>
-              <th style={{ padding: "16px 20px" }}>Veículo / Motorista</th>
-              <th style={{ padding: "16px 20px" }}>Placa</th>
-              <th style={{ padding: "16px 20px" }}>Áreas de Atuação</th>
-              <th style={{ padding: "16px 20px" }}>Chave PIX</th>
-              <th style={{ padding: "16px 20px" }}>Coletas Hoje</th>
-              <th style={{ padding: "16px 20px" }}>Status Operacional</th>
-              <th style={{ padding: "16px 20px", textAlign: "right" }}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "var(--admin-muted)" }}>
-                  Carregando veículos da frota...
-                </td>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontFamily: "DM Sans", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)", color: "var(--admin-subtle)", fontSize: 12, textTransform: "uppercase" }}>
+                <th style={{ padding: "16px 20px" }}>Veículo / Placa</th>
+                <th style={{ padding: "16px 20px" }}>Colaboradores Vinculados</th>
+                <th style={{ padding: "16px 20px" }}>Rota Ordenada (Bairro a Bairro)</th>
+                <th style={{ padding: "16px 20px" }}>Saída / Retorno</th>
+                <th style={{ padding: "16px 20px" }}>Status Operacional</th>
+                <th style={{ padding: "16px 20px", textAlign: "right" }}>Ações</th>
               </tr>
-            ) : filteredCaminhoes.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "var(--admin-muted)" }}>
-                  Nenhum caminhão encontrado para este filtro.
-                </td>
-              </tr>
-            ) : (
-              filteredCaminhoes.map((c) => {
-                const prestador = c.prestador_id ? prestadorsMap[c.prestador_id] : null;
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--admin-muted)" }}>
+                    Carregando veículos da frota...
+                  </td>
+                </tr>
+              ) : filteredCaminhoes.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--admin-muted)" }}>
+                    Nenhum caminhão encontrado para este filtro.
+                  </td>
+                </tr>
+              ) : (
+                filteredCaminhoes.map((c) => {
+                  const prestador = c.prestador_id ? prestadorsMap[c.prestador_id] : null;
+                  const linkedColabs = (c.colaboradores_ids || [])
+                    .map((cid) => colaboradoresMap[cid])
+                    .filter(Boolean);
+                  const rota = c.areas_atendidas || [];
 
-                return (
-                  <tr key={c.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
-                    <td style={{ padding: "16px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Truck size={18} />
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: "Syne", fontWeight: 700, color: "var(--admin-text)", fontSize: 14 }}>
-                            {c.apelido}
+                  return (
+                    <tr key={c.id} style={{ borderBottom: "1px solid var(--admin-border)" }}>
+                      <td style={{ padding: "16px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(13,184,126,0.12)", color: "#0DB87E", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Truck size={18} />
                           </div>
-                          <span style={{ fontSize: 11, color: "var(--admin-subtle)" }}>
-                            {prestador?.nome ? `${prestador.nome} · ` : ""}
-                            {c.role_solicitada === "cocoecia-dirigentes" ? "💼 Dirigente" : "🚚 Colaborador"}
-                          </span>
+                          <div>
+                            <div style={{ fontFamily: "Syne", fontWeight: 700, color: "var(--admin-text)", fontSize: 14 }}>
+                              {c.apelido}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" }}>
+                              <span style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: "1px 6px", borderRadius: 4, fontFamily: "monospace", fontWeight: 700, fontSize: 11, color: "var(--admin-text)" }}>
+                                {c.plate}
+                              </span>
+                              {prestador?.nome && (
+                                <span style={{ fontSize: 11, color: "var(--admin-subtle)" }}>
+                                  · {prestador.nome}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td style={{ padding: "16px 20px" }}>
-                      <span style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: "4px 8px", borderRadius: 6, fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--admin-text)" }}>
-                        {c.plate}
-                      </span>
-                    </td>
-
-                    <td style={{ padding: "16px 20px", maxWidth: 200 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {c.areas_atendidas && c.areas_atendidas.length > 0 ? (
-                          c.areas_atendidas.map((a: string) => (
-                            <span key={a} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--admin-border)", padding: "2px 6px", borderRadius: 4, fontSize: 11, color: "var(--admin-subtle)" }}>
-                              {a}
-                            </span>
-                          ))
+                      {/* Colaboradores Vinculados */}
+                      <td style={{ padding: "16px 20px", maxWidth: 220 }}>
+                        {linkedColabs.length > 0 ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {linkedColabs.map((col) => (
+                              <span
+                                key={col.id}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  background: "rgba(13,184,126,0.12)",
+                                  border: "1px solid rgba(13,184,126,0.3)",
+                                  color: "#0DB87E",
+                                  padding: "2px 7px",
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <Users size={11} /> {col.nome}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
-                          <span style={{ color: "var(--admin-muted)", fontSize: 11 }}>Todas as regiões</span>
+                          <span style={{ color: "var(--admin-muted)", fontSize: 12 }}>
+                            Nenhum colaborador vinculado
+                          </span>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td style={{ padding: "16px 20px", color: "var(--admin-subtle)", fontFamily: "monospace", fontSize: 12 }}>
-                      {c.pix_key || <span style={{ color: "var(--admin-muted)" }}>Não cadastrada</span>}
-                    </td>
-
-                    <td style={{ padding: "16px 20px", fontWeight: 700, color: "var(--admin-text)" }}>
-                      {c.collections_today || 0} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--admin-subtle)" }}>({c.total_collections || 0} total)</span>
-                    </td>
-
-                    <td style={{ padding: "16px 20px" }}>
-                      {c.status_aprovacao === "pending" ? (
-                        <Pill bg="rgba(245,166,35,0.15)" color="#F5A623" size="sm">
-                          ⏳ Aprovação Pendente
-                        </Pill>
-                      ) : c.status_aprovacao === "rejected" ? (
-                        <Pill bg="rgba(232,64,64,0.15)" color="#E84040" size="sm">
-                          ❌ Rejeitado
-                        </Pill>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleOnline(c.id, Boolean(c.is_online), c.apelido)}
-                          style={{
-                            border: "none",
-                            background: c.is_online ? "rgba(13,184,126,0.15)" : "var(--admin-border)",
-                            color: c.is_online ? "#0DB87E" : "var(--admin-muted)",
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: "pointer"
-                          }}
-                        >
-                          {c.is_online ? "🟢 Online no Mapa" : "⚪ Offline"}
-                        </button>
-                      )}
-                    </td>
-
-                    <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                        {c.status_aprovacao === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
-                              style={{
-                                background: "#0DB87E",
-                                color: "white",
-                                border: "none",
-                                borderRadius: 6,
-                                padding: "4px 8px",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4
-                              }}
-                              title="Aprovar Prestador"
-                            >
-                              <Check size={12} /> Aprovar
-                            </button>
-                            <button
-                              onClick={() => handleRejeitar(c.id, c.apelido)}
-                              style={{
-                                background: "rgba(232,64,64,0.15)",
-                                color: "#E84040",
-                                border: "1px solid rgba(232,64,64,0.3)",
-                                borderRadius: 6,
-                                padding: "4px 8px",
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4
-                              }}
-                              title="Rejeitar Solicitação"
-                            >
-                              <X size={12} /> Rejeitar
-                            </button>
-                          </>
+                      {/* Rota Ordenada Bairro a Bairro */}
+                      <td style={{ padding: "16px 20px", maxWidth: 280 }}>
+                        {rota.length > 0 ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                            {rota.map((b, idx) => (
+                              <React.Fragment key={`${b}-${idx}`}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    background: "rgba(255,255,255,0.06)",
+                                    border: "1px solid var(--admin-border)",
+                                    padding: "2px 7px",
+                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    color: "var(--admin-text)",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span style={{ color: "#0DB87E", fontFamily: "monospace", fontWeight: 700 }}>
+                                    {idx + 1}º
+                                  </span>
+                                  {b}
+                                </span>
+                                {idx < rota.length - 1 && (
+                                  <span style={{ color: "var(--admin-muted)", fontSize: 10 }}>→</span>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--admin-muted)", fontSize: 12 }}>Rota não definida</span>
                         )}
+                      </td>
 
-                        {c.status_aprovacao === "rejected" && (
+                      {/* Hora de Saída e Expectativa de Retorno */}
+                      <td style={{ padding: "16px 20px", whiteSpace: "nowrap" }}>
+                        {c.hora_saida || c.expectativa_retorno ? (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "monospace", fontSize: 12, color: "var(--admin-text)" }}>
+                            <Clock size={13} color="#0DB87E" />
+                            <span>{c.hora_saida || "--:--"}</span>
+                            <span style={{ color: "var(--admin-muted)" }}>→</span>
+                            <span>{c.expectativa_retorno || "--:--"}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--admin-muted)", fontSize: 12 }}>Não informado</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding: "16px 20px" }}>
+                        {c.status_aprovacao === "pending" ? (
+                          <Pill bg="rgba(245,166,35,0.15)" color="#F5A623" size="sm">
+                            ⏳ Aprovação Pendente
+                          </Pill>
+                        ) : c.status_aprovacao === "rejected" ? (
+                          <Pill bg="rgba(232,64,64,0.15)" color="#E84040" size="sm">
+                            ❌ Rejeitado
+                          </Pill>
+                        ) : (
                           <button
-                            onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                            type="button"
+                            onClick={() => handleToggleOnline(c.id, Boolean(c.is_online), c.apelido)}
                             style={{
-                              background: "rgba(13,184,126,0.15)",
-                              color: "#0DB87E",
-                              border: "1px solid rgba(13,184,126,0.3)",
-                              borderRadius: 6,
-                              padding: "4px 8px",
-                              fontSize: 11,
+                              border: "none",
+                              background: c.is_online ? "rgba(13,184,126,0.15)" : "var(--admin-border)",
+                              color: c.is_online ? "#0DB87E" : "var(--admin-muted)",
+                              padding: "4px 10px",
+                              borderRadius: 999,
+                              fontSize: 12,
                               fontWeight: 700,
                               cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4
                             }}
-                            title="Reavaliar e Aprovar"
                           >
-                            <RotateCcw size={12} /> Reaprovar
+                            {c.is_online ? "🟢 Online no Mapa" : "⚪ Offline"}
                           </button>
                         )}
+                      </td>
 
-                        <button
-                          onClick={() => handleDeleteCaminhao(c.id, c.apelido)}
-                          style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 6 }}
-                          title="Remover Caminhão"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      {/* Ações */}
+                      <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                          {c.status_aprovacao === "pending" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                                style={{
+                                  background: "#0DB87E",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                                title="Aprovar Prestador"
+                              >
+                                <Check size={12} /> Aprovar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejeitar(c.id, c.apelido)}
+                                style={{
+                                  background: "rgba(232,64,64,0.15)",
+                                  color: "#E84040",
+                                  border: "1px solid rgba(232,64,64,0.3)",
+                                  borderRadius: 6,
+                                  padding: "4px 8px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                                title="Rejeitar Solicitação"
+                              >
+                                <X size={12} /> Rejeitar
+                              </button>
+                            </>
+                          )}
+
+                          {c.status_aprovacao === "rejected" && (
+                            <button
+                              type="button"
+                              onClick={() => handleAprovar(c.id, c.prestador_id, c.apelido, c.role_solicitada)}
+                              style={{
+                                background: "rgba(13,184,126,0.15)",
+                                color: "#0DB87E",
+                                border: "1px solid rgba(13,184,126,0.3)",
+                                borderRadius: 6,
+                                padding: "4px 8px",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              title="Reavaliar e Aprovar"
+                            >
+                              <RotateCcw size={12} /> Reaprovar
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => openModal(c)}
+                            style={{ background: "transparent", border: "none", color: "var(--admin-subtle)", cursor: "pointer", padding: 6 }}
+                            title="Editar Caminhão, Equipe, Rota e Horários"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCaminhao(c.id, c.apelido)}
+                            style={{ background: "transparent", border: "none", color: "#E84040", cursor: "pointer", padding: 6 }}
+                            title="Remover Caminhão"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      {/* MODAL: CADASTRAR NOVO CAMINHÃO */}
+      {/* MODAL: CADASTRAR / EDITAR CAMINHÃO */}
       {isModalOpen && (
         <div style={modalBackdropStyle} onClick={() => setIsModalOpen(false)}>
           <div style={modalBoxStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Truck size={20} color="#0DB87E" />
                 <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, margin: 0, color: "var(--admin-text)" }}>
-                  Cadastrar Caminhão Oficial da Frota
+                  {editingCaminhao ? "Editar Caminhão & Rota" : "Cadastrar Caminhão Oficial da Frota"}
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} style={closeBtnStyle}>
+              <button type="button" onClick={() => setIsModalOpen(false)} style={closeBtnStyle}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCaminhao} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={labelStyle}>Placa do Veículo *</label>
-                <input
-                  type="text"
-                  required
-                  value={plate}
-                  onChange={(e) => setPlate(e.target.value)}
-                  placeholder="Ex: ABC-1234 ou BRA2E19"
-                  style={{ ...inputStyle, textTransform: "uppercase" }}
-                />
+            <form onSubmit={handleSaveCaminhao} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Placa e Apelido */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Placa do Veículo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={plate}
+                    onChange={(e) => setPlate(e.target.value)}
+                    placeholder="Ex: ABC-1234"
+                    style={{ ...inputStyle, textTransform: "uppercase", fontFamily: "monospace" }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Apelido / Identificação *</label>
+                  <input
+                    type="text"
+                    required
+                    value={apelido}
+                    onChange={(e) => setApelido(e.target.value)}
+                    placeholder="Ex: Caminhão 01 - Norte"
+                    style={inputStyle}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label style={labelStyle}>Apelido do Veículo / Identificação *</label>
-                <input
-                  type="text"
-                  required
-                  value={apelido}
-                  onChange={(e) => setApelido(e.target.value)}
-                  placeholder="Ex: Caminhão 01 - Zé do Coco"
-                  style={inputStyle}
-                />
+              {/* Hora de Saída e Expectativa de Retorno */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Hora de Saída</label>
+                  <input
+                    type="time"
+                    value={horaSaida}
+                    onChange={(e) => setHoraSaida(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: "monospace" }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Expectativa de Retorno</label>
+                  <input
+                    type="time"
+                    value={expectativaRetorno}
+                    onChange={(e) => setExpectativaRetorno(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: "monospace" }}
+                  />
+                </div>
               </div>
 
+              {/* Colaboradores Vinculados */}
               <div>
-                <label style={labelStyle}>Chave PIX do Motorista (opcional)</label>
-                <input
-                  type="text"
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  placeholder="Chave para repasse direto de doações"
-                  style={inputStyle}
-                />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>
+                    Colaboradores Vinculados ao Caminhão ({selectedColaboradores.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/admin/coco/colaboradores")}
+                    style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    + Gerenciar Colaboradores
+                  </button>
+                </div>
+
+                {colaboradoresList.length === 0 ? (
+                  <div style={{ padding: "12px", borderRadius: 10, border: "1px dashed var(--admin-border)", fontSize: 12, color: "var(--admin-muted)", textAlign: "center" }}>
+                    Nenhum colaborador cadastrado em /admin/coco/colaboradores ainda.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 110, overflowY: "auto", padding: 8, borderRadius: 10, background: "var(--admin-bg)", border: "1px solid var(--admin-border)" }}>
+                    {colaboradoresList.map((col) => {
+                      const sel = selectedColaboradores.includes(col.id);
+                      return (
+                        <button
+                          key={col.id}
+                          type="button"
+                          onClick={() => toggleColaborador(col.id)}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 8,
+                            border: "1px solid",
+                            borderColor: sel ? "#0DB87E" : "var(--admin-border)",
+                            background: sel ? "rgba(13,184,126,0.16)" : "transparent",
+                            color: sel ? "#0DB87E" : "var(--admin-subtle)",
+                            fontSize: 12,
+                            fontWeight: sel ? 700 : 500,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <Users size={12} />
+                          <span>{col.nome}</span>
+                          {sel && <Check size={12} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
+              {/* Seleção de Bairros + Ordenação Sequencial */}
               <div>
-                <label style={labelStyle}>Função Operacional Padrão</label>
-                <select
-                  value={roleSolicitada}
-                  onChange={(e) => setRoleSolicitada(e.target.value)}
-                  style={{ ...inputStyle, width: "100%" }}
-                >
-                  <option value="cocoecia-colaborador">🚚 Colaborador / Motorista de Coleta</option>
-                  <option value="cocoecia-dirigentes">💼 Dirigente / Coordenador</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>Bairros Atendidos (Escala Inicial)</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, maxHeight: 130, overflowY: "auto", padding: 4 }}>
+                <label style={labelStyle}>
+                  Rotas por Ordem de Coleta — Selecione os Bairros ({orderedBairros.length})
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, maxHeight: 120, overflowY: "auto", padding: 6, borderRadius: 10, background: "var(--admin-bg)", border: "1px solid var(--admin-border)" }}>
                   {BAIRROS_UBATUBA.map((b) => {
-                    const sel = selectedBairros.includes(b);
+                    const idx = orderedBairros.indexOf(b);
+                    const sel = idx !== -1;
                     return (
                       <button
                         key={b}
                         type="button"
-                        onClick={() => {
-                          if (sel) {
-                            setSelectedBairros(selectedBairros.filter((x) => x !== b));
-                          } else {
-                            setSelectedBairros([...selectedBairros, b]);
-                          }
-                        }}
+                        onClick={() => toggleBairro(b)}
                         style={{
                           padding: "6px 8px",
                           borderRadius: 6,
                           border: "1px solid",
                           borderColor: sel ? "#0DB87E" : "var(--admin-border)",
-                          background: sel ? "rgba(13,184,126,0.15)" : "var(--admin-bg)",
+                          background: sel ? "rgba(13,184,126,0.15)" : "transparent",
                           color: sel ? "#0DB87E" : "var(--admin-subtle)",
                           fontSize: 11,
+                          fontWeight: sel ? 700 : 500,
                           cursor: "pointer",
-                          textAlign: "left"
+                          textAlign: "left",
                         }}
                       >
-                        {sel ? "✓ " : "+ "} {b}
+                        {sel ? `${idx + 1}º ` : "+ "}
+                        {b}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* Lista Ordenada de Coleta com Subir / Descer */}
+                {orderedBairros.length > 0 && (
+                  <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: "rgba(13,184,126,0.06)", border: "1px solid rgba(13,184,126,0.25)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0DB87E", textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                      <MapPin size={12} /> Sequência de Coleta (Use as setas para ordenar)
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 140, overflowY: "auto" }}>
+                      {orderedBairros.map((bairro, idx) => (
+                        <div
+                          key={bairro}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            background: "var(--admin-bg)",
+                            border: "1px solid var(--admin-border)",
+                            fontSize: 12,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#0DB87E", minWidth: 24 }}>
+                              {idx + 1}º
+                            </span>
+                            <span style={{ fontWeight: 600, color: "var(--admin-text)" }}>{bairro}</span>
+                          </div>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveBairro(idx, -1)}
+                              title="Subir na ordem"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--admin-border)",
+                                borderRadius: 5,
+                                padding: 3,
+                                color: idx === 0 ? "var(--admin-muted)" : "var(--admin-text)",
+                                cursor: idx === 0 ? "not-allowed" : "pointer",
+                                opacity: idx === 0 ? 0.4 : 1,
+                              }}
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === orderedBairros.length - 1}
+                              onClick={() => moveBairro(idx, 1)}
+                              title="Descer na ordem"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--admin-border)",
+                                borderRadius: 5,
+                                padding: 3,
+                                color: idx === orderedBairros.length - 1 ? "var(--admin-muted)" : "var(--admin-text)",
+                                cursor: idx === orderedBairros.length - 1 ? "not-allowed" : "pointer",
+                                opacity: idx === orderedBairros.length - 1 ? 0.4 : 1,
+                              }}
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleBairro(bairro)}
+                              title="Remover da rota"
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                padding: 3,
+                                color: "#E84040",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -816,7 +1152,11 @@ export default function AdminCocoFrota() {
                   disabled={submitting}
                   style={{ ...primaryBtnStyle, flex: 1 }}
                 >
-                  {submitting ? "Cadastrando..." : "Cadastrar Veículo"}
+                  {submitting
+                    ? "Salvando..."
+                    : editingCaminhao
+                      ? "Salvar Alterações"
+                      : "Cadastrar Veículo"}
                 </button>
               </div>
             </form>
@@ -832,10 +1172,10 @@ const inputStyle = {
   background: "var(--admin-bg)",
   border: "1px solid var(--admin-border)",
   borderRadius: 10,
-  height: 42,
-  padding: "0 14px",
+  height: 40,
+  padding: "0 12px",
   fontFamily: "DM Sans",
-  fontSize: 14,
+  fontSize: 13,
   color: "var(--admin-text)",
   outline: "none",
 };
@@ -852,13 +1192,13 @@ const labelStyle = {
 const modalBackdropStyle = {
   position: "fixed" as const,
   inset: 0,
-  background: "rgba(0,0,0,0.6)",
+  background: "rgba(0,0,0,0.65)",
   backdropFilter: "blur(4px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   zIndex: 9999,
-  padding: 16
+  padding: 16,
 };
 
 const modalBoxStyle = {
@@ -866,9 +1206,11 @@ const modalBoxStyle = {
   border: "1px solid var(--admin-border)",
   borderRadius: 20,
   padding: 24,
-  maxWidth: 500,
+  maxWidth: 560,
   width: "100%",
-  boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+  maxHeight: "90vh",
+  overflowY: "auto" as const,
+  boxShadow: "0 20px 50px rgba(0,0,0,0.35)",
 };
 
 const closeBtnStyle = {
@@ -876,7 +1218,7 @@ const closeBtnStyle = {
   border: "none",
   color: "var(--admin-muted)",
   cursor: "pointer",
-  padding: 4
+  padding: 4,
 };
 
 const primaryBtnStyle = {
