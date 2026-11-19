@@ -13,8 +13,13 @@ import {
   Handshake,
   Users,
   Building2,
-  User
+  User,
+  Wallet,
+  Clock,
+  CheckCircle2,
+  Lock
 } from "lucide-react";
+import PixContingencyBanner from "@/components/finance/PixContingencyBanner";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
@@ -58,6 +63,49 @@ export default function IndicacaoPage() {
   const [loadingApadrinhados, setLoadingApadrinhados] = useState<boolean>(true);
   const [apadrinhadosError, setApadrinhadosError] = useState<string | null>(null);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
+
+  interface RepasseApadrinhamentoItem {
+    split_id: string;
+    transaction_id: string;
+    data: string;
+    service_type: string;
+    papel_indicado: "tomador" | "prestador";
+    indicado_nome: string;
+    valor: number;
+    status_repasse: "contingenciado" | "pendente_repasse" | "pago" | "nao_aplicavel";
+    status_pagamento: string;
+  }
+
+  interface ResumoFinanceiroApadrinhamento {
+    total_disponivel: number;
+    total_contingenciado: number;
+    total_pago: number;
+    total_pendente_repasse: number;
+    possui_chave_pix: boolean;
+    chave_pix_atual: string | null;
+    tipo_chave_pix: string | null;
+    possui_mercadopago: boolean;
+    repasses: RepasseApadrinhamentoItem[];
+  }
+
+  const [resumoFinanceiro, setResumoFinanceiro] = useState<ResumoFinanceiroApadrinhamento | null>(null);
+  const [loadingResumo, setLoadingResumo] = useState<boolean>(true);
+
+  const fetchResumoFinanceiro = async (padrinhoUserId: string) => {
+    try {
+      setLoadingResumo(true);
+      const { data, error } = await supabase.rpc("obter_resumo_financeiro_apadrinhamento", {
+        p_padrinho_id: padrinhoUserId,
+      });
+      if (!error && data) {
+        setResumoFinanceiro(data as ResumoFinanceiroApadrinhamento);
+      }
+    } catch (err) {
+      console.warn("Erro ao carregar resumo financeiro de apadrinhamento:", err);
+    } finally {
+      setLoadingResumo(false);
+    }
+  };
 
   const fetchApadrinhados = async (padrinhoUserId: string) => {
     try {
@@ -136,11 +184,13 @@ export default function IndicacaoPage() {
           }
         }
 
-        // 3. Se tiver userId identificado, busca rede de apadrinhados
+        // 3. Se tiver userId identificado, busca rede de apadrinhados e extrato financeiro
         if (resolvedUserId && isMounted) {
           fetchApadrinhados(resolvedUserId);
+          fetchResumoFinanceiro(resolvedUserId);
         } else if (isMounted) {
           setLoadingApadrinhados(false);
+          setLoadingResumo(false);
         }
 
         // 5. Tenta recuperar slug do storage local se ainda não definido
@@ -160,6 +210,7 @@ export default function IndicacaoPage() {
       if (uId && isMounted) {
         setActiveUserId(uId);
         fetchApadrinhados(uId);
+        fetchResumoFinanceiro(uId);
       }
     });
 
@@ -469,6 +520,117 @@ export default function IndicacaoPage() {
                             Em Aprovação
                           </span>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Alerta / Gestão de Chave PIX para Repasses */}
+          {activeUserId && !loadingResumo && resumoFinanceiro && (
+            <PixContingencyBanner
+              userId={activeUserId}
+              possuiChavePix={resumoFinanceiro.possui_chave_pix}
+              chavePixAtual={resumoFinanceiro.chave_pix_atual}
+              tipoChavePix={resumoFinanceiro.tipo_chave_pix}
+              saldoContingenciado={Number(resumoFinanceiro.total_contingenciado || 0)}
+              onSaved={() => fetchResumoFinanceiro(activeUserId)}
+            />
+          )}
+
+          {/* Seção: Ganhos por Apadrinhamento (Fase 3) */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800 flex flex-col gap-5">
+            <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#00FF66]/10 border border-[#00FF66]/30 flex items-center justify-center text-[#00FF66] shrink-0">
+                  <Wallet className="w-5 h-5 text-[#00FF66]" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-base sm:text-lg text-white">
+                    Ganhos por Apadrinhamento
+                  </h2>
+                  <p className="text-xs text-zinc-400 font-sans">
+                    Comissões de 0,5% sobre transações dos seus indicados (tomadores e prestadores).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cards Saldo Liberado vs Saldo Contingenciado */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-black border border-emerald-500/30 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
+                    Saldo Liberado / Disponível
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-[#00FF66]" />
+                </div>
+                <div className="font-display font-extrabold text-2xl text-[#00FF66] mt-1">
+                  R$ {Number(resumoFinanceiro?.total_disponivel || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <span className="text-[11px] text-zinc-500">
+                  Pago: R$ {Number(resumoFinanceiro?.total_pago || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} • Pronto p/ repasse: R$ {Number(resumoFinanceiro?.total_pendente_repasse || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className={`p-4 rounded-2xl bg-black border flex flex-col gap-1 ${Number(resumoFinanceiro?.total_contingenciado || 0) > 0 ? "border-amber-500/50 bg-amber-950/15" : "border-zinc-800"}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
+                    Saldo Contingenciado
+                  </span>
+                  <Lock className={`w-4 h-4 ${Number(resumoFinanceiro?.total_contingenciado || 0) > 0 ? "text-amber-400" : "text-zinc-500"}`} />
+                </div>
+                <div className={`font-display font-extrabold text-2xl mt-1 ${Number(resumoFinanceiro?.total_contingenciado || 0) > 0 ? "text-amber-400" : "text-zinc-300"}`}>
+                  R$ {Number(resumoFinanceiro?.total_contingenciado || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <span className="text-[11px] text-zinc-500">
+                  {resumoFinanceiro?.possui_chave_pix ? "Nenhum valor aguardando chave PIX" : "Aguardando cadastro da sua Chave PIX"}
+                </span>
+              </div>
+            </div>
+
+            {/* Histórico dos Repasses */}
+            {loadingResumo ? (
+              <div className="text-xs text-zinc-500 py-3 font-mono">Carregando histórico financeiro...</div>
+            ) : !resumoFinanceiro?.repasses || resumoFinanceiro.repasses.length === 0 ? (
+              <div className="py-5 px-4 rounded-2xl bg-black/40 border border-dashed border-zinc-800 text-center text-xs text-zinc-400">
+                Nenhum repasse registrado ainda. Assim que seus indicados realizarem ou concluírem serviços na UBT, suas comissões de 0,5% aparecerão aqui.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {resumoFinanceiro.repasses.map((rep, idx) => {
+                  const dt = rep.data ? new Date(rep.data).toLocaleDateString("pt-BR") : "—";
+                  const badgeCfg =
+                    rep.status_repasse === "pago"
+                      ? { label: "Pago", cls: "bg-emerald-950/60 border-emerald-500/40 text-[#00FF66]" }
+                      : rep.status_repasse === "pendente_repasse"
+                        ? { label: "Liberado (Pendente Repasse)", cls: "bg-sky-950/60 border-sky-500/40 text-sky-400" }
+                        : { label: "Contingenciado (Sem PIX)", cls: "bg-amber-950/60 border-amber-500/40 text-amber-400" };
+                  return (
+                    <div
+                      key={`${rep.split_id}-${rep.papel_indicado}-${idx}`}
+                      className="p-3.5 rounded-xl bg-black border border-zinc-800/90 flex items-center justify-between gap-3 flex-wrap"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white truncate">
+                          {rep.indicado_nome} • <span className="uppercase font-mono text-[10px] text-zinc-400">{rep.papel_indicado}</span>
+                        </div>
+                        <div className="text-[11px] text-zinc-500 flex items-center gap-2 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          <span>{dt}</span>
+                          <span>•</span>
+                          <span className="uppercase font-mono">{rep.service_type}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="font-mono text-sm font-bold text-[#00FF66]">
+                          + R$ {Number(rep.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase ${badgeCfg.cls}`}>
+                          {badgeCfg.label}
+                        </span>
                       </div>
                     </div>
                   );

@@ -275,3 +275,132 @@ export function buildNominal7WayLedger({
   };
 }
 
+
+// ============================================================
+// FASE 3: GODPARENT SPLIT & CONTINGENCY ALLOCATION
+// ============================================================
+
+export type RepasseGodparentStatus =
+  | "nao_aplicavel"
+  | "pendente_repasse"
+  | "contingenciado"
+  | "pago";
+
+export interface GodparentProfileInput {
+  id: string | null | undefined;
+  hasPixKey: boolean;
+}
+
+export interface GodparentSplitAllocation {
+  split: SplitAmounts;
+  godparent_tomador_id: string | null;
+  godparent_tomador_amount: number;
+  status_repasse_godparent_tomador: RepasseGodparentStatus;
+  destino_tomador: "padrinho_tomador" | "fundo_reserva_plataforma";
+  godparent_prestador_id: string | null;
+  godparent_prestador_amount: number;
+  status_repasse_godparent_prestador: RepasseGodparentStatus;
+  destino_prestador: "padrinho_prestador" | "fundo_reserva_plataforma";
+}
+
+function resolveSingleGodparentShare(
+  godparent: GodparentProfileInput | null | undefined,
+  amount: number,
+  roleLabel: "padrinho_tomador" | "padrinho_prestador"
+): {
+  id: string | null;
+  amount: number;
+  status: RepasseGodparentStatus;
+  destino: "padrinho_tomador" | "padrinho_prestador" | "fundo_reserva_plataforma";
+} {
+  const cleanId = godparent?.id ? String(godparent.id).trim() : null;
+  if (!cleanId || amount <= 0) {
+    return {
+      id: null,
+      amount,
+      status: "nao_aplicavel",
+      destino: "fundo_reserva_plataforma",
+    };
+  }
+
+  return {
+    id: cleanId,
+    amount,
+    status: godparent?.hasPixKey ? "pendente_repasse" : "contingenciado",
+    destino: roleLabel,
+  };
+}
+
+/**
+ * Resolve a alocação das cotas de apadrinhamento (0,5% tomador + 0,5% prestador)
+ * aplicando o contingenciamento quando o padrinho ainda não possui Chave PIX.
+ */
+export function resolveGodparentAllocation({
+  totalAmount,
+  config = REGULATORY_DEFAULTS,
+  godparentTomador,
+  godparentPrestador,
+}: {
+  totalAmount: number;
+  config?: SplitConfig;
+  godparentTomador?: GodparentProfileInput | null;
+  godparentPrestador?: GodparentProfileInput | null;
+}): GodparentSplitAllocation {
+  const split = calculateSplitAmounts(totalAmount, config);
+
+  const tomadorShare = resolveSingleGodparentShare(
+    godparentTomador,
+    split.padrinho_tomador_amount,
+    "padrinho_tomador"
+  );
+  const prestadorShare = resolveSingleGodparentShare(
+    godparentPrestador,
+    split.padrinho_prestador_amount,
+    "padrinho_prestador"
+  );
+
+  return {
+    split,
+    godparent_tomador_id: tomadorShare.id,
+    godparent_tomador_amount: tomadorShare.amount,
+    status_repasse_godparent_tomador: tomadorShare.status,
+    destino_tomador: tomadorShare.destino as "padrinho_tomador" | "fundo_reserva_plataforma",
+    godparent_prestador_id: prestadorShare.id,
+    godparent_prestador_amount: prestadorShare.amount,
+    status_repasse_godparent_prestador: prestadorShare.status,
+    destino_prestador: prestadorShare.destino as "padrinho_prestador" | "fundo_reserva_plataforma",
+  };
+}
+
+export interface GodparentLedgerItem {
+  id: string;
+  godparent_tomador_id: string | null;
+  godparent_tomador_amount: number;
+  status_repasse_godparent_tomador: RepasseGodparentStatus;
+  godparent_prestador_id: string | null;
+  godparent_prestador_amount: number;
+  status_repasse_godparent_prestador: RepasseGodparentStatus;
+}
+
+/**
+ * Simula a liberação automática de saldo contingenciado quando um padrinho regulariza sua Chave PIX.
+ */
+export function releaseContingencyRepasses(
+  records: GodparentLedgerItem[],
+  padrinhoId: string,
+  hasPixKeyNow: boolean
+): GodparentLedgerItem[] {
+  if (!padrinhoId || !hasPixKeyNow) return records;
+
+  return records.map((rec) => ({
+    ...rec,
+    status_repasse_godparent_tomador:
+      rec.godparent_tomador_id === padrinhoId && rec.status_repasse_godparent_tomador === "contingenciado"
+        ? "pendente_repasse"
+        : rec.status_repasse_godparent_tomador,
+    status_repasse_godparent_prestador:
+      rec.godparent_prestador_id === padrinhoId && rec.status_repasse_godparent_prestador === "contingenciado"
+        ? "pendente_repasse"
+        : rec.status_repasse_godparent_prestador,
+  }));
+}

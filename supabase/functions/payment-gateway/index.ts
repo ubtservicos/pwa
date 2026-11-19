@@ -566,18 +566,89 @@ function ledgerStatus(mpStatus: string | undefined, failure: boolean): string {
   return "pending";
 }
 
+async function resolveGodparentSplitContext(
+  tomadorId: string | null,
+  providerId: string,
+  explicitTomadorGodparentId: string | null,
+  explicitPrestadorGodparentId: string | null,
+): Promise<{
+  godparentTomadorId: string | null;
+  godparentPrestadorId: string | null;
+  statusRepasseTomador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
+  statusRepassePrestador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
+}> {
+  let godparentTomadorId = explicitTomadorGodparentId;
+  let godparentPrestadorId = explicitPrestadorGodparentId;
+
+  const idsToFetch = [tomadorId, providerId].filter(Boolean) as string[];
+  if ((!godparentTomadorId || !godparentPrestadorId) && idsToFetch.length > 0) {
+    const { data: usersData } = await adminClient()
+      .from("usuarios")
+      .select("id, padrinho_id")
+      .in("id", idsToFetch);
+
+    if (usersData) {
+      for (const u of usersData) {
+        if (!godparentTomadorId && tomadorId && u.id === tomadorId && u.padrinho_id) {
+          godparentTomadorId = u.padrinho_id;
+        }
+        if (!godparentPrestadorId && u.id === providerId && u.padrinho_id) {
+          godparentPrestadorId = u.padrinho_id;
+        }
+      }
+    }
+  }
+
+  const godparentIds = [godparentTomadorId, godparentPrestadorId].filter(Boolean) as string[];
+  const pixByUser = new Map<string, boolean>();
+  if (godparentIds.length > 0) {
+    const [{ data: gpUsers }, { data: gpProfiles }] = await Promise.all([
+      adminClient().from("usuarios").select("id, chave_pix").in("id", godparentIds),
+      adminClient().from("profiles").select("id, pix_key").in("id", godparentIds),
+    ]);
+    for (const gp of gpUsers || []) {
+      if (String(gp.chave_pix || "").trim()) pixByUser.set(gp.id, true);
+    }
+    for (const pr of gpProfiles || []) {
+      if (String(pr.pix_key || "").trim()) pixByUser.set(pr.id, true);
+    }
+  }
+
+  const statusRepasseTomador = !godparentTomadorId
+    ? "nao_aplicavel"
+    : pixByUser.get(godparentTomadorId)
+      ? "pendente_repasse"
+      : "contingenciado";
+
+  const statusRepassePrestador = !godparentPrestadorId
+    ? "nao_aplicavel"
+    : pixByUser.get(godparentPrestadorId)
+      ? "pendente_repasse"
+      : "contingenciado";
+
+  return {
+    godparentTomadorId,
+    godparentPrestadorId,
+    statusRepasseTomador,
+    statusRepassePrestador,
+  };
+}
+
 async function reserveSplitRecord(input: {
   transactionId: string;
   idempotencyKey: string;
   serviceType: ServiceType;
   serviceId: string;
   providerId: string;
+  tomadorId: string | null;
   split: SplitAmounts;
   route: RoutingDecision;
   environment: MpEnvironment;
   entityId: string | null;
   godparentTomadorId: string | null;
   godparentPrestadorId: string | null;
+  statusRepasseGodparentTomador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
+  statusRepasseGodparentPrestador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
 }): Promise<void> {
   const record = {
     transaction_id: input.transactionId,
@@ -586,6 +657,7 @@ async function reserveSplitRecord(input: {
     service_type: input.serviceType,
     service_id: input.serviceId,
     provider_id: input.providerId,
+    tomador_id: input.tomadorId,
     total_amount: input.split.total_amount,
     provider_amount: input.split.prestador_amount,
     ubt_amount: input.split.ubt_amount,
@@ -595,10 +667,12 @@ async function reserveSplitRecord(input: {
     prize_consumer_amount: input.split.premio_consumidor,
     godparent_tomador_amount: input.split.padrinho_tomador_amount,
     godparent_tomador_id: input.godparentTomadorId,
+    status_repasse_godparent_tomador: input.statusRepasseGodparentTomador,
     godparent_prestador_amount: input.split.padrinho_prestador_amount,
     godparent_prestador_id: input.godparentPrestadorId,
+    status_repasse_godparent_prestador: input.statusRepasseGodparentPrestador,
     godparent_amount: input.split.padrinho_amount,
-    godparent_id: input.godparentTomadorId,
+    godparent_id: input.godparentTomadorId ?? input.godparentPrestadorId,
     refunded_amount: 0,
     payment_route: input.route.mode,
     provider_payout_status: input.route.mode === "platform_fallback" ? "pending" : "not_required",
@@ -869,6 +943,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   let payerSource = body;
+  let effectiveTomadorId: string | null = providerInitiatedMototaxiPix ? null : customerId;
   if (providerInitiatedMototaxiPix) {
     if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
       throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
@@ -898,6 +973,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       throw new HttpError(409, "ride_amount_mismatch", "O valor da cobrança diverge do valor registrado na corrida.");
     }
     amount = canonicalAmount;
+    effectiveTomadorId = ride.tomador_id;
 
     const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
       adminClient().auth.admin.getUserById(ride.tomador_id),
@@ -931,18 +1007,28 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   const transactionId = paymentAttemptId;
   const idempotencyKey = paymentAttemptId;
 
+  const godparentCtx = await resolveGodparentSplitContext(
+    effectiveTomadorId,
+    providerId,
+    godparentTomadorId,
+    godparentPrestadorId,
+  );
+
   await reserveSplitRecord({
     transactionId,
     idempotencyKey,
     serviceType,
     serviceId,
     providerId,
+    tomadorId: effectiveTomadorId,
     split,
     route,
     environment,
     entityId,
-    godparentTomadorId,
-    godparentPrestadorId,
+    godparentTomadorId: godparentCtx.godparentTomadorId,
+    godparentPrestadorId: godparentCtx.godparentPrestadorId,
+    statusRepasseGodparentTomador: godparentCtx.statusRepasseTomador,
+    statusRepasseGodparentPrestador: godparentCtx.statusRepassePrestador,
   });
 
   await logAuditEvent("payment_routed", "pending", {

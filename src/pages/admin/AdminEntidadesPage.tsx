@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Card, GhostButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import AdminPixQuickEditor from "@/components/admin/AdminPixQuickEditor";
 import { supabase } from "@/lib/supabase";
 import { maskCNPJ, maskPhone, maskCPF, generateReferralSlug } from "@/utils/masks";
 
@@ -520,6 +521,11 @@ export default function AdminEntidadesPage() {
                       <div style={{ fontSize: 12, color: "var(--admin-muted)", marginTop: 1 }}>
                         {e.email}
                       </div>
+                      {!e.chavePix && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", marginTop: 2 }}>
+                          ⚠️ Sem chave PIX — repasses contingenciados
+                        </div>
+                      )}
                     </td>
 
                     {/* CNPJ */}
@@ -758,16 +764,18 @@ export default function AdminEntidadesPage() {
                 </div>
               </div>
 
-              {selectedEntidade.chavePix && (
-                <div style={{ gridColumn: "1 / -1", background: "var(--admin-bg)", padding: 10, borderRadius: 8, border: "1px solid var(--admin-border)" }}>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                    Chave Pix ({selectedEntidade.tipoChavePix || "Pix"})
-                  </span>
-                  <span style={{ fontSize: 13, fontFamily: "monospace", color: "#0DB87E", fontWeight: 600 }}>
-                    {selectedEntidade.chavePix}
-                  </span>
-                </div>
-              )}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <AdminPixQuickEditor
+                  userId={selectedEntidade.id}
+                  chavePix={selectedEntidade.chavePix}
+                  tipoChavePix={selectedEntidade.tipoChavePix}
+                  onToast={(msg) => toast.show(msg)}
+                  onSaved={(novaChave, novoTipo) => {
+                    setSelectedEntidade((prev) => prev ? { ...prev, chavePix: novaChave, tipoChavePix: novoTipo } : null);
+                    setEntidades((prev) => prev.map((ent) => ent.id === selectedEntidade.id ? { ...ent, chavePix: novaChave, tipoChavePix: novoTipo } : ent));
+                  }}
+                />
+              </div>
             </div>
 
             {/* SEÇÃO: REDE DE APADRINHADOS DESTA ENTIDADE */}

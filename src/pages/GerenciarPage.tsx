@@ -34,6 +34,8 @@ import {
 } from "@/utils/dateFilter";
 import { supabase } from "@/lib/supabase";
 import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
+import PixContingencyBanner from "@/components/finance/PixContingencyBanner";
+import MercadoPagoOnboardingCard from "@/components/finance/MercadoPagoOnboardingCard";
 
 const GREEN = "#0DB87E";
 
@@ -197,6 +199,26 @@ const GerenciarPage = () => {
   const [draftEnd, setDraftEnd] = useState<string>("");
   const [dbTransactions, setDbTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [referralSummary, setReferralSummary] = useState<{
+    possui_chave_pix: boolean;
+    chave_pix_atual: string | null;
+    tipo_chave_pix: string | null;
+    possui_mercadopago: boolean;
+    total_contingenciado: number;
+  } | null>(null);
+
+  const reloadReferralSummary = async (uid: string) => {
+    try {
+      const { data } = await supabase.rpc("obter_resumo_financeiro_apadrinhamento", {
+        p_padrinho_id: uid,
+      });
+      if (data) {
+        setReferralSummary(data as any);
+      }
+    } catch (e) {
+      console.warn("[GerenciarPage] Falha ao consultar resumo apadrinhamento:", e);
+    }
+  };
 
   useEffect(() => {
     if (!user.isLoading && user.role === "tomador") setActiveTab("saida");
@@ -228,6 +250,7 @@ const GerenciarPage = () => {
 
         // Ledger financeiro enriquecido por JOIN seguro no banco.
         const paymentHistory = await fetchUserPaymentHistory();
+        await reloadReferralSummary(user.uid);
 
         const list: Transaction[] = [];
 
@@ -494,6 +517,32 @@ const GerenciarPage = () => {
         </div>
 
         <MiniBars border={t.border} transactions={dbTransactions} />
+
+        {/* Fase 3: Alerta PIX & Conta Digital Mercado Pago */}
+        {user.uid && referralSummary && (
+          <div style={{ marginTop: 14 }}>
+            {!referralSummary.possui_chave_pix && (
+              <PixContingencyBanner
+                userId={user.uid}
+                possuiChavePix={referralSummary.possui_chave_pix}
+                chavePixAtual={referralSummary.chave_pix_atual}
+                tipoChavePix={referralSummary.tipo_chave_pix}
+                saldoContingenciado={Number(referralSummary.total_contingenciado || 0)}
+                variant="adaptive"
+                isDarkTheme={t.isDark}
+                onSaved={() => reloadReferralSummary(user.uid!)}
+              />
+            )}
+            <MercadoPagoOnboardingCard
+              userId={user.uid}
+              possuiMercadoPago={Boolean(referralSummary.possui_mercadopago)}
+              isDarkTheme={t.isDark}
+              onStatusChange={(possui) =>
+                setReferralSummary((prev) => (prev ? { ...prev, possui_mercadopago: possui } : prev))
+              }
+            />
+          </div>
+        )}
 
         {/* Tabs */}
         <div

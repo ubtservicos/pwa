@@ -81,6 +81,25 @@ const ConfigFinanceiroPage = () => {
     const loadFinancialData = async () => {
       setLoadingMp(true);
       try {
+        // 0. Sincroniza chave PIX oficial de public.usuarios
+        const { data: uPix } = await supabase
+          .from("usuarios")
+          .select("chave_pix, tipo_chave_pix")
+          .eq("id", user.uid)
+          .maybeSingle();
+        if (uPix?.chave_pix) {
+          const tipoRaw = String(uPix.tipo_chave_pix || "cpf").toLowerCase();
+          const mappedTipo: PixKey["tipo"] =
+            tipoRaw === "cnpj" ? "CNPJ" : tipoRaw === "email" ? "E-mail" : tipoRaw === "telefone" ? "Telefone" : "CPF";
+          setPixKeys((prev) => {
+            const hasSame = prev.some((k) => k.valor === uPix.chave_pix);
+            if (hasSame) return prev;
+            const merged = [{ id: "db-pix", tipo: mappedTipo, valor: uPix.chave_pix }, ...prev];
+            localStorage.setItem("ubt_pix_keys_user", JSON.stringify(merged));
+            return merged;
+          });
+        }
+
         // 1. Check Mercado Pago OAuth Account in marketplace_accounts
         const { data: mpData, error: mpErr } = await supabase
           .from("marketplace_accounts")
@@ -295,14 +314,36 @@ const ConfigFinanceiroPage = () => {
     showToast("Cartão removido");
   };
 
-  const handleAddPix = () => {
+  const handleAddPix = async () => {
     if (!pixValor.trim()) return;
-    const newKeys = [...pixKeys, { id: String(Date.now()), tipo: pixTipo, valor: pixValor }];
+    const tipoNormalized =
+      pixTipo === "E-mail" ? "email" : pixTipo === "Telefone" ? "telefone" : pixTipo.toLowerCase();
+    if (user?.uid) {
+      try {
+        const { data, error } = await supabase.rpc("salvar_chave_pix_usuario", {
+          p_user_id: user.uid,
+          p_chave_pix: pixValor.trim(),
+          p_tipo_chave_pix: tipoNormalized,
+        });
+        if (error) throw error;
+        const liberados = Number(data?.repasses_liberados || 0);
+        if (liberados > 0) {
+          showToast(`Chave PIX salva e ${liberados} repasse(s) liberado(s)!`);
+        } else {
+          showToast("Chave PIX salva com sucesso!");
+        }
+      } catch (err: any) {
+        showToast("Erro ao salvar chave PIX: " + (err?.message || err));
+        return;
+      }
+    } else {
+      showToast("Chave adicionada!");
+    }
+    const newKeys = [...pixKeys, { id: String(Date.now()), tipo: pixTipo, valor: pixValor.trim() }];
     setPixKeys(newKeys);
     localStorage.setItem("ubt_pix_keys_user", JSON.stringify(newKeys));
     setPixValor("");
     setShowPixModal(false);
-    showToast("Chave adicionada!");
   };
 
   const handleAddCard = () => {

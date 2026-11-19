@@ -794,6 +794,9 @@ export default function AtualizacaoCadastral() {
             .from("usuarios")
             .update({
               status: "ativo",
+              chave_pix: chavePix || null,
+              tipo_chave_pix: tipoChavePix || null,
+              possui_mercadopago: possuiMercadoPago,
               metadata: {
                 ...(leadRecord?.metadata || {}),
                 bairro_residencia: effectiveMatrizOrResidencia,

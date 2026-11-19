@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import AdminPixQuickEditor from "@/components/admin/AdminPixQuickEditor";
 import { supabase } from "@/lib/supabase";
 import { getAppOrigin } from "@/lib/appUrl";
 import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
@@ -109,6 +110,7 @@ export default function AdminClienteDetailPage() {
 
   const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
   const [loadingApadrinhados, setLoadingApadrinhados] = useState(false);
+  const [saldoContingenciado, setSaldoContingenciado] = useState(0);
 
   const handleCopyLink = async (text: string, type: string) => {
     try {
@@ -330,6 +332,12 @@ export default function AdminClienteDetailPage() {
         const { data: apadData, error: apadErr } = await supabase.rpc("obter_meus_apadrinhados", {
           p_padrinho_id: id,
         });
+        const { data: resumoData } = await supabase.rpc("obter_resumo_financeiro_apadrinhamento", {
+          p_padrinho_id: id,
+        });
+        if (resumoData && typeof (resumoData as any).total_contingenciado === "number") {
+          setSaldoContingenciado(Number((resumoData as any).total_contingenciado || 0));
+        }
         if (!apadErr && apadData) {
           setApadrinhados(apadData as ApadrinhadoItem[]);
         }
@@ -1211,6 +1219,24 @@ export default function AdminClienteDetailPage() {
             </div>
           </Card>
         </div>
+
+        {/* Chave PIX e Contingenciamento de Repasses */}
+        <Card style={{ padding: 24 }}>
+          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 12px" }}>
+            Chave PIX & Repasses por Apadrinhamento
+          </h2>
+          <AdminPixQuickEditor
+            userId={user.id}
+            chavePix={dbUser?.chave_pix || dbProfile?.pix_key || dbWaitlist?.chave_pix || ""}
+            tipoChavePix={dbUser?.tipo_chave_pix || dbWaitlist?.tipo_chave_pix || ""}
+            saldoContingenciado={saldoContingenciado}
+            onToast={(msg) => toast.show(msg)}
+            onSaved={(novaChave, novoTipo) => {
+              setDbUser((prev: any) => prev ? { ...prev, chave_pix: novaChave, tipo_chave_pix: novoTipo } : prev);
+              setSaldoContingenciado(0);
+            }}
+          />
+        </Card>
 
         {/* Rede de Apadrinhados deste Membro */}
         <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>

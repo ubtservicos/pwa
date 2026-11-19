@@ -5,6 +5,7 @@ import { getAppOrigin } from "@/lib/appUrl";
 import { maskCPF, generateReferralSlug } from "@/utils/masks";
 import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import AdminPixQuickEditor from "@/components/admin/AdminPixQuickEditor";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
 
@@ -395,6 +396,8 @@ export default function AdminClientesPage() {
         padrinhoId,
         padrinhoNome,
         padrinhoRole,
+        chavePix: u.chave_pix || prof?.pix_key || matchedWl?.chave_pix || matchedWl?.pix_chave || "",
+        tipoChavePix: u.tipo_chave_pix || matchedWl?.tipo_chave_pix || "",
       };
     });
   }, [dbUsers, dbProfiles, dbPedidos, mototaxisMap, diaristasMap, caminhoesMap, userAssocMap, dbWaitlist, filterPeriod]);
@@ -654,6 +657,11 @@ export default function AdminClientesPage() {
                         <Avatar name={u.name} />
                         <div>
                           <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 500 }}>{u.name}</div>
+                          {!u.chavePix && (
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", marginTop: 2 }}>
+                              ⚠️ Sem chave PIX — repasses contingenciados
+                            </div>
+                          )}
                           {u.status !== "active" && (() => {
                             const rule = rules.find((r) => r.key === u.status);
                             if (!rule) return null;
@@ -1347,6 +1355,18 @@ export default function AdminClientesPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Chave PIX & Contingenciamento */}
+              <AdminPixQuickEditor
+                userId={selectedUserModal.id}
+                chavePix={selectedUserModal.chavePix}
+                tipoChavePix={selectedUserModal.tipoChavePix}
+                onToast={(msg) => toast.show(msg)}
+                onSaved={(novaChave, novoTipo) => {
+                  setSelectedUserModal((prev: any) => prev ? { ...prev, chavePix: novaChave, tipoChavePix: novoTipo } : null);
+                  setDbUsers((prev) => prev.map((usr) => usr.id === selectedUserModal.id ? { ...usr, chave_pix: novaChave, tipo_chave_pix: novoTipo } : usr));
+                }}
+              />
 
               {/* Rede de Apadrinhados deste Membro */}
               <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
