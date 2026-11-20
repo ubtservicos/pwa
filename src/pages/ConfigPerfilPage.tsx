@@ -19,7 +19,8 @@ import {
   X,
   MapPin,
   Waves,
-  Briefcase
+  Briefcase,
+  Edit3
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -184,6 +185,10 @@ const ConfigPerfilPage = () => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState(false);
   const [colaboradorSlug, setColaboradorSlug] = useState<string>("");
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugDraft, setSlugDraft] = useState("");
+  const [savingSlug, setSavingSlug] = useState(false);
+  const [slugError, setSlugError] = useState<string | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showPraiasModal, setShowPraiasModal] = useState(false);
   const [searchPraia, setSearchPraia] = useState("");
@@ -256,13 +261,70 @@ const ConfigPerfilPage = () => {
 
   const { toast, showToast } = useSimpleToast();
 
+  const sanitizeSlugInput = (raw: string) =>
+    raw
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-{2,}/g, "-")
+      .slice(0, 30);
+
   const handleCopySlug = () => {
     const slugToCopy = colaboradorSlug || user.uid;
     if (!slugToCopy) return;
     navigator.clipboard.writeText(slugToCopy);
     setCopiedSlug(true);
-    showToast("ID do Colaborador copiado! ✓");
+    showToast("ID / Slug UBT copiado! ✓");
     setTimeout(() => setCopiedSlug(false), 2000);
+  };
+
+  const handleStartEditSlug = () => {
+    setSlugDraft(colaboradorSlug || "");
+    setSlugError(null);
+    setEditingSlug(true);
+  };
+
+  const handleSaveSlug = async () => {
+    const cleaned = sanitizeSlugInput(slugDraft).replace(/^-+|-+$/g, "");
+    setSlugDraft(cleaned);
+    setSlugError(null);
+
+    if (cleaned.length < 3 || cleaned.length > 30) {
+      setSlugError("O ID / Slug deve ter entre 3 e 30 caracteres.");
+      return;
+    }
+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleaned)) {
+      setSlugError("Use apenas letras minúsculas, números e hífen (sem hífen no início ou fim).");
+      return;
+    }
+
+    if (cleaned === colaboradorSlug) {
+      setEditingSlug(false);
+      return;
+    }
+
+    setSavingSlug(true);
+    try {
+      const { data, error } = await supabase.rpc("atualizar_meu_slug_ubt", {
+        p_novo_slug: cleaned,
+      });
+
+      if (error) {
+        setSlugError(error.message || "Não foi possível atualizar o ID / Slug.");
+        return;
+      }
+
+      const savedSlug = (data as any)?.slug || cleaned;
+      setColaboradorSlug(savedSlug);
+      setEditingSlug(false);
+      showToast("ID / Slug atualizado com sucesso! ✓");
+    } catch (err: any) {
+      setSlugError(err?.message || "Erro ao salvar o novo ID / Slug.");
+    } finally {
+      setSavingSlug(false);
+    }
   };
 
   const handleShareLink = () => {
@@ -585,7 +647,7 @@ const ConfigPerfilPage = () => {
           </div>
         </div>
 
-        {/* Card ID do Colaborador na Plataforma UBT (Slug) */}
+        {/* Card Seu ID / Slug na Plataforma UBT (Genérico e Editável) */}
         <div
           style={{
             background: "linear-gradient(135deg, rgba(16,185,129,0.10) 0%, rgba(11,15,20,0.65) 100%)",
@@ -595,12 +657,12 @@ const ConfigPerfilPage = () => {
             marginTop: 24,
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: 12,
             boxShadow: "0 0 20px rgba(16,185,129,0.08)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <span
                 style={{
                   fontFamily: "DM Sans",
@@ -612,45 +674,151 @@ const ConfigPerfilPage = () => {
                   display: "block",
                 }}
               >
-                ID do Colaborador na Plataforma UBT
+                Seu ID / Slug na Plataforma UBT
               </span>
-              <p
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: t.text,
-                  margin: "4px 0 0",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {colaboradorSlug || "Carregando..."}
-              </p>
+              {!editingSlug && (
+                <p
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: t.text,
+                    margin: "4px 0 0",
+                    letterSpacing: "0.04em",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {colaboradorSlug || "Carregando..."}
+                </p>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={handleCopySlug}
-              disabled={!colaboradorSlug}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "10px 14px",
-                borderRadius: 12,
-                background: copiedSlug ? "#059669" : "#10B981",
-                border: "none",
-                color: "#0B0F14",
-                fontFamily: "Syne",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              {copiedSlug ? <Check size={15} /> : <Copy size={15} />}
-              {copiedSlug ? "Copiado!" : "Copiar ID"}
-            </button>
+
+            {!editingSlug && (
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={handleStartEditSlug}
+                  disabled={!colaboradorSlug}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "9px 12px",
+                    borderRadius: 12,
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(16,185,129,0.35)",
+                    color: t.text,
+                    fontFamily: "Syne",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Edit3 size={14} color="#10B981" />
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopySlug}
+                  disabled={!colaboradorSlug}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "9px 14px",
+                    borderRadius: 12,
+                    background: copiedSlug ? "#059669" : "#10B981",
+                    border: "none",
+                    color: "#0B0F14",
+                    fontFamily: "Syne",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {copiedSlug ? <Check size={15} /> : <Copy size={15} />}
+                  {copiedSlug ? "Copiado!" : "Copiar"}
+                </button>
+              </div>
+            )}
           </div>
+
+          {editingSlug && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input
+                type="text"
+                value={slugDraft}
+                onChange={(e) => {
+                  setSlugDraft(sanitizeSlugInput(e.target.value));
+                  setSlugError(null);
+                }}
+                placeholder="ex: seu-nome-ubt"
+                maxLength={30}
+                style={{
+                  width: "100%",
+                  background: t.inputBg,
+                  border: `1px solid ${slugError ? "#E84040" : "rgba(16,185,129,0.45)"}`,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  color: t.text,
+                  fontFamily: "monospace",
+                  fontSize: 15,
+                  outline: "none",
+                }}
+              />
+              <span style={{ fontFamily: "DM Sans", fontSize: 11, color: t.muted }}>
+                Use de 3 a 30 caracteres: letras minúsculas, números e hífen.
+              </span>
+              {slugError && (
+                <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "#E84040", margin: 0, fontWeight: 600 }}>
+                  {slugError}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleSaveSlug}
+                  disabled={savingSlug}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    background: "#10B981",
+                    border: "none",
+                    color: "#0B0F14",
+                    fontFamily: "Syne",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: savingSlug ? "wait" : "pointer",
+                  }}
+                >
+                  {savingSlug ? "Salvando..." : "Salvar ID / Slug"}
+                </button>
+                <button
+                  type="button"
+                  disabled={savingSlug}
+                  onClick={() => {
+                    setEditingSlug(false);
+                    setSlugError(null);
+                  }}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    background: "transparent",
+                    border: `1px solid ${t.border}`,
+                    color: t.subtle,
+                    fontFamily: "DM Sans",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           <p
             style={{
               fontFamily: "DM Sans",
@@ -660,7 +828,7 @@ const ConfigPerfilPage = () => {
               lineHeight: 1.45,
             }}
           >
-            Informe este ID (slug) ao administrativo da <strong>Côco &amp; Cia</strong> para vincular sua conta à equipe e habilitar o acesso às rotas de coleta.
+            Este identificador único pertence à sua conta na plataforma UBT. Use-o para <strong>apadrinhar pessoas</strong>, <strong>compartilhar convites</strong> e <strong>vincular sua conta</strong> na plataforma.
           </p>
         </div>
 
