@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { BrowserRouter, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,7 +39,6 @@ import OnboardingPage from "./pages/OnboardingPage.tsx";
 import RecuperarSenha from "./pages/RecuperarSenha.tsx";
 import SouFundadorPage from "./pages/SouFundadorPage.tsx";
 import AtualizacaoCadastral from "./pages/AtualizacaoCadastral.tsx";
-import IndicacaoPage from "./pages/IndicacaoPage.tsx";
 import AppHome from "./pages/AppHome.tsx";
 import MototaxiTomador from "./pages/MototaxiTomador.tsx";
 import PrestadorHome from "./pages/PrestadorHome.tsx";
@@ -186,8 +185,8 @@ const App = () => (
               <Route path="/recuperar-senha" element={<RecuperarSenha />} />
               <Route path="/sou-fundador" element={<SouFundadorPage />} />
               <Route path="/atualizacao-cadastral" element={<AtualizacaoCadastral />} />
-              <Route path="/app/indicacao" element={<IndicacaoPage />} />
-              <Route path="/indicacao" element={<IndicacaoPage />} />
+              <Route path="/app/indicacao" element={<Navigate to="/sou-fundador" replace />} />
+              <Route path="/indicacao" element={<Navigate to="/sou-fundador" replace />} />
               <Route path="/r/:slug" element={<ReferralRedirect />} />
               <Route path="/app/consentimento" element={<LgpdConsentPage />} />
 

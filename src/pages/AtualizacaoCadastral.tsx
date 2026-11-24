@@ -509,38 +509,76 @@ export default function AtualizacaoCadastral() {
       let targetEmail = "";
 
       if (authMode === "PF") {
-        const cleanEmail = authEmail.trim().toLowerCase();
-        if (!cleanEmail || !isValidEmail(cleanEmail)) {
-          setAuthError("Informe um endereço de e-mail válido.");
+        const rawInput = authEmail.trim();
+        if (!rawInput) {
+          setAuthError("Informe seu e-mail, CPF ou telefone cadastrado.");
           setIsAuthenticating(false);
           return;
         }
 
-        // Pré-verifica estado da conta PF na RPC segura (Auth, senha, provedor Google, legado)
-        const { data: resolved, error: rpcError } = await supabase.rpc(
-          "resolve_cadastral_login_email",
-          { p_email: cleanEmail },
-        );
+        const isEmailInput = rawInput.includes("@");
+        const cleanDigits = rawInput.replace(/\D/g, "");
+
+        let resolved: any = null;
+        let rpcError: any = null;
+        let fallbackEmail = "";
+
+        if (isEmailInput) {
+          const cleanEmail = rawInput.toLowerCase();
+          if (!isValidEmail(cleanEmail)) {
+            setAuthError("Informe um endereço de e-mail válido.");
+            setIsAuthenticating(false);
+            return;
+          }
+          fallbackEmail = cleanEmail;
+          const res = await supabase.rpc("resolve_cadastral_login_email", { p_email: cleanEmail });
+          resolved = res.data;
+          rpcError = res.error;
+        } else if (cleanDigits.length === 11 && isValidCPF(cleanDigits)) {
+          // 11 dígitos válidos como CPF: tenta p_cpf primeiro e faz fallback para p_telefone caso seja celular
+          const resCpf = await supabase.rpc("resolve_cadastral_login_email", { p_cpf: cleanDigits });
+          resolved = resCpf.data;
+          rpcError = resCpf.error;
+          if (!rpcError && !resolved?.email && !resolved?.has_legacy_profile) {
+            const resTel = await supabase.rpc("resolve_cadastral_login_email", { p_telefone: cleanDigits });
+            resolved = resTel.data;
+            rpcError = resTel.error;
+          }
+        } else if (cleanDigits.length >= 8 && cleanDigits.length <= 13) {
+          // Telefone (com ou sem DDI 55) — se tiver 11 dígitos e não encontrar como telefone, tenta p_cpf
+          const resTel = await supabase.rpc("resolve_cadastral_login_email", { p_telefone: cleanDigits });
+          resolved = resTel.data;
+          rpcError = resTel.error;
+          if (!rpcError && !resolved?.email && !resolved?.has_legacy_profile && cleanDigits.length === 11) {
+            const resCpf = await supabase.rpc("resolve_cadastral_login_email", { p_cpf: cleanDigits });
+            resolved = resCpf.data;
+            rpcError = resCpf.error;
+          }
+        } else {
+          setAuthError("Informe um e-mail válido, CPF (11 dígitos) ou telefone com DDD.");
+          setIsAuthenticating(false);
+          return;
+        }
 
         if (!rpcError && resolved) {
           const resolvedEmail =
             typeof resolved.email === "string" && resolved.email.trim()
               ? resolved.email.trim().toLowerCase()
-              : cleanEmail;
+              : fallbackEmail;
           const hasAuthAccount = Boolean(resolved.has_auth_account);
           const hasPassword = Boolean(resolved.has_password);
           const hasLegacyProfile = Boolean(resolved.has_legacy_profile);
           const authProvider = String(resolved.auth_provider || "").toLowerCase();
 
-          if (!hasAuthAccount && !hasLegacyProfile) {
+          if (!resolvedEmail && !hasAuthAccount && !hasLegacyProfile) {
             setAuthError(
-              "E-mail não localizado na base da UBT. Confira o endereço digitado ou faça sua inscrição.",
+              "Cadastro não localizado com o e-mail, CPF ou telefone informado. Confira os dados ou faça sua inscrição.",
             );
             setIsAuthenticating(false);
             return;
           }
 
-          if (!hasAuthAccount && hasLegacyProfile) {
+          if (!hasAuthAccount && hasLegacyProfile && resolvedEmail) {
             setRecoveryEmail(resolvedEmail);
             setRecoveryMode("magic_link");
             setShowGoogleOption(resolvedEmail.endsWith("@gmail.com"));
@@ -552,7 +590,7 @@ export default function AtualizacaoCadastral() {
             return;
           }
 
-          if (hasAuthAccount && !hasPassword) {
+          if (hasAuthAccount && !hasPassword && resolvedEmail) {
             setRecoveryEmail(resolvedEmail);
             setRecoveryMode("password_reset");
             setShowGoogleOption(authProvider === "google" || resolvedEmail.endsWith("@gmail.com"));
@@ -564,8 +602,12 @@ export default function AtualizacaoCadastral() {
           }
 
           targetEmail = resolvedEmail;
+        } else if (fallbackEmail) {
+          targetEmail = fallbackEmail;
         } else {
-          targetEmail = cleanEmail;
+          setAuthError("Não foi possível localizar seu cadastro. Tente novamente ou informe seu e-mail.");
+          setIsAuthenticating(false);
+          return;
         }
       } else {
         const cleanCnpj = authCnpj.replace(/\D/g, "");
@@ -993,17 +1035,18 @@ export default function AtualizacaoCadastral() {
   const handleFinalSubmit = async () => {
     setStep4Error("");
 
-    if (possuiMercadoPago && chavePix) {
-      const cleanPix = chavePix.replace(/\D/g, "");
-      if (tipoChavePix === "cpf" && !isValidCPF(chavePix)) {
+    const trimmedPix = (chavePix || "").trim();
+    if (trimmedPix) {
+      const cleanPix = trimmedPix.replace(/\D/g, "");
+      if (tipoChavePix === "cpf" && !isValidCPF(trimmedPix)) {
         setStep4Error("Chave Pix CPF inválida.");
         return;
       }
-      if (tipoChavePix === "cnpj" && !isValidCNPJ(chavePix)) {
+      if (tipoChavePix === "cnpj" && !isValidCNPJ(trimmedPix)) {
         setStep4Error("Chave Pix CNPJ inválida.");
         return;
       }
-      if (tipoChavePix === "email" && !isValidEmail(chavePix)) {
+      if (tipoChavePix === "email" && !isValidEmail(trimmedPix)) {
         setStep4Error("Chave Pix E-mail inválida.");
         return;
       }
@@ -1026,6 +1069,8 @@ export default function AtualizacaoCadastral() {
       const cleanCnpj = (cnpj || "").replace(/\D/g, "");
       const finalSlug = referralSlug || generateReferralSlug(nome || razaoSocial, cleanCpf || cleanCnpj);
       const finalPraias = (isPJ && naoAtuaPraias) ? [] : praias;
+      const finalPixKey = trimmedPix || null;
+      const finalPixType = trimmedPix ? tipoChavePix : null;
 
       const updatePayload: Record<string, any> = {
         bairro_residencia: effectiveMatrizOrResidencia,
@@ -1037,8 +1082,8 @@ export default function AtualizacaoCadastral() {
         praias_frequenta: finalPraias,
         possui_conta_mercado_pago: possuiMercadoPago,
         possui_mercado_pago: possuiMercadoPago,
-        tipo_chave_pix: tipoChavePix,
-        chave_pix: chavePix,
+        tipo_chave_pix: finalPixType,
+        chave_pix: finalPixKey,
         referral_code: finalSlug,
         cadastro_completo: true,
         status: (leadRecord?.status === "aprovado" || leadRecord?.status === "approved") ? "aprovado" : "completo",
@@ -1066,7 +1111,7 @@ export default function AtualizacaoCadastral() {
         if (rawDigitsTel) updatePayload.telefone = rawDigitsTel;
       }
 
-      // 1. Atualiza na tabela usuarios (fonte principal do usuário autenticado)
+      // 1. Atualiza na tabela usuarios via RPC SECURITY DEFINER (garante persistência de chave_pix, cadastro_completo e slug único)
       const usuarioUpdatePayload: Record<string, any> = {
         bairro_residencia: effectiveMatrizOrResidencia || null,
         bairro_moradia: effectiveMatrizOrResidencia || null,
@@ -1076,9 +1121,10 @@ export default function AtualizacaoCadastral() {
         praias_frequenta: finalPraias.join(", ") || null,
         regioes: isPJ ? regioesAtuacao : undefined,
         referral_code: finalSlug || null,
-        chave_pix: chavePix || null,
-        tipo_chave_pix: tipoChavePix || null,
+        chave_pix: finalPixKey,
+        tipo_chave_pix: finalPixType,
         possui_mercadopago: possuiMercadoPago,
+        cadastro_completo: true,
         updated_at: new Date().toISOString(),
         metadata: {
           ...(leadRecord?.metadata || {}),
@@ -1086,6 +1132,8 @@ export default function AtualizacaoCadastral() {
           bairros_atuacao: bairrosAtuacao,
           praias: finalPraias,
           referral_code: finalSlug,
+          chave_pix: finalPixKey,
+          tipo_chave_pix: finalPixType,
           cadastro_completo: true,
           atualizado_em: new Date().toISOString(),
           ...(isPJ
@@ -1114,29 +1162,32 @@ export default function AtualizacaoCadastral() {
         if (rawDigitsTel) usuarioUpdatePayload.telefone = maskPhone(rawDigitsTel);
       }
 
+      let savedProfileRes: any = null;
       if (authUserId) {
-        let savedViaRpc = false;
-        try {
-          const { data: rpcRes, error: rpcErr } = await supabase.rpc("save_my_cadastral_profile", {
-            p_data: usuarioUpdatePayload,
-          });
-          if (!rpcErr && rpcRes?.success) {
-            savedViaRpc = true;
-          }
-        } catch {
-          // Fallback para update direto abaixo
-        }
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc("save_my_cadastral_profile", {
+          p_data: usuarioUpdatePayload,
+        });
 
-        if (!savedViaRpc) {
-          const { error: userErr } = await supabase
+        if (!rpcErr && rpcRes?.success) {
+          savedProfileRes = rpcRes;
+          if (typeof rpcRes.referral_code === "string" && rpcRes.referral_code.trim()) {
+            setReferralSlug(rpcRes.referral_code.trim());
+          }
+          if (typeof rpcRes.chave_pix === "string") {
+            setChavePix(rpcRes.chave_pix);
+          }
+        } else {
+          console.warn("[AtualizacaoCadastral] Fallback direto após resposta da RPC:", rpcErr || rpcRes);
+          const { data: updatedRows, error: userErr } = await supabase
             .from("usuarios")
             .update(usuarioUpdatePayload)
-            .eq("id", authUserId);
+            .eq("id", authUserId)
+            .select("id, referral_code, chave_pix");
 
-          if (userErr) {
-            console.warn("[AtualizacaoCadastral] Erro ao atualizar public.usuarios:", userErr);
-            throw userErr;
+          if (userErr || !updatedRows || updatedRows.length === 0) {
+            throw userErr || new Error("Não foi possível persistir os dados em public.usuarios.");
           }
+          savedProfileRes = updatedRows[0];
         }
       }
 
@@ -1146,7 +1197,10 @@ export default function AtualizacaoCadastral() {
         try {
           const { error: wlErr } = await supabase
             .from("waitlist")
-            .update(updatePayload)
+            .update({
+              ...updatePayload,
+              referral_code: savedProfileRes?.referral_code || finalSlug,
+            })
             .eq("id", waitlistId);
 
           if (wlErr) {
@@ -1170,6 +1224,7 @@ export default function AtualizacaoCadastral() {
         lead_id: leadRecord?.id,
         bairro_residencia: bairroResidencia,
         praias_count: praias.length,
+        has_pix: Boolean(finalPixKey),
       });
 
       // Dispara chuva de confetes exagerada em primeiro plano (zIndex 999999)
@@ -1180,9 +1235,9 @@ export default function AtualizacaoCadastral() {
         duration: 4500,
       });
 
-      // Redireciona imediatamente para a página exclusiva de compartilhamento do link de apadrinhamento
+      // Redireciona de forma limpa para a página única unificada do Fundador (/sou-fundador)
       setTimeout(() => {
-        navigate(`/app/indicacao?ref=${encodeURIComponent(finalSlug)}&nome=${encodeURIComponent(nome || razaoSocial)}&tel=${rawDigitsTel}`);
+        navigate("/sou-fundador", { replace: true });
       }, 1500);
     } catch (err: any) {
       console.error("[AtualizacaoCadastral] Erro ao concluir atualização:", err);
@@ -1266,7 +1321,7 @@ export default function AtualizacaoCadastral() {
               </h1>
               <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed max-w-sm">
                 {authMode === "PF"
-                  ? "Entre com seu e-mail e senha cadastrados para revisar e atualizar suas informações."
+                  ? "Entre com seu telefone, e-mail ou CPF e senha cadastrados para revisar e atualizar suas informações."
                   : "Entre com o CNPJ da entidade e a senha cadastrada para atualizar os dados institucionais."}
               </p>
             </div>
@@ -1313,23 +1368,23 @@ export default function AtualizacaoCadastral() {
                 </button>
               </div>
 
-              {/* Campo 1: E-mail (PF) ou CNPJ (PJ) */}
+              {/* Campo 1: E-mail, CPF ou Telefone (PF) ou CNPJ (PJ) */}
               {authMode === "PF" ? (
                 <div>
                   <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2">
-                    E-mail Cadastrado:
+                    E-mail, CPF ou Telefone:
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
+                      type="text"
                       value={authEmail}
                       onChange={(e) => {
                         setAuthEmail(e.target.value);
                         setAuthError("");
                       }}
-                      placeholder="seu.email@exemplo.com"
-                      autoComplete="email"
+                      placeholder="seu.email@exemplo.com, CPF ou WhatsApp"
+                      autoComplete="username"
                       autoFocus
                       className="w-full pl-10 pr-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-sans outline-none transition-all"
                     />
