@@ -437,15 +437,9 @@ export default function AdminClienteDetailPage() {
   };
 
   const referralInviteUrl = `${getAppOrigin()}/${client.slug}`;
-  const rawPhoneDigits = String(client.phone || "").replace(/\D/g, "");
-  const cleanClientEmail =
-    client.email && client.email.includes("@") ? client.email.trim().toLowerCase() : "";
-  const cadastralUpdateUrl =
-    rawPhoneDigits.length >= 8
-      ? `${getAppOrigin()}/atualizacao-cadastral?telefone=${encodeURIComponent(rawPhoneDigits)}`
-      : cleanClientEmail
-        ? `${getAppOrigin()}/atualizacao-cadastral?email=${encodeURIComponent(cleanClientEmail)}`
-        : `${getAppOrigin()}/atualizacao-cadastral`;
+  const cadastralUpdateUrl = client.id
+    ? `${getAppOrigin()}/atualizacao-cadastral?id=${encodeURIComponent(client.id)}`
+    : `${getAppOrigin()}/atualizacao-cadastral`;
 
   const sectionCardStyle = {
     padding: 22,

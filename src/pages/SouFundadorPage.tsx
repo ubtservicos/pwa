@@ -33,6 +33,7 @@ interface FounderProfile {
   nome: string;
   razao_social: string | null;
   tipo_pessoa: "PF" | "PJ";
+  role: string;
   email: string;
   telefone: string | null;
   cpf: string | null;
@@ -122,6 +123,7 @@ export default function SouFundadorPage() {
             nome: fallbackName,
             razao_social: null,
             tipo_pessoa: "PF",
+            role: "tomador",
             email: authUser.email || "",
             telefone: null,
             cpf: null,
@@ -161,6 +163,7 @@ export default function SouFundadorPage() {
           nome: realName,
           razao_social: row.razao_social ? String(row.razao_social).trim() : null,
           tipo_pessoa: isPJ ? "PJ" : "PF",
+          role: String(row.role || "tomador").toLowerCase(),
           email: String(row.email || authUser.email || "").trim(),
           telefone: row.telefone || null,
           cpf: row.cpf || null,
@@ -185,17 +188,30 @@ export default function SouFundadorPage() {
     const init = async () => {
       try {
         setAuthLoading(true);
+        // Validação estrita server-side via getUser() + getSession() (nunca confia apenas em cache local)
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
+        if (!session?.access_token) {
+          if (active) setProfile(null);
+          return;
+        }
+
+        const {
+          data: { user: verifiedUser },
+          error: verifyErr,
+        } = await supabase.auth.getUser();
+
         if (!active) return;
 
-        if (session?.user) {
-          await loadAuthenticatedProfile(session.user);
-        } else {
+        if (verifyErr || !verifiedUser) {
+          await supabase.auth.signOut();
           setProfile(null);
+          return;
         }
+
+        await loadAuthenticatedProfile(verifiedUser);
       } catch (err) {
         console.error("[SouFundadorPage] Erro ao verificar sessão:", err);
         if (active) setProfile(null);
@@ -560,16 +576,28 @@ export default function SouFundadorPage() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {profile ? (
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              className="px-3.5 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sair</span>
-            </button>
+            <>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121215] border border-zinc-800 text-[11px] font-mono text-zinc-300 max-w-[260px]">
+                <span className="w-2 h-2 rounded-full bg-[#00E676] shrink-0" />
+                <span className="truncate">{profile.email}</span>
+                {["admin", "superadmin", "super_admin"].includes(profile.role) && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[10px] font-bold uppercase shrink-0">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className="px-3.5 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Sair desta conta"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sair</span>
+              </button>
+            </>
           ) : (
             <Link
               to="/#cadastro-fundadores-cap"
@@ -882,7 +910,9 @@ export default function SouFundadorPage() {
 
                 <button
                   type="button"
-                  onClick={() => navigate("/atualizacao-cadastral")}
+                  onClick={() =>
+                    navigate("/atualizacao-cadastral", { state: { fromSouFundador: true } })
+                  }
                   className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-[#00E676] hover:bg-[#10B981] text-zinc-950 font-display font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-emerald-500/20 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-zinc-950" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Loader2,
@@ -70,9 +70,15 @@ const STEPS = [
   { id: 4, title: "Financeiro & Indicação", icon: Wallet },
 ];
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function AtualizacaoCadastral() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  const rawIdParam = (searchParams.get("id") || "").trim();
+  const targetUserId = UUID_REGEX.test(rawIdParam) ? rawIdParam : null;
 
   // Estados de Autenticação e Carregamento Cadastral (PF: E-mail+Senha | PJ: CNPJ+Senha)
   const [lookupState, setLookupState] = useState<"loading" | "auth" | "wizard">("loading");
@@ -429,7 +435,10 @@ export default function AtualizacaoCadastral() {
         typeof window !== "undefined" && window.location.origin
           ? window.location.origin
           : "https://ubtservicos.vercel.app";
-      const redirectTo = `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`;
+      const callbackParams = new URLSearchParams();
+      if (targetUserId) callbackParams.set("id", targetUserId);
+      callbackParams.set("auth_callback", "1");
+      const redirectTo = `${origin}/atualizacao-cadastral?${callbackParams.toString()}`;
 
       if (recoveryMode === "magic_link") {
         const { error } = await supabase.auth.signInWithOtp({
@@ -468,14 +477,10 @@ export default function AtualizacaoCadastral() {
         typeof window !== "undefined" && window.location.origin
           ? window.location.origin
           : "https://ubtservicos.vercel.app";
-      const targetEmail = (recoveryEmail || authEmail || "").trim().toLowerCase();
       const params = new URLSearchParams();
-      if (targetEmail) params.set("email", targetEmail);
-      if (hintPhone) params.set("telefone", hintPhone);
-      const qs = params.toString();
-      const redirectTo = qs
-        ? `${origin}/atualizacao-cadastral?${qs}`
-        : `${origin}/atualizacao-cadastral`;
+      if (targetUserId) params.set("id", targetUserId);
+      params.set("auth_callback", "1");
+      const redirectTo = `${origin}/atualizacao-cadastral?${params.toString()}`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -704,6 +709,26 @@ export default function AtualizacaoCadastral() {
         return;
       }
 
+      // Validação pós-login de titularidade quando o link possui ?id=<uuid> (impede acesso cruzado)
+      if (targetUserId) {
+        const { data: isOwner, error: ownerErr } = await supabase.rpc(
+          "verify_my_cadastral_link_owner",
+          { p_target_user_id: targetUserId },
+        );
+
+        if (ownerErr || isOwner !== true) {
+          await supabase.auth.signOut();
+          setIsUnlocked(false);
+          setLookupState("auth");
+          setAuthError(
+            "A conta autenticada não corresponde ao titular deste link de atualização cadastral. Entre com as credenciais do titular correto.",
+          );
+          toast.error("Conta não corresponde ao titular deste link.");
+          setIsAuthenticating(false);
+          return;
+        }
+      }
+
       await loadAuthenticatedProfile(authData.user, hintPhone);
       toast.success("Acesso liberado! Confira e atualize seus dados cadastrais.");
       trackEvent("atualizacao_cadastral_authenticated", "security", {
@@ -719,108 +744,116 @@ export default function AtualizacaoCadastral() {
     }
   };
 
-  // Inicialização: pré-preenche via ?email=, ?telefone=, ?cnpj= e pré-diagnostica contas sem senha/Google sem bloquear
+  // Inicialização com GATE OBRIGATÓRIO DE LOGIN + SENHA (LGPD: zero PII pré-login, sem reaproveitar sessão antiga)
   useEffect(() => {
     let cancelled = false;
 
-    const bootstrap = async () => {
-      setLookupState("loading");
-      const rawEmail = (searchParams.get("email") || "").trim().toLowerCase();
-      const rawPhoneParam = searchParams.get("tel") || searchParams.get("telefone") || "";
-      const rawCnpjParam = (searchParams.get("cnpj") || "").replace(/\D/g, "");
-      const rawTipoParam = (searchParams.get("tipo") || "").trim().toLowerCase();
+    const hashStr = typeof window !== "undefined" ? window.location.hash || "" : "";
+    const queryType = (searchParams.get("type") || "").toLowerCase();
+    const isAuthCallback = Boolean(
+      searchParams.get("auth_callback") === "1" ||
+        searchParams.get("code") ||
+        queryType === "recovery" ||
+        queryType === "magiclink" ||
+        hashStr.includes("access_token=") ||
+        hashStr.includes("type=recovery") ||
+        hashStr.includes("type=magiclink"),
+    );
+    const isFromSouFundador = Boolean((location.state as any)?.fromSouFundador === true);
 
-      const telDigits = decodeURIComponent(rawPhoneParam).replace(/\D/g, "");
-      const cleanPhone =
-        telDigits.startsWith("55") && telDigits.length > 10 ? telDigits.slice(2) : telDigits;
-
-      if (cleanPhone) setHintPhone(cleanPhone);
-      if (rawCnpjParam) {
-        setAuthCnpj(maskCNPJ(rawCnpjParam));
-        setAuthMode("PJ");
-      } else if (rawTipoParam === "pj" || rawTipoParam === "entidade") {
-        setAuthMode("PJ");
+    const verifyAndLoadCallbackSession = async (sessionUser: {
+      id: string;
+      email?: string | null;
+      user_metadata?: Record<string, any>;
+    }) => {
+      if (targetUserId) {
+        const { data: isOwner, error: ownerErr } = await supabase.rpc(
+          "verify_my_cadastral_link_owner",
+          { p_target_user_id: targetUserId },
+        );
+        if (ownerErr || isOwner !== true) {
+          await supabase.auth.signOut();
+          if (!cancelled) {
+            setIsUnlocked(false);
+            setLookupState("auth");
+            setAuthError(
+              "A conta autenticada não corresponde ao titular deste link de atualização cadastral. Entre com as credenciais do titular correto.",
+            );
+          }
+          return;
+        }
       }
 
-      let resolvedEmail = rawEmail;
-      let resolvedTipo: "PF" | "PJ" | null =
-        rawCnpjParam || rawTipoParam === "pj" || rawTipoParam === "entidade" ? "PJ" : null;
-      let resolvedState: {
-        has_auth_account?: boolean;
-        has_password?: boolean;
-        auth_provider?: string | null;
-        has_legacy_profile?: boolean;
-      } | null = null;
+      if (!cancelled) {
+        await loadAuthenticatedProfile(sessionUser, "");
+      }
+    };
 
-      if (cleanPhone.length >= 8 || rawEmail) {
+    const bootstrap = async () => {
+      setLookupState("loading");
+      // Garante campos de login sempre limpos (LGPD: zero pré-preenchimento de PII)
+      setAuthEmail("");
+      setAuthCnpj("");
+      setAuthPassword("");
+      setAuthError("");
+      setAccountNotice(null);
+      setRecoveryEmail(null);
+      setRecoverySent(false);
+      setShowGoogleOption(false);
+      setHintPhone("");
+
+      // 1. Detecta apenas metadados não-sensíveis (PF vs PJ) via ?id=<uuid> — ZERO PII retornado
+      if (targetUserId) {
         try {
-          const rpcParams = rawEmail
-            ? { p_email: rawEmail }
-            : { p_telefone: cleanPhone };
-          const { data: resolved } = await supabase.rpc("resolve_cadastral_login_email", rpcParams);
-          if (!cancelled && resolved) {
-            resolvedState = resolved;
-            if (typeof resolved.email === "string" && resolved.email.trim()) {
-              resolvedEmail = resolved.email.trim().toLowerCase();
-            }
-            if (resolved.tipo_pessoa === "PJ" || resolved.tipo_pessoa === "PF") {
-              resolvedTipo = resolved.tipo_pessoa;
+          const { data: meta } = await supabase.rpc("resolve_cadastral_login_email", {
+            p_user_id: targetUserId,
+          });
+          if (!cancelled && meta) {
+            if (meta.tipo_pessoa === "PJ") setAuthMode("PJ");
+            else if (meta.tipo_pessoa === "PF") setAuthMode("PF");
+
+            const hasAuth = Boolean(meta.has_auth_account);
+            const hasPwd = Boolean(meta.has_password);
+            const hasLegacy = Boolean(meta.has_legacy_profile);
+            const provider = String(meta.auth_provider || "").toLowerCase();
+
+            if (!hasAuth && hasLegacy) {
+              setAccountNotice(
+                "Este cadastro ainda não possui senha de acesso criada. Informe seu e-mail, CPF, telefone ou CNPJ abaixo para receber o link de criação de senha.",
+              );
+            } else if (hasAuth && !hasPwd) {
+              setShowGoogleOption(provider === "google");
+              setAccountNotice(
+                "Esta conta foi criada via Google ou ainda não possui senha definida. Informe seu identificador abaixo para criar uma senha ou entre com sua conta Google.",
+              );
             }
           }
         } catch {
-          // Nunca bloqueia o usuário se a pré-resolução falhar
+          // Nunca bloqueia a tela de login
         }
       }
 
       if (cancelled) return;
 
-      if (resolvedEmail) setAuthEmail(resolvedEmail);
-      if (resolvedTipo === "PJ") setAuthMode("PJ");
-      else if (resolvedTipo === "PF") setAuthMode("PF");
-
-      // Se já houver sessão ativa correspondente ao titular (ou retorno de Magic Link / OAuth / Recovery), entra no wizard
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const sessionEmail = (session?.user?.email || "").trim().toLowerCase();
-        const hasUrlTarget = Boolean(rawEmail || cleanPhone || rawCnpjParam);
-        const matchesUrlTarget = Boolean(resolvedEmail && sessionEmail && sessionEmail === resolvedEmail);
-
-        if (session?.user && (!hasUrlTarget || matchesUrlTarget)) {
-          await loadAuthenticatedProfile(session.user, cleanPhone);
-          return;
+      // 2. Exceções ÚNICAS permitidas para pular o gate de Login + Senha:
+      //    (a) Retorno imediato de callback Auth (magiclink / recovery / OAuth)
+      //    (b) Navegação interna autenticada a partir de /sou-fundador (location.state.fromSouFundador === true)
+      if (isAuthCallback || isFromSouFundador) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.user && !cancelled) {
+            await verifyAndLoadCallbackSession(session.user);
+            return;
+          }
+        } catch {
+          // Cai para o gate obrigatório abaixo
         }
-      } catch {
-        // Fallback defensivo: mostra tela de login
       }
 
+      // 3. Regra padrão: SEMPRE exibe o gate obrigatório de Login + Senha
       if (!cancelled) {
-        // Pré-aviso amigável caso o link já identifique conta legada sem senha ou Google OAuth
-        if (resolvedEmail && resolvedState) {
-          const hasAuth = Boolean(resolvedState.has_auth_account);
-          const hasPwd = Boolean(resolvedState.has_password);
-          const hasLegacy = Boolean(resolvedState.has_legacy_profile);
-          const provider = String(resolvedState.auth_provider || "").toLowerCase();
-
-          if (!hasAuth && hasLegacy) {
-            setRecoveryEmail(resolvedEmail);
-            setRecoveryMode("magic_link");
-            setShowGoogleOption(resolvedEmail.endsWith("@gmail.com"));
-            setAccountNotice(
-              "Seu cadastro já está na UBT, mas ainda não possui senha de acesso criada. Clique abaixo para receber o link de acesso e criação de senha no seu e-mail" +
-                (resolvedEmail.endsWith("@gmail.com") ? " ou entre direto com sua conta Google." : "."),
-            );
-          } else if (hasAuth && !hasPwd) {
-            setRecoveryEmail(resolvedEmail);
-            setRecoveryMode("password_reset");
-            setShowGoogleOption(provider === "google" || resolvedEmail.endsWith("@gmail.com"));
-            setAccountNotice(
-              "Sua conta foi criada via Google ou ainda não possui senha definida. Clique abaixo para receber o link de criação de senha ou entre com sua conta Google.",
-            );
-          }
-        }
-
         setIsUnlocked(false);
         setLookupState("auth");
       }
@@ -830,8 +863,11 @@ export default function AtualizacaoCadastral() {
 
     const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-      if ((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && session?.user) {
-        void loadAuthenticatedProfile(session.user, hintPhone);
+      if (
+        (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && isAuthCallback)) &&
+        session?.user
+      ) {
+        void verifyAndLoadCallbackSession(session.user);
       }
     });
 
@@ -839,7 +875,7 @@ export default function AtualizacaoCadastral() {
       cancelled = true;
       authSub?.subscription?.unsubscribe();
     };
-  }, [searchParams]);
+  }, [searchParams, targetUserId, location.state]);
 
   // Lista filtrada de bairros para atuação
   const filteredBairrosAtuacao = useMemo(() => {
@@ -1494,7 +1530,7 @@ export default function AtualizacaoCadastral() {
                   </div>
                   {recoverySent && (
                     <span className="text-emerald-400 text-[11px] font-semibold">
-                      Link enviado para {recoveryEmail}! Verifique sua caixa de entrada e spam.
+                      Link enviado! Verifique sua caixa de entrada e spam.
                     </span>
                   )}
                 </div>

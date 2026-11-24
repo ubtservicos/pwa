@@ -102,15 +102,6 @@ function cleanBrazilPhone(raw?: string | null): string {
   return `55${digits}`;
 }
 
-function cleanLocalPhoneDigits(raw?: string | null): string {
-  const digits = String(raw || "").replace(/\D/g, "");
-  if (digits.length < 8) return "";
-  if (digits.startsWith("55") && digits.length > 10) {
-    return digits.slice(2);
-  }
-  return digits;
-}
-
 export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   key: WhatsAppTemplateKey;
   label: string;
@@ -119,7 +110,7 @@ export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   {
     key: "completar_cadastro",
     label: "1. Completar o cadastro",
-    description: "Link direto de atualização cadastral com o telefone do cliente",
+    description: "Link seguro de atualização cadastral por ID da conta (LGPD)",
   },
   {
     key: "abrir_mercadopago",
@@ -143,11 +134,11 @@ export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   },
 ];
 
-export function buildCadastralUpdateUrl(clientPhone?: string | null): string {
+export function buildCadastralUpdateUrl(userId?: string | null): string {
   const appOrigin = getAppOrigin();
-  const localDigits = cleanLocalPhoneDigits(clientPhone);
-  return localDigits
-    ? `${appOrigin}/atualizacao-cadastral?telefone=${encodeURIComponent(localDigits)}`
+  const cleanId = String(userId || "").trim();
+  return cleanId
+    ? `${appOrigin}/atualizacao-cadastral?id=${encodeURIComponent(cleanId)}`
     : `${appOrigin}/atualizacao-cadastral`;
 }
 
@@ -159,7 +150,7 @@ export const WHATSAPP_ENTIDADE_TEMPLATE_OPTIONS: Array<{
   {
     key: "completar_cadastro",
     label: "1. Completar o cadastro",
-    description: "Link direto de atualização cadastral com o telefone da entidade",
+    description: "Link seguro de atualização cadastral por ID da entidade (LGPD)",
   },
   {
     key: "abrir_mercadopago",
@@ -186,13 +177,13 @@ export const WHATSAPP_ENTIDADE_TEMPLATE_OPTIONS: Array<{
 export function buildWhatsAppTemplate(
   key: WhatsAppTemplateKey,
   clientName: string,
-  clientPhone?: string | null,
+  userId?: string | null,
   entityType: "cliente" | "entidade" = "cliente",
 ): string {
   const firstName = String(clientName || (entityType === "entidade" ? "Entidade" : "Cliente")).trim().split(/\s+/)[0] || "Cliente";
   const displayName = String(clientName || "Entidade").trim();
   const appOrigin = getAppOrigin();
-  const updateUrl = buildCadastralUpdateUrl(clientPhone);
+  const updateUrl = buildCadastralUpdateUrl(userId);
 
   if (entityType === "entidade") {
     switch (key) {
@@ -639,10 +630,10 @@ export function WhatsAppClientModal({
     if (client) {
       setTemplateKey("completar_cadastro");
       setMessageText(
-        buildWhatsAppTemplate("completar_cadastro", client.name, client.phone, client.entityType || "cliente"),
+        buildWhatsAppTemplate("completar_cadastro", client.name, client.id, client.entityType || "cliente"),
       );
     }
-  }, [client?.id, client?.phone, client?.entityType]);
+  }, [client?.id, client?.entityType]);
 
   const normalizedPhone = useMemo(() => cleanBrazilPhone(client?.phone), [client?.phone]);
 
@@ -650,7 +641,7 @@ export function WhatsAppClientModal({
 
   const handleSelectTemplate = (key: WhatsAppTemplateKey) => {
     setTemplateKey(key);
-    setMessageText(buildWhatsAppTemplate(key, client.name, client.phone, entityType));
+    setMessageText(buildWhatsAppTemplate(key, client.name, client.id, entityType));
   };
 
   const handleOpenWhatsApp = () => {

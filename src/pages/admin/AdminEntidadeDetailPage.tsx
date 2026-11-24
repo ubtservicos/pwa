@@ -358,15 +358,9 @@ export default function AdminEntidadeDetailPage() {
   };
 
   const referralInviteUrl = `${getAppOrigin()}/${entidade.slug}`;
-  const rawPhoneDigits = String(entidade.telefoneRaw || entidade.telefone || "").replace(/\D/g, "");
-  const cleanEntidadeEmail =
-    entidade.email && entidade.email.includes("@") ? entidade.email.trim().toLowerCase() : "";
-  const cadastralUpdateUrl =
-    rawPhoneDigits.length >= 8
-      ? `${getAppOrigin()}/atualizacao-cadastral?telefone=${encodeURIComponent(rawPhoneDigits)}`
-      : cleanEntidadeEmail
-        ? `${getAppOrigin()}/atualizacao-cadastral?email=${encodeURIComponent(cleanEntidadeEmail)}`
-        : `${getAppOrigin()}/atualizacao-cadastral`;
+  const cadastralUpdateUrl = entidade.id
+    ? `${getAppOrigin()}/atualizacao-cadastral?id=${encodeURIComponent(entidade.id)}`
+    : `${getAppOrigin()}/atualizacao-cadastral`;
 
   const sectionCardStyle = {
     padding: 22,
