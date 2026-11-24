@@ -1,9 +1,95 @@
 import { calculateSplitAmounts } from "@/lib/finance/splitEngine";
 
-export const calcPrice = (distanceKm: number): number => {
-  const BASE_FIXED = 4.0;
-  const BASE_RATE = 2.5;
-  return Math.round((BASE_FIXED + BASE_RATE * distanceKm) * 100) / 100;
+export interface MototaxiPricingConfig {
+  taxaUnica: number;
+  valorPorKm: number;
+  kmGatilhoIdaVolta: number;
+  fatorDemanda: number;
+  fatorHorario: number;
+  fatorClima: number;
+}
+
+export const DEFAULT_MOTOTAXI_PRICING_CONFIG: MototaxiPricingConfig = {
+  taxaUnica: 4.0,
+  valorPorKm: 2.5,
+  kmGatilhoIdaVolta: 8.0,
+  fatorDemanda: 1.0,
+  fatorHorario: 1.0,
+  fatorClima: 1.0,
+};
+
+export interface MototaxiQuoteBreakdown {
+  distanciaKm: number;
+  idaEVoltaAtivada: boolean;
+  kmCobrados: number;
+  taxaUnica: number;
+  valorPorKm: number;
+  kmGatilhoIdaVolta: number;
+  fatorDemanda: number;
+  fatorHorario: number;
+  fatorClima: number;
+  multiplicadorTotal: number;
+  precoBase: number;
+  precoFinal: number;
+  repasseMototaxista: number;
+  taxaPlataforma: number;
+}
+
+export function calculateMototaxiQuote(
+  distanceKm: number,
+  config?: Partial<MototaxiPricingConfig> | null,
+): MototaxiQuoteBreakdown {
+  const distanciaKm = Math.max(0, Number.isFinite(distanceKm) ? distanceKm : 0);
+  const taxaUnica = Math.max(0, Number(config?.taxaUnica ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.taxaUnica) || 0);
+  const valorPorKm = Math.max(0, Number(config?.valorPorKm ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.valorPorKm) || 0);
+  const kmGatilhoIdaVolta = Math.max(
+    0,
+    Number(config?.kmGatilhoIdaVolta ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.kmGatilhoIdaVolta) || 0,
+  );
+  const fatorDemanda = Math.max(
+    0.5,
+    Number(config?.fatorDemanda ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.fatorDemanda) || 1.0,
+  );
+  const fatorHorario = Math.max(
+    0.5,
+    Number(config?.fatorHorario ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.fatorHorario) || 1.0,
+  );
+  const fatorClima = Math.max(
+    0.5,
+    Number(config?.fatorClima ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.fatorClima) || 1.0,
+  );
+
+  const idaEVoltaAtivada = kmGatilhoIdaVolta > 0 && distanciaKm >= kmGatilhoIdaVolta;
+  const kmCobrados = idaEVoltaAtivada ? +(distanciaKm * 2).toFixed(2) : +distanciaKm.toFixed(2);
+  const precoBase = Math.round((taxaUnica + valorPorKm * kmCobrados) * 100) / 100;
+  const multiplicadorTotal = +(fatorDemanda * fatorHorario * fatorClima).toFixed(4);
+  const precoFinal = Math.round(precoBase * multiplicadorTotal * 100) / 100;
+  const repasseMototaxista = Math.round(precoFinal * 0.9 * 100) / 100;
+  const taxaPlataforma = Math.round((precoFinal - repasseMototaxista) * 100) / 100;
+
+  return {
+    distanciaKm,
+    idaEVoltaAtivada,
+    kmCobrados,
+    taxaUnica,
+    valorPorKm,
+    kmGatilhoIdaVolta,
+    fatorDemanda,
+    fatorHorario,
+    fatorClima,
+    multiplicadorTotal,
+    precoBase,
+    precoFinal,
+    repasseMototaxista,
+    taxaPlataforma,
+  };
+}
+
+export const calcPrice = (
+  distanceKm: number,
+  config?: Partial<MototaxiPricingConfig> | null,
+): number => {
+  return calculateMototaxiQuote(distanceKm, config).precoFinal;
 };
 
 export const calcSplit = (total: number) => {

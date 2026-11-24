@@ -25,7 +25,14 @@ import QuickStatusMessages, { type QuickMessageItem } from "@/components/mototax
 import { useMototaxiQuickMessages, type MototaxiChatStatus } from "@/hooks/useMototaxiQuickMessages";
 import { FullscreenConfetti } from "@/components/ui/FullscreenConfetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
-import { calcPrice, formatBRL } from "@/utils/ride";
+import {
+  calcPrice,
+  calculateMototaxiQuote,
+  DEFAULT_MOTOTAXI_PRICING_CONFIG,
+  formatBRL,
+  type MototaxiPricingConfig,
+} from "@/utils/ride";
+import { fetchMototaxiPricingConfig } from "@/services/MototaxiPricingService";
 import { useRide, type RideType } from "@/contexts/RideContext";
 import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, reverseGeocode, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -65,6 +72,7 @@ const IdleSheet = ({
   type, setType,
   origin, setOriginAddress, recenter,
   destination, setDestination,
+  pricingConfig,
   onConfirm,
 }: {
   type: RideType | null;
@@ -74,6 +82,7 @@ const IdleSheet = ({
   recenter: () => void;
   destination: { lat: number; lng: number; address: string } | null;
   setDestination: (d: { lat: number; lng: number; address: string }) => void;
+  pricingConfig: MototaxiPricingConfig;
   onConfirm: () => void;
 }) => {
   const distanceKm = useMemo(() => {
@@ -90,7 +99,11 @@ const IdleSheet = ({
     return +(2 * R * Math.asin(Math.sqrt(a))).toFixed(1);
   }, [origin, destination]);
 
-  const price = distanceKm > 0 ? calcPrice(distanceKm) : 0;
+  const quote = useMemo(
+    () => (distanceKm > 0 ? calculateMototaxiQuote(distanceKm, pricingConfig) : null),
+    [distanceKm, pricingConfig],
+  );
+  const price = quote ? quote.precoFinal : 0;
   const durationMin = Math.max(3, Math.round(distanceKm * 3));
 
   const canConfirm = !!type && !!origin && !!destination;
@@ -1033,7 +1046,20 @@ const MototaxiTomadorPage = () => {
   const { state, setState, resetRide } = useRide();
   const [center, setCenter] = useState(UBATUBA_FALLBACK);
   const [onlineDrivers, setOnlineDrivers] = useState<any[]>([]);
+  const [pricingConfig, setPricingConfig] = useState<MototaxiPricingConfig>(
+    DEFAULT_MOTOTAXI_PRICING_CONFIG,
+  );
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetchMototaxiPricingConfig().then((cfg) => {
+      if (active) setPricingConfig(cfg);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const initOnce = useRef(false);
   const mototaxiChat = useMototaxiQuickMessages(state.rideId, "tomador", (message) => {
     setIncomingMessage({ text: message.text, sender: "Motorista" });
@@ -1085,10 +1111,10 @@ const MototaxiTomadorPage = () => {
     setState({
       distanceKm: km,
       durationMin: Math.max(3, Math.round(km * 3)),
-      estimatedPrice: calcPrice(km),
+      estimatedPrice: calcPrice(km, pricingConfig),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.origin, state.destination]);
+  }, [state.origin, state.destination, pricingConfig]);
 
   // Buscar motoristas online em tempo real com polling de contingência e suporte a bfcache
   useEffect(() => {
@@ -1733,6 +1759,7 @@ const MototaxiTomadorPage = () => {
           }}
           destination={state.destination}
           setDestination={(d) => setState({ destination: d })}
+          pricingConfig={pricingConfig}
           onConfirm={handleConfirm}
         />
       )}

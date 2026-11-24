@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { calcPrice, calcSplit, formatBRL } from "../utils/ride";
+import { calcPrice, calculateMototaxiQuote, calcSplit, formatBRL } from "../utils/ride";
 import { RideStatus, RideState } from "../types/database.types";
 
 // Class to simulate the state transitions of the Mototáxi journey
@@ -125,6 +125,52 @@ describe("Mototáxi Journey State Transitions & Financial Calculations", () => {
       const price = calcPrice(2.78);
       // 4.0 + 2.5 * 2.78 = 4.0 + 6.95 = 10.95
       expect(price).toBe(10.95);
+    });
+
+    it("should apply round-trip (2x km) rule when distance >= kmGatilhoIdaVolta", () => {
+      // 12 km >= 8 km gatilho => 24 km cobrados => 4.0 + 2.5 * 24 = 64.0
+      const quote = calculateMototaxiQuote(12, {
+        taxaUnica: 4.0,
+        valorPorKm: 2.5,
+        kmGatilhoIdaVolta: 8.0,
+        fatorDemanda: 1.0,
+        fatorHorario: 1.0,
+        fatorClima: 1.0,
+      });
+      expect(quote.idaEVoltaAtivada).toBe(true);
+      expect(quote.kmCobrados).toBe(24);
+      expect(quote.precoBase).toBe(64.0);
+      expect(quote.precoFinal).toBe(64.0);
+      expect(quote.repasseMototaxista).toBe(57.6);
+      expect(quote.taxaPlataforma).toBe(6.4);
+    });
+
+    it("should apply dynamic multipliers on top of round-trip base price", () => {
+      // 10 km >= 8 km => 20 km cobrados => base = 4 + 2.5*20 = 54.0
+      // multiplicadores: 1.3 * 1.2 * 1.0 = 1.56 => 54 * 1.56 = 84.24
+      const quote = calculateMototaxiQuote(10, {
+        taxaUnica: 4.0,
+        valorPorKm: 2.5,
+        kmGatilhoIdaVolta: 8.0,
+        fatorDemanda: 1.3,
+        fatorHorario: 1.2,
+        fatorClima: 1.0,
+      });
+      expect(quote.idaEVoltaAtivada).toBe(true);
+      expect(quote.precoBase).toBe(54.0);
+      expect(quote.precoFinal).toBe(84.24);
+      expect(quote.repasseMototaxista).toBe(75.82);
+    });
+
+    it("should disable round-trip rule when kmGatilhoIdaVolta is 0", () => {
+      const quote = calculateMototaxiQuote(12, {
+        taxaUnica: 4.0,
+        valorPorKm: 2.5,
+        kmGatilhoIdaVolta: 0,
+      });
+      expect(quote.idaEVoltaAtivada).toBe(false);
+      expect(quote.kmCobrados).toBe(12);
+      expect(quote.precoFinal).toBe(34.0);
     });
 
     it("should calculate splits correctly based on total transaction amount (7-way split)", () => {

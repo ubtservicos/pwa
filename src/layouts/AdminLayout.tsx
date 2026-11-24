@@ -76,6 +76,7 @@ export const DIARISTAS_NAV_ITEMS = [
 
 export const MOTOTAXI_NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin"] },
+  { icon: Zap, label: "Tarifas & Preço Dinâmico", path: "/admin/mototaxistas/preco-dinamico", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const AMBULANTES_NAV_ITEMS = [
@@ -106,7 +107,6 @@ export const NAV_ITEMS = [
   { icon: Settings, label: "Configurações", path: "/admin/configuracoes", roles: ["admin", "super_admin"] },
   { icon: Divide, label: "Taxa de Serviço", path: "/admin/split", roles: ["financeiro", "admin", "super_admin"] },
   { icon: Building2, label: "Entidades", path: "/admin/entidades", roles: ["operator", "admin", "super_admin"] },
-  { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco", roles: ["operator", "admin", "super_admin"] },
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
   { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["admin", "super_admin", "superadmin"] },
@@ -211,7 +211,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
   const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/kyc-pendentes", "/admin/mensageria", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
-  const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
+  const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
 
