@@ -11,18 +11,25 @@ const migration = read("supabase/migrations/20261014143000_mototaxi_provider_pix
 const qrImageMigration = read("supabase/migrations/20261014162000_mototaxi_pix_qr_image.sql");
 
 describe("Mototaxi provider-created Pix contract", () => {
-  it("makes the assigned provider the only Pix charge initiator", () => {
+  it("makes the assigned provider the only Pix charge initiator with unique attempt idempotency", () => {
     expect(provider).toContain('action: "create_mototaxi_pix_charge"');
     expect(provider).toContain("Gerar Cobrança Pix");
-    expect(provider).toContain("payment_attempt_id: ride.id");
+    expect(provider).toContain("const paymentAttemptId = crypto.randomUUID()");
+    expect(provider).toContain("payment_attempt_id: paymentAttemptId");
+    expect(provider).not.toContain("payment_attempt_id: ride.id");
+    expect(provider).not.toContain("handleConfirmCashOrManualPaid");
+    expect(provider).not.toContain("status: 'paid'");
     expect(passenger).not.toContain("Gerar Código Pix");
     expect(passenger).not.toContain('action: "create_payment_intent"');
   });
 
-  it("validates provider, canonical ride amount and payer identity server-side", () => {
+  it("validates provider, canonical ride amount, notification_url, wallet and payer identity server-side", () => {
     expect(gateway).toContain('action === "create_mototaxi_pix_charge"');
     expect(gateway).toContain('ride.prestador_id !== customerId || providerId !== customerId');
     expect(gateway).toContain("canonicalAmount");
+    expect(gateway).toContain("notification_url: notificationUrl");
+    expect(gateway).toContain("list_saved_cards");
+    expect(gateway).toContain("save_card");
     expect(gateway).toMatch(/(?:supabaseAdmin|adminClient\(\))\.auth\.admin\.getUserById\(ride\.tomador_id\)/);
   });
 

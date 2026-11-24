@@ -16,7 +16,6 @@ import {
   User,
   MessageSquare,
   Smartphone,
-  Banknote,
   Copy,
   Check,
 } from "lucide-react";
@@ -588,7 +587,7 @@ const InProgressSheet = ({
   );
 };
 
-type PaymentMethodOption = "pix_checkout" | "card" | "cash";
+type PaymentMethodOption = "pix_checkout" | "card";
 
 const CompletedScreen = ({
   price,
@@ -618,12 +617,10 @@ const CompletedScreen = ({
   }, []);
 
   const rawBase = price > 0 ? price : 10.00;
-  // Calculate fee mapping for split display
-  const feeMethodType = (method === "card" ? "card" : "pix") as "pix" | "card";
-  const calculatedFee = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
-  const feeCalc = method === "card"
-    ? calculatedFee
-    : { ...calculatedFee, feeAmount: 0, feePercentage: 0, totalAmount: rawBase };
+  const pixCalc = calculatePaymentWithFee(rawBase, "pix", feeSettings);
+  const cardCalc = calculatePaymentWithFee(rawBase, "card", feeSettings);
+  const activeFeeCalc = method === "card" ? cardCalc : method === "pix_checkout" ? pixCalc : null;
+  const formatPct = (pct: number) => `${pct.toFixed(2).replace(".", ",")}%`;
 
   const transitionToPaid = useCallback(() => {
     setConfirming(true);
@@ -663,50 +660,38 @@ const CompletedScreen = ({
     if (paidTimerRef.current) clearTimeout(paidTimerRef.current);
   }, []);
 
-
   // Persist the selected method; Pix creation itself belongs to the provider.
   const handleSelectMethod = async (m: PaymentMethodOption) => {
     setMethod(m);
     setPaymentError(null);
 
-    const methodMap: Record<PaymentMethodOption, string | null> = {
-      cash: null,
-      pix_checkout: "pix",
-      card: "card",
-    };
-
-    const dbMethod = methodMap[m] !== undefined ? methodMap[m] : null;
+    const dbMethod = m === "pix_checkout" ? "pix" : "card";
 
     if (rideId) {
       try {
-        const updatePayload: { payment_method: string | null } = {
-          payment_method: dbMethod,
-        };
-        
         const { error } = await supabase
           .from("mototaxi_corridas")
-          .update(updatePayload)
+          .update({ payment_method: dbMethod })
           .eq("id", rideId);
 
         if (error) {
           console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
         }
-
       } catch (e: any) {
         console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
     }
-
   };
 
   // ─── Card payment callbacks (delegated to <CheckoutUniversal />) ───
   const handleCardPaymentSuccess = async (result: PaymentResult) => {
+    const status = String(result?.status || (result?.payment as { status?: string } | undefined)?.status || "").toLowerCase();
+    if (status !== "approved") return;
     if (result?.split?.statement) {
       console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + result.split.statement);
     }
     // payment-gateway is the only authority allowed to mark the ride as paid.
-    setConfirming(true);
-    setTimeout(onPay, 1500);
+    transitionToPaid();
   };
 
   const handleCardPaymentError = (errorMsg: string) => {
@@ -741,28 +726,51 @@ const CompletedScreen = ({
           <span>{durationMin} min</span>
         </div>
         <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-        
-        {/* Dynamic Split Breakdown */}
-        <SplitBreakdown total={feeCalc.totalAmount} />
-        
+
+        {/* Dynamic Split Breakdown (always computed over base ride fare) */}
+        <SplitBreakdown total={rawBase} />
+
         <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
 
-        {/* Detailed Price & Fee Display */}
-        <div className="space-y-1">
-          <div className="flex justify-between font-sans text-[13px] text-white/60">
-            <span>Tarifa base:</span>
-            <span>{formatBRL(feeCalc.baseAmount)}</span>
+        {/* Detailed Price & Payment Method Fee Display (paid by Tomador) */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between font-sans text-[13px] text-white/70">
+            <span>Valor base da corrida:</span>
+            <span>{formatBRL(rawBase)}</span>
           </div>
-          {feeCalc.feeAmount > 0 && (
-            <div className="flex justify-between font-sans text-[13px] text-[#F5A623]">
-              <span>Taxa gateway ({feeCalc.feePercentage}%):</span>
-              <span>+ {formatBRL(feeCalc.feeAmount)}</span>
-            </div>
+
+          {activeFeeCalc ? (
+            <>
+              <div className="flex justify-between font-sans text-[13px] text-[#F5A623]">
+                <span>
+                  Taxa {method === "card" ? "Cartão de Crédito" : "PIX"} ({formatPct(activeFeeCalc.feePct)} · arcada pelo Tomador):
+                </span>
+                <span>+ {formatBRL(activeFeeCalc.feeAmount)}</span>
+              </div>
+              <p className="font-sans text-[11px] text-white/45 leading-snug">
+                A taxa do meio de pagamento varia entre PIX ({formatPct(pixCalc.feePct)}) e Cartão ({formatPct(cardCalc.feePct)}) e garante que o mototaxista receba 90% líquidos da tarifa base.
+              </p>
+              <div className="flex justify-between font-display text-[18px] font-bold text-white pt-1.5 border-t border-white/10">
+                <span>Total a pagar</span>
+                <span style={{ color: "#0DB87E" }}>{formatBRL(activeFeeCalc.totalAmount)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between font-sans text-[12px] text-white/55">
+                <span>Taxa PIX ({formatPct(pixCalc.feePct)} · Tomador):</span>
+                <span>+ {formatBRL(pixCalc.feeAmount)} (Total {formatBRL(pixCalc.totalAmount)})</span>
+              </div>
+              <div className="flex justify-between font-sans text-[12px] text-white/55">
+                <span>Taxa Cartão ({formatPct(cardCalc.feePct)} · Tomador):</span>
+                <span>+ {formatBRL(cardCalc.feeAmount)} (Total {formatBRL(cardCalc.totalAmount)})</span>
+              </div>
+              <div className="flex justify-between font-display text-[18px] font-bold text-white pt-1.5 border-t border-white/10">
+                <span>Tarifa base</span>
+                <span style={{ color: "#0DB87E" }}>{formatBRL(rawBase)}</span>
+              </div>
+            </>
           )}
-          <div className="flex justify-between font-display text-[18px] font-bold text-white pt-1">
-            <span>Total a pagar</span>
-            <span style={{ color: "#0DB87E" }}>{formatBRL(feeCalc.totalAmount)}</span>
-          </div>
         </div>
       </div>
 
@@ -784,7 +792,9 @@ const CompletedScreen = ({
             <Smartphone size={18} className={method === "pix_checkout" ? "text-white" : "text-white/70"} />
           </div>
           <span className="font-display text-[12px] font-bold leading-tight">Pix presencial</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">Cobrança do motorista</span>
+          <span className="font-sans text-[10px] text-white/55 mt-0.5">
+            Taxa {formatPct(pixCalc.feePct)} · Total {formatBRL(pixCalc.totalAmount)}
+          </span>
         </button>
 
         <button
@@ -800,7 +810,9 @@ const CompletedScreen = ({
             <CreditCard size={18} className={method === "card" ? "text-white" : "text-white/70"} />
           </div>
           <span className="font-display text-[12px] font-bold leading-tight">Cartão</span>
-          <span className="font-sans text-[10px] text-white/50 mt-0.5">Crédito online</span>
+          <span className="font-sans text-[10px] text-white/55 mt-0.5">
+            Taxa {formatPct(cardCalc.feePct)} · Total {formatBRL(cardCalc.totalAmount)}
+          </span>
         </button>
       </div>
 
@@ -817,11 +829,11 @@ const CompletedScreen = ({
           <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
             <Smartphone size={24} className="text-[#0DB87E]" />
           </div>
-          <h3 className="font-display text-[16px] font-bold text-white">Pix Cópia e Cola</h3>
+          <h3 className="font-display text-[16px] font-bold text-white">Pix Presencial ({formatBRL(pixCalc.totalAmount)})</h3>
           <p className="font-sans text-[12px] text-white/70 text-center mt-1 mb-3">
             {pixCopiaCola
-              ? "Cobrança gerada pelo mototaxista. Copie o código e cole no aplicativo do seu banco:"
-              : "Aguardando o mototaxista gerar a cobrança no celular dele..."}
+              ? "Escaneie o QR Code no celular do mototaxista ou copie o código abaixo para pagar no app do seu banco:"
+              : "O QR Code está sendo gerado automaticamente na tela do mototaxista..."}
           </p>
 
           {pixCopiaCola ? (
@@ -855,11 +867,11 @@ const CompletedScreen = ({
         </div>
       )}
 
-      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO — Delegated to CheckoutUniversal */}
+      {/* METHOD CONTENT: CARTÃO DE CRÉDITO — Delegated to CheckoutUniversal (with Wallet) */}
       {method === "card" && (
         prestadorInfo?.id ? (
           <CheckoutUniversal
-            amount={feeCalc.totalAmount}
+            amount={cardCalc.totalAmount}
             providerId={prestadorInfo.id}
             providerName={prestadorInfo.name || "Motorista UBT"}
             serviceType="mototaxi"
@@ -872,23 +884,6 @@ const CompletedScreen = ({
             O prestador desta corrida não foi identificado. Atualize a página antes de pagar.
           </div>
         )
-      )}
-
-      {/* METHOD CONTENT 4: EM DINHEIRO */}
-      {method === "cash" && (
-        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center">
-          <div className="w-14 h-14 mx-auto rounded-full bg-[#F5A623]/20 border border-[#F5A623]/40 flex items-center justify-center mb-3">
-            <Banknote size={28} className="text-[#F5A623]" />
-          </div>
-          <h3 className="font-display text-[16px] font-bold text-white">Pagamento Presencial em Dinheiro</h3>
-          <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
-            Entregue o valor de <strong>{formatBRL(feeCalc.baseAmount)}</strong> em cédula ou moeda ao motorista.
-          </p>
-          <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-sans text-[12px] flex items-center justify-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-            Aguardando confirmação do motorista...
-          </div>
-        </div>
       )}
 
       {paymentError && (
@@ -1166,62 +1161,152 @@ const MototaxiTomadorPage = () => {
     };
   }, []);
 
+  // Recupera corrida ativa/concluída pendente de pagamento caso a página seja recarregada
+  const recoveredOnceRef = useRef(false);
+  useEffect(() => {
+    if (recoveredOnceRef.current || state.rideId || state.status !== "idle") return;
+    let active = true;
+
+    const recoverPendingRide = async () => {
+      let tomadorId = user.uid;
+      if (!tomadorId) {
+        const { data: authData } = await supabase.auth.getUser();
+        tomadorId = authData?.user?.id || "";
+      }
+      if (!tomadorId || !active) return;
+      recoveredOnceRef.current = true;
+
+      const { data: dbRide, error } = await supabase
+        .from("mototaxi_corridas")
+        .select("*")
+        .eq("tomador_id", tomadorId)
+        .in("status", ["searching", "accepted", "in_progress", "completed"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !dbRide || !active) return;
+
+      const parsePoint = (raw: any) => {
+        const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!obj) return null;
+        return {
+          lat: Number(obj.lat ?? UBATUBA_FALLBACK.lat),
+          lng: Number(obj.lng ?? UBATUBA_FALLBACK.lng),
+          address: String(obj.address || ""),
+        };
+      };
+
+      let prestadorInfo = null;
+      let prestadorLocation = null;
+      if (dbRide.prestador_id) {
+        const [{ data: userData }, { data: sessData }] = await Promise.all([
+          supabase.from("usuarios").select("nome").eq("id", dbRide.prestador_id).maybeSingle(),
+          supabase.from("mototaxi_sessoes").select("lat, lng").eq("prestador_id", dbRide.prestador_id).maybeSingle(),
+        ]);
+        prestadorInfo = {
+          id: dbRide.prestador_id,
+          name: userData?.nome || "Motorista UBT",
+          photo: "",
+          plate: "MTX-" + dbRide.prestador_id.slice(0, 4).toUpperCase(),
+          rating: 4.8,
+        };
+        if (sessData) {
+          prestadorLocation = { lat: Number(sessData.lat), lng: Number(sessData.lng) };
+        }
+      }
+
+      if (!active) return;
+      setState({
+        rideId: dbRide.id,
+        status: dbRide.status as any,
+        type: (dbRide.type === "entrega" ? "entrega" : "carona") as RideType,
+        origin: parsePoint(dbRide.origin),
+        destination: parsePoint(dbRide.destination),
+        distanceKm: Number(dbRide.distance_km || 0),
+        durationMin: Number(dbRide.duration_min || 5),
+        estimatedPrice: Number(dbRide.estimated_price || 0),
+        finalPrice: Number(dbRide.final_price || dbRide.estimated_price || 0),
+        acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : null,
+        prestadorInfo,
+        prestadorLocation,
+        paymentMethod: dbRide.payment_method === "card" ? "card" : dbRide.payment_method === "pix" ? "pix" : null,
+      });
+    };
+
+    void recoverPendingRide();
+    return () => { active = false; };
+  }, [user.uid, state.rideId, state.status, setState]);
+
   // Escuta atualizações da corrida em tempo real com polling contínuo de 2s e suporte a bfcache
   useEffect(() => {
-    if (!state.rideId) return;
+    if (!state.rideId || state.status === "rating") return;
 
     let channel: any = null;
+
+    const applyDbRideTransition = async (dbRide: any) => {
+      if (!dbRide) return;
+      if (dbRide.status === "accepted") {
+        let prestadorInfo = null;
+        if (dbRide.prestador_id) {
+          const { data: userData } = await supabase
+            .from("usuarios")
+            .select("nome")
+            .eq("id", dbRide.prestador_id)
+            .single();
+
+          const { data: sessData } = await supabase
+            .from("mototaxi_sessoes")
+            .select("lat, lng")
+            .eq("prestador_id", dbRide.prestador_id)
+            .single();
+
+          prestadorInfo = {
+            id: dbRide.prestador_id,
+            name: userData?.nome || "Motorista UBT",
+            photo: "",
+            plate: "MTX-" + dbRide.prestador_id.slice(0, 4).toUpperCase(),
+            rating: 4.8,
+          };
+
+          setState({
+            status: "accepted",
+            acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
+            prestadorInfo,
+            prestadorLocation: sessData
+              ? { lat: Number(sessData.lat), lng: Number(sessData.lng) }
+              : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null),
+          });
+        }
+      } else if (dbRide.status === "in_progress") {
+        setState({ status: "in_progress" });
+      } else if (dbRide.status === "completed") {
+        setState({
+          status: "completed",
+          finalPrice: dbRide.final_price || dbRide.estimated_price,
+        });
+      } else if (dbRide.status === "paid") {
+        setState({
+          status: "rating",
+          finalPrice: dbRide.final_price || dbRide.estimated_price,
+          paymentMethod: dbRide.payment_method === "card" ? "card" : "pix",
+        });
+      } else if (dbRide.status === "cancelled") {
+        alert("A corrida foi cancelada.");
+        resetRide();
+      }
+    };
 
     const syncCurrentStatus = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
       const { data: dbRide, error } = await supabase
-        .from('mototaxi_corridas')
-        .select('*')
-        .eq('id', state.rideId)
+        .from("mototaxi_corridas")
+        .select("*")
+        .eq("id", state.rideId)
         .single();
 
       if (dbRide && !error) {
-        if (dbRide.status === 'accepted') {
-          let prestadorInfo = null;
-          if (dbRide.prestador_id) {
-            const { data: userData } = await supabase
-              .from('usuarios')
-              .select('nome')
-              .eq('id', dbRide.prestador_id)
-              .single();
-
-            const { data: sessData } = await supabase
-              .from('mototaxi_sessoes')
-              .select('lat, lng')
-              .eq('prestador_id', dbRide.prestador_id)
-              .single();
-
-            prestadorInfo = {
-              id: dbRide.prestador_id,
-              name: userData?.nome || 'Motorista UBT',
-              photo: '',
-              plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
-              rating: 4.8
-            };
-
-            setState({
-              status: 'accepted',
-              acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
-              prestadorInfo,
-              prestadorLocation: sessData ? { lat: Number(sessData.lat), lng: Number(sessData.lng) } : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null)
-            });
-          }
-        } else if (dbRide.status === 'in_progress') {
-          setState({ status: 'in_progress' });
-        } else if (dbRide.status === 'completed') {
-          setState({
-            status: 'completed',
-            finalPrice: dbRide.final_price || dbRide.estimated_price
-          });
-        } else if (dbRide.status === 'cancelled') {
-          alert('A corrida foi cancelada.');
-          resetRide();
-        }
+        await applyDbRideTransition(dbRide);
       }
     };
 
@@ -1236,52 +1321,11 @@ const MototaxiTomadorPage = () => {
       channel = supabase
         .channel(`ride_status_${state.rideId}`)
         .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${state.rideId}` },
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "mototaxi_corridas", filter: `id=eq.${state.rideId}` },
           async (payload: any) => {
             if (payload.new) {
-              const dbRide = payload.new;
-              if (dbRide.status === 'accepted') {
-                let prestadorInfo = null;
-                if (dbRide.prestador_id) {
-                  const { data: userData } = await supabase
-                    .from('usuarios')
-                    .select('nome')
-                    .eq('id', dbRide.prestador_id)
-                    .single();
-
-                  const { data: sessData } = await supabase
-                    .from('mototaxi_sessoes')
-                    .select('lat, lng')
-                    .eq('prestador_id', dbRide.prestador_id)
-                    .single();
-
-                  prestadorInfo = {
-                    id: dbRide.prestador_id,
-                    name: userData?.nome || 'Motorista UBT',
-                    photo: '',
-                    plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
-                    rating: 4.8
-                  };
-
-                  setState({
-                    status: 'accepted',
-                    acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
-                    prestadorInfo,
-                    prestadorLocation: sessData ? { lat: Number(sessData.lat), lng: Number(sessData.lng) } : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null)
-                  });
-                }
-              } else if (dbRide.status === 'in_progress') {
-                setState({ status: 'in_progress' });
-              } else if (dbRide.status === 'completed') {
-                setState({
-                  status: 'completed',
-                  finalPrice: dbRide.final_price || dbRide.estimated_price
-                });
-              } else if (dbRide.status === 'cancelled') {
-                alert('A corrida foi cancelada.');
-                resetRide();
-              }
+              await applyDbRideTransition(payload.new);
             }
           }
         )
@@ -1322,7 +1366,7 @@ const MototaxiTomadorPage = () => {
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", setupStatusChannel);
     };
-  }, [state.rideId]);
+  }, [state.rideId, state.status]);
 
   // Escuta a localização em tempo real do prestador aceito e em andamento com suporte a bfcache
   useEffect(() => {
@@ -1486,7 +1530,7 @@ const MototaxiTomadorPage = () => {
       distance_km: state.distanceKm,
       duration_min: state.durationMin,
       estimated_price: state.estimatedPrice,
-      payment_method: state.paymentMethod || 'pix'
+      payment_method: null
     };
 
     console.log('[AUDIT MototaxiTomador] Enviando INSERT em mototaxi_corridas:', newRide);

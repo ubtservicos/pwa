@@ -52,12 +52,13 @@ export async function fetchGatewayFeeSettings(): Promise<GatewayFeeSettings> {
         try { raw = JSON.parse(raw); } catch { /* noop */ }
       }
       const numVal = typeof raw === 'number' ? raw : parseFloat(String(raw));
-      if (!isNaN(numVal)) {
+      if (!isNaN(numVal) && numVal >= 0 && numVal <= 30) {
+        const normalizedPct = numVal > 0 && numVal < 0.2 ? Math.round((numVal * 100 + Number.EPSILON) * 100) / 100 : numVal;
         if (row.chave === 'taxa_pix' || row.chave === 'taxa_gateway_pix') {
-          pixPct = numVal < 1 && numVal > 0 ? numVal * 100 : numVal;
+          pixPct = normalizedPct;
           found = true;
         } else if (row.chave === 'taxa_cartao' || row.chave === 'taxa_gateway_cartao' || row.chave === 'taxa_credito') {
-          cardPct = numVal < 1 && numVal > 0 ? numVal * 100 : numVal;
+          cardPct = normalizedPct;
           found = true;
         }
       }

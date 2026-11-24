@@ -139,7 +139,6 @@ function platformAccessToken(environment: MpEnvironment): string {
     ? Deno.env.get("MP_ACCESS_TOKEN_PRODUCTION")?.trim()
     : (
       Deno.env.get("MP_ACCESS_TOKEN_SANDBOX") ||
-      Deno.env.get("MP_ACCESS_TOKEN_TEST") ||
       Deno.env.get("MP_ACCESS_TOKEN")
     )?.trim();
   if (!token) throw new Error(`Mercado Pago platform access token is not configured for ${environment}.`);
@@ -309,7 +308,7 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
   // external_reference is the transaction_id in pagamentos_split
   const { data: splits, error: selectErr } = await supabaseAdmin
     .from("pagamentos_split")
-    .select("id, status, transaction_id, service_type, service_id, total_amount")
+    .select("id, status, transaction_id, service_type, service_id, total_amount, base_amount")
     .eq("transaction_id", external_reference)
     .limit(1);
 
@@ -352,6 +351,8 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
       .from("pagamentos_split")
       .update({
         status: "approved",
+        gateway_status: "approved",
+        gateway_status_detail: mpPayment.status_detail ?? "accredited",
         updated_at: date_approved ?? new Date().toISOString(),
       })
       .eq("transaction_id", external_reference)
@@ -367,11 +368,12 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
   // Keep operational state server-authoritative for asynchronous methods (for
   // example Pix). The browser must never promote a service to paid itself.
   if (split.service_type === "mototaxi") {
+    const rideFinalPrice = Number(split.base_amount ?? split.total_amount);
     const { error: rideError } = await supabaseAdmin
       .from("mototaxi_corridas")
       .update({
         status: "paid",
-        final_price: Number(split.total_amount),
+        final_price: rideFinalPrice,
         pix_charge_status: "approved",
         updated_at: date_approved ?? new Date().toISOString(),
       })

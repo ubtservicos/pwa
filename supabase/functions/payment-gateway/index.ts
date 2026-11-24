@@ -16,6 +16,9 @@ interface SplitConfig {
 }
 
 interface SplitAmounts {
+  base_amount: number;
+  fee_pct: number;
+  fee_amount: number;
   total_amount: number;
   prestador_amount: number;
   ubt_amount: number;
@@ -28,11 +31,19 @@ interface SplitAmounts {
   application_fee: number;
 }
 
+interface GatewayFeeSettings {
+  taxaPixPct: number;
+  taxaCardPct: number;
+  source: "database" | "defaults";
+}
+
 interface RoutingDecision {
   mode: PaymentRoute;
   authToken: string;
   checkoutPublicKey: string | null;
   marketplaceAccountId: string | null;
+  mercadoPagoUserId: string | null;
+  collectorScope: string;
   fallbackReason: string | null;
 }
 
@@ -148,24 +159,92 @@ function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function calculateSplitAmounts(totalAmount: number, config: SplitConfig): SplitAmounts {
-  const prestadorAmount = roundMoney(totalAmount * config.prestador_pct / 100);
-  const ubtAmount = roundMoney(totalAmount * config.ubt_pct / 100);
-  const comunidadeAmount = roundMoney(totalAmount * config.comunidade_pct / 100);
-  const premioTrabalhador = roundMoney(totalAmount * config.premio_trabalhador_pct / 100);
-  const premioConsumidor = roundMoney(totalAmount * config.premio_consumidor_pct / 100);
-  const padrinhoPrestadorAmount = roundMoney(totalAmount * config.padrinho_prestador_pct / 100);
+const DEFAULT_FEE_SETTINGS: GatewayFeeSettings = {
+  taxaPixPct: 0.0,
+  taxaCardPct: 2.99,
+  source: "defaults",
+};
+
+function normalizeFeePct(raw: unknown): number | null {
+  let value = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      // keep raw string
+    }
+  }
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 30) return null;
+  // Convert strict fractional notation (e.g. 0.0299 -> 2.99) without altering 0.99% -> 0.99.
+  return parsed > 0 && parsed < 0.2 ? roundMoney(parsed * 100) : parsed;
+}
+
+async function fetchGatewayFeeSettings(): Promise<GatewayFeeSettings> {
+  const { data, error } = await adminClient()
+    .from("system_settings")
+    .select("chave, valor")
+    .in("chave", ["taxa_pix", "taxa_cartao", "taxa_gateway_pix", "taxa_gateway_cartao", "taxa_credito"]);
+
+  if (error || !data || data.length === 0) {
+    return DEFAULT_FEE_SETTINGS;
+  }
+
+  let taxaPixPct = DEFAULT_FEE_SETTINGS.taxaPixPct;
+  let taxaCardPct = DEFAULT_FEE_SETTINGS.taxaCardPct;
+  let found = false;
+
+  for (const row of data) {
+    const pct = normalizeFeePct(row.valor);
+    if (pct === null) continue;
+    if (row.chave === "taxa_pix" || row.chave === "taxa_gateway_pix") {
+      taxaPixPct = pct;
+      found = true;
+    } else if (
+      row.chave === "taxa_cartao" ||
+      row.chave === "taxa_gateway_cartao" ||
+      row.chave === "taxa_credito"
+    ) {
+      taxaCardPct = pct;
+      found = true;
+    }
+  }
+
+  return {
+    taxaPixPct,
+    taxaCardPct,
+    source: found ? "database" : "defaults",
+  };
+}
+
+function calculateSplitAmounts(
+  baseAmount: number,
+  config: SplitConfig,
+  feePct = 0,
+  feeAmount = 0,
+): SplitAmounts {
+  const prestadorAmount = roundMoney(baseAmount * config.prestador_pct / 100);
+  const ubtAmount = roundMoney(baseAmount * config.ubt_pct / 100);
+  const comunidadeAmount = roundMoney(baseAmount * config.comunidade_pct / 100);
+  const premioTrabalhador = roundMoney(baseAmount * config.premio_trabalhador_pct / 100);
+  const premioConsumidor = roundMoney(baseAmount * config.premio_consumidor_pct / 100);
+  const padrinhoPrestadorAmount = roundMoney(baseAmount * config.padrinho_prestador_pct / 100);
   const allocated = roundMoney(
     prestadorAmount + ubtAmount + comunidadeAmount + premioTrabalhador +
       premioConsumidor + padrinhoPrestadorAmount,
   );
-  const padrinhoTomadorAmount = roundMoney(totalAmount - allocated);
+  const padrinhoTomadorAmount = roundMoney(baseAmount - allocated);
 
   if (padrinhoTomadorAmount < 0) {
     throw new HttpError(500, "invalid_split_configuration", "A configuração de split ultrapassa 100%.");
   }
 
+  const totalAmount = roundMoney(baseAmount + feeAmount);
+
   return {
+    base_amount: baseAmount,
+    fee_pct: feePct,
+    fee_amount: feeAmount,
     total_amount: totalAmount,
     prestador_amount: prestadorAmount,
     ubt_amount: ubtAmount,
@@ -399,6 +478,8 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
       authToken: platformToken,
       checkoutPublicKey: null,
       marketplaceAccountId: null,
+      mercadoPagoUserId: null,
+      collectorScope: "platform",
       fallbackReason: "seller_not_connected",
     };
   }
@@ -425,6 +506,8 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
       authToken: platformToken,
       checkoutPublicKey: null,
       marketplaceAccountId: sellerAccount.id,
+      mercadoPagoUserId: null,
+      collectorScope: "platform",
       fallbackReason: "seller_token_expired",
     };
   }
@@ -441,11 +524,15 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
   const sellerToken = (await decryptToken(sellerAccount.access_token_encrypted, environment)).trim();
   if (!sellerToken) throw new HttpError(409, "seller_token_missing", "Access Token OAuth do Seller está vazio.");
 
+  const sellerMpUserId = String(sellerAccount.mercado_pago_user_id || "").trim() || null;
+
   return {
     mode: "seller_oauth_split",
     authToken: sellerToken,
     checkoutPublicKey: String(sellerAccount.token_metadata?.public_key || "").trim() || null,
     marketplaceAccountId: sellerAccount.id,
+    mercadoPagoUserId: sellerMpUserId,
+    collectorScope: sellerMpUserId ? `seller:${sellerMpUserId}` : `account:${sellerAccount.id}`,
     fallbackReason: null,
   };
 }
@@ -453,7 +540,10 @@ async function resolvePaymentRoute(providerId: string, environment: MpEnvironmen
 async function handleGetCheckoutConfig(req: Request, body: Record<string, any>): Promise<Response> {
   const environment = paymentEnvironment();
   const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
-  const route = await resolvePaymentRoute(providerId, environment);
+  const [route, feeSettings] = await Promise.all([
+    resolvePaymentRoute(providerId, environment),
+    fetchGatewayFeeSettings(),
+  ]);
   if (route.mode === "seller_oauth_split" && !route.checkoutPublicKey) {
     throw new HttpError(
       409,
@@ -467,6 +557,11 @@ async function handleGetCheckoutConfig(req: Request, body: Record<string, any>):
     payment_route: route.mode,
     public_key: route.checkoutPublicKey,
     fallback_reason: route.fallbackReason,
+    fee_settings: {
+      taxa_pix_pct: feeSettings.taxaPixPct,
+      taxa_cartao_pct: feeSettings.taxaCardPct,
+      source: feeSettings.source,
+    },
   });
 }
 
@@ -506,6 +601,11 @@ async function createMercadoPagoPayment(input: {
     throw new HttpError(400, "missing_card_token", "Pagamento com cartão exige tokenização prévia.");
   }
 
+  const notificationUrl = (
+    Deno.env.get("MP_WEBHOOK_URL") ||
+    (supabaseUrl ? `${supabaseUrl}/functions/v1/payment-webhook` : "")
+  ).trim();
+
   const payload: Record<string, unknown> = {
     transaction_amount: input.transactionAmount,
     description: input.description,
@@ -513,6 +613,7 @@ async function createMercadoPagoPayment(input: {
     payer: input.payer,
     external_reference: input.externalReference,
     metadata: input.metadata,
+    ...(notificationUrl ? { notification_url: notificationUrl } : {}),
     ...(input.applicationFee !== undefined ? { application_fee: input.applicationFee } : {}),
     ...(input.cardToken ? { token: input.cardToken } : {}),
     ...(isCard ? { installments: input.installments } : {}),
@@ -649,6 +750,7 @@ async function reserveSplitRecord(input: {
   godparentPrestadorId: string | null;
   statusRepasseGodparentTomador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
   statusRepasseGodparentPrestador: "nao_aplicavel" | "pendente_repasse" | "contingenciado";
+  paymentMethod: "pix" | "card";
 }): Promise<void> {
   const record = {
     transaction_id: input.transactionId,
@@ -658,6 +760,10 @@ async function reserveSplitRecord(input: {
     service_id: input.serviceId,
     provider_id: input.providerId,
     tomador_id: input.tomadorId,
+    base_amount: input.split.base_amount,
+    payment_method_fee_pct: input.split.fee_pct,
+    payment_method_fee_amount: input.split.fee_amount,
+    payment_method: input.paymentMethod,
     total_amount: input.split.total_amount,
     provider_amount: input.split.prestador_amount,
     ubt_amount: input.split.ubt_amount,
@@ -921,11 +1027,318 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   });
 }
 
+interface SanitizedSavedCard {
+  id: string;
+  last_four_digits: string;
+  first_six_digits: string;
+  expiration_month: number | null;
+  expiration_year: number | null;
+  payment_method: {
+    id: string;
+    name: string;
+    thumbnail: string | null;
+  };
+  cardholder: {
+    name: string;
+  };
+}
+
+function sanitizeSavedCard(card: Record<string, any>): SanitizedSavedCard | null {
+  const id = String(card?.id || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    last_four_digits: String(card?.last_four_digits || "").slice(-4),
+    first_six_digits: String(card?.first_six_digits || "").slice(0, 6),
+    expiration_month: Number.isFinite(Number(card?.expiration_month)) ? Number(card.expiration_month) : null,
+    expiration_year: Number.isFinite(Number(card?.expiration_year)) ? Number(card.expiration_year) : null,
+    payment_method: {
+      id: String(card?.payment_method?.id || "credit_card"),
+      name: String(card?.payment_method?.name || "Cartão"),
+      thumbnail: card?.payment_method?.secure_thumbnail || card?.payment_method?.thumbnail || null,
+    },
+    cardholder: {
+      name: String(card?.cardholder?.name || "Titular"),
+    },
+  };
+}
+
+async function resolveAuthenticatedPayerSource(
+  userId: string,
+  body: Record<string, any>,
+): Promise<Record<string, any>> {
+  const [{ data: authData }, { data: userRow }] = await Promise.all([
+    adminClient().auth.admin.getUserById(userId),
+    adminClient().from("usuarios").select("nome").eq("id", userId).maybeSingle(),
+  ]);
+  const fullName = String(userRow?.nome || authData?.user?.user_metadata?.full_name || "").trim();
+  const [firstName = "", ...lastParts] = fullName.split(/\s+/).filter(Boolean);
+  const cpf = String(authData?.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+  return {
+    ...body,
+    payer_email: body.payer_email || body.payer?.email || authData?.user?.email || "",
+    payer_first_name: body.payer_first_name || body.payer?.first_name || firstName || undefined,
+    payer_last_name: body.payer_last_name || body.payer?.last_name || lastParts.join(" ") || undefined,
+    payer_identification: body.payer_identification || body.payer?.identification ||
+      (cpf ? { type: "CPF", number: cpf } : undefined),
+  };
+}
+
+async function getOrCreateMpCustomer(input: {
+  userId: string;
+  environment: MpEnvironment;
+  route: RoutingDecision;
+  payerEmail: string;
+  payer: Record<string, unknown>;
+  createIfMissing: boolean;
+}): Promise<string | null> {
+  const { data: existingWallet } = await adminClient()
+    .from("mp_customer_wallets")
+    .select("mp_customer_id, mp_customer_email")
+    .eq("user_id", input.userId)
+    .eq("environment", input.environment)
+    .eq("collector_scope", input.route.collectorScope)
+    .maybeSingle();
+
+  if (existingWallet?.mp_customer_id) {
+    return String(existingWallet.mp_customer_id);
+  }
+
+  // Search Mercado Pago customer by email under the resolved collector token
+  const searchUrl = `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(input.payerEmail)}`;
+  const searchResp = await fetch(searchUrl, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${input.route.authToken}`,
+      "Accept": "application/json",
+    },
+  });
+  if (searchResp.ok) {
+    const searchData = await searchResp.json().catch(() => ({}));
+    const firstMatch = Array.isArray(searchData?.results) ? searchData.results[0] : null;
+    if (firstMatch?.id) {
+      const mpCustomerId = String(firstMatch.id);
+      await adminClient().from("mp_customer_wallets").upsert({
+        user_id: input.userId,
+        environment: input.environment,
+        collector_scope: input.route.collectorScope,
+        mp_customer_id: mpCustomerId,
+        mp_customer_email: input.payerEmail,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,environment,collector_scope" });
+      return mpCustomerId;
+    }
+  }
+
+  if (!input.createIfMissing) return null;
+
+  const createPayload: Record<string, unknown> = {
+    email: input.payerEmail,
+    ...(input.payer.first_name ? { first_name: input.payer.first_name } : {}),
+    ...(input.payer.last_name ? { last_name: input.payer.last_name } : {}),
+    ...(input.payer.identification ? { identification: input.payer.identification } : {}),
+  };
+
+  const createResp = await fetch("https://api.mercadopago.com/v1/customers", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${input.route.authToken}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify(createPayload),
+  });
+  const createData = await createResp.json().catch(() => ({}));
+  if (!createResp.ok || !createData?.id) {
+    throw new HttpError(
+      422,
+      "wallet_customer_create_failed",
+      String(createData?.message || "Não foi possível inicializar a carteira no Mercado Pago."),
+      mpErrorDetails(createData),
+    );
+  }
+
+  const mpCustomerId = String(createData.id);
+  await adminClient().from("mp_customer_wallets").upsert({
+    user_id: input.userId,
+    environment: input.environment,
+    collector_scope: input.route.collectorScope,
+    mp_customer_id: mpCustomerId,
+    mp_customer_email: input.payerEmail,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "user_id,environment,collector_scope" });
+
+  return mpCustomerId;
+}
+
+async function saveCardToMpCustomer(input: {
+  authToken: string;
+  mpCustomerId: string;
+  cardToken: string;
+}): Promise<SanitizedSavedCard> {
+  const resp = await fetch(`https://api.mercadopago.com/v1/customers/${encodeURIComponent(input.mpCustomerId)}/cards`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${input.authToken}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({ token: input.cardToken }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data?.id) {
+    throw new HttpError(
+      422,
+      "wallet_card_save_failed",
+      String(data?.message || "Não foi possível salvar o cartão na carteira Mercado Pago."),
+      mpErrorDetails(data),
+    );
+  }
+  const sanitized = sanitizeSavedCard(data);
+  if (!sanitized) {
+    throw new HttpError(502, "wallet_card_invalid_response", "Resposta inválida ao salvar cartão.");
+  }
+  return sanitized;
+}
+
+async function handleListSavedCards(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
+  const environment = paymentEnvironment();
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const route = await resolvePaymentRoute(providerId, environment);
+  const payerSource = await resolveAuthenticatedPayerSource(userId, body);
+  const payerEmail = resolvePayerEmail(payerSource, environment);
+  const payer = sanitizePayer(payerSource, payerEmail);
+
+  const mpCustomerId = await getOrCreateMpCustomer({
+    userId,
+    environment,
+    route,
+    payerEmail,
+    payer,
+    createIfMissing: false,
+  });
+
+  if (!mpCustomerId) {
+    return json(req, {
+      success: true,
+      customer_id: null,
+      payment_route: route.mode,
+      cards: [],
+    });
+  }
+
+  const cardsResp = await fetch(
+    `https://api.mercadopago.com/v1/customers/${encodeURIComponent(mpCustomerId)}/cards`,
+    {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${route.authToken}`,
+        "Accept": "application/json",
+      },
+    },
+  );
+  if (!cardsResp.ok) {
+    return json(req, {
+      success: true,
+      customer_id: mpCustomerId,
+      payment_route: route.mode,
+      cards: [],
+    });
+  }
+  const rawCards = await cardsResp.json().catch(() => []);
+  const cards = Array.isArray(rawCards)
+    ? rawCards.map((item) => sanitizeSavedCard(item)).filter((item): item is SanitizedSavedCard => Boolean(item))
+    : [];
+
+  return json(req, {
+    success: true,
+    customer_id: mpCustomerId,
+    payment_route: route.mode,
+    cards,
+  });
+}
+
+async function handleSaveCard(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
+  const environment = paymentEnvironment();
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const cardToken = String(body.card_token || body.token || "").trim();
+  if (!cardToken) {
+    throw new HttpError(400, "missing_card_token", "card_token é obrigatório para salvar um cartão.");
+  }
+
+  const route = await resolvePaymentRoute(providerId, environment);
+  const payerSource = await resolveAuthenticatedPayerSource(userId, body);
+  const payerEmail = resolvePayerEmail(payerSource, environment);
+  const payer = sanitizePayer(payerSource, payerEmail);
+
+  const mpCustomerId = await getOrCreateMpCustomer({
+    userId,
+    environment,
+    route,
+    payerEmail,
+    payer,
+    createIfMissing: true,
+  });
+  if (!mpCustomerId) {
+    throw new HttpError(500, "wallet_customer_unavailable", "Não foi possível resolver o cliente da carteira.");
+  }
+
+  const savedCard = await saveCardToMpCustomer({
+    authToken: route.authToken,
+    mpCustomerId,
+    cardToken,
+  });
+
+  return json(req, {
+    success: true,
+    customer_id: mpCustomerId,
+    card: savedCard,
+  });
+}
+
+async function handleDeleteSavedCard(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
+  const environment = paymentEnvironment();
+  const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
+  const cardId = String(body.card_id || "").trim();
+  if (!cardId) {
+    throw new HttpError(400, "missing_card_id", "card_id é obrigatório.");
+  }
+  const route = await resolvePaymentRoute(providerId, environment);
+  const { data: wallet } = await adminClient()
+    .from("mp_customer_wallets")
+    .select("mp_customer_id")
+    .eq("user_id", userId)
+    .eq("environment", environment)
+    .eq("collector_scope", route.collectorScope)
+    .maybeSingle();
+
+  if (!wallet?.mp_customer_id) {
+    throw new HttpError(404, "wallet_not_found", "Carteira do usuário não encontrada.");
+  }
+
+  const resp = await fetch(
+    `https://api.mercadopago.com/v1/customers/${encodeURIComponent(wallet.mp_customer_id)}/cards/${encodeURIComponent(cardId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${route.authToken}`,
+        "Accept": "application/json",
+      },
+    },
+  );
+  if (!resp.ok) {
+    const errData = await resp.json().catch(() => ({}));
+    throw new HttpError(422, "wallet_card_delete_failed", String(errData?.message || "Erro ao remover cartão."));
+  }
+
+  return json(req, { success: true, deleted_card_id: cardId });
+}
+
 async function handlePayment(req: Request, body: Record<string, any>, customerId: string): Promise<Response> {
   const environment = paymentEnvironment();
   const action = String(body.action || "create_payment_intent").trim().toLowerCase();
   const providerInitiatedMototaxiPix = action === "create_mototaxi_pix_charge";
-  let amount = validateAmount(body.transaction_amount ?? body.amount);
+  const requestedAmount = validateAmount(body.transaction_amount ?? body.amount);
   const serviceType = normalizeServiceType(body.service_type ?? body.serviceType);
   const serviceId = assertUuid(body.service_id ?? body.serviceId, "service_id");
   const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
@@ -936,19 +1349,28 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   const godparentPrestadorId = optionalUuid(body.godparent_prestador_id ?? body.godparentPrestadorId, "godparent_prestador_id");
   const description = String(body.description || `Serviço UBT ${serviceType}`).trim().slice(0, 250);
   const paymentMethodId = String(body.payment_method_id || (body.card_token ? "master" : "pix")).trim().toLowerCase();
+  const normalizedMethodCategory: "pix" | "card" = paymentMethodId === "pix" ? "pix" : "card";
   const cardToken = String(body.card_token || body.token || "").trim() || undefined;
+  const savedCardId = String(body.saved_card_id || "").trim() || undefined;
+  const shouldSaveCard = Boolean(body.save_card) && normalizedMethodCategory === "card" && !savedCardId;
+  const saveCardToken = String(body.save_card_token || "").trim() || undefined;
   const installments = Math.min(24, Math.max(1, Number.parseInt(String(body.installments || 1), 10) || 1));
   if (paymentMethodId !== "pix" && !cardToken) {
     throw new HttpError(400, "missing_card_token", "Pagamento com cartão exige tokenização prévia.");
   }
 
+  const feeSettings = await fetchGatewayFeeSettings();
+  const appliedFeePct = normalizedMethodCategory === "pix"
+    ? feeSettings.taxaPixPct
+    : feeSettings.taxaCardPct;
+
+  let baseAmount = requestedAmount;
+  let feeAmount = 0;
+  let amount = requestedAmount;
   let payerSource = body;
   let effectiveTomadorId: string | null = providerInitiatedMototaxiPix ? null : customerId;
-  if (providerInitiatedMototaxiPix) {
-    if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
-      throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
-    }
 
+  if (serviceType === "mototaxi") {
     const { data: ride, error: rideError } = await adminClient()
       .from("mototaxi_corridas")
       .select("id, tomador_id, prestador_id, status, estimated_price, final_price")
@@ -958,52 +1380,98 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       throw new HttpError(503, "ride_lookup_failed", "Não foi possível validar a corrida antes da cobrança.");
     }
     if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
-    if (ride.prestador_id !== customerId || providerId !== customerId) {
-      throw new HttpError(403, "provider_not_assigned", "Somente o prestador atribuído pode gerar esta cobrança Pix.");
+
+    if (providerInitiatedMototaxiPix) {
+      if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
+        throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
+      }
+      if (ride.prestador_id !== customerId || providerId !== customerId) {
+        throw new HttpError(403, "provider_not_assigned", "Somente o prestador atribuído pode gerar esta cobrança Pix.");
+      }
+    } else if (ride.tomador_id && ride.tomador_id !== customerId) {
+      throw new HttpError(403, "passenger_not_assigned", "Somente o passageiro da corrida pode pagar esta corrida.");
     }
+
     if (ride.status !== "completed") {
-      throw new HttpError(409, "ride_not_ready_for_payment", "A corrida precisa estar concluída antes de gerar o Pix.");
+      throw new HttpError(409, "ride_not_ready_for_payment", "A corrida precisa estar concluída antes do pagamento.");
     }
     if (!ride.tomador_id) {
       throw new HttpError(409, "ride_payer_missing", "A corrida não possui um Tomador vinculado.");
     }
 
     const canonicalAmount = validateAmount(ride.final_price ?? ride.estimated_price);
-    if (Math.abs(canonicalAmount - amount) > 0.009) {
+    const canonicalFeeAmount = roundMoney(canonicalAmount * (appliedFeePct / 100));
+    const canonicalTotalAmount = roundMoney(canonicalAmount + canonicalFeeAmount);
+
+    const matchesTotal = Math.abs(canonicalTotalAmount - requestedAmount) <= 0.05;
+    const matchesBase = Math.abs(canonicalAmount - requestedAmount) <= 0.02;
+    if (!matchesTotal && !matchesBase) {
       throw new HttpError(409, "ride_amount_mismatch", "O valor da cobrança diverge do valor registrado na corrida.");
     }
-    amount = canonicalAmount;
+
+    baseAmount = canonicalAmount;
+    feeAmount = canonicalFeeAmount;
+    amount = canonicalTotalAmount;
     effectiveTomadorId = ride.tomador_id;
 
-    const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
-      adminClient().auth.admin.getUserById(ride.tomador_id),
-      adminClient().from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
-    ]);
-    if (payerAuthError || !payerAuth.user?.email) {
-      if (environment === "production") {
-        throw new HttpError(409, "payer_identity_missing", "O Tomador não possui e-mail válido para o pagamento.");
+    if (providerInitiatedMototaxiPix) {
+      const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
+        adminClient().auth.admin.getUserById(ride.tomador_id),
+        adminClient().from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
+      ]);
+      if (payerAuthError || !payerAuth.user?.email) {
+        if (environment === "production") {
+          throw new HttpError(409, "payer_identity_missing", "O Tomador não possui e-mail válido para o pagamento.");
+        }
       }
-    }
 
-    const payerName = String(payerProfile?.nome || payerAuth.user?.user_metadata?.full_name || "").trim();
-    const [payerFirstName = "", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
-    const payerCpf = String(payerAuth.user?.user_metadata?.cpf || "").replace(/\D/g, "");
-    payerSource = {
-      ...body,
-      payer_email: payerAuth.user?.email || body.payer_email,
-      payer_first_name: payerFirstName || undefined,
-      payer_last_name: payerLastParts.join(" ") || undefined,
-      payer_identification: payerCpf ? { type: "CPF", number: payerCpf } : undefined,
-    };
+      const payerName = String(payerProfile?.nome || payerAuth.user?.user_metadata?.full_name || "").trim();
+      const [payerFirstName = "", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
+      const payerCpf = String(payerAuth.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+      payerSource = {
+        ...body,
+        payer_email: payerAuth.user?.email || body.payer_email,
+        payer_first_name: payerFirstName || undefined,
+        payer_last_name: payerLastParts.join(" ") || undefined,
+        payer_identification: payerCpf ? { type: "CPF", number: payerCpf } : undefined,
+      };
+    }
+  } else {
+    baseAmount = requestedAmount;
+    feeAmount = 0;
+    amount = requestedAmount;
   }
+
   const clientMetadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
   const metadataJson = JSON.stringify(clientMetadata);
   if (metadataJson.length > 4000) throw new HttpError(400, "metadata_too_large", "metadata excede 4 KB.");
   const payerEmail = resolvePayerEmail(payerSource, environment);
   const payer = sanitizePayer(payerSource, payerEmail);
   const route = await resolvePaymentRoute(providerId, environment);
+
+  let effectivePayer: Record<string, unknown> = payer;
+  let resolvedMpCustomerId: string | null = null;
+  if (savedCardId) {
+    resolvedMpCustomerId = await getOrCreateMpCustomer({
+      userId: customerId,
+      environment,
+      route,
+      payerEmail,
+      payer,
+      createIfMissing: false,
+    });
+    if (!resolvedMpCustomerId) {
+      throw new HttpError(404, "wallet_customer_not_found", "Carteira do pagador não encontrada para o cartão selecionado.");
+    }
+    effectivePayer = {
+      ...payer,
+      type: "customer",
+      id: resolvedMpCustomerId,
+    };
+  }
+
   const { config, source: splitConfigSource } = await fetchSplitConfig();
-  const split = calculateSplitAmounts(amount, config);
+  const split = calculateSplitAmounts(baseAmount, config, appliedFeePct, feeAmount);
   const transactionId = paymentAttemptId;
   const idempotencyKey = paymentAttemptId;
 
@@ -1029,6 +1497,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     godparentPrestadorId: godparentCtx.godparentPrestadorId,
     statusRepasseGodparentTomador: godparentCtx.statusRepasseTomador,
     statusRepasseGodparentPrestador: godparentCtx.statusRepassePrestador,
+    paymentMethod: normalizedMethodCategory,
   });
 
   await logAuditEvent("payment_routed", "pending", {
@@ -1038,10 +1507,12 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     provider_id: providerId,
     customer_id: customerId,
     payment_attempt_source: paymentAttempt.source,
+    payment_method: normalizedMethodCategory,
     route: route.mode,
     fallback_reason: route.fallbackReason,
     environment,
     split_config_source: splitConfigSource,
+    fee_settings_source: feeSettings.source,
     split_amounts: split,
   });
 
@@ -1051,7 +1522,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     transactionAmount: amount,
     description,
     paymentMethodId,
-    payer,
+    payer: effectivePayer,
     cardToken,
     installments,
     externalReference: transactionId,
@@ -1061,6 +1532,9 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       ubt_service_id: serviceId,
       ubt_provider_id: providerId,
       ubt_payment_route: route.mode,
+      ubt_base_amount: baseAmount,
+      ubt_fee_pct: appliedFeePct,
+      ubt_fee_amount: feeAmount,
     },
     ...(route.mode === "seller_oauth_split" ? { applicationFee: split.application_fee } : {}),
   });
@@ -1089,6 +1563,8 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     return json(req, {
       success: false,
       error: mpResult.outcomeUnknown ? "payment_outcome_unknown" : "payment_rejected",
+      status: mpStatus || "rejected",
+      status_detail: mpResult.data?.status_detail || null,
       message: mpResult.outcomeUnknown
         ? "Não foi possível confirmar o resultado. Consulte pela mesma payment_attempt_id antes de tentar novamente."
         : String(mpResult.data?.message || mpResult.data?.error || "Pagamento rejeitado pelo Mercado Pago."),
@@ -1099,10 +1575,35 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     }, status);
   }
 
+  // Non-blocking save of new card to Mercado Pago Customer Wallet after approval
+  let savedCardResult: SanitizedSavedCard | null = null;
+  if (shouldSaveCard && saveCardToken && mpStatus === "approved") {
+    try {
+      const mpCustId = resolvedMpCustomerId || await getOrCreateMpCustomer({
+        userId: customerId,
+        environment,
+        route,
+        payerEmail,
+        payer,
+        createIfMissing: true,
+      });
+      if (mpCustId) {
+        savedCardResult = await saveCardToMpCustomer({
+          authToken: route.authToken,
+          mpCustomerId: mpCustId,
+          cardToken: saveCardToken,
+        });
+      }
+    } catch (walletErr) {
+      console.warn("[payment-gateway] non-blocking wallet card save failed:", walletErr);
+    }
+  }
+
   if (serviceType === "mototaxi" && mpStatus === "approved") {
     const { error } = await adminClient().from("mototaxi_corridas").update({
       status: "paid",
-      final_price: amount,
+      final_price: baseAmount,
+      payment_method: normalizedMethodCategory,
       updated_at: new Date().toISOString(),
     }).eq("id", serviceId);
     if (error) console.error("[payment-gateway] ride status update failed", error.message);
@@ -1165,11 +1666,20 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     success: true,
     payment_id: mpResult.data.id,
     status: mpStatus,
+    status_detail: mpResult.data.status_detail || null,
     transaction_id: transactionId,
     payment_route: route.mode,
     fallback_reason: route.fallbackReason,
     provider_payout_status: route.mode === "platform_fallback" ? "pending" : "not_required",
     ledger_persisted: ledgerPersisted,
+    saved_card: savedCardResult,
+    fee_breakdown: {
+      base_amount: baseAmount,
+      fee_pct: appliedFeePct,
+      fee_amount: feeAmount,
+      total_amount: amount,
+      payment_method: normalizedMethodCategory,
+    },
     payment: {
       id: mpResult.data.id,
       status: mpStatus,
@@ -1185,6 +1695,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       ticket_url: txData?.ticket_url ?? null,
       qr_code: txData?.qr_code ?? null,
       qr_code_base64: txData?.qr_code_base64 ?? null,
+      date_of_expiration: mpResult.data?.date_of_expiration ?? null,
     } : null,
     split: {
       ...split,
@@ -1227,6 +1738,15 @@ serve(async (req: Request): Promise<Response> => {
     }
     if (["get_checkout_config", "checkout_config"].includes(action)) {
       return await handleGetCheckoutConfig(req, body);
+    }
+    if (["list_saved_cards", "wallet_list_cards"].includes(action)) {
+      return await handleListSavedCards(req, body, userId);
+    }
+    if (["save_card", "wallet_save_card"].includes(action)) {
+      return await handleSaveCard(req, body, userId);
+    }
+    if (["delete_saved_card", "wallet_delete_card"].includes(action)) {
+      return await handleDeleteSavedCard(req, body, userId);
     }
     if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge"].includes(action)) {
       return await handlePayment(req, body, userId);
