@@ -76,6 +76,7 @@ import AdminKycListPage from "./pages/admin/AdminKycListPage.tsx";
 import AdminFinanceiroPage from "./pages/admin/AdminFinanceiroPage.tsx";
 import AdminSplitPage from "./pages/admin/AdminSplitPage.tsx";
 import AdminEntidadesPage from "./pages/admin/AdminEntidadesPage.tsx";
+import AdminEntidadeDetailPage from "./pages/admin/AdminEntidadeDetailPage.tsx";
 import AdminPrecoPage from "./pages/admin/AdminPrecoPage.tsx";
 import AdminArbitragemPage from "./pages/admin/AdminArbitragemPage.tsx";
 import AdminConteudoPage from "./pages/admin/AdminConteudoPage.tsx";
@@ -271,6 +272,7 @@ const App = () => (
               <Route path="/admin/sorteio/1-5" element={adminGuard(<AdminSorteioTrabPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/sorteio/1-11" element={adminGuard(<AdminSorteioConsPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/entidades" element={adminGuard(<AdminEntidadesPage />, ["operator", "admin", "super_admin"])} />
+            <Route path="/admin/entidades/:id" element={adminGuard(<AdminEntidadeDetailPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/preco" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/arbitragem" element={adminGuard(<AdminArbitragemPage />, ["moderador", "admin", "super_admin"])} />
               <Route path="/admin/conteudo" element={adminGuard(<AdminConteudoPage />, ["operator", "admin", "super_admin"])} />

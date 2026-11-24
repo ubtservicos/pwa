@@ -26,6 +26,9 @@ export interface AdminActionClientTarget {
   email: string;
   phone?: string | null;
   slug?: string | null;
+  entityType?: "cliente" | "entidade";
+  cnpj?: string | null;
+  razaoSocial?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   cadastroCompleto?: boolean;
@@ -148,18 +151,68 @@ export function buildCadastralUpdateUrl(clientPhone?: string | null): string {
     : `${appOrigin}/atualizacao-cadastral`;
 }
 
+export const WHATSAPP_ENTIDADE_TEMPLATE_OPTIONS: Array<{
+  key: WhatsAppTemplateKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "completar_cadastro",
+    label: "1. Completar o cadastro",
+    description: "Link direto de atualização cadastral com o telefone da entidade",
+  },
+  {
+    key: "abrir_mercadopago",
+    label: "2. Abrir conta no Mercado Pago",
+    description: "Orientação para abrir/conectar a conta PJ/Mercado Pago da entidade",
+  },
+  {
+    key: "cadastrar_pix",
+    label: "3. Cadastrar chave-pix",
+    description: "Orientação para cadastrar chave PIX da entidade para repasses solidários",
+  },
+  {
+    key: "aniversario",
+    label: "4. Aniversário / Data Comemorativa",
+    description: "Mensagem comemorativa parabenizando a entidade/responsável",
+  },
+  {
+    key: "livre",
+    label: "5. Mensagem livre",
+    description: "Escreva uma mensagem personalizada",
+  },
+];
+
 export function buildWhatsAppTemplate(
   key: WhatsAppTemplateKey,
   clientName: string,
   clientPhone?: string | null,
+  entityType: "cliente" | "entidade" = "cliente",
 ): string {
-  const firstName = String(clientName || "Cliente").trim().split(/\s+/)[0] || "Cliente";
+  const firstName = String(clientName || (entityType === "entidade" ? "Entidade" : "Cliente")).trim().split(/\s+/)[0] || "Cliente";
+  const displayName = String(clientName || "Entidade").trim();
   const appOrigin = getAppOrigin();
-  switch (key) {
-    case "completar_cadastro": {
-      const updateUrl = buildCadastralUpdateUrl(clientPhone);
-      return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 🌴\n\nNotamos que o seu cadastro na plataforma ainda precisa ser completado. Acesse o link abaixo para atualizar seus dados em poucos minutos:\n${updateUrl}\n\nQualquer dúvida, estamos por aqui!`;
+  const updateUrl = buildCadastralUpdateUrl(clientPhone);
+
+  if (entityType === "entidade") {
+    switch (key) {
+      case "completar_cadastro":
+        return `Olá, equipe ${displayName}! Tudo bem? Aqui é da UBT Serviços 🌴\n\nNotamos que o cadastro da entidade na plataforma ainda precisa ser completado. Acesse o link abaixo para atualizar os dados cadastrais da associação:\n${updateUrl}\n\nQualquer dúvida, estamos à disposição!`;
+      case "abrir_mercadopago":
+        return `Olá, equipe ${displayName}! Aqui é da UBT Serviços 💳\n\nPara receber os repasses solidários e benefícios da plataforma automaticamente, abra ou conecte a conta PJ do Mercado Pago da entidade:\n• Abrir conta PJ: https://www.mercadopago.com.br/hub/registration/landing\n• Conectar na UBT: ${appOrigin}/app/config/financeiro\n\nConte com nossa equipe se precisar de apoio!`;
+      case "cadastrar_pix":
+        return `Olá, equipe ${displayName}! Aqui é da UBT Serviços ⚡\n\nIdentificamos que a entidade ainda não possui chave PIX cadastrada na UBT. Cadastre a chave PIX da associação para liberar o recebimento dos repasses solidários:\n${appOrigin}/app/config/financeiro\n\nÉ rápido e seguro!`;
+      case "aniversario":
+        return `Parabéns à equipe ${displayName} por esta data especial! 🎉✨\n\nA UBT Serviços celebra junto com vocês e agradece pela parceria e pelo impacto positivo gerado na nossa comunidade em Ubatuba! 🌴🤝`;
+      case "livre":
+      default:
+        return `Olá, equipe ${displayName}! `;
     }
+  }
+
+  switch (key) {
+    case "completar_cadastro":
+      return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 🌴\n\nNotamos que o seu cadastro na plataforma ainda precisa ser completado. Acesse o link abaixo para atualizar seus dados em poucos minutos:\n${updateUrl}\n\nQualquer dúvida, estamos por aqui!`;
     case "abrir_mercadopago":
       return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 💳\n\nPara receber seus pagamentos e repasses automaticamente com split na UBT, conecte ou abra sua conta no Mercado Pago:\n• Abrir conta: https://www.mercadopago.com.br/hub/registration/landing\n• Conectar no app UBT: ${appOrigin}/app/config/financeiro\n\nSe precisar de ajuda, conte com a gente!`;
     case "cadastrar_pix":
@@ -249,7 +302,7 @@ export function DeleteClientAlertModal({
             </div>
             <div>
               <h3 className="font-display text-[16px] font-bold text-red-300 m-0">
-                Prevenção de Erros · Excluir Cliente
+                Prevenção de Erros · Excluir {client.entityType === "entidade" ? "Entidade" : "Cliente"}
               </h3>
               <p className="text-[11px] text-red-200/75 uppercase tracking-wider font-semibold">
                 Ação definitiva e irreversível
@@ -270,9 +323,14 @@ export function DeleteClientAlertModal({
         <div className="p-6 space-y-4">
           <div className="rounded-xl p-4 border border-red-500/35 bg-red-950/25 space-y-1.5">
             <div className="text-[11px] uppercase tracking-wider font-bold text-red-400">
-              Cliente selecionado para exclusão
+              {client.entityType === "entidade" ? "Entidade selecionada para exclusão" : "Cliente selecionado para exclusão"}
             </div>
-            <div className="text-[15px] font-bold text-zinc-100">{client.name}</div>
+            <div className="text-[15px] font-bold text-zinc-100">
+              {client.razaoSocial || client.name}
+            </div>
+            {client.entityType === "entidade" && client.cnpj && (
+              <div className="text-[12px] font-mono text-red-200">CNPJ: {client.cnpj}</div>
+            )}
             <div className="text-[13px] text-red-200/90">{client.email}</div>
             <div className="text-[12px] font-mono text-red-300">
               Slug: {client.slug ? `@${client.slug}` : "Não definido"}
@@ -573,12 +631,18 @@ export function WhatsAppClientModal({
   const [templateKey, setTemplateKey] = useState<WhatsAppTemplateKey>("completar_cadastro");
   const [messageText, setMessageText] = useState("");
 
+  const entityType = client?.entityType || "cliente";
+  const templateOptions =
+    entityType === "entidade" ? WHATSAPP_ENTIDADE_TEMPLATE_OPTIONS : WHATSAPP_TEMPLATE_OPTIONS;
+
   useEffect(() => {
     if (client) {
       setTemplateKey("completar_cadastro");
-      setMessageText(buildWhatsAppTemplate("completar_cadastro", client.name, client.phone));
+      setMessageText(
+        buildWhatsAppTemplate("completar_cadastro", client.name, client.phone, client.entityType || "cliente"),
+      );
     }
-  }, [client?.id, client?.phone]);
+  }, [client?.id, client?.phone, client?.entityType]);
 
   const normalizedPhone = useMemo(() => cleanBrazilPhone(client?.phone), [client?.phone]);
 
@@ -586,7 +650,7 @@ export function WhatsAppClientModal({
 
   const handleSelectTemplate = (key: WhatsAppTemplateKey) => {
     setTemplateKey(key);
-    setMessageText(buildWhatsAppTemplate(key, client.name, client.phone));
+    setMessageText(buildWhatsAppTemplate(key, client.name, client.phone, entityType));
   };
 
   const handleOpenWhatsApp = () => {
@@ -642,7 +706,7 @@ export function WhatsAppClientModal({
               Tipo de Mensagem
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {WHATSAPP_TEMPLATE_OPTIONS.map((opt) => {
+              {templateOptions.map((opt) => {
                 const selected = templateKey === opt.key;
                 return (
                   <button
@@ -916,7 +980,7 @@ export function ClientHistoryModal({
             </div>
             <div>
               <h3 className="font-display text-[16px] font-bold text-zinc-100 m-0">
-                Histórico do Cliente
+                {client.entityType === "entidade" ? "Histórico da Entidade" : "Histórico do Cliente"}
               </h3>
               <p className="text-[12px] text-zinc-400">
                 {client.name} {client.slug ? `· @${client.slug}` : ""}

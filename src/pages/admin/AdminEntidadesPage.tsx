@@ -1,24 +1,34 @@
 import { useState, useEffect, useMemo } from "react";
-import { 
-  X, 
-  Search, 
-  Copy, 
-  Check, 
-  Building2, 
-  Eye, 
-  RefreshCw, 
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-  Users,
-  User,
-  Handshake
+import { useNavigate } from "react-router-dom";
+import {
+  Search,
+  Copy,
+  Check,
+  Building2,
+  Eye,
+  RefreshCw,
+  History,
+  Ban,
+  ShieldCheck,
+  MessageCircle,
+  Trash2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
-import { Card, GhostButton } from "@/components/admin/ui";
+import { Card } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
-import AdminPixQuickEditor from "@/components/admin/AdminPixQuickEditor";
+import {
+  DeleteClientAlertModal,
+  BlockClientModal,
+  WhatsAppClientModal,
+  ClientHistoryModal,
+  isUserBlockedActive,
+  formatBlockedSummary,
+  type AdminActionClientTarget,
+} from "@/components/admin/AdminClienteActionsModals";
 import { supabase } from "@/lib/supabase";
-import { maskCNPJ, maskPhone, maskCPF, generateReferralSlug } from "@/utils/masks";
+import { maskCNPJ, maskPhone, generateReferralSlug } from "@/utils/masks";
 
 export interface EntidadeItem {
   id: string;
@@ -35,141 +45,140 @@ export interface EntidadeItem {
   referralSlug: string;
   chavePix: string;
   tipoChavePix: string;
-  possuiMp: boolean;
-  bairros: string[];
-  praias: string[];
-  waitlistId?: string;
-  metadata?: any;
+  hasPix: boolean;
   createdAt: string;
-  padrinhoId?: string | null;
-  padrinhoNome?: string | null;
-  padrinhoRole?: string | null;
+  updatedAt?: string | null;
+  isBlocked: boolean;
+  blockedUntil?: string | null;
+  blockDurationLabel?: string | null;
+  blockedReason?: string | null;
+  isBlockedActive: boolean;
 }
 
-const cleanPhoneDigits = (phone?: string | null) => {
-  if (!phone) return "";
-  return phone.replace(/\D/g, "");
-};
+type PixFilter = "all" | "com_pix" | "sem_pix";
+type SortField =
+  | "razaoSocial"
+  | "slug"
+  | "cnpj"
+  | "responsavel"
+  | "contato"
+  | "cadastro"
+  | "createdAt"
+  | "status";
+type SortDir = "asc" | "desc";
 
-const getAppOrigin = () => {
-  if (typeof window !== "undefined" && window.location.origin) {
-    return window.location.origin;
-  }
-  return "https://ubtservicos.vercel.app";
+const cleanDigits = (val?: string | null) => String(val || "").replace(/\D/g, "");
+
+const formatDateDDMMYYYY = (iso?: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 export default function AdminEntidadesPage() {
+  const navigate = useNavigate();
   const toast = useAdminToast();
+
   const [entidades, setEntidades] = useState<EntidadeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "completo" | "incompleto">("all");
-  const [filterSemPix, setFilterSemPix] = useState<boolean>(false);
+  const [filterPix, setFilterPix] = useState<PixFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [copiedSlugId, setCopiedSlugId] = useState<string | null>(null);
 
-  // Modal de Detalhes
-  const [selectedEntidade, setSelectedEntidade] = useState<EntidadeItem | null>(null);
-  const [entidadeApadrinhados, setEntidadeApadrinhados] = useState<any[]>([]);
-  const [loadingEntidadeApadrinhados, setLoadingEntidadeApadrinhados] = useState(false);
+  // 4 Modais de Ação
+  const [deleteTarget, setDeleteTarget] = useState<AdminActionClientTarget | null>(null);
+  const [blockTarget, setBlockTarget] = useState<AdminActionClientTarget | null>(null);
+  const [whatsAppTarget, setWhatsAppTarget] = useState<AdminActionClientTarget | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<AdminActionClientTarget | null>(null);
 
-  useEffect(() => {
-    if (selectedEntidade?.id) {
-      setLoadingEntidadeApadrinhados(true);
-      supabase.rpc("obter_meus_apadrinhados", { p_padrinho_id: selectedEntidade.id })
-        .then(({ data, error }) => {
-          if (!error && data) {
-            setEntidadeApadrinhados(data);
-          } else {
-            setEntidadeApadrinhados([]);
-          }
-        })
-        .catch(() => setEntidadeApadrinhados([]))
-        .finally(() => setLoadingEntidadeApadrinhados(false));
-    } else {
-      setEntidadeApadrinhados([]);
-    }
-  }, [selectedEntidade?.id]);
-  const [customSlugInput, setCustomSlugInput] = useState("");
-  const [isSavingCustomSlug, setIsSavingCustomSlug] = useState(false);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
-
-  // Sincroniza slug quando seleciona entidade
-  useEffect(() => {
-    if (selectedEntidade) {
-      setCustomSlugInput(selectedEntidade.referralSlug || "");
-      setCopiedLink(null);
-    }
-  }, [selectedEntidade]);
-
-  // Carrega entidades do Supabase
   const fetchEntidades = async () => {
     setLoading(true);
     try {
-      // 1. Busca usuários com role associacao ou metadata PJ
       const { data: rawUsers, error: errUsers } = await supabase
         .from("usuarios")
         .select("*")
-        .or("role.eq.associacao,metadata->>tipo_cadastro.eq.pj")
+        .or("role.eq.associacao,tipo_pessoa.eq.PJ,metadata->>tipo_cadastro.eq.pj,metadata->>tipo_cadastro.eq.PJ")
         .order("created_at", { ascending: false });
 
       if (errUsers) throw errUsers;
 
-      // 2. Busca waitlist para correlação de dados complementares
-      const { data: rawWaitlist, error: errWaitlist } = await supabase
-        .from("waitlist")
-        .select("*");
+      const { data: rawWaitlist } = await supabase.from("waitlist").select("*");
 
-      if (errWaitlist) throw errWaitlist;
-
-      // 3. Resolução de Padrinhos
-      const padrinhoIds = Array.from(new Set([
-        ...(rawUsers || []).map((u: any) => u.padrinho_id),
-        ...(rawWaitlist || []).map((w: any) => w.padrinho_id)
-      ].filter(Boolean)));
-
-      const padrinhoMap = new Map<string, any>();
-      if (padrinhoIds.length > 0) {
-        const { data: padrinhosData } = await supabase
-          .from("usuarios")
-          .select("id, nome, razao_social, role, tipo_pessoa")
-          .in("id", padrinhoIds);
-        (padrinhosData || []).forEach((p: any) => padrinhoMap.set(p.id, p));
-      }
-
-      // Mapas auxiliares para correlação
       const wlPhoneMap = new Map<string, any>();
       const wlCnpjMap = new Map<string, any>();
       const wlUserIdMap = new Map<string, any>();
 
       (rawWaitlist || []).forEach((w: any) => {
-        const cleanTel = cleanPhoneDigits(w.telefone);
-        const cleanDoc = String(w.cnpj || "").replace(/\D/g, "");
+        const cleanTel = cleanDigits(w.telefone);
+        const cleanDoc = cleanDigits(w.cnpj);
         if (cleanTel) wlPhoneMap.set(cleanTel, w);
         if (cleanDoc) wlCnpjMap.set(cleanDoc, w);
         if (w.user_id) wlUserIdMap.set(w.user_id, w);
         if (w.id) wlUserIdMap.set(w.id, w);
       });
 
-      // Mapeamento e unificação dos registros
       const mappedList: EntidadeItem[] = (rawUsers || []).map((u: any) => {
-        const cleanTel = cleanPhoneDigits(u.telefone || u.phone);
-        const cleanDoc = String(u.cnpj || u.metadata?.cnpj || "").replace(/\D/g, "");
-        const matchedWl = wlUserIdMap.get(u.id) || (cleanDoc ? wlCnpjMap.get(cleanDoc) : null) || (cleanTel ? wlPhoneMap.get(cleanTel) : null);
+        const cleanTel = cleanDigits(u.telefone || u.phone);
+        const cleanDoc = cleanDigits(u.cnpj || u.metadata?.cnpj);
+        const matchedWl =
+          wlUserIdMap.get(u.id) ||
+          (cleanDoc ? wlCnpjMap.get(cleanDoc) : null) ||
+          (cleanTel ? wlPhoneMap.get(cleanTel) : null);
 
-        const razaoSocial = u.razao_social || u.metadata?.razao_social || matchedWl?.razao_social || u.nome || "Entidade Sem Razão Social";
-        const nomeFantasia = u.nome || matchedWl?.nome || matchedWl?.nome_fantasia || razaoSocial;
-        const cnpjVal = cleanDoc || String(matchedWl?.cnpj || "").replace(/\D/g, "");
-        const responsavelNome = u.responsavel_legal || u.responsavel_nome || matchedWl?.responsavel_nome || matchedWl?.responsavel_legal || "Não informado";
-        const responsavelCpf = u.cpf_responsavel || matchedWl?.responsavel_cpf || matchedWl?.cpf_responsavel || u.cpf || "";
+        const razaoSocial =
+          u.razao_social ||
+          u.metadata?.razao_social ||
+          matchedWl?.razao_social ||
+          u.nome ||
+          "Entidade Sem Razão Social";
+        const nomeFantasia =
+          u.nome_fantasia || u.nome || matchedWl?.nome_fantasia || matchedWl?.nome || razaoSocial;
+        const cnpjVal = cleanDoc || cleanDigits(matchedWl?.cnpj);
+        const responsavelNome =
+          u.responsavel_legal ||
+          u.responsavel_nome ||
+          matchedWl?.responsavel_nome ||
+          matchedWl?.responsavel_legal ||
+          "Não informado";
+        const responsavelCpf =
+          u.cpf_responsavel || matchedWl?.responsavel_cpf || matchedWl?.cpf_responsavel || u.cpf || "";
         const telefoneVal = u.telefone || matchedWl?.telefone || "";
         const emailVal = u.email || matchedWl?.email || "Não informado";
-        const isCompleto = u.cadastro_completo === true || u.metadata?.cadastro_completo === true || matchedWl?.cadastro_completo === true;
-        const statusVal = u.status === "ativo" || u.status === "active" ? "ativo" : (u.status || "ativo");
+        const isCompleto =
+          u.cadastro_completo === true ||
+          u.metadata?.cadastro_completo === true ||
+          matchedWl?.cadastro_completo === true;
+        const statusVal = u.status === "ativo" || u.status === "active" ? "ativo" : u.status || "ativo";
 
-        const referralSlug = matchedWl?.referral_code || matchedWl?.referral_slug || matchedWl?.slug || u.referral_code || u.metadata?.referral_code || generateReferralSlug(nomeFantasia || razaoSocial, cnpjVal || u.id);
-        const padId = u.padrinho_id || matchedWl?.padrinho_id || null;
-        const pObj = padId ? padrinhoMap.get(padId) : null;
-        const padNome = pObj ? (pObj.nome || pObj.razao_social || "Padrinho") : null;
-        const padRole = pObj?.role === "associacao" || pObj?.tipo_pessoa === "PJ" ? "PJ" : "PF";
+        const rawSlug =
+          u.referral_code ||
+          matchedWl?.referral_code ||
+          matchedWl?.referral_slug ||
+          matchedWl?.slug ||
+          u.metadata?.referral_code ||
+          "";
+        const referralSlug = String(
+          rawSlug || generateReferralSlug(nomeFantasia || razaoSocial, cnpjVal || u.id) || "",
+        ).trim();
+
+        const chavePix = String(
+          u.chave_pix || matchedWl?.pix_chave || matchedWl?.chave_pix || "",
+        ).trim();
+        const tipoChavePix = String(
+          u.tipo_chave_pix || matchedWl?.pix_tipo || matchedWl?.tipo_chave_pix || "",
+        ).trim();
+
+        const isBlocked = Boolean(u.is_blocked);
+        const blockedUntil = u.blocked_until || null;
+        const blockDurationLabel = u.block_duration_label || null;
+        const blockedReason = u.blocked_reason || null;
 
         return {
           id: u.id,
@@ -184,40 +193,42 @@ export default function AdminEntidadesPage() {
           cadastroCompleto: isCompleto,
           status: statusVal,
           referralSlug,
-          chavePix: matchedWl?.pix_chave || matchedWl?.chave_pix || u.chave_pix || "",
-          tipoChavePix: matchedWl?.pix_tipo || matchedWl?.tipo_chave_pix || u.tipo_chave_pix || "",
-          possuiMp: Boolean(matchedWl?.possui_mp || matchedWl?.possui_mercado_pago),
-          bairros: matchedWl?.bairros_atuacao || matchedWl?.bairros || u.bairros_atuacao || [],
-          praias: matchedWl?.praias || u.praias || [],
-          waitlistId: matchedWl?.id,
-          metadata: u.metadata || {},
+          chavePix,
+          tipoChavePix,
+          hasPix: Boolean(chavePix),
           createdAt: u.created_at || matchedWl?.created_at_utc || new Date().toISOString(),
-          padrinhoId: padId,
-          padrinhoNome: padNome,
-          padrinhoRole: padRole,
+          updatedAt: u.updated_at || null,
+          isBlocked,
+          blockedUntil,
+          blockDurationLabel,
+          blockedReason,
+          isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
         };
       });
 
-      // Se houver leads na waitlist que foram aprovados como PJ mas ainda não constam na lista
+      // Leads aprovados como PJ na waitlist que ainda não estão em usuarios
       (rawWaitlist || []).forEach((w: any) => {
-        const isPJ = w.tipo_cadastro === "pj" || w.tipo_cadastro === "PJ" || w.tipo_cadastro === "associacao" || Boolean(w.cnpj) || Boolean(w.razao_social);
-        const isApproved = w.status === "aprovado" || w.status === "approved" || w.cadastro_completo === true;
-        
-        if (isPJ && isApproved) {
-          const cleanTel = cleanPhoneDigits(w.telefone);
-          const cleanDoc = String(w.cnpj || "").replace(/\D/g, "");
-          const alreadyExists = mappedList.some(item => 
-            (cleanTel && cleanPhoneDigits(item.telefone) === cleanTel) || 
-            (cleanDoc && cleanPhoneDigits(item.cnpj) === cleanDoc)
-          );
+        const isPJ =
+          w.tipo_cadastro === "pj" ||
+          w.tipo_cadastro === "PJ" ||
+          w.tipo_cadastro === "associacao" ||
+          Boolean(w.cnpj) ||
+          Boolean(w.razao_social);
+        const isApproved =
+          w.status === "aprovado" || w.status === "approved" || w.cadastro_completo === true;
 
+        if (isPJ && isApproved) {
+          const cleanTel = cleanDigits(w.telefone);
+          const cleanDoc = cleanDigits(w.cnpj);
+          const alreadyExists = mappedList.some(
+            (item) =>
+              (cleanTel && cleanDigits(item.telefone) === cleanTel) ||
+              (cleanDoc && cleanDigits(item.cnpj) === cleanDoc),
+          );
           if (!alreadyExists) {
             const rSocial = w.razao_social || w.nome || "Entidade Sem Razão Social";
-            const nFantasia = w.nome || w.nome_fantasia || rSocial;
-            const wPadId = w.padrinho_id || null;
-            const wPObj = wPadId ? padrinhoMap.get(wPadId) : null;
-            const wPadNome = wPObj ? (wPObj.nome || wPObj.razao_social || "Padrinho") : null;
-            const wPadRole = wPObj?.role === "associacao" || wPObj?.tipo_pessoa === "PJ" ? "PJ" : "PF";
+            const nFantasia = w.nome_fantasia || w.nome || rSocial;
+            const chavePix = String(w.pix_chave || w.chave_pix || "").trim();
             mappedList.push({
               id: w.user_id || w.id,
               name: nFantasia,
@@ -230,25 +241,28 @@ export default function AdminEntidadesPage() {
               email: w.email || "Não informado",
               cadastroCompleto: Boolean(w.cadastro_completo),
               status: "ativo",
-              referralSlug: w.referral_code || w.referral_slug || w.slug || generateReferralSlug(nFantasia, cleanDoc || w.id),
-              chavePix: w.pix_chave || w.chave_pix || "",
-              tipoChavePix: w.pix_tipo || w.tipo_chave_pix || "",
-              possuiMp: Boolean(w.possui_mp || w.possui_mercado_pago),
-              bairros: w.bairros_atuacao || w.bairros || [],
-              praias: w.praias || [],
-              waitlistId: w.id,
-              metadata: w.metadata || {},
+              referralSlug:
+                w.referral_code ||
+                w.referral_slug ||
+                w.slug ||
+                generateReferralSlug(nFantasia, cleanDoc || w.id),
+              chavePix,
+              tipoChavePix: String(w.pix_tipo || w.tipo_chave_pix || "").trim(),
+              hasPix: Boolean(chavePix),
               createdAt: w.created_at_utc || new Date().toISOString(),
-              padrinhoId: wPadId,
-              padrinhoNome: wPadNome,
-              padrinhoRole: wPadRole,
+              updatedAt: null,
+              isBlocked: false,
+              blockedUntil: null,
+              blockDurationLabel: null,
+              blockedReason: null,
+              isBlockedActive: false,
             });
           }
         }
       });
 
       setEntidades(mappedList);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Erro ao buscar entidades:", err);
       toast.show("Erro ao carregar entidades.");
     } finally {
@@ -257,873 +271,539 @@ export default function AdminEntidadesPage() {
   };
 
   useEffect(() => {
-    fetchEntidades();
+    void fetchEntidades();
   }, []);
 
-  // Filtro de Busca
-  const filtered = useMemo(() => {
+  const filteredAndSorted = useMemo(() => {
     const ql = q.toLowerCase().trim();
-    return entidades.filter((e) => {
-      const matchStatus = 
+    const cleanQ = ql.replace(/\D/g, "");
+
+    const list = entidades.filter((e) => {
+      const okCadastro =
         filterStatus === "all" ||
         (filterStatus === "completo" && e.cadastroCompleto) ||
         (filterStatus === "incompleto" && !e.cadastroCompleto);
+      if (!okCadastro) return false;
 
-      if (!matchStatus) return false;
-      if (filterSemPix && String(e.chavePix || "").trim()) return false;
+      const okPix =
+        filterPix === "all" ||
+        (filterPix === "com_pix" && e.hasPix) ||
+        (filterPix === "sem_pix" && !e.hasPix);
+      if (!okPix) return false;
+
       if (!ql) return true;
-
-      const cleanQ = ql.replace(/\D/g, "");
-      const matchCnpj = cleanQ && cleanPhoneDigits(e.cnpj).includes(cleanQ);
-      const matchTel = cleanQ && cleanPhoneDigits(e.telefone).includes(cleanQ);
-      const matchText = 
+      const matchCnpj = cleanQ && cleanDigits(e.cnpj).includes(cleanQ);
+      const matchTel = cleanQ && cleanDigits(e.telefone).includes(cleanQ);
+      const matchText =
         e.name.toLowerCase().includes(ql) ||
         e.razaoSocial.toLowerCase().includes(ql) ||
         e.email.toLowerCase().includes(ql) ||
         e.responsavelNome.toLowerCase().includes(ql) ||
         e.referralSlug.toLowerCase().includes(ql);
-
-      return matchCnpj || matchTel || matchText;
+      return Boolean(matchCnpj || matchTel || matchText);
     });
-  }, [entidades, q, filterStatus, filterSemPix]);
 
-  // Função para copiar links com feedback
-  const handleCopyLink = async (text: string, type: string) => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-9999px";
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
+    const mult = sortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sortField) {
+        case "razaoSocial":
+          return a.razaoSocial.localeCompare(b.razaoSocial, "pt-BR") * mult;
+        case "slug":
+          return a.referralSlug.localeCompare(b.referralSlug, "pt-BR") * mult;
+        case "cnpj":
+          return a.cnpj.localeCompare(b.cnpj) * mult;
+        case "responsavel":
+          return a.responsavelNome.localeCompare(b.responsavelNome, "pt-BR") * mult;
+        case "contato":
+          return (a.telefone || a.email).localeCompare(b.telefone || b.email, "pt-BR") * mult;
+        case "cadastro":
+          return (Number(a.cadastroCompleto) - Number(b.cadastroCompleto)) * mult;
+        case "status":
+          return (Number(a.isBlockedActive) - Number(b.isBlockedActive)) * mult;
+        case "createdAt":
+        default: {
+          const ta = new Date(a.createdAt).getTime() || 0;
+          const tb = new Date(b.createdAt).getTime() || 0;
+          return (ta - tb) * mult;
+        }
       }
-      setCopiedLink(type);
-      toast.show("Link copiado com sucesso!");
-      setTimeout(() => setCopiedLink(null), 2500);
-    } catch (e) {
-      console.error(e);
-      toast.show("Erro ao copiar link.");
+    });
+  }, [entidades, q, filterStatus, filterPix, sortField, sortDir]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "createdAt" ? "desc" : "asc");
     }
   };
 
-  // Função para salvar Vanity Slug
-  const handleSaveSlug = async () => {
-    if (!selectedEntidade) return;
-    const clean = customSlugInput.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+|-+$/g, "");
-    if (!clean) {
-      toast.show("Informe um código de indicação válido.");
-      return;
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown size={12} className="text-zinc-600 inline-block ml-1" />;
     }
-    setIsSavingCustomSlug(true);
+    return sortDir === "asc" ? (
+      <ArrowUp size={12} className="text-emerald-400 inline-block ml-1" />
+    ) : (
+      <ArrowDown size={12} className="text-emerald-400 inline-block ml-1" />
+    );
+  };
+
+  const handleCopySlug = async (slug: string, id: string) => {
+    if (!slug) return;
     try {
-      const phoneDigits = cleanPhoneDigits(selectedEntidade.telefone);
-      
-      // Atualiza waitlist
-      if (selectedEntidade.waitlistId) {
-        await supabase.from("waitlist").update({ referral_code: clean, referral_slug: clean, slug: clean }).eq("id", selectedEntidade.waitlistId);
-      } else if (phoneDigits) {
-        await supabase.from("waitlist").update({ referral_code: clean, referral_slug: clean, slug: clean }).or(`telefone.eq.${phoneDigits},telefone.eq.${selectedEntidade.telefone}`);
-      }
-
-      // Atualiza usuarios
-      if (selectedEntidade.id) {
-        await supabase.from("usuarios").update({
-          referral_code: clean,
-          metadata: { ...(selectedEntidade.metadata || {}), referral_code: clean }
-        }).eq("id", selectedEntidade.id);
-      }
-
-      setSelectedEntidade((prev) => prev ? { ...prev, referralSlug: clean } : null);
-      setEntidades((prev) => prev.map((ent) => ent.id === selectedEntidade.id ? { ...ent, referralSlug: clean } : ent));
-      toast.show("Código de indicação (vanity slug) salvo com sucesso!");
-    } catch (e) {
-      console.error(e);
-      toast.show("Erro ao salvar código de indicação.");
-    } finally {
-      setIsSavingCustomSlug(false);
+      await navigator.clipboard.writeText(slug);
+      setCopiedSlugId(id);
+      toast.show(`Slug "@${slug}" copiado! ✓`);
+      setTimeout(() => setCopiedSlugId(null), 2000);
+    } catch {
+      toast.show("Erro ao copiar slug.");
     }
   };
+
+  const toActionTarget = (e: EntidadeItem): AdminActionClientTarget => ({
+    id: e.id,
+    name: e.nomeFantasia || e.razaoSocial,
+    razaoSocial: e.razaoSocial,
+    cnpj: e.cnpj ? maskCNPJ(e.cnpj) : null,
+    email: e.email,
+    phone: e.telefone,
+    slug: e.referralSlug,
+    entityType: "entidade",
+    createdAt: e.createdAt,
+    updatedAt: e.updatedAt,
+    cadastroCompleto: e.cadastroCompleto,
+    isBlocked: e.isBlocked,
+    blockedUntil: e.blockedUntil,
+    blockDurationLabel: e.blockDurationLabel,
+    blockedReason: e.blockedReason,
+  });
+
+  const handleDeleted = (deletedId: string) => {
+    setEntidades((prev) => prev.filter((item) => item.id !== deletedId));
+    toast.show("Entidade excluída definitivamente com sucesso! ✓");
+  };
+
+  const handleBlockUpdated = (
+    userId: string,
+    patch: {
+      isBlocked: boolean;
+      blockedUntil: string | null;
+      blockDurationLabel: string | null;
+      blockedReason: string | null;
+      status: string;
+    },
+  ) => {
+    setEntidades((prev) =>
+      prev.map((item) =>
+        item.id === userId
+          ? {
+              ...item,
+              isBlocked: patch.isBlocked,
+              blockedUntil: patch.blockedUntil,
+              blockDurationLabel: patch.blockDurationLabel,
+              blockedReason: patch.blockedReason,
+              status: patch.status,
+              isBlockedActive: isUserBlockedActive({
+                isBlocked: patch.isBlocked,
+                blockedUntil: patch.blockedUntil,
+              }),
+            }
+          : item,
+      ),
+    );
+    toast.show(
+      patch.isBlocked
+        ? `Entidade bloqueada (${patch.blockDurationLabel || "ativo"}).`
+        : "Entidade desbloqueada com sucesso! ✓",
+    );
+  };
+
+  const COLUMNS: Array<{ field: SortField; label: string; align?: "left" | "center" }> = [
+    { field: "razaoSocial", label: "Entidade / Razão Social" },
+    { field: "slug", label: "Slug" },
+    { field: "cnpj", label: "CNPJ" },
+    { field: "responsavel", label: "Responsável Legal" },
+    { field: "contato", label: "Contato" },
+    { field: "cadastro", label: "Cadastro", align: "center" },
+    { field: "createdAt", label: "Entidade desde", align: "center" },
+    { field: "status", label: "Status", align: "center" },
+  ];
+
+  const selectClass =
+    "h-10 bg-[#09090B] border border-zinc-800 rounded-xl px-3 font-sans text-[13px] text-zinc-200 outline-none cursor-pointer focus:border-zinc-600";
 
   return (
-    <div style={{ padding: 32 }}>
-      {/* Topo / Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 16 }}>
+    <div style={{ padding: "28px 24px" }}>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Building2 size={24} color="#0DB87E" />
-            <h1 style={{ fontFamily: "Syne", fontSize: 22, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+          <div className="flex items-center gap-2.5">
+            <Building2 size={22} className="text-emerald-400" />
+            <h1 className="font-display text-[22px] font-bold text-zinc-100 m-0">
               Entidades & Associações (PJ)
             </h1>
-            <span style={{ fontSize: 12, background: "rgba(13,184,126,0.12)", color: "#0DB87E", padding: "3px 8px", borderRadius: 999, fontWeight: 600 }}>
-              {filtered.length} {filtered.length === 1 ? "entidade" : "entidades"}
+            <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2.5 py-0.5 rounded-full font-semibold">
+              {filteredAndSorted.length}{" "}
+              {filteredAndSorted.length === 1 ? "entidade" : "entidades"}
             </span>
           </div>
-          <p style={{ margin: "4px 0 0 0", fontSize: 13, color: "var(--admin-subtle)" }}>
-            Gestão de associações, ONGs e pessoas jurídicas credenciadas para participação e repasse solidário.
+          <p className="font-sans text-xs text-zinc-400 mt-1 mb-0">
+            Gestão cadastral de associações, ONGs e pessoas jurídicas credenciadas na UBT.
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            onClick={fetchEntidades}
-            disabled={loading}
-            title="Recarregar dados"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--admin-border)",
-              background: "var(--admin-bg)",
-              color: "var(--admin-text)",
-              fontSize: 13,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            <span>Atualizar</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void fetchEntidades()}
+          disabled={loading}
+          className="h-9 px-3.5 rounded-xl bg-[#09090B] border border-zinc-800 hover:bg-zinc-900 text-zinc-200 text-xs font-semibold inline-flex items-center gap-2 transition-colors"
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin text-emerald-400" : ""} />
+          Atualizar
+        </button>
       </div>
 
-      {/* Barra de Filtros e Busca */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
-          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
+      {/* Barra de Busca e Filtros */}
+      <div className="flex flex-wrap gap-2.5 mb-5 items-center">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search size={15} className="text-zinc-500 absolute left-3 top-3" />
           <input
             type="text"
-            placeholder="Buscar por nome, razão social, CNPJ, telefone..."
+            placeholder="Buscar por nome, razão social, CNPJ, slug ou telefone..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            style={{
-              width: "100%",
-              background: "var(--admin-bg)",
-              border: "1px solid var(--admin-border)",
-              borderRadius: 8,
-              padding: "9px 12px 9px 36px",
-              fontFamily: "DM Sans",
-              fontSize: 13,
-              color: "var(--admin-text)",
-              outline: "none",
-            }}
+            className="w-full h-10 bg-[#09090B] border border-zinc-800 rounded-xl pl-9 pr-3 font-sans text-[13px] text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600"
           />
         </div>
 
-        <div style={{ display: "flex", gap: 6 }}>
+        <select
+          value={filterPix}
+          onChange={(e) => setFilterPix(e.target.value as PixFilter)}
+          className={selectClass}
+          style={{
+            borderColor:
+              filterPix === "sem_pix"
+                ? "rgba(245, 158, 11, 0.7)"
+                : filterPix === "com_pix"
+                  ? "rgba(16, 185, 129, 0.7)"
+                  : undefined,
+            color:
+              filterPix === "sem_pix"
+                ? "#FBBF24"
+                : filterPix === "com_pix"
+                  ? "#34D399"
+                  : undefined,
+          }}
+        >
+          <option value="all">Chave PIX: Todos</option>
+          <option value="com_pix">Com chave PIX</option>
+          <option value="sem_pix">Sem chave PIX</option>
+        </select>
+
+        <div className="flex gap-1.5">
           {(["all", "completo", "incompleto"] as const).map((st) => (
             <button
               key={st}
+              type="button"
               onClick={() => setFilterStatus(st)}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 8,
-                border: "1px solid var(--admin-border)",
-                background: filterStatus === st ? "rgba(13,184,126,0.15)" : "var(--admin-bg)",
-                color: filterStatus === st ? "#0DB87E" : "var(--admin-subtle)",
-                fontWeight: filterStatus === st ? 700 : 500,
-                fontSize: 12,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                textTransform: "capitalize",
-              }}
+              className={`h-10 px-3.5 rounded-xl border text-xs font-semibold transition-colors ${
+                filterStatus === st
+                  ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-400"
+                  : "bg-[#09090B] border-zinc-800 text-zinc-400 hover:text-zinc-200"
+              }`}
             >
               {st === "all" ? "Todos os Cadastros" : st === "completo" ? "Completos" : "Incompletos"}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setFilterSemPix((v) => !v)}
-            style={{
-              padding: "8px 14px",
-              borderRadius: 8,
-              border: filterSemPix ? "1px solid rgba(245, 166, 35, 0.7)" : "1px solid var(--admin-border)",
-              background: filterSemPix ? "rgba(245, 166, 35, 0.16)" : "var(--admin-bg)",
-              color: filterSemPix ? "#F5A623" : "var(--admin-subtle)",
-              fontWeight: filterSemPix ? 700 : 500,
-              fontSize: 12,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              whiteSpace: "nowrap",
-            }}
-          >
-            ⚠️ Sem chave PIX
-          </button>
         </div>
       </div>
 
-      {/* Tabela de Entidades */}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
+      {/* Tabela Desktop (Preto/Cinza + Ordenação Clicável + 5 Ações) */}
+      <Card
+        style={{
+          overflow: "hidden",
+          padding: 0,
+          background: "#121215",
+          border: "1px solid #27272A",
+        }}
+      >
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "var(--admin-bg)" }}>
+            <thead style={{ background: "#09090B" }}>
               <tr>
-                {[
-                  "ENTIDADE / RAZÃO SOCIAL",
-                  "CNPJ",
-                  "RESPONSÁVEL LEGAL",
-                  "CONTATO",
-                  "CADASTRO",
-                  "STATUS",
-                  "AÇÕES"
-                ].map((h) => (
+                {COLUMNS.map((col) => (
                   <th
-                    key={h}
+                    key={col.field}
+                    onClick={() => handleSort(col.field)}
+                    title={`Ordenar por ${col.label}`}
                     style={{
-                      textAlign: "left",
-                      padding: "12px 18px",
+                      textAlign: col.align || "left",
+                      padding: "12px 14px",
                       fontFamily: "DM Sans",
                       fontSize: 11,
-                      fontWeight: 600,
-                      color: "var(--admin-muted)",
+                      fontWeight: 700,
+                      color: sortField === col.field ? "#34D399" : "#A1A1AA",
                       textTransform: "uppercase",
-                      letterSpacing: 0.8,
+                      letterSpacing: 1,
+                      borderBottom: "1px solid #27272A",
+                      cursor: "pointer",
+                      userSelect: "none",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {h}
+                    {col.label}
+                    {renderSortIcon(col.field)}
                   </th>
                 ))}
+                <th
+                  style={{
+                    textAlign: "right",
+                    padding: "12px 14px",
+                    fontFamily: "DM Sans",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#A1A1AA",
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                    borderBottom: "1px solid #27272A",
+                  }}
+                >
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--admin-subtle)" }}>
-                    Carregando entidades cadastradas...
+                  <td colSpan={9} className="py-10 text-center text-zinc-400 text-sm">
+                    Carregando entidades...
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--admin-subtle)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                      <Building2 size={32} color="var(--admin-muted)" />
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)" }}>
-                        Nenhuma entidade encontrada
-                      </div>
-                      <div style={{ fontSize: 13 }}>
-                        {q ? "Nenhum resultado corresponde à sua pesquisa." : "Ainda não existem entidades cadastradas ou aprovadas."}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((e) => (
-                  <tr 
-                    key={e.id} 
-                    style={{ 
-                      borderBottom: "1px solid var(--admin-border)",
-                      transition: "background 0.15s ease",
-                    }}
-                    className="hover:bg-zinc-900/40"
+              )}
+
+              {!loading &&
+                filteredAndSorted.map((ent) => (
+                  <tr
+                    key={ent.id}
+                    onClick={() => navigate(`/admin/entidades/${ent.id}`)}
+                    className={`border-b border-zinc-800/80 transition-colors cursor-pointer ${
+                      ent.isBlockedActive
+                        ? "bg-red-950/15 hover:bg-red-950/30"
+                        : "hover:bg-zinc-900/80"
+                    }`}
                   >
                     {/* ENTIDADE / RAZÃO SOCIAL */}
-                    <td style={{ padding: "14px 18px", minWidth: 220 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 700, color: "var(--admin-text)" }}>
-                          {e.nomeFantasia || e.razaoSocial}
-                        </span>
-                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">
-                          PJ
-                        </span>
-                      </div>
-                      {e.razaoSocial && e.razaoSocial !== e.nomeFantasia && (
-                        <div style={{ fontSize: 12, color: "var(--admin-subtle)", marginTop: 1 }}>
-                          {e.razaoSocial}
+                    <td style={{ padding: "11px 14px" }}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-[#09090B] border border-zinc-800 flex items-center justify-center shrink-0">
+                          <Building2 size={16} className="text-emerald-400" />
                         </div>
-                      )}
-                      <div style={{ fontSize: 12, color: "var(--admin-muted)", marginTop: 1 }}>
-                        {e.email}
-                      </div>
-                      {!e.chavePix && (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", marginTop: 2 }}>
-                          ⚠️ Sem chave PIX
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-zinc-100 truncate max-w-[230px]">
+                            {ent.razaoSocial}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {ent.nomeFantasia && ent.nomeFantasia !== ent.razaoSocial && (
+                              <span className="text-[11px] text-zinc-400 truncate max-w-[160px]">
+                                {ent.nomeFantasia}
+                              </span>
+                            )}
+                            {ent.hasPix ? (
+                              <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                PIX OK
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">
+                                Sem chave PIX
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      </div>
+                    </td>
+
+                    {/* SLUG */}
+                    <td style={{ padding: "11px 14px" }} onClick={(e) => e.stopPropagation()}>
+                      {ent.referralSlug ? (
+                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800">
+                          <span className="font-mono text-[12px] text-zinc-200">
+                            @{ent.referralSlug}
+                          </span>
+                          <button
+                            type="button"
+                            title="Copiar slug"
+                            onClick={() => void handleCopySlug(ent.referralSlug, ent.id)}
+                            className="text-zinc-500 hover:text-emerald-400 transition-colors"
+                          >
+                            {copiedSlugId === ent.id ? (
+                              <Check size={12} className="text-emerald-400" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-500 text-xs">—</span>
                       )}
                     </td>
 
                     {/* CNPJ */}
-                    <td style={{ padding: "14px 18px", fontFamily: "monospace", fontSize: 13, color: "var(--admin-text)", whiteSpace: "nowrap" }}>
-                      {maskCNPJ(e.cnpj)}
+                    <td
+                      style={{ padding: "11px 14px" }}
+                      className="font-mono text-xs text-zinc-300 whitespace-nowrap"
+                    >
+                      {ent.cnpj ? maskCNPJ(ent.cnpj) : "—"}
                     </td>
 
                     {/* RESPONSÁVEL LEGAL */}
-                    <td style={{ padding: "14px 18px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)" }}>
-                      <div>{e.responsavelNome}</div>
-                      {e.responsavelCpf && (
-                        <div style={{ fontSize: 11, color: "var(--admin-muted)", fontFamily: "monospace" }}>
-                          CPF: {maskCPF(e.responsavelCpf)}
-                        </div>
-                      )}
+                    <td style={{ padding: "11px 14px" }} className="text-xs text-zinc-200">
+                      {ent.responsavelNome}
                     </td>
 
                     {/* CONTATO */}
-                    <td style={{ padding: "14px 18px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", whiteSpace: "nowrap" }}>
-                      {maskPhone(e.telefone)}
+                    <td style={{ padding: "11px 14px" }}>
+                      <div className="text-xs text-zinc-200 whitespace-nowrap">
+                        {ent.telefone ? maskPhone(ent.telefone) : "Não cadastrado"}
+                      </div>
+                      <div className="text-[11px] text-zinc-400 truncate max-w-[180px]">
+                        {ent.email}
+                      </div>
                     </td>
 
-                    {/* CADASTRO (STATUS) */}
-                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap" }}>
-                      {e.cadastroCompleto ? (
-                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
-                          <CheckCircle2 size={12} /> Completo
+                    {/* CADASTRO */}
+                    <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                      {ent.cadastroCompleto ? (
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          Completo
                         </span>
                       ) : (
-                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
-                          <AlertCircle size={12} /> Incompleto
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          Incompleto
                         </span>
                       )}
                     </td>
 
-                    {/* STATUS OPERACIONAL */}
-                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap" }}>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          padding: "3px 8px",
-                          borderRadius: 6,
-                          background: e.status === "ativo" || e.status === "active" ? "rgba(13,184,126,0.12)" : "rgba(245,158,11,0.12)",
-                          color: e.status === "ativo" || e.status === "active" ? "#0DB87E" : "#F59E0B",
-                        }}
-                      >
-                        {e.status === "ativo" || e.status === "active" ? "Ativo" : "Pendente"}
-                      </span>
+                    {/* ENTIDADE DESDE */}
+                    <td
+                      style={{ padding: "11px 14px", textAlign: "center" }}
+                      className="font-mono text-xs text-zinc-300 whitespace-nowrap"
+                    >
+                      {formatDateDDMMYYYY(ent.createdAt)}
                     </td>
 
-                    {/* AÇÕES */}
-                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap" }}>
-                      <button
-                        onClick={() => setSelectedEntidade(e)}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          background: "var(--admin-surface)",
-                          border: "1px solid var(--admin-border)",
-                          color: "#0DB87E",
-                          fontFamily: "DM Sans",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          borderRadius: 6,
-                          padding: "6px 12px",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        className="hover:border-emerald-500 hover:bg-emerald-500/10"
-                      >
-                        <Eye size={13} />
-                        <span>Detalhes</span>
-                      </button>
+                    {/* STATUS */}
+                    <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                      {ent.isBlockedActive ? (
+                        <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
+                          Bloqueado · {formatBlockedSummary(ent)}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
+                          Ativo
+                        </span>
+                      )}
+                    </td>
+
+                    {/* 5 AÇÕES */}
+                    <td
+                      style={{ padding: "11px 14px", textAlign: "right" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          title="Visualizar ficha cadastral da entidade"
+                          aria-label="Visualizar"
+                          onClick={() => navigate(`/admin/entidades/${ent.id}`)}
+                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 transition-colors"
+                        >
+                          <Eye size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Histórico da entidade"
+                          aria-label="Histórico"
+                          onClick={() => setHistoryTarget(toActionTarget(ent))}
+                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                        >
+                          <History size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          title={ent.isBlockedActive ? "Desbloquear / Gerenciar bloqueio" : "Bloquear Entidade"}
+                          aria-label={ent.isBlockedActive ? "Desbloquear" : "Bloquear"}
+                          onClick={() => setBlockTarget(toActionTarget(ent))}
+                          className={`w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border transition-colors ${
+                            ent.isBlockedActive
+                              ? "border-emerald-500 text-emerald-400 hover:bg-emerald-950/40"
+                              : "border-red-500 text-red-400 hover:bg-red-950/50"
+                          }`}
+                        >
+                          {ent.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Enviar mensagem por WhatsApp"
+                          aria-label="WhatsApp"
+                          onClick={() => setWhatsAppTarget(toActionTarget(ent))}
+                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-emerald-500/45 text-emerald-400 hover:bg-emerald-950/40 transition-colors"
+                        >
+                          <MessageCircle size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          title="Deletar entidade (requer senha do Superadmin)"
+                          aria-label="Deletar"
+                          onClick={() => setDeleteTarget(toActionTarget(ent))}
+                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-red-500/50 text-red-400 hover:bg-red-950/50 transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))
+                ))}
+
+              {!loading && filteredAndSorted.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="py-10 text-center text-zinc-400 text-sm">
+                    Nenhuma entidade encontrada com os filtros selecionados.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* MODAL DE DETALHES DA ENTIDADE */}
-      {selectedEntidade && (
-        <>
-          <div 
-            onClick={() => setSelectedEntidade(null)} 
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 60, backdropFilter: "blur(2px)" }} 
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              background: "var(--admin-surface)",
-              border: "1px solid var(--admin-border)",
-              borderRadius: 16,
-              padding: 24,
-              width: 580,
-              maxWidth: "94vw",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              zIndex: 70,
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.45)",
-            }}
-          >
-            {/* Cabeçalho do Modal */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18, borderBottom: "1px solid var(--admin-border)", paddingBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(13,184,126,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: "#0DB87E" }}>
-                  <Building2 size={24} />
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <h2 style={{ fontFamily: "Syne", fontSize: 17, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-                      {selectedEntidade.nomeFantasia || selectedEntidade.razaoSocial}
-                    </h2>
-                    <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                      PJ
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--admin-subtle)", marginTop: 2 }}>
-                    ID: {selectedEntidade.id}
-                  </div>
-                </div>
-              </div>
+      {/* Modais Compartilhados (PJ / Entidades) */}
+      <DeleteClientAlertModal
+        client={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={handleDeleted}
+      />
 
-              <button
-                onClick={() => setSelectedEntidade(null)}
-                aria-label="Fechar"
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 4, borderRadius: 6, color: "var(--admin-subtle)" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <BlockClientModal
+        client={blockTarget}
+        onClose={() => setBlockTarget(null)}
+        onUpdated={handleBlockUpdated}
+      />
 
-            {/* Grid de Dados Estruturados */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px", marginBottom: 20 }}>
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Razão Social
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", fontWeight: 600 }}>
-                  {selectedEntidade.razaoSocial}
-                </span>
-              </div>
+      <WhatsAppClientModal
+        client={whatsAppTarget}
+        onClose={() => setWhatsAppTarget(null)}
+      />
 
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Nome Fantasia
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", fontWeight: 600 }}>
-                  {selectedEntidade.nomeFantasia || "—"}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  CNPJ
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", fontFamily: "monospace", fontWeight: 600 }}>
-                  {maskCNPJ(selectedEntidade.cnpj)}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Responsável Legal
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", fontWeight: 600 }}>
-                  {selectedEntidade.responsavelNome}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  CPF do Responsável
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", fontFamily: "monospace" }}>
-                  {maskCPF(selectedEntidade.responsavelCpf)}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Telefone / WhatsApp
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>
-                  {maskPhone(selectedEntidade.telefone)}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  E-mail Oficial
-                </span>
-                <span style={{ fontSize: 13, color: "var(--admin-text)", wordBreak: "break-all" }}>
-                  {selectedEntidade.email}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Status do Cadastro
-                </span>
-                <div style={{ marginTop: 2 }}>
-                  {selectedEntidade.cadastroCompleto ? (
-                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Completo
-                    </span>
-                  ) : (
-                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1">
-                      <AlertCircle size={12} /> Incompleto
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block" }}>
-                  Padrinho / Indicado por
-                </span>
-                <div style={{ marginTop: 2 }}>
-                  {selectedEntidade.padrinhoNome ? (
-                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-flex items-center gap-1.5">
-                      🤝 {selectedEntidade.padrinhoNome} ({selectedEntidade.padrinhoRole})
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500 text-xs italic">
-                      Direto (Sem Padrinho)
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ gridColumn: "1 / -1" }}>
-                <AdminPixQuickEditor
-                  userId={selectedEntidade.id}
-                  chavePix={selectedEntidade.chavePix}
-                  tipoChavePix={selectedEntidade.tipoChavePix}
-                  onToast={(msg) => toast.show(msg)}
-                  onSaved={(novaChave, novoTipo) => {
-                    setSelectedEntidade((prev) => prev ? { ...prev, chavePix: novaChave, tipoChavePix: novoTipo } : null);
-                    setEntidades((prev) => prev.map((ent) => ent.id === selectedEntidade.id ? { ...ent, chavePix: novaChave, tipoChavePix: novoTipo } : ent));
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* SEÇÃO: REDE DE APADRINHADOS DESTA ENTIDADE */}
-            <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.6 }}>
-                  🤝 Rede de Apadrinhados desta Entidade
-                </div>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)" }}>
-                  <Users size={12} color="#00FF66" />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#00FF66" }}>
-                    Total: {entidadeApadrinhados.length}
-                  </span>
-                </div>
-              </div>
-
-              {loadingEntidadeApadrinhados ? (
-                <div style={{ padding: "16px 0", textAlign: "center", color: "var(--admin-muted)", fontSize: 12 }}>
-                  Carregando apadrinhados...
-                </div>
-              ) : entidadeApadrinhados.length === 0 ? (
-                <div style={{ padding: "14px 12px", textAlign: "center", color: "var(--admin-muted)", fontSize: 12, background: "var(--admin-bg)", borderRadius: 8, border: "1px dashed var(--admin-border)" }}>
-                  Esta entidade ainda não possui apadrinhados vinculados.
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflowY: "auto" }}>
-                  {entidadeApadrinhados.map((item: any) => (
-                    <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 8, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", gap: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--admin-text)", minWidth: 140, truncate: "true" }}>
-                        {item.nome}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700, background: item.tipo_cadastro === "pj" ? "rgba(56,189,248,0.15)" : "rgba(13,184,126,0.12)", color: item.tipo_cadastro === "pj" ? "#38BDF8" : "#0DB87E" }}>
-                          {item.tipo_cadastro?.toUpperCase() || "PF"}
-                        </span>
-                        <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700, background: item.cadastro_completo ? "rgba(0,255,102,0.12)" : "rgba(245,166,35,0.12)", color: item.cadastro_completo ? "#00FF66" : "#F5A623" }}>
-                          {item.cadastro_completo ? "Completo" : "Em Aprovação"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* SEÇÃO: AÇÕES E LINKS OPERACIONAIS */}
-            <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.6 }}>
-                Ações e Links Operacionais
-              </div>
-
-              {/* 1. Link de Atualização Cadastral (Fluxo Geográfico PJ) */}
-              {(() => {
-                const telLimpo = cleanPhoneDigits(selectedEntidade.telefone);
-                const linkAtualizacao = `${getAppOrigin()}/atualizacao-cadastral?tel=${telLimpo}`;
-                const nomeEntidade = selectedEntidade.nomeFantasia || selectedEntidade.razaoSocial;
-                const waMsg = `Olá, equipe da ${nomeEntidade}! Aqui é da coordenação UBT Serviços. Para dar continuidade ao cadastro da entidade e configuração das regiões/praias de atuação, acesse este link seguro: ${linkAtualizacao}`;
-                const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
-                const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
-
-                return (
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>1. Link de Atualização Cadastral (Fluxo Geográfico PJ):</span>
-                      {telLimpo ? (
-                        <span style={{ fontSize: 10, color: "#0DB87E", fontWeight: 600 }}>Pronto para envio</span>
-                      ) : (
-                        <span style={{ fontSize: 10, color: "#E84040", fontWeight: 600 }}>Telefone não cadastrado</span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <input
-                        readOnly
-                        type="text"
-                        value={telLimpo ? linkAtualizacao : "Telefone da entidade não cadastrado"}
-                        style={{
-                          flex: 1,
-                          minWidth: 200,
-                          background: "var(--admin-bg)",
-                          border: "1px solid var(--admin-border)",
-                          borderRadius: 6,
-                          padding: "6px 10px",
-                          fontSize: 12,
-                          fontFamily: "monospace",
-                          color: "var(--admin-text)",
-                          outline: "none",
-                          cursor: telLimpo ? "text" : "not-allowed",
-                          opacity: telLimpo ? 1 : 0.6,
-                        }}
-                        onClick={(e) => telLimpo && (e.target as HTMLInputElement).select()}
-                      />
-                      <button
-                        type="button"
-                        disabled={!telLimpo}
-                        onClick={() => handleCopyLink(linkAtualizacao, "atualizacao")}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "1px solid var(--admin-border)",
-                          background: copiedLink === "atualizacao" ? "rgba(13,184,126,0.15)" : "var(--admin-bg)",
-                          color: copiedLink === "atualizacao" ? "#0DB87E" : "var(--admin-text)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: telLimpo ? "pointer" : "not-allowed",
-                          opacity: telLimpo ? 1 : 0.5,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {copiedLink === "atualizacao" ? (
-                          <>
-                            <Check size={13} color="#0DB87E" /> Copiado
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={13} /> Copiar
-                          </>
-                        )}
-                      </button>
-                      {telLimpo && (
-                        <>
-                          <a
-                            href={linkAtualizacao}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                              padding: "6px 10px",
-                              borderRadius: 6,
-                              border: "1px solid var(--admin-border)",
-                              background: "var(--admin-bg)",
-                              color: "#2B6EE8",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              textDecoration: "none",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <ExternalLink size={12} /> Abrir
-                          </a>
-                          <a
-                            href={waLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              padding: "6px 12px",
-                              borderRadius: 6,
-                              background: "#25D366",
-                              color: "#000000",
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              textDecoration: "none",
-                            }}
-                          >
-                            <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14 }}>
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                            </svg>
-                            <span>WhatsApp</span>
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* 2. Link Padrinho/Madrinha (Indicação PJ) */}
-              {(() => {
-                const refSlug = selectedEntidade.referralSlug || customSlugInput || "entidade-ubatuba";
-                const padrinhoLink = `${getAppOrigin()}/?ref=${refSlug}#cadastro-fundadores-cap`;
-                const nomeEntidade = selectedEntidade.nomeFantasia || selectedEntidade.razaoSocial;
-                const telLimpo = cleanPhoneDigits(selectedEntidade.telefone);
-                const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
-                const waReferralMsg = `Olá, equipe da ${nomeEntidade}! Aqui está o Link Padrinho/Madrinha exclusivo da entidade para convidar membros e moradores, gerando recursos para a associação:\n${padrinhoLink}`;
-                const waReferralLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waReferralMsg)}`;
-
-                return (
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>2. Link Padrinho/Madrinha (Indicação PJ):</span>
-                      <span style={{ fontSize: 10, color: "#0DB87E", fontWeight: 600 }}>Slug: {refSlug}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <input
-                        readOnly
-                        type="text"
-                        value={padrinhoLink}
-                        style={{
-                          flex: 1,
-                          minWidth: 200,
-                          background: "var(--admin-bg)",
-                          border: "1px solid var(--admin-border)",
-                          borderRadius: 6,
-                          padding: "6px 10px",
-                          fontSize: 12,
-                          fontFamily: "monospace",
-                          color: "var(--admin-text)",
-                          outline: "none",
-                          cursor: "text",
-                        }}
-                        onClick={(e) => (e.target as HTMLInputElement).select()}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleCopyLink(padrinhoLink, "padrinho")}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "1px solid var(--admin-border)",
-                          background: copiedLink === "padrinho" ? "rgba(13,184,126,0.15)" : "var(--admin-bg)",
-                          color: copiedLink === "padrinho" ? "#0DB87E" : "var(--admin-text)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {copiedLink === "padrinho" ? (
-                          <>
-                            <Check size={13} color="#0DB87E" /> Copiado
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={13} /> Copiar
-                          </>
-                        )}
-                      </button>
-                      {telLimpo && (
-                        <a
-                          href={waReferralLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                            background: "#25D366",
-                            color: "#000000",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                            textDecoration: "none",
-                          }}
-                        >
-                          <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14 }}>
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                          </svg>
-                          <span>WhatsApp</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* 3. Código de Indicação Personalizado (Vanity Slug) */}
-              <div>
-                <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                  3. Código de Indicação Personalizado (Vanity Slug):
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input
-                    type="text"
-                    value={customSlugInput}
-                    onChange={(e) => setCustomSlugInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-                    placeholder="ex: coco-cia-teste"
-                    style={{
-                      flex: 1,
-                      background: "var(--admin-bg)",
-                      border: "1px solid var(--admin-border)",
-                      borderRadius: 6,
-                      padding: "6px 10px",
-                      fontSize: 12,
-                      fontFamily: "monospace",
-                      color: "var(--admin-text)",
-                      outline: "none",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedEntidade.referralSlug}
-                    onClick={handleSaveSlug}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      padding: "6px 12px",
-                      borderRadius: 6,
-                      border: "1px solid var(--admin-border)",
-                      background: "#0DB87E",
-                      color: "#FFFFFF",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: (isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedEntidade.referralSlug) ? "not-allowed" : "pointer",
-                      opacity: (isSavingCustomSlug || !customSlugInput.trim() || customSlugInput.trim() === selectedEntidade.referralSlug) ? 0.5 : 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {isSavingCustomSlug ? "Salvando..." : "Salvar Slug"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Rodapé do Modal */}
-            <div style={{ borderTop: "1px solid var(--admin-border)", marginTop: 18, paddingTop: 14, display: "flex", justifyContent: "flex-end" }}>
-              <GhostButton onClick={() => setSelectedEntidade(null)}>
-                Fechar
-              </GhostButton>
-            </div>
-          </div>
-        </>
-      )}
+      <ClientHistoryModal
+        client={historyTarget}
+        onClose={() => setHistoryTarget(null)}
+      />
     </div>
   );
 }
