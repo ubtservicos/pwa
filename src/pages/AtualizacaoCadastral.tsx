@@ -82,8 +82,12 @@ export default function AtualizacaoCadastral() {
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
   const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const [recoveryMode, setRecoveryMode] = useState<"password_reset" | "magic_link">("password_reset");
+  const [showGoogleOption, setShowGoogleOption] = useState(false);
   const [isSendingRecovery, setIsSendingRecovery] = useState(false);
+  const [isSigningInGoogle, setIsSigningInGoogle] = useState(false);
   const [recoverySent, setRecoverySent] = useState(false);
   const [hintPhone, setHintPhone] = useState("");
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -253,7 +257,7 @@ export default function AtualizacaoCadastral() {
     }
   };
 
-  // Carrega dados cadastrais do usuário autenticado a partir de public.usuarios + complemento opcional em waitlist
+  // Carrega dados cadastrais do usuário autenticado via RPC segura (suporta contas legadas sem duplicar public.usuarios)
   const loadAuthenticatedProfile = async (
     authUser: { id: string; email?: string | null; user_metadata?: Record<string, any> },
     fallbackPhone = "",
@@ -261,11 +265,24 @@ export default function AtualizacaoCadastral() {
     setAuthUserId(authUser.id);
     const normalizedEmail = (authUser.email || "").trim().toLowerCase();
 
-    const { data: usuarioRow } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("id", authUser.id)
-      .maybeSingle();
+    let usuarioRow: any = null;
+    try {
+      const { data: rpcProfile, error: rpcErr } = await supabase.rpc("get_my_cadastral_profile");
+      if (!rpcErr && rpcProfile && typeof rpcProfile === "object") {
+        usuarioRow = rpcProfile;
+      }
+    } catch {
+      // Fallback para consulta direta abaixo
+    }
+
+    if (!usuarioRow) {
+      const { data: directUsuario } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("id", authUser.id)
+        .maybeSingle();
+      usuarioRow = directUsuario;
+    }
 
     let waitlistRow: any = null;
     try {
@@ -396,11 +413,13 @@ export default function AtualizacaoCadastral() {
     setLookupState("wizard");
   };
 
-  // Envio de link de definição/redefinição de senha para contas legadas sem senha no Auth
+  // Envio de link de acesso / definição de senha:
+  // - Se a conta já existe no Auth: resetPasswordForEmail
+  // - Se é cadastro legado em public.usuarios sem linha em auth.users: signInWithOtp (cria/vincula no Auth sem duplicar usuarios)
   const handleSendPasswordRecovery = async () => {
     const targetEmail = (recoveryEmail || authEmail || "").trim().toLowerCase();
     if (!targetEmail || !isValidEmail(targetEmail)) {
-      toast.error("Informe um e-mail válido para receber o link de redefinição.");
+      toast.error("Informe um e-mail válido para receber o link de acesso.");
       return;
     }
     setIsSendingRecovery(true);
@@ -409,26 +428,70 @@ export default function AtualizacaoCadastral() {
         typeof window !== "undefined" && window.location.origin
           ? window.location.origin
           : "https://ubtservicos.vercel.app";
-      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-        redirectTo: `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`,
-      });
-      if (error) throw error;
-      setRecoverySent(true);
-      toast.success("Link de definição/redefinição de senha enviado para seu e-mail!");
+      const redirectTo = `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`;
+
+      if (recoveryMode === "magic_link") {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: targetEmail,
+          options: {
+            shouldCreateUser: true,
+            emailRedirectTo: redirectTo,
+          },
+        });
+        if (error) throw error;
+        setRecoverySent(true);
+        toast.success(
+          "Link de acesso enviado para seu e-mail! Ao clicar, você entrará direto para atualizar seu cadastro e definir sua senha.",
+        );
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+          redirectTo,
+        });
+        if (error) throw error;
+        setRecoverySent(true);
+        toast.success("Link de definição/redefinição de senha enviado para seu e-mail!");
+      }
     } catch (err) {
-      console.error("[AtualizacaoCadastral] Erro ao enviar recuperação de senha:", err);
-      toast.error("Não foi possível enviar o e-mail de redefinição agora. Fale com o suporte UBT.");
+      console.error("[AtualizacaoCadastral] Erro ao enviar link de acesso/senha:", err);
+      toast.error("Não foi possível enviar o link agora. Tente entrar com Google ou fale com o suporte UBT.");
     } finally {
       setIsSendingRecovery(false);
     }
   };
 
-  // Autenticação direta: PF (E-mail + Senha) ou Entidade/PJ (CNPJ + Senha via RPC segura)
+  // Login alternativo com conta Google (para contas OAuth ou legadas Gmail sem senha definida)
+  const handleGoogleSignIn = async () => {
+    setIsSigningInGoogle(true);
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "https://ubtservicos.vercel.app";
+      const targetEmail = (recoveryEmail || authEmail || "").trim().toLowerCase();
+      const redirectTo = targetEmail
+        ? `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`
+        : `${origin}/atualizacao-cadastral`;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error("[AtualizacaoCadastral] Erro ao iniciar login com Google:", err);
+      toast.error("Não foi possível conectar com o Google agora.");
+      setIsSigningInGoogle(false);
+    }
+  };
+
+  // Autenticação direta: PF (E-mail + Senha com pré-verificação de conta) ou Entidade/PJ (CNPJ + Senha via RPC segura)
   const handleAuthSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setAuthError("");
+    setAccountNotice(null);
     setRecoveryEmail(null);
     setRecoverySent(false);
+    setShowGoogleOption(false);
 
     if (!authPassword) {
       setAuthError("Por favor, digite sua senha de acesso.");
@@ -447,7 +510,58 @@ export default function AtualizacaoCadastral() {
           setIsAuthenticating(false);
           return;
         }
-        targetEmail = cleanEmail;
+
+        // Pré-verifica estado da conta PF na RPC segura (Auth, senha, provedor Google, legado)
+        const { data: resolved, error: rpcError } = await supabase.rpc(
+          "resolve_cadastral_login_email",
+          { p_email: cleanEmail },
+        );
+
+        if (!rpcError && resolved) {
+          const resolvedEmail =
+            typeof resolved.email === "string" && resolved.email.trim()
+              ? resolved.email.trim().toLowerCase()
+              : cleanEmail;
+          const hasAuthAccount = Boolean(resolved.has_auth_account);
+          const hasPassword = Boolean(resolved.has_password);
+          const hasLegacyProfile = Boolean(resolved.has_legacy_profile);
+          const authProvider = String(resolved.auth_provider || "").toLowerCase();
+
+          if (!hasAuthAccount && !hasLegacyProfile) {
+            setAuthError(
+              "E-mail não localizado na base da UBT. Confira o endereço digitado ou faça sua inscrição.",
+            );
+            setIsAuthenticating(false);
+            return;
+          }
+
+          if (!hasAuthAccount && hasLegacyProfile) {
+            setRecoveryEmail(resolvedEmail);
+            setRecoveryMode("magic_link");
+            setShowGoogleOption(resolvedEmail.endsWith("@gmail.com"));
+            setAuthError(
+              "Encontramos seu cadastro na UBT, mas sua conta ainda não possui senha de acesso definida. Clique abaixo para receber o link de acesso e criação de senha no seu e-mail" +
+                (resolvedEmail.endsWith("@gmail.com") ? " ou entre com sua conta Google." : "."),
+            );
+            setIsAuthenticating(false);
+            return;
+          }
+
+          if (hasAuthAccount && !hasPassword) {
+            setRecoveryEmail(resolvedEmail);
+            setRecoveryMode("password_reset");
+            setShowGoogleOption(authProvider === "google" || resolvedEmail.endsWith("@gmail.com"));
+            setAuthError(
+              "Sua conta foi criada via Google ou ainda não possui senha definida. Clique abaixo para receber o link de criação de senha ou entre com sua conta Google.",
+            );
+            setIsAuthenticating(false);
+            return;
+          }
+
+          targetEmail = resolvedEmail;
+        } else {
+          targetEmail = cleanEmail;
+        }
       } else {
         const cleanCnpj = authCnpj.replace(/\D/g, "");
         if (cleanCnpj.length !== 14) {
@@ -468,8 +582,11 @@ export default function AtualizacaoCadastral() {
           return;
         }
 
-        const resolvedEmail = typeof resolved?.email === "string" ? resolved.email.trim().toLowerCase() : "";
+        const resolvedEmail =
+          typeof resolved?.email === "string" ? resolved.email.trim().toLowerCase() : "";
         const hasAuthAccount = Boolean(resolved?.has_auth_account);
+        const hasPassword = Boolean(resolved?.has_password);
+        const authProvider = String(resolved?.auth_provider || "").toLowerCase();
 
         if (!resolvedEmail) {
           setAuthError("CNPJ não localizado na base da UBT. Confira os números ou fale com o suporte.");
@@ -479,8 +596,21 @@ export default function AtualizacaoCadastral() {
 
         if (!hasAuthAccount) {
           setRecoveryEmail(resolvedEmail);
+          setRecoveryMode("magic_link");
+          setShowGoogleOption(resolvedEmail.endsWith("@gmail.com"));
           setAuthError(
-            "Encontramos o cadastro desta entidade, mas ainda não há uma senha definida no acesso UBT. Solicite o link de definição de senha abaixo ou fale com o suporte.",
+            "Encontramos o cadastro desta entidade, mas ainda não há uma senha definida no acesso UBT. Solicite o link de acesso e definição de senha abaixo ou fale com o suporte.",
+          );
+          setIsAuthenticating(false);
+          return;
+        }
+
+        if (!hasPassword) {
+          setRecoveryEmail(resolvedEmail);
+          setRecoveryMode("password_reset");
+          setShowGoogleOption(authProvider === "google" || resolvedEmail.endsWith("@gmail.com"));
+          setAuthError(
+            "A conta desta entidade foi criada via Google ou ainda não possui senha definida. Solicite o link de criação de senha abaixo ou entre com Google.",
           );
           setIsAuthenticating(false);
           return;
@@ -513,6 +643,8 @@ export default function AtualizacaoCadastral() {
       if (signInError || !authData?.user) {
         console.warn("[AtualizacaoCadastral] Falha no signInWithPassword:", signInError?.message);
         setRecoveryEmail(targetEmail);
+        setRecoveryMode("password_reset");
+        setShowGoogleOption(targetEmail.endsWith("@gmail.com"));
         setAuthError(
           authMode === "PJ"
             ? "Senha incorreta para este CNPJ. Verifique sua senha ou solicite a redefinição abaixo."
@@ -540,7 +672,7 @@ export default function AtualizacaoCadastral() {
     }
   };
 
-  // Inicialização: pré-preenche via ?email=, ?telefone=, ?cnpj= e detecta PF/PJ sem bloquear acesso
+  // Inicialização: pré-preenche via ?email=, ?telefone=, ?cnpj= e pré-diagnostica contas sem senha/Google sem bloquear
   useEffect(() => {
     let cancelled = false;
 
@@ -566,13 +698,21 @@ export default function AtualizacaoCadastral() {
       let resolvedEmail = rawEmail;
       let resolvedTipo: "PF" | "PJ" | null =
         rawCnpjParam || rawTipoParam === "pj" || rawTipoParam === "entidade" ? "PJ" : null;
+      let resolvedState: {
+        has_auth_account?: boolean;
+        has_password?: boolean;
+        auth_provider?: string | null;
+        has_legacy_profile?: boolean;
+      } | null = null;
 
-      if (!resolvedEmail && cleanPhone.length >= 8) {
+      if (cleanPhone.length >= 8 || rawEmail) {
         try {
-          const { data: resolved } = await supabase.rpc("resolve_cadastral_login_email", {
-            p_telefone: cleanPhone,
-          });
+          const rpcParams = rawEmail
+            ? { p_email: rawEmail }
+            : { p_telefone: cleanPhone };
+          const { data: resolved } = await supabase.rpc("resolve_cadastral_login_email", rpcParams);
           if (!cancelled && resolved) {
+            resolvedState = resolved;
             if (typeof resolved.email === "string" && resolved.email.trim()) {
               resolvedEmail = resolved.email.trim().toLowerCase();
             }
@@ -581,7 +721,7 @@ export default function AtualizacaoCadastral() {
             }
           }
         } catch {
-          // Nunca bloqueia o usuário se a pré-resolução por telefone falhar
+          // Nunca bloqueia o usuário se a pré-resolução falhar
         }
       }
 
@@ -591,7 +731,7 @@ export default function AtualizacaoCadastral() {
       if (resolvedTipo === "PJ") setAuthMode("PJ");
       else if (resolvedTipo === "PF") setAuthMode("PF");
 
-      // Se já houver sessão ativa correspondente ao titular (ou acesso direto sem filtro conflitante), entra no wizard
+      // Se já houver sessão ativa correspondente ao titular (ou retorno de Magic Link / OAuth / Recovery), entra no wizard
       try {
         const {
           data: { session },
@@ -609,14 +749,48 @@ export default function AtualizacaoCadastral() {
       }
 
       if (!cancelled) {
+        // Pré-aviso amigável caso o link já identifique conta legada sem senha ou Google OAuth
+        if (resolvedEmail && resolvedState) {
+          const hasAuth = Boolean(resolvedState.has_auth_account);
+          const hasPwd = Boolean(resolvedState.has_password);
+          const hasLegacy = Boolean(resolvedState.has_legacy_profile);
+          const provider = String(resolvedState.auth_provider || "").toLowerCase();
+
+          if (!hasAuth && hasLegacy) {
+            setRecoveryEmail(resolvedEmail);
+            setRecoveryMode("magic_link");
+            setShowGoogleOption(resolvedEmail.endsWith("@gmail.com"));
+            setAccountNotice(
+              "Seu cadastro já está na UBT, mas ainda não possui senha de acesso criada. Clique abaixo para receber o link de acesso e criação de senha no seu e-mail" +
+                (resolvedEmail.endsWith("@gmail.com") ? " ou entre direto com sua conta Google." : "."),
+            );
+          } else if (hasAuth && !hasPwd) {
+            setRecoveryEmail(resolvedEmail);
+            setRecoveryMode("password_reset");
+            setShowGoogleOption(provider === "google" || resolvedEmail.endsWith("@gmail.com"));
+            setAccountNotice(
+              "Sua conta foi criada via Google ou ainda não possui senha definida. Clique abaixo para receber o link de criação de senha ou entre com sua conta Google.",
+            );
+          }
+        }
+
         setIsUnlocked(false);
         setLookupState("auth");
       }
     };
 
     void bootstrap();
+
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if ((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && session?.user) {
+        void loadAuthenticatedProfile(session.user, hintPhone);
+      }
+    });
+
     return () => {
       cancelled = true;
+      authSub?.subscription?.unsubscribe();
     };
   }, [searchParams]);
 
@@ -936,14 +1110,28 @@ export default function AtualizacaoCadastral() {
       }
 
       if (authUserId) {
-        const { error: userErr } = await supabase
-          .from("usuarios")
-          .update(usuarioUpdatePayload)
-          .eq("id", authUserId);
+        let savedViaRpc = false;
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc("save_my_cadastral_profile", {
+            p_data: usuarioUpdatePayload,
+          });
+          if (!rpcErr && rpcRes?.success) {
+            savedViaRpc = true;
+          }
+        } catch {
+          // Fallback para update direto abaixo
+        }
 
-        if (userErr) {
-          console.warn("[AtualizacaoCadastral] Erro ao atualizar public.usuarios:", userErr);
-          throw userErr;
+        if (!savedViaRpc) {
+          const { error: userErr } = await supabase
+            .from("usuarios")
+            .update(usuarioUpdatePayload)
+            .eq("id", authUserId);
+
+          if (userErr) {
+            console.warn("[AtualizacaoCadastral] Erro ao atualizar public.usuarios:", userErr);
+            throw userErr;
+          }
         }
       }
 
@@ -1198,35 +1386,112 @@ export default function AtualizacaoCadastral() {
                 </div>
               </div>
 
+              {/* Aviso contextual (conta legada sem senha ou Google OAuth detectada pela URL) */}
+              {accountNotice && !authError && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/35 text-xs text-amber-200 flex flex-col gap-2.5 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                    <span>{accountNotice}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {recoveryEmail && !recoverySent && (
+                      <button
+                        type="button"
+                        disabled={isSendingRecovery}
+                        onClick={() => void handleSendPasswordRecovery()}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-amber-500/50 hover:border-green/60 text-zinc-100 hover:text-green text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSendingRecovery ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Enviando link...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>Enviar link de criação de senha</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {showGoogleOption && (
+                      <button
+                        type="button"
+                        disabled={isSigningInGoogle}
+                        onClick={() => void handleGoogleSignIn()}
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 text-[11px] font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSigningInGoogle ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Conectando...</span>
+                          </>
+                        ) : (
+                          <span>Entrar com Google</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {recoverySent && (
+                    <span className="text-emerald-400 text-[11px] font-semibold">
+                      Link enviado para {recoveryEmail}! Verifique sua caixa de entrada e spam.
+                    </span>
+                  )}
+                </div>
+              )}
+
               {authError && (
                 <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex flex-col gap-2.5 animate-in fade-in duration-200">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{authError}</span>
                   </div>
-                  {recoveryEmail && !recoverySent && (
-                    <button
-                      type="button"
-                      disabled={isSendingRecovery}
-                      onClick={() => void handleSendPasswordRecovery()}
-                      className="self-start px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-green/50 text-zinc-100 hover:text-green text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      {isSendingRecovery ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Enviando link...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mail className="w-3.5 h-3.5" />
-                          <span>Enviar link para definir/redefinir senha</span>
-                        </>
-                      )}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {recoveryEmail && !recoverySent && (
+                      <button
+                        type="button"
+                        disabled={isSendingRecovery}
+                        onClick={() => void handleSendPasswordRecovery()}
+                        className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-green/50 text-zinc-100 hover:text-green text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSendingRecovery ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Enviando link...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>
+                              {recoveryMode === "magic_link"
+                                ? "Enviar link de acesso e criação de senha"
+                                : "Enviar link para definir/redefinir senha"}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {showGoogleOption && (
+                      <button
+                        type="button"
+                        disabled={isSigningInGoogle}
+                        onClick={() => void handleGoogleSignIn()}
+                        className="px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 text-[11px] font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSigningInGoogle ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Conectando...</span>
+                          </>
+                        ) : (
+                          <span>Entrar com Google</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
                   {recoverySent && (
                     <span className="text-emerald-400 text-[11px] font-semibold">
-                      Link de redefinição enviado! Verifique sua caixa de entrada e spam.
+                      Link enviado! Verifique sua caixa de entrada e spam.
                     </span>
                   )}
                 </div>

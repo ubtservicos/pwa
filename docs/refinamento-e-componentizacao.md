@@ -419,3 +419,13 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
   - **PF:** autentica diretamente via `signInWithPassword({ email, password })` e carrega/persiste dados diretamente em `public.usuarios` (com `waitlist` apenas como complemento opcional).
   - **PJ:** resolve o e-mail exato do Supabase Auth via `resolve_cadastral_login_email({ p_cnpj })` antes de autenticar; para contas legadas sem senha no Auth (`has_auth_account = false`), orienta e disponibiliza envio de link de definição/redefinição de senha (`resetPasswordForEmail`).
 - **Validação & Release (`v1.6.1-atualizacao-cadastral-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
+
+### 9.7 Adendo `v1.6.2-atualizacao-cadastral-pf-prod`: Diagnóstico PF, Contas Legadas sem Auth, Google OAuth e Vínculo Seguro
+- **Extensão da RPC `public.resolve_cadastral_login_email` + RPCs de vínculo seguro (`20261124170000_extend_cadastral_login_and_legacy_link.sql`):**
+  - Adicionado parâmetro opcional `p_email text DEFAULT NULL` (mantendo retrocompatibilidade com `p_cnpj` e `p_telefone`) e novos campos de diagnóstico `{ has_password, auth_provider, has_legacy_profile }`.
+  - Criadas as RPCs `SECURITY DEFINER` `public.get_my_cadastral_profile()` e `public.save_my_cadastral_profile(p_data jsonb)` (`GRANT EXECUTE TO authenticated`) para localizar e atualizar o cadastro existente em `public.usuarios` por `auth.uid()` ou e-mail autenticado (`auth.jwt() ->> 'email'`), garantindo vínculo seguro de contas legadas sem jamais duplicar registros em `public.usuarios`.
+- **Melhoria do fluxo PF em `/atualizacao-cadastral` (`AtualizacaoCadastral.tsx`):**
+  - Pré-verifica o estado da conta (na carga por `?telefone=`/`?email=` e na submissão do login PF) antes de disparar `signInWithPassword`.
+  - Para contas criadas via **Google OAuth** ou sem senha definida (`has_auth_account = true, has_password = false`), exibe orientação clara com botão de envio de link de criação de senha (`resetPasswordForEmail`) e opção **Entrar com Google**.
+  - Para cadastros legados presentes em `public.usuarios` sem linha em `auth.users` (`has_auth_account = false, has_legacy_profile = true`), aciona `signInWithOtp` (`shouldCreateUser: true`) ou **Entrar com Google** para criar/vincular a identidade no Auth e carregar/atualizar o perfil legado sem duplicação.
+- **Validação & Release (`v1.6.2-atualizacao-cadastral-pf-prod`):** migração aplicada de forma idempotente em Homologação e Produção (`bfqidoduceusbqlnrsol`, zero alteração de dados de usuários), `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
