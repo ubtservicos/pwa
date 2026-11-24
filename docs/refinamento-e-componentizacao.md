@@ -430,3 +430,43 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
   - Para cadastros legados presentes em `public.usuarios` sem linha em `auth.users` (`has_auth_account = false, has_legacy_profile = true`), aciona `signInWithOtp` (`shouldCreateUser: true`) ou **Entrar com Google** para criar/vincular a identidade no Auth e carregar/atualizar o perfil legado sem duplicação.
 - **Validação & Release (`v1.6.2-atualizacao-cadastral-pf-prod`):** migração aplicada de forma idempotente em Homologação e Produção (`bfqidoduceusbqlnrsol`, zero alteração de dados de usuários), `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
 - **Hotfix `v1.6.3-atualizacao-cadastral-fix-wizard`:** restaurado o import `Search` de `lucide-react` em `src/pages/AtualizacaoCadastral.tsx` (eliminando `ReferenceError: Search is not defined` nos campos de busca das etapas internas do wizard), auditados todos os demais ícones/componentes JSX do arquivo e preservados os parâmetros (`email`/`telefone`) no `redirectTo` do login via Google OAuth (`${window.location.origin}/atualizacao-cadastral`).
+
+
+---
+
+## 10. Unificação de `/sou-fundador`, Persistência da Chave PIX, Adequação LGPD (`?id=<uuid>`) e Login Unificado (`v1.7.0-fundador-unificado-lgpd-prod`)
+
+> **Status:** HOMOLOGADO E PROMOVIDO PARA PRODUÇÃO  
+> **Tag de Release:** `v1.7.0-fundador-unificado-lgpd-prod`  
+> **Ambientes:** Produção ([ubtservicos.vercel.app](https://ubtservicos.vercel.app) / `bfqidoduceusbqlnrsol`) e Homologação ([ubt-homologacao.vercel.app](https://ubt-homologacao.vercel.app) / `xqujubbqcfqxkfczbidq`)  
+> **Data de Promoção:** 24 de Novembro de 2026  
+
+### 10.1 Migrações Idempotentes Aplicadas (Homologação & Produção — Apenas DDL/RPC)
+
+| Arquivo de Migração | Responsabilidade Principal |
+| :--- | :--- |
+| `20261124180000_fundador_unificacao_pix_slug_e_waitlist.sql` | Adiciona a coluna booleana `cadastro_completo` em `public.usuarios` (com backfill seguro de `metadata->>'cadastro_completo'`); cria `public.generate_unique_referral_slug(...)`; atualiza `public.save_my_cadastral_profile(p_data)` (persistência explícita de `chave_pix`, `tipo_chave_pix`, `cadastro_completo = true`, slug único e sincronização com `public.profiles`) e `public.get_my_cadastral_profile()` (fonte única em `public.usuarios`); cria `public.update_my_referral_slug(p_slug)` com validação de formato/unicidade; adiciona `p_cpf` em `resolve_cadastral_login_email`; e atualiza a trigger `sync_waitlist_to_usuarios()` para garantir `referral_code` único e `tipo_pessoa` consistente na aprovação da Waitlist. |
+| `20261124190000_lgpd_cadastral_link_uuid_rpc.sql` | Adiciona `p_user_id uuid DEFAULT NULL` em `public.resolve_cadastral_login_email` retornando **estritamente** metadados não-sensíveis (`email = NULL`, `tipo_pessoa`, `has_auth_account`, `has_password`, `auth_provider`, `has_legacy_profile`) quando chamada apenas por UUID (zero vazamento de PII pré-login); cria `public.verify_my_cadastral_link_owner(p_target_user_id uuid)` (`SECURITY DEFINER`, `GRANT EXECUTE TO authenticated`) para bloqueio de acesso cruzado pós-login. |
+
+### 10.2 Unificação de `/sou-fundador` (Identidade Dark Gamer / Bets)
+- **Roteamento consolidado (`App.tsx`):** `/sou-fundador` passa a ser a página única oficial do Fundador/Membro; acessos legados a `/app/indicacao` e `/indicacao` redirecionam diretamente via `<Navigate to="/sou-fundador" replace />`.
+- **Estrutura de 5 blocos exatos (`SouFundadorPage.tsx`):**
+  1. **Boas-vindas personalizadas** com **Nome** real (ou **Razão Social** se PJ), badge `Membro Fundador`, indicador da conta autenticada (com badge `Admin` quando aplicável) e botão **Sair** (validação server-side via `supabase.auth.getUser()`, zero bypass por `localStorage`).
+  2. **Botão condicional de Atualização Cadastral** (*"Completar Atualização Cadastral"* → `/atualizacao-cadastral` com `state: { fromSouFundador: true }`), exibido **apenas** quando `cadastro_completo === false`.
+  3. **Breve explicação sobre o Apadrinhamento** (card enxuto sem percentuais ou dados financeiros).
+  4. **Customizador de Slug (`@slug`)** com sanitização em tempo real, preview de `${origin}/cadastro?ref=<slug>` e salvamento via `update_my_referral_slug`.
+  5. **Compartilhamento via WhatsApp** em verde esmeralda neon (`#00E676` / `#10B981` com texto `text-zinc-950`) + botão secundário **Copiar Link** (`Copiado!`).
+- **Remoções definitivas:** eliminados todos os blocos financeiros (`0,5%`, ganhos, saldos liberados/contingenciados), lista de apadrinhados, card escuro de PIX pendente e fallbacks artificiais (`"Olá, Membro!"` / `membro-722`).
+
+### 10.3 Persistência Definitiva da Chave PIX e Garantia de Slug na Waitlist
+- `AtualizacaoCadastral.tsx` valida e envia explicitamente `chave_pix`, `tipo_chave_pix`, `cadastro_completo = true` e `referral_code` para `save_my_cadastral_profile`, atualiza o estado local com o registro canônico retornado e redireciona de forma limpa para `/sou-fundador` (sem query strings poluídas).
+- Na aprovação de leads via `/admin/waitlist` (`approve_waitlist_leads` → trigger `sync_waitlist_to_usuarios()`), todo cadastro PF ou PJ promovido para `public.usuarios` recebe imediatamente um `referral_code` único válido (`0` usuários sem slug em Homologação e Produção).
+
+### 10.4 Adequação LGPD (`?id=<uuid>`), Gate Obrigatório de Login + Senha e Validação de Titularidade
+- **Zero PII nas URLs:** todos os geradores de link de Atualização Cadastral (`AdminClienteDetailPage.tsx`, `AdminEntidadeDetailPage.tsx` e template de WhatsApp **"1. Completar o cadastro"** em `AdminClienteActionsModals.tsx`) foram padronizados para `${origin}/atualizacao-cadastral?id=<uuid>`.
+- **Gate obrigatório de Login + Senha (`AtualizacaoCadastral.tsx`):** ao abrir `/atualizacao-cadastral?id=<uuid>` ou `/atualizacao-cadastral`, a tela exige sempre autenticação (**E-mail, CPF ou Telefone + Senha** para PF; **CNPJ + Senha** para Entidade/PJ) com campos limpos (zero pré-preenchimento de PII e zero reaproveitamento de sessão antiga do navegador), abrindo exceção exclusivamente para retorno de callback Auth (`recovery` / `magiclink` / OAuth) ou clique interno autenticado em `/sou-fundador` (`fromSouFundador === true`).
+- **Bloqueio de acesso cruzado:** após autenticar com `?id=<uuid>`, `verify_my_cadastral_link_owner` confirma no servidor que o usuário autenticado é o titular do link; em caso de divergência, a sessão cruzada é encerrada com erro explícito.
+
+### 10.5 Comprovação de Zero Transferência de Dados e Validação (`v1.7.0-fundador-unificado-lgpd-prod`)
+- **Produção (`bfqidoduceusbqlnrsol`):** contagens idênticas antes e depois das migrações (`public.usuarios`: `11 → 11`, `auth.users`: `10 → 10`, `public.waitlist`: `9 → 9`, `usuarios_sem_slug: 0`), mantendo isolamento total de secrets/credenciais.
+- **Validação & Release (`v1.7.0-fundador-unificado-lgpd-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
