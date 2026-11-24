@@ -422,8 +422,8 @@ export default function AdminEntidadesPage() {
 
   const COLUMNS: Array<{ field: SortField; label: string; align?: "left" | "center" }> = [
     { field: "razaoSocial", label: "Entidade / Razão Social" },
-    { field: "slug", label: "Slug" },
     { field: "cnpj", label: "CNPJ" },
+    { field: "slug", label: "Slug" },
     { field: "responsavel", label: "Responsável Legal" },
     { field: "contato", label: "Contato" },
     { field: "cadastro", label: "Cadastro", align: "center" },
@@ -529,35 +529,44 @@ export default function AdminEntidadesPage() {
           border: "1px solid #27272A",
         }}
       >
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#09090B" }}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1260px] border-separate border-spacing-0">
+            <thead className="bg-zinc-950">
               <tr>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.field}
-                    onClick={() => handleSort(col.field)}
-                    title={`Ordenar por ${col.label}`}
-                    style={{
-                      textAlign: col.align || "left",
-                      padding: "12px 14px",
-                      fontFamily: "DM Sans",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: sortField === col.field ? "#34D399" : "#A1A1AA",
-                      textTransform: "uppercase",
-                      letterSpacing: 1,
-                      borderBottom: "1px solid #27272A",
-                      cursor: "pointer",
-                      userSelect: "none",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {col.label}
-                    {renderSortIcon(col.field)}
-                  </th>
-                ))}
+                {COLUMNS.map((col, idx) => {
+                  const stickyHeaderClass =
+                    idx === 0
+                      ? "sticky left-0 z-30 w-[260px] min-w-[260px] max-w-[260px] bg-zinc-950"
+                      : idx === 1
+                        ? "sticky left-[260px] z-30 w-[175px] min-w-[175px] max-w-[175px] bg-zinc-950 border-r border-zinc-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.65)]"
+                        : "bg-zinc-950";
+                  return (
+                    <th
+                      key={col.field}
+                      onClick={() => handleSort(col.field)}
+                      title={`Ordenar por ${col.label}`}
+                      className={`border-b border-zinc-800 ${stickyHeaderClass}`}
+                      style={{
+                        textAlign: col.align || "left",
+                        padding: "12px 14px",
+                        fontFamily: "DM Sans",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: sortField === col.field ? "#34D399" : "#A1A1AA",
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
+                        cursor: "pointer",
+                        userSelect: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {col.label}
+                      {renderSortIcon(col.field)}
+                    </th>
+                  );
+                })}
                 <th
+                  className="bg-zinc-950 border-b border-zinc-800"
                   style={{
                     textAlign: "right",
                     padding: "12px 14px",
@@ -567,7 +576,6 @@ export default function AdminEntidadesPage() {
                     color: "#A1A1AA",
                     textTransform: "uppercase",
                     letterSpacing: 1,
-                    borderBottom: "1px solid #27272A",
                   }}
                 >
                   Ações
@@ -584,191 +592,213 @@ export default function AdminEntidadesPage() {
               )}
 
               {!loading &&
-                filteredAndSorted.map((ent) => (
-                  <tr
-                    key={ent.id}
-                    onClick={() => navigate(`/admin/entidades/${ent.id}`)}
-                    className={`border-b border-zinc-800/80 transition-colors cursor-pointer ${
-                      ent.isBlockedActive
-                        ? "bg-red-950/15 hover:bg-red-950/30"
-                        : "hover:bg-zinc-900/80"
-                    }`}
-                  >
-                    {/* ENTIDADE / RAZÃO SOCIAL */}
-                    <td style={{ padding: "11px 14px" }}>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-[#09090B] border border-zinc-800 flex items-center justify-center shrink-0">
-                          <Building2 size={16} className="text-emerald-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-zinc-100 truncate max-w-[230px]">
-                            {ent.razaoSocial}
+                filteredAndSorted.map((ent) => {
+                  const stickyCellBg = ent.isBlockedActive
+                    ? "bg-[#1f1215] group-hover:bg-[#2a151a]"
+                    : "bg-zinc-900 group-hover:bg-zinc-800";
+                  return (
+                    <tr
+                      key={ent.id}
+                      onClick={() => navigate(`/admin/entidades/${ent.id}`)}
+                      className={`group transition-colors cursor-pointer ${
+                        ent.isBlockedActive
+                          ? "bg-[#1f1215] hover:bg-[#2a151a]"
+                          : "bg-zinc-900 hover:bg-zinc-800"
+                      }`}
+                    >
+                      {/* 1ª COLUNA (STICKY): ENTIDADE / RAZÃO SOCIAL */}
+                      <td
+                        style={{ padding: "11px 14px" }}
+                        className={`sticky left-0 z-20 w-[260px] min-w-[260px] max-w-[260px] border-b border-zinc-800/80 transition-colors ${stickyCellBg}`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-[#09090B] border border-zinc-800 flex items-center justify-center shrink-0">
+                            <Building2 size={16} className="text-emerald-400" />
                           </div>
-                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            {ent.nomeFantasia && ent.nomeFantasia !== ent.razaoSocial && (
-                              <span className="text-[11px] text-zinc-400 truncate max-w-[160px]">
-                                {ent.nomeFantasia}
-                              </span>
-                            )}
-                            {ent.hasPix ? (
-                              <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
-                                PIX OK
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">
-                                Sem chave PIX
-                              </span>
-                            )}
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-zinc-100 truncate max-w-[185px]">
+                              {ent.razaoSocial}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              {ent.nomeFantasia && ent.nomeFantasia !== ent.razaoSocial && (
+                                <span className="text-[11px] text-zinc-400 truncate max-w-[120px]">
+                                  {ent.nomeFantasia}
+                                </span>
+                              )}
+                              {ent.hasPix ? (
+                                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                  PIX OK
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">
+                                  Sem chave PIX
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* SLUG */}
-                    <td style={{ padding: "11px 14px" }} onClick={(e) => e.stopPropagation()}>
-                      {ent.referralSlug ? (
-                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800">
-                          <span className="font-mono text-[12px] text-zinc-200">
-                            @{ent.referralSlug}
+                      {/* 2ª COLUNA (STICKY): CNPJ */}
+                      <td
+                        style={{ padding: "11px 14px" }}
+                        className={`sticky left-[260px] z-20 w-[175px] min-w-[175px] max-w-[175px] border-b border-zinc-800/80 border-r border-r-zinc-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.65)] font-mono text-xs text-zinc-200 whitespace-nowrap transition-colors ${stickyCellBg}`}
+                      >
+                        {ent.cnpj ? maskCNPJ(ent.cnpj) : "—"}
+                      </td>
+
+                      {/* 3ª COLUNA: SLUG */}
+                      <td
+                        style={{ padding: "11px 14px" }}
+                        className="border-b border-zinc-800/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {ent.referralSlug ? (
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800">
+                            <span className="font-mono text-[12px] text-zinc-200">
+                              @{ent.referralSlug}
+                            </span>
+                            <button
+                              type="button"
+                              title="Copiar slug"
+                              onClick={() => void handleCopySlug(ent.referralSlug, ent.id)}
+                              className="text-zinc-500 hover:text-emerald-400 transition-colors"
+                            >
+                              {copiedSlugId === ent.id ? (
+                                <Check size={12} className="text-emerald-400" />
+                              ) : (
+                                <Copy size={12} />
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-500 text-xs">—</span>
+                        )}
+                      </td>
+
+                      {/* 4ª COLUNA: RESPONSÁVEL LEGAL */}
+                      <td
+                        style={{ padding: "11px 14px" }}
+                        className="border-b border-zinc-800/80 text-xs text-zinc-200 whitespace-nowrap"
+                      >
+                        {ent.responsavelNome}
+                      </td>
+
+                      {/* 5ª COLUNA: CONTATO */}
+                      <td style={{ padding: "11px 14px" }} className="border-b border-zinc-800/80">
+                        <div className="text-xs text-zinc-200 whitespace-nowrap">
+                          {ent.telefone ? maskPhone(ent.telefone) : "Não cadastrado"}
+                        </div>
+                        <div className="text-[11px] text-zinc-400 truncate max-w-[180px]">
+                          {ent.email}
+                        </div>
+                      </td>
+
+                      {/* 6ª COLUNA: CADASTRO */}
+                      <td
+                        style={{ padding: "11px 14px", textAlign: "center" }}
+                        className="border-b border-zinc-800/80"
+                      >
+                        {ent.cadastroCompleto ? (
+                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                            Completo
                           </span>
+                        ) : (
+                          <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                            Incompleto
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 7ª COLUNA: ENTIDADE DESDE */}
+                      <td
+                        style={{ padding: "11px 14px", textAlign: "center" }}
+                        className="border-b border-zinc-800/80 font-mono text-xs text-zinc-300 whitespace-nowrap"
+                      >
+                        {formatDateDDMMYYYY(ent.createdAt)}
+                      </td>
+
+                      {/* 8ª COLUNA: STATUS */}
+                      <td
+                        style={{ padding: "11px 14px", textAlign: "center" }}
+                        className="border-b border-zinc-800/80"
+                      >
+                        {ent.isBlockedActive ? (
+                          <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
+                            Bloqueado · {formatBlockedSummary(ent)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
+                            Ativo
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 9ª COLUNA: 5 AÇÕES */}
+                      <td
+                        style={{ padding: "11px 14px", textAlign: "right" }}
+                        className="border-b border-zinc-800/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            title="Copiar slug"
-                            onClick={() => void handleCopySlug(ent.referralSlug, ent.id)}
-                            className="text-zinc-500 hover:text-emerald-400 transition-colors"
+                            title="Visualizar ficha cadastral da entidade"
+                            aria-label="Visualizar"
+                            onClick={() => navigate(`/admin/entidades/${ent.id}`)}
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 transition-colors"
                           >
-                            {copiedSlugId === ent.id ? (
-                              <Check size={12} className="text-emerald-400" />
-                            ) : (
-                              <Copy size={12} />
-                            )}
+                            <Eye size={15} />
+                          </button>
+
+                          <button
+                            type="button"
+                            title="Histórico da entidade"
+                            aria-label="Histórico"
+                            onClick={() => setHistoryTarget(toActionTarget(ent))}
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                          >
+                            <History size={15} />
+                          </button>
+
+                          <button
+                            type="button"
+                            title={ent.isBlockedActive ? "Desbloquear / Gerenciar bloqueio" : "Bloquear Entidade"}
+                            aria-label={ent.isBlockedActive ? "Desbloquear" : "Bloquear"}
+                            onClick={() => setBlockTarget(toActionTarget(ent))}
+                            className={`w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border transition-colors ${
+                              ent.isBlockedActive
+                                ? "border-emerald-500 text-emerald-400 hover:bg-emerald-950/40"
+                                : "border-red-500 text-red-400 hover:bg-red-950/50"
+                            }`}
+                          >
+                            {ent.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
+                          </button>
+
+                          <button
+                            type="button"
+                            title="Enviar mensagem por WhatsApp"
+                            aria-label="WhatsApp"
+                            onClick={() => setWhatsAppTarget(toActionTarget(ent))}
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-emerald-500/45 text-emerald-400 hover:bg-emerald-950/40 transition-colors"
+                          >
+                            <MessageCircle size={15} />
+                          </button>
+
+                          <button
+                            type="button"
+                            title="Deletar entidade (requer senha do Superadmin)"
+                            aria-label="Deletar"
+                            onClick={() => setDeleteTarget(toActionTarget(ent))}
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-red-500/50 text-red-400 hover:bg-red-950/50 transition-colors"
+                          >
+                            <Trash2 size={15} />
                           </button>
                         </div>
-                      ) : (
-                        <span className="text-zinc-500 text-xs">—</span>
-                      )}
-                    </td>
-
-                    {/* CNPJ */}
-                    <td
-                      style={{ padding: "11px 14px" }}
-                      className="font-mono text-xs text-zinc-300 whitespace-nowrap"
-                    >
-                      {ent.cnpj ? maskCNPJ(ent.cnpj) : "—"}
-                    </td>
-
-                    {/* RESPONSÁVEL LEGAL */}
-                    <td style={{ padding: "11px 14px" }} className="text-xs text-zinc-200">
-                      {ent.responsavelNome}
-                    </td>
-
-                    {/* CONTATO */}
-                    <td style={{ padding: "11px 14px" }}>
-                      <div className="text-xs text-zinc-200 whitespace-nowrap">
-                        {ent.telefone ? maskPhone(ent.telefone) : "Não cadastrado"}
-                      </div>
-                      <div className="text-[11px] text-zinc-400 truncate max-w-[180px]">
-                        {ent.email}
-                      </div>
-                    </td>
-
-                    {/* CADASTRO */}
-                    <td style={{ padding: "11px 14px", textAlign: "center" }}>
-                      {ent.cadastroCompleto ? (
-                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
-                          Completo
-                        </span>
-                      ) : (
-                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
-                          Incompleto
-                        </span>
-                      )}
-                    </td>
-
-                    {/* ENTIDADE DESDE */}
-                    <td
-                      style={{ padding: "11px 14px", textAlign: "center" }}
-                      className="font-mono text-xs text-zinc-300 whitespace-nowrap"
-                    >
-                      {formatDateDDMMYYYY(ent.createdAt)}
-                    </td>
-
-                    {/* STATUS */}
-                    <td style={{ padding: "11px 14px", textAlign: "center" }}>
-                      {ent.isBlockedActive ? (
-                        <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
-                          Bloqueado · {formatBlockedSummary(ent)}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
-                          Ativo
-                        </span>
-                      )}
-                    </td>
-
-                    {/* 5 AÇÕES */}
-                    <td
-                      style={{ padding: "11px 14px", textAlign: "right" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="inline-flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          title="Visualizar ficha cadastral da entidade"
-                          aria-label="Visualizar"
-                          onClick={() => navigate(`/admin/entidades/${ent.id}`)}
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 transition-colors"
-                        >
-                          <Eye size={15} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Histórico da entidade"
-                          aria-label="Histórico"
-                          onClick={() => setHistoryTarget(toActionTarget(ent))}
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
-                        >
-                          <History size={15} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title={ent.isBlockedActive ? "Desbloquear / Gerenciar bloqueio" : "Bloquear Entidade"}
-                          aria-label={ent.isBlockedActive ? "Desbloquear" : "Bloquear"}
-                          onClick={() => setBlockTarget(toActionTarget(ent))}
-                          className={`w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border transition-colors ${
-                            ent.isBlockedActive
-                              ? "border-emerald-500 text-emerald-400 hover:bg-emerald-950/40"
-                              : "border-red-500 text-red-400 hover:bg-red-950/50"
-                          }`}
-                        >
-                          {ent.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Enviar mensagem por WhatsApp"
-                          aria-label="WhatsApp"
-                          onClick={() => setWhatsAppTarget(toActionTarget(ent))}
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-emerald-500/45 text-emerald-400 hover:bg-emerald-950/40 transition-colors"
-                        >
-                          <MessageCircle size={15} />
-                        </button>
-
-                        <button
-                          type="button"
-                          title="Deletar entidade (requer senha do Superadmin)"
-                          aria-label="Deletar"
-                          onClick={() => setDeleteTarget(toActionTarget(ent))}
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-red-500/50 text-red-400 hover:bg-red-950/50 transition-colors"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
 
               {!loading && filteredAndSorted.length === 0 && (
                 <tr>

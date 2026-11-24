@@ -654,35 +654,44 @@ export default function AdminClientesPage() {
             border: "1px solid #27272A",
           }}
         >
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#09090B" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1160px] border-separate border-spacing-0">
+              <thead className="bg-zinc-950">
                 <tr>
-                  {COLUMNS.map((col) => (
-                    <th
-                      key={col.field}
-                      onClick={() => handleSort(col.field)}
-                      title={`Ordenar por ${col.label}`}
-                      style={{
-                        textAlign: col.align || "left",
-                        padding: "12px 14px",
-                        fontFamily: "DM Sans",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: sortField === col.field ? "#34D399" : "#A1A1AA",
-                        textTransform: "uppercase",
-                        letterSpacing: 1,
-                        borderBottom: "1px solid #27272A",
-                        cursor: "pointer",
-                        userSelect: "none",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {col.label}
-                      {renderSortIcon(col.field)}
-                    </th>
-                  ))}
+                  {COLUMNS.map((col, idx) => {
+                    const stickyHeaderClass =
+                      idx === 0
+                        ? "sticky left-0 z-30 w-[240px] min-w-[240px] max-w-[240px] bg-zinc-950"
+                        : idx === 1
+                          ? "sticky left-[240px] z-30 w-[170px] min-w-[170px] max-w-[170px] bg-zinc-950 border-r border-zinc-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.65)]"
+                          : "bg-zinc-950";
+                    return (
+                      <th
+                        key={col.field}
+                        onClick={() => handleSort(col.field)}
+                        title={`Ordenar por ${col.label}`}
+                        className={`border-b border-zinc-800 ${stickyHeaderClass}`}
+                        style={{
+                          textAlign: col.align || "left",
+                          padding: "12px 14px",
+                          fontFamily: "DM Sans",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: sortField === col.field ? "#34D399" : "#A1A1AA",
+                          textTransform: "uppercase",
+                          letterSpacing: 1,
+                          cursor: "pointer",
+                          userSelect: "none",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {col.label}
+                        {renderSortIcon(col.field)}
+                      </th>
+                    );
+                  })}
                   <th
+                    className="bg-zinc-950 border-b border-zinc-800"
                     style={{
                       textAlign: "right",
                       padding: "12px 14px",
@@ -692,7 +701,6 @@ export default function AdminClientesPage() {
                       color: "#A1A1AA",
                       textTransform: "uppercase",
                       letterSpacing: 1,
-                      borderBottom: "1px solid #27272A",
                     }}
                   >
                     Ações
@@ -712,168 +720,183 @@ export default function AdminClientesPage() {
                 )}
 
                 {!loading &&
-                  paged.map((u) => (
-                    <tr
-                      key={u.id}
-                      onClick={() => navigate(`/admin/clientes/${u.id}`)}
-                      className={`border-b border-zinc-800/80 transition-colors cursor-pointer ${
-                        u.isBlockedActive
-                          ? "bg-red-950/15 hover:bg-red-950/30"
-                          : "hover:bg-zinc-900/80"
-                      }`}
-                    >
-                      {/* NOME + PIX */}
-                      <td style={{ padding: "11px 14px" }}>
-                        <div className="flex items-center gap-2.5">
-                          <Avatar name={u.name} />
-                          <div>
-                            <div className="font-sans text-sm text-zinc-100 font-semibold">
-                              {u.name}
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                              {u.hasPix ? (
-                                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
-                                  PIX OK
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">
-                                  Sem chave PIX
-                                </span>
-                              )}
+                  paged.map((u) => {
+                    const stickyCellBg = u.isBlockedActive
+                      ? "bg-[#1f1215] group-hover:bg-[#2a151a]"
+                      : "bg-zinc-900 group-hover:bg-zinc-800";
+                    return (
+                      <tr
+                        key={u.id}
+                        onClick={() => navigate(`/admin/clientes/${u.id}`)}
+                        className={`group transition-colors cursor-pointer ${
+                          u.isBlockedActive
+                            ? "bg-[#1f1215] hover:bg-[#2a151a]"
+                            : "bg-zinc-900 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {/* NOME + PIX (Sticky Col 1) */}
+                        <td
+                          style={{ padding: "11px 14px" }}
+                          className={`sticky left-0 z-20 w-[240px] min-w-[240px] max-w-[240px] border-b border-zinc-800/80 transition-colors ${stickyCellBg}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={u.name} />
+                            <div className="min-w-0">
+                              <div className="font-sans text-sm text-zinc-100 font-semibold truncate max-w-[165px]">
+                                {u.name}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                {u.hasPix ? (
+                                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                    PIX OK
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded">
+                                    Sem chave PIX
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* SLUG */}
-                      <td style={{ padding: "11px 14px" }} onClick={(e) => e.stopPropagation()}>
-                        {u.referralSlug ? (
-                          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800">
-                            <span className="font-mono text-[12px] text-zinc-200">
-                              @{u.referralSlug}
-                            </span>
-                            <button
-                              type="button"
-                              title="Copiar slug"
-                              onClick={() => void handleCopySlug(u.referralSlug, u.id)}
-                              className="text-zinc-500 hover:text-emerald-400 transition-colors"
-                            >
-                              {copiedSlugId === u.id ? (
-                                <Check size={12} className="text-emerald-400" />
-                              ) : (
-                                <Copy size={12} />
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-zinc-500 text-xs">—</span>
-                        )}
-                      </td>
-
-                      {/* PAPEL */}
-                      <td style={{ padding: "11px 14px" }}>
-                        <div className="flex gap-1 flex-wrap">
-                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700">
-                            tomador
-                          </span>
-                          {(u.role === "prestador" || (u.services ?? []).length > 0) && (
-                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                              prestador
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* CADASTRO */}
-                      <td style={{ padding: "11px 14px" }}>
-                        {u.isPendente ? (
-                          <span className="bg-zinc-900 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
-                            Pendente
-                          </span>
-                        ) : u.cadastroCompleto ? (
-                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
-                            Completo
-                          </span>
-                        ) : (
-                          <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
-                            Incompleto
-                          </span>
-                        )}
-                      </td>
-
-                      {/* SERVIÇOS */}
-                      <td style={{ padding: "11px 14px" }}>
-                        <div className="flex gap-1 flex-wrap">
-                          {(u.services ?? []).map((s: string) => (
-                            <span
-                              key={s}
-                              className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#09090B] text-zinc-300 border border-zinc-800"
-                            >
-                              {s}
-                            </span>
-                          ))}
-                          {(u.services ?? []).length === 0 && (
+                        {/* SLUG (Sticky Col 2) */}
+                        <td
+                          style={{ padding: "11px 14px" }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`sticky left-[240px] z-20 w-[170px] min-w-[170px] max-w-[170px] border-b border-zinc-800/80 border-r border-r-zinc-800 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.65)] transition-colors ${stickyCellBg}`}
+                        >
+                          {u.referralSlug ? (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800 max-w-full">
+                              <span className="font-mono text-[12px] text-zinc-200 truncate max-w-[110px]">
+                                @{u.referralSlug}
+                              </span>
+                              <button
+                                type="button"
+                                title="Copiar slug"
+                                onClick={() => void handleCopySlug(u.referralSlug, u.id)}
+                                className="text-zinc-500 hover:text-emerald-400 transition-colors shrink-0"
+                              >
+                                {copiedSlugId === u.id ? (
+                                  <Check size={12} className="text-emerald-400" />
+                                ) : (
+                                  <Copy size={12} />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
                             <span className="text-zinc-500 text-xs">—</span>
                           )}
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* CLIENTE DESDE */}
-                      <td
-                        style={{ padding: "11px 14px", textAlign: "center" }}
-                        className="font-mono text-xs text-zinc-300 whitespace-nowrap"
-                      >
-                        {formatDateDDMMYYYY(u.createdAt)}
-                      </td>
+                        {/* PAPEL */}
+                        <td style={{ padding: "11px 14px" }} className="border-b border-zinc-800/80">
+                          <div className="flex gap-1 flex-wrap">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-950 text-zinc-300 border border-zinc-700">
+                              tomador
+                            </span>
+                            {(u.role === "prestador" || (u.services ?? []).length > 0) && (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                prestador
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* STATUS / BLOQUEIO */}
-                      <td style={{ padding: "11px 14px", textAlign: "center" }}>
-                        {u.isBlockedActive ? (
-                          <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
-                            Bloqueado · {formatBlockedSummary(u)}
-                          </span>
-                        ) : u.status !== "active" &&
-                          (() => {
-                            const rule = rules.find((r) => r.key === u.status);
-                            if (!rule) return false;
-                            const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
-                            return (
-                              <Pill
-                                bg={colors.bg}
-                                color={colors.color}
-                                border={colors.border}
-                                size="sm"
+                        {/* CADASTRO */}
+                        <td style={{ padding: "11px 14px" }} className="border-b border-zinc-800/80">
+                          {u.isPendente ? (
+                            <span className="bg-zinc-950 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                              Pendente
+                            </span>
+                          ) : u.cadastroCompleto ? (
+                            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                              Completo
+                            </span>
+                          ) : (
+                            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                              Incompleto
+                            </span>
+                          )}
+                        </td>
+
+                        {/* SERVIÇOS */}
+                        <td style={{ padding: "11px 14px" }} className="border-b border-zinc-800/80">
+                          <div className="flex gap-1 flex-wrap">
+                            {(u.services ?? []).map((s: string) => (
+                              <span
+                                key={s}
+                                className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#09090B] text-zinc-300 border border-zinc-800"
                               >
-                                {rule.label}
-                              </Pill>
-                            );
-                          })() ? (
-                          (() => {
-                            const rule = rules.find((r) => r.key === u.status)!;
-                            const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
-                            return (
-                              <Pill
-                                bg={colors.bg}
-                                color={colors.color}
-                                border={colors.border}
-                                size="sm"
-                              >
-                                {rule.label}
-                              </Pill>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
-                            Ativo
-                          </span>
-                        )}
-                      </td>
+                                {s}
+                              </span>
+                            ))}
+                            {(u.services ?? []).length === 0 && (
+                              <span className="text-zinc-500 text-xs">—</span>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* AÇÕES (5 ações: Visualizar, Histórico, Bloquear com borda vermelha, WhatsApp, Deletar) */}
-                      <td
-                        style={{ padding: "11px 14px", textAlign: "right" }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                        {/* CLIENTE DESDE */}
+                        <td
+                          style={{ padding: "11px 14px", textAlign: "center" }}
+                          className="border-b border-zinc-800/80 font-mono text-xs text-zinc-300 whitespace-nowrap"
+                        >
+                          {formatDateDDMMYYYY(u.createdAt)}
+                        </td>
+
+                        {/* STATUS / BLOQUEIO */}
+                        <td
+                          style={{ padding: "11px 14px", textAlign: "center" }}
+                          className="border-b border-zinc-800/80"
+                        >
+                          {u.isBlockedActive ? (
+                            <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
+                              Bloqueado · {formatBlockedSummary(u)}
+                            </span>
+                          ) : u.status !== "active" &&
+                            (() => {
+                              const rule = rules.find((r) => r.key === u.status);
+                              if (!rule) return false;
+                              const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
+                              return (
+                                <Pill
+                                  bg={colors.bg}
+                                  color={colors.color}
+                                  border={colors.border}
+                                  size="sm"
+                                >
+                                  {rule.label}
+                                </Pill>
+                              );
+                            })() ? (
+                            (() => {
+                              const rule = rules.find((r) => r.key === u.status)!;
+                              const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
+                              return (
+                                <Pill
+                                  bg={colors.bg}
+                                  color={colors.color}
+                                  border={colors.border}
+                                  size="sm"
+                                >
+                                  {rule.label}
+                                </Pill>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
+                              Ativo
+                            </span>
+                          )}
+                        </td>
+
+                        {/* AÇÕES (5 ações: Visualizar, Histórico, Bloquear com borda vermelha, WhatsApp, Deletar) */}
+                        <td
+                          style={{ padding: "11px 14px", textAlign: "right" }}
+                          className="border-b border-zinc-800/80"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                         <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             type="button"
@@ -931,7 +954,8 @@ export default function AdminClientesPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
 
                 {!loading && paged.length === 0 && (
                   <tr>
