@@ -437,6 +437,15 @@ export default function AdminClienteDetailPage() {
   };
 
   const referralInviteUrl = `${getAppOrigin()}/${client.slug}`;
+  const rawPhoneDigits = String(client.phone || "").replace(/\D/g, "");
+  const cleanClientEmail =
+    client.email && client.email.includes("@") ? client.email.trim().toLowerCase() : "";
+  const cadastralUpdateUrl =
+    rawPhoneDigits.length >= 8
+      ? `${getAppOrigin()}/atualizacao-cadastral?telefone=${encodeURIComponent(rawPhoneDigits)}`
+      : cleanClientEmail
+        ? `${getAppOrigin()}/atualizacao-cadastral?email=${encodeURIComponent(cleanClientEmail)}`
+        : `${getAppOrigin()}/atualizacao-cadastral`;
 
   const sectionCardStyle = {
     padding: 22,
@@ -659,7 +668,34 @@ export default function AdminClienteDetailPage() {
                 className="h-8 px-3 rounded-lg bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0"
               >
                 {copiedKey === "reflink" ? <Check size={13} /> : <Copy size={13} />}
-                {copiedKey === "reflink" ? "Copiado" : "Copiar Link"}
+                {copiedKey === "reflink" ? "Copiado!" : "Copiar Link"}
+              </button>
+            </div>
+          </div>
+
+          {/* BLOCO SEPARADO C: LINK DE ATUALIZAÇÃO CADASTRAL */}
+          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2">
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-zinc-300">
+              <Link2 size={13} className="text-emerald-400" />
+              Link de Atualização Cadastral
+            </div>
+            <div className="flex items-center gap-2 rounded-lg bg-[#09090B] border border-zinc-800 p-2 pl-3">
+              <span className="font-mono text-xs text-zinc-300 truncate flex-1 select-all">
+                {cadastralUpdateUrl}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  void handleCopy(
+                    cadastralUpdateUrl,
+                    "updatelink",
+                    "Link de atualização cadastral copiado",
+                  )
+                }
+                className="h-8 px-3 rounded-lg bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0"
+              >
+                {copiedKey === "updatelink" ? <Check size={13} /> : <Copy size={13} />}
+                {copiedKey === "updatelink" ? "Copiado!" : "Copiar Link"}
               </button>
             </div>
           </div>

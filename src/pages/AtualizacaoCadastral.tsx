@@ -3,8 +3,6 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Loader2,
-  Search,
-  Smartphone,
   AlertCircle,
   Check,
   Lock,
@@ -22,7 +20,9 @@ import {
   ChevronLeft,
   Sparkles,
   ShieldCheck,
-  Handshake
+  Handshake,
+  Mail,
+  KeyRound
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -60,18 +60,6 @@ export {
   REGIOES_UBATUBA
 };
 
-// Helper seguro para hash SHA-256 no browser
-async function computeSha256(message: string): Promise<string> {
-  try {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  } catch {
-    return "";
-  }
-}
-
 type WizardStep = 1 | 2 | 3 | 4;
 
 const STEPS = [
@@ -85,31 +73,27 @@ export default function AtualizacaoCadastral() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Estados de Busca e Carregamento do Lead
-  const [lookupState, setLookupState] = useState<"loading" | "lookup" | "wizard">("loading");
-  const [lookupPhone, setLookupPhone] = useState("");
-  const [lookupError, setLookupError] = useState("");
-  const [isLookingUp, setIsLookingUp] = useState(false);
+  // Estados de Autenticação e Carregamento Cadastral (PF: E-mail+Senha | PJ: CNPJ+Senha)
+  const [lookupState, setLookupState] = useState<"loading" | "auth" | "wizard">("loading");
+  const [authMode, setAuthMode] = useState<"PF" | "PJ">("PF");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authCnpj, setAuthCnpj] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const [isSendingRecovery, setIsSendingRecovery] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [hintPhone, setHintPhone] = useState("");
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [leadRecord, setLeadRecord] = useState<any>(null);
 
   // Estado de Padrinho de Entrada
   const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
 
-  // Estados do Gatekeeper de Autenticação e Segurança
+  // Estado de Desbloqueio do Wizard
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [gatekeeperMeta, setGatekeeperMeta] = useState<{
-    id: string;
-    email: string;
-    is_pj: boolean;
-    tipo_documento: "CPF" | "CNPJ";
-    doc_hashes: string[];
-    telefone: string;
-  } | null>(null);
-  const [gatekeeperDoc, setGatekeeperDoc] = useState("");
-  const [gatekeeperPassword, setGatekeeperPassword] = useState("");
-  const [showGatekeeperPassword, setShowGatekeeperPassword] = useState(false);
-  const [isVerifyingGatekeeper, setIsVerifyingGatekeeper] = useState(false);
-  const [gatekeeperError, setGatekeeperError] = useState("");
 
   // Estado do Wizard
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
@@ -269,242 +253,371 @@ export default function AtualizacaoCadastral() {
     }
   };
 
-  // Função auxiliar para carregar lead por telefone com proteção do Gatekeeper
-  const searchLeadByPhone = async (rawPhone: string) => {
-    const telDigits = (rawPhone || "").replace(/\D/g, "");
-    if (!telDigits || telDigits.length < 8) {
-      setLookupError("Informe um número de telefone com DDD válido (ex: 12 99999-8888).");
-      setLookupState("lookup");
-      return;
-    }
+  // Carrega dados cadastrais do usuário autenticado a partir de public.usuarios + complemento opcional em waitlist
+  const loadAuthenticatedProfile = async (
+    authUser: { id: string; email?: string | null; user_metadata?: Record<string, any> },
+    fallbackPhone = "",
+  ) => {
+    setAuthUserId(authUser.id);
+    const normalizedEmail = (authUser.email || "").trim().toLowerCase();
 
-    const telQuery = (telDigits.startsWith("55") && telDigits.length > 10)
-      ? telDigits.slice(2)
-      : telDigits;
+    const { data: usuarioRow } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("id", authUser.id)
+      .maybeSingle();
 
-    setIsLookingUp(true);
-    setLookupError("");
-
+    let waitlistRow: any = null;
     try {
-      let meta: any = null;
-
-      // 1. Tenta chamar a RPC segura obter_gatekeeper_lead (não expõe dados sensíveis)
-      try {
-        const { data: rpcData, error: rpcError } = await supabase
-          .rpc("obter_gatekeeper_lead", { p_identificador: telQuery });
-
-        if (!rpcError && rpcData && rpcData.encontrado) {
-          meta = rpcData;
-        }
-      } catch (rpcErr) {
-        // Fallback silencioso
-      }
-
-      // 2. Fallback: Consulta direta mínima trazendo estritamente campos para conferência de segurança
-      if (!meta) {
-        const mascaraTelefone = maskPhone(telQuery);
-        const last8 = telQuery.slice(-8);
-
-        const { data, error } = await supabase
+      if (normalizedEmail) {
+        const { data: wlByEmail } = await supabase
           .from("waitlist")
-          .select("id, email, tipo_pessoa, tipo_cadastro, cnpj, cpf, responsavel_cpf, razao_social, telefone")
-          .or(`telefone.eq.${telQuery},telefone.eq.${mascaraTelefone},telefone.ilike.%${last8}%`)
+          .select("*")
+          .ilike("email", normalizedEmail)
           .order("created_at_utc", { ascending: false })
           .limit(1)
           .maybeSingle();
-
-        if (error && error.code !== "PGRST116") {
-          throw error;
-        }
-
-        if (data) {
-          const isPJLead = Boolean(
-            data.tipo_cadastro === "pj" ||
-            data.tipo_cadastro === "PJ" ||
-            data.tipo_cadastro === "associacao" ||
-            data.tipo_pessoa === "PJ" ||
-            data.cnpj ||
-            data.razao_social
-          );
-          const cClean = (data.cnpj || "").replace(/\D/g, "");
-          const fClean = (data.cpf || "").replace(/\D/g, "");
-          const rClean = (data.responsavel_cpf || "").replace(/\D/g, "");
-          const hashes: string[] = [];
-          if (cClean) hashes.push(await computeSha256(cClean));
-          if (fClean) hashes.push(await computeSha256(fClean));
-          if (rClean && rClean !== fClean) hashes.push(await computeSha256(rClean));
-
-          meta = {
-            encontrado: true,
-            id: data.id,
-            email: data.email,
-            is_pj: isPJLead,
-            tipo_documento: isPJLead ? "CNPJ" : "CPF",
-            doc_hashes: hashes,
-            telefone: data.telefone || telQuery
-          };
-        }
+        if (wlByEmail) waitlistRow = wlByEmail;
       }
 
-      if (!meta || !meta.encontrado) {
-        setLookupError("Nenhum cadastro de fundador encontrado com este número. Verifique os dígitos ou faça sua inscrição como novo fundador.");
-        setIsLookingUp(false);
-        setLookupState("lookup");
-        return;
-      }
-
-      meta.telefone = meta.telefone || telQuery;
-      setGatekeeperMeta(meta);
-
-      // 3. Verificação de Sessão Ativa do Supabase
-      let userIsAuthenticated = false;
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user?.email && meta.email) {
-          if (session.user.email.trim().toLowerCase() === meta.email.trim().toLowerCase()) {
-            userIsAuthenticated = true;
-          }
+      if (!waitlistRow) {
+        const rawPhoneDigits = (usuarioRow?.telefone || fallbackPhone || "").replace(/\D/g, "");
+        if (rawPhoneDigits.length >= 8) {
+          const last8 = rawPhoneDigits.slice(-8);
+          const { data: wlByPhone } = await supabase
+            .from("waitlist")
+            .select("*")
+            .or(`telefone.eq.${rawPhoneDigits},telefone.ilike.%${last8}%`)
+            .order("created_at_utc", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (wlByPhone) waitlistRow = wlByPhone;
         }
-      } catch (authSessionErr) {
-        // Fallback defensivo: exige desbloqueio via gatekeeper
       }
+    } catch {
+      // Waitlist é complemento opcional — nunca bloqueia o carregamento
+    }
 
-      if (userIsAuthenticated) {
-        // Sessão ativa correspondente ao titular: desbloqueia imediatamente e carrega dados
-        setIsUnlocked(true);
-        const { data: fullLead } = await supabase
-          .from("waitlist")
-          .select("*")
-          .eq("id", meta.id)
-          .maybeSingle();
+    const uMeta = (usuarioRow?.metadata && typeof usuarioRow.metadata === "object")
+      ? usuarioRow.metadata
+      : {};
 
-        if (fullLead) {
-          populateWizardFromLead(fullLead, telQuery);
-          trackEvent("atualizacao_cadastral_lead_loaded_session", "onboarding", { lead_id: fullLead.id });
-        }
-      } else {
-        // Sem sessão autenticada: bloqueia e apresenta o desafio de identidade
-        setIsUnlocked(false);
-        setGatekeeperDoc("");
-        setGatekeeperPassword("");
-        setGatekeeperError("");
-      }
+    const isPJAccount = Boolean(
+      String(usuarioRow?.tipo_pessoa || "").toUpperCase() === "PJ" ||
+      String(usuarioRow?.role || "").toLowerCase() === "associacao" ||
+      String(uMeta?.tipo_cadastro || "").toLowerCase() === "pj" ||
+      String(uMeta?.tipo_cadastro || "").toLowerCase() === "associacao" ||
+      usuarioRow?.cnpj ||
+      waitlistRow?.cnpj ||
+      String(waitlistRow?.tipo_pessoa || "").toUpperCase() === "PJ" ||
+      ["pj", "associacao"].includes(String(waitlistRow?.tipo_cadastro || "").toLowerCase()),
+    );
 
-      setLookupState("wizard");
-    } catch (err: any) {
-      console.error("[AtualizacaoCadastral] Erro ao buscar lead:", err);
-      setLookupError("Ocorreu um erro ao consultar os dados. Tente novamente.");
-      setLookupState("lookup");
+    const mergedLead: Record<string, any> = {
+      ...(waitlistRow || {}),
+      ...(usuarioRow || {}),
+      id: waitlistRow?.id || null,
+      waitlist_id: waitlistRow?.id || null,
+      usuario_id: authUser.id,
+      email: usuarioRow?.email || normalizedEmail || waitlistRow?.email || "",
+      nome:
+        usuarioRow?.nome ||
+        waitlistRow?.nome ||
+        authUser.user_metadata?.nome ||
+        authUser.user_metadata?.full_name ||
+        "",
+      razao_social:
+        usuarioRow?.razao_social ||
+        waitlistRow?.razao_social ||
+        (isPJAccount ? usuarioRow?.nome : "") ||
+        "",
+      tipo_pessoa: isPJAccount ? "PJ" : "PF",
+      cpf: usuarioRow?.cpf || waitlistRow?.cpf || "",
+      cnpj: usuarioRow?.cnpj || waitlistRow?.cnpj || "",
+      responsavel_legal: usuarioRow?.responsavel_legal || waitlistRow?.responsavel_legal || "",
+      cpf_responsavel:
+        usuarioRow?.cpf_responsavel ||
+        waitlistRow?.cpf_responsavel ||
+        waitlistRow?.responsavel_cpf ||
+        "",
+      telefone: usuarioRow?.telefone || waitlistRow?.telefone || fallbackPhone || "",
+      bairro_residencia:
+        usuarioRow?.bairro_residencia ||
+        usuarioRow?.bairro_moradia ||
+        uMeta?.bairro_residencia ||
+        waitlistRow?.bairro_residencia ||
+        waitlistRow?.bairro_moradia ||
+        "",
+      bairro_matriz:
+        uMeta?.bairro_matriz ||
+        waitlistRow?.bairro_matriz ||
+        usuarioRow?.bairro_residencia ||
+        usuarioRow?.bairro_moradia ||
+        "",
+      bairros_filiais: Array.isArray(uMeta?.bairros_filiais)
+        ? uMeta.bairros_filiais
+        : (Array.isArray(waitlistRow?.bairros_filiais) ? waitlistRow.bairros_filiais : []),
+      bairros_atuacao: Array.isArray(usuarioRow?.bairros_atuacao) && usuarioRow.bairros_atuacao.length > 0
+        ? usuarioRow.bairros_atuacao
+        : (Array.isArray(uMeta?.bairros_atuacao) && uMeta.bairros_atuacao.length > 0
+            ? uMeta.bairros_atuacao
+            : (Array.isArray(waitlistRow?.bairros_atuacao) ? waitlistRow.bairros_atuacao : [])),
+      bairro_trabalho: usuarioRow?.bairro_trabalho || waitlistRow?.bairro_trabalho || "",
+      regioes_atuacao: Array.isArray(usuarioRow?.regioes) && usuarioRow.regioes.length > 0
+        ? usuarioRow.regioes
+        : (Array.isArray(uMeta?.regioes_atuacao) && uMeta.regioes_atuacao.length > 0
+            ? uMeta.regioes_atuacao
+            : (Array.isArray(waitlistRow?.regioes_atuacao) ? waitlistRow.regioes_atuacao : [])),
+      praias: Array.isArray(usuarioRow?.praias) && usuarioRow.praias.length > 0
+        ? usuarioRow.praias
+        : (Array.isArray(uMeta?.praias) && uMeta.praias.length > 0
+            ? uMeta.praias
+            : (Array.isArray(waitlistRow?.praias) ? waitlistRow.praias : [])),
+      nao_atua_praias: Boolean(uMeta?.nao_atua_praias ?? waitlistRow?.nao_atua_praias ?? false),
+      possui_conta_mercado_pago:
+        typeof usuarioRow?.possui_mercadopago === "boolean"
+          ? usuarioRow.possui_mercadopago
+          : (typeof waitlistRow?.possui_conta_mercado_pago === "boolean"
+              ? waitlistRow.possui_conta_mercado_pago
+              : true),
+      tipo_chave_pix: usuarioRow?.tipo_chave_pix || waitlistRow?.tipo_chave_pix || "telefone",
+      chave_pix: usuarioRow?.chave_pix || waitlistRow?.chave_pix || "",
+      referral_code:
+        usuarioRow?.referral_code ||
+        uMeta?.referral_code ||
+        waitlistRow?.referral_code ||
+        "",
+      padrinho_id: usuarioRow?.padrinho_id || waitlistRow?.padrinho_id || null,
+      metadata: uMeta,
+    };
+
+    populateWizardFromLead(mergedLead, fallbackPhone || mergedLead.telefone || "");
+    setIsUnlocked(true);
+    setLookupState("wizard");
+  };
+
+  // Envio de link de definição/redefinição de senha para contas legadas sem senha no Auth
+  const handleSendPasswordRecovery = async () => {
+    const targetEmail = (recoveryEmail || authEmail || "").trim().toLowerCase();
+    if (!targetEmail || !isValidEmail(targetEmail)) {
+      toast.error("Informe um e-mail válido para receber o link de redefinição.");
+      return;
+    }
+    setIsSendingRecovery(true);
+    try {
+      const origin =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "https://ubtservicos.vercel.app";
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`,
+      });
+      if (error) throw error;
+      setRecoverySent(true);
+      toast.success("Link de definição/redefinição de senha enviado para seu e-mail!");
+    } catch (err) {
+      console.error("[AtualizacaoCadastral] Erro ao enviar recuperação de senha:", err);
+      toast.error("Não foi possível enviar o e-mail de redefinição agora. Fale com o suporte UBT.");
     } finally {
-      setIsLookingUp(false);
+      setIsSendingRecovery(false);
     }
   };
 
-  // Submissão do Gatekeeper (Desafio de Identidade: Documento + Senha)
-  const handleGatekeeperUnlock = async (e?: React.FormEvent) => {
+  // Autenticação direta: PF (E-mail + Senha) ou Entidade/PJ (CNPJ + Senha via RPC segura)
+  const handleAuthSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!gatekeeperMeta) return;
+    setAuthError("");
+    setRecoveryEmail(null);
+    setRecoverySent(false);
 
-    setGatekeeperError("");
-
-    const cleanInputDoc = gatekeeperDoc.replace(/\D/g, "");
-    if (!cleanInputDoc) {
-      setGatekeeperError(`Por favor, informe o seu ${gatekeeperMeta.tipo_documento || "documento"}.`);
+    if (!authPassword) {
+      setAuthError("Por favor, digite sua senha de acesso.");
       return;
     }
 
-    if (!gatekeeperPassword) {
-      setGatekeeperError("Por favor, digite sua senha de acesso.");
-      return;
-    }
-
-    setIsVerifyingGatekeeper(true);
+    setIsAuthenticating(true);
 
     try {
-      // 1. Validação de Documento (confere se hash do input confere com algum dos hashes do cadastro)
-      const inputHash = await computeSha256(cleanInputDoc);
-      const isDocValid = Array.isArray(gatekeeperMeta.doc_hashes) && gatekeeperMeta.doc_hashes.includes(inputHash);
+      let targetEmail = "";
 
-      if (!isDocValid) {
-        setGatekeeperError("Documento ou senha incorretos. Verifique suas credenciais.");
-        toast.error("Documento ou senha incorretos.");
-        setIsVerifyingGatekeeper(false);
+      if (authMode === "PF") {
+        const cleanEmail = authEmail.trim().toLowerCase();
+        if (!cleanEmail || !isValidEmail(cleanEmail)) {
+          setAuthError("Informe um endereço de e-mail válido.");
+          setIsAuthenticating(false);
+          return;
+        }
+        targetEmail = cleanEmail;
+      } else {
+        const cleanCnpj = authCnpj.replace(/\D/g, "");
+        if (cleanCnpj.length !== 14) {
+          setAuthError("Informe um CNPJ válido com 14 dígitos.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        const { data: resolved, error: rpcError } = await supabase.rpc(
+          "resolve_cadastral_login_email",
+          { p_cnpj: cleanCnpj },
+        );
+
+        if (rpcError) {
+          console.error("[AtualizacaoCadastral] Erro na RPC resolve_cadastral_login_email:", rpcError);
+          setAuthError("Não foi possível consultar o CNPJ no momento. Tente novamente.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        const resolvedEmail = typeof resolved?.email === "string" ? resolved.email.trim().toLowerCase() : "";
+        const hasAuthAccount = Boolean(resolved?.has_auth_account);
+
+        if (!resolvedEmail) {
+          setAuthError("CNPJ não localizado na base da UBT. Confira os números ou fale com o suporte.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        if (!hasAuthAccount) {
+          setRecoveryEmail(resolvedEmail);
+          setAuthError(
+            "Encontramos o cadastro desta entidade, mas ainda não há uma senha definida no acesso UBT. Solicite o link de definição de senha abaixo ou fale com o suporte.",
+          );
+          setIsAuthenticating(false);
+          return;
+        }
+
+        targetEmail = resolvedEmail;
+      }
+
+      // Autenticação oficial via Supabase Auth
+      let { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password: authPassword,
+      });
+
+      // Fallback defensivo: confirma e-mail pendente no Auth e tenta novamente
+      if (signInError && signInError.message.toLowerCase().includes("email not confirmed")) {
+        try {
+          await supabase.rpc("confirmar_email_lead", { p_email: targetEmail });
+          const retry = await supabase.auth.signInWithPassword({
+            email: targetEmail,
+            password: authPassword,
+          });
+          authData = retry.data;
+          signInError = retry.error;
+        } catch (rpcErr) {
+          console.warn("[AtualizacaoCadastral] Falha no fallback confirmar_email_lead:", rpcErr);
+        }
+      }
+
+      if (signInError || !authData?.user) {
+        console.warn("[AtualizacaoCadastral] Falha no signInWithPassword:", signInError?.message);
+        setRecoveryEmail(targetEmail);
+        setAuthError(
+          authMode === "PJ"
+            ? "Senha incorreta para este CNPJ. Verifique sua senha ou solicite a redefinição abaixo."
+            : "E-mail ou senha incorretos. Verifique suas credenciais ou solicite a redefinição abaixo.",
+        );
+        toast.error(
+          authMode === "PJ" ? "CNPJ ou senha incorretos." : "E-mail ou senha incorretos.",
+        );
+        setIsAuthenticating(false);
         return;
       }
 
-      // 2. Autenticação Oficial via Supabase Auth
-      if (gatekeeperMeta.email) {
-        let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: gatekeeperMeta.email.trim(),
-          password: gatekeeperPassword
-        });
-
-        // Fallback defensivo: se o e-mail não estiver confirmado no Auth, auto-confirma via RPC e tenta novamente
-        if (authError && authError.message.toLowerCase().includes("email not confirmed")) {
-          console.info("[Gatekeeper] E-mail pendente de confirmação no Auth. Acionando confirmação automática...");
-          try {
-            await supabase.rpc("confirmar_email_lead", { p_email: gatekeeperMeta.email.trim() });
-            const retry = await supabase.auth.signInWithPassword({
-              email: gatekeeperMeta.email.trim(),
-              password: gatekeeperPassword
-            });
-            authData = retry.data;
-            authError = retry.error;
-          } catch (rpcErr) {
-            console.warn("[Gatekeeper] Falha ao executar fallback de confirmação de e-mail:", rpcErr);
-          }
-        }
-
-        if (authError || !authData?.user) {
-          console.warn("[Gatekeeper] Falha na autenticação Supabase:", authError?.message);
-          setGatekeeperError("Documento ou senha incorretos. Verifique suas credenciais.");
-          toast.error("Documento ou senha incorretos. Verifique suas credenciais.");
-          setIsVerifyingGatekeeper(false);
-          return;
-        }
-      }
-
-      // 3. Validação Concluída com Sucesso!
-      // Busca os dados completos somente após a autenticação bem-sucedida do usuário
-      const { data: fullLead, error: fullError } = await supabase
-        .from("waitlist")
-        .select("*")
-        .eq("id", gatekeeperMeta.id)
-        .maybeSingle();
-
-      if (fullError || !fullLead) {
-        throw new Error("Não foi possível carregar os dados cadastrais.");
-      }
-
-      populateWizardFromLead(fullLead, gatekeeperMeta.telefone || lookupPhone);
-      setIsUnlocked(true);
-      toast.success("Identidade confirmada com sucesso! Acesso liberado.");
-      trackEvent("atualizacao_cadastral_gatekeeper_unlocked", "security", { lead_id: fullLead.id });
-
+      await loadAuthenticatedProfile(authData.user, hintPhone);
+      toast.success("Acesso liberado! Confira e atualize seus dados cadastrais.");
+      trackEvent("atualizacao_cadastral_authenticated", "security", {
+        mode: authMode,
+        user_id: authData.user.id,
+      });
     } catch (err: any) {
-      console.error("[Gatekeeper] Erro durante desbloqueio:", err);
-      setGatekeeperError("Ocorreu um erro ao validar seus dados. Tente novamente ou contate o suporte.");
-      toast.error("Erro ao validar credenciais.");
+      console.error("[AtualizacaoCadastral] Erro durante autenticação:", err);
+      setAuthError("Ocorreu um erro ao validar suas credenciais. Tente novamente.");
+      toast.error("Erro ao autenticar.");
     } finally {
-      setIsVerifyingGatekeeper(false);
+      setIsAuthenticating(false);
     }
   };
 
-    // Inicialização: checa parâmetro tel ou telefone na URL
+  // Inicialização: pré-preenche via ?email=, ?telefone=, ?cnpj= e detecta PF/PJ sem bloquear acesso
   useEffect(() => {
-    const rawParam = searchParams.get("tel") || searchParams.get("telefone") || "";
-    const telDigits = decodeURIComponent(rawParam).replace(/\D/g, "");
+    let cancelled = false;
 
-    if (telDigits && telDigits.length >= 8) {
-      const cleanPhone = (telDigits.startsWith("55") && telDigits.length > 10)
-        ? telDigits.slice(2)
-        : telDigits;
+    const bootstrap = async () => {
+      setLookupState("loading");
+      const rawEmail = (searchParams.get("email") || "").trim().toLowerCase();
+      const rawPhoneParam = searchParams.get("tel") || searchParams.get("telefone") || "";
+      const rawCnpjParam = (searchParams.get("cnpj") || "").replace(/\D/g, "");
+      const rawTipoParam = (searchParams.get("tipo") || "").trim().toLowerCase();
 
-      setLookupPhone(maskPhone(cleanPhone));
-      searchLeadByPhone(cleanPhone);
-    } else {
-      setLookupState("lookup");
-    }
+      const telDigits = decodeURIComponent(rawPhoneParam).replace(/\D/g, "");
+      const cleanPhone =
+        telDigits.startsWith("55") && telDigits.length > 10 ? telDigits.slice(2) : telDigits;
+
+      if (cleanPhone) setHintPhone(cleanPhone);
+      if (rawCnpjParam) {
+        setAuthCnpj(maskCNPJ(rawCnpjParam));
+        setAuthMode("PJ");
+      } else if (rawTipoParam === "pj" || rawTipoParam === "entidade") {
+        setAuthMode("PJ");
+      }
+
+      let resolvedEmail = rawEmail;
+      let resolvedTipo: "PF" | "PJ" | null =
+        rawCnpjParam || rawTipoParam === "pj" || rawTipoParam === "entidade" ? "PJ" : null;
+
+      if (!resolvedEmail && cleanPhone.length >= 8) {
+        try {
+          const { data: resolved } = await supabase.rpc("resolve_cadastral_login_email", {
+            p_telefone: cleanPhone,
+          });
+          if (!cancelled && resolved) {
+            if (typeof resolved.email === "string" && resolved.email.trim()) {
+              resolvedEmail = resolved.email.trim().toLowerCase();
+            }
+            if (resolved.tipo_pessoa === "PJ" || resolved.tipo_pessoa === "PF") {
+              resolvedTipo = resolved.tipo_pessoa;
+            }
+          }
+        } catch {
+          // Nunca bloqueia o usuário se a pré-resolução por telefone falhar
+        }
+      }
+
+      if (cancelled) return;
+
+      if (resolvedEmail) setAuthEmail(resolvedEmail);
+      if (resolvedTipo === "PJ") setAuthMode("PJ");
+      else if (resolvedTipo === "PF") setAuthMode("PF");
+
+      // Se já houver sessão ativa correspondente ao titular (ou acesso direto sem filtro conflitante), entra no wizard
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const sessionEmail = (session?.user?.email || "").trim().toLowerCase();
+        const hasUrlTarget = Boolean(rawEmail || cleanPhone || rawCnpjParam);
+        const matchesUrlTarget = Boolean(resolvedEmail && sessionEmail && sessionEmail === resolvedEmail);
+
+        if (session?.user && (!hasUrlTarget || matchesUrlTarget)) {
+          await loadAuthenticatedProfile(session.user, cleanPhone);
+          return;
+        }
+      } catch {
+        // Fallback defensivo: mostra tela de login
+      }
+
+      if (!cancelled) {
+        setIsUnlocked(false);
+        setLookupState("auth");
+      }
+    };
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams]);
 
   // Lista filtrada de bairros para atuação
@@ -774,49 +887,81 @@ export default function AtualizacaoCadastral() {
         if (rawDigitsTel) updatePayload.telefone = rawDigitsTel;
       }
 
-      // 1. Atualiza na tabela waitlist
-      if (leadRecord?.id) {
-        const { error: wlErr } = await supabase
-          .from("waitlist")
-          .update(updatePayload)
-          .eq("id", leadRecord.id);
+      // 1. Atualiza na tabela usuarios (fonte principal do usuário autenticado)
+      const usuarioUpdatePayload: Record<string, any> = {
+        bairro_residencia: effectiveMatrizOrResidencia || null,
+        bairro_moradia: effectiveMatrizOrResidencia || null,
+        bairro_trabalho: bairrosAtuacao.join(", ") || null,
+        bairros_atuacao: bairrosAtuacao,
+        praias: finalPraias,
+        praias_frequenta: finalPraias.join(", ") || null,
+        regioes: isPJ ? regioesAtuacao : undefined,
+        referral_code: finalSlug || null,
+        chave_pix: chavePix || null,
+        tipo_chave_pix: tipoChavePix || null,
+        possui_mercadopago: possuiMercadoPago,
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...(leadRecord?.metadata || {}),
+          bairro_residencia: effectiveMatrizOrResidencia,
+          bairros_atuacao: bairrosAtuacao,
+          praias: finalPraias,
+          referral_code: finalSlug,
+          cadastro_completo: true,
+          atualizado_em: new Date().toISOString(),
+          ...(isPJ
+            ? {
+                tipo_cadastro: "pj",
+                bairro_matriz: effectiveMatrizOrResidencia,
+                bairros_filiais: bairrosFiliais,
+                regioes_atuacao: regioesAtuacao,
+                nao_atua_praias: naoAtuaPraias,
+              }
+            : {}),
+        },
+      };
 
-        if (wlErr) {
-          console.warn("[AtualizacaoCadastral] Erro no update da waitlist:", wlErr);
-          throw wlErr;
+      if (isPersonalUnlocked) {
+        if (tipoPessoa === "PF") {
+          usuarioUpdatePayload.nome = nome.trim();
+          if (cleanCpf) usuarioUpdatePayload.cpf = cleanCpf;
+        } else {
+          usuarioUpdatePayload.razao_social = razaoSocial.trim();
+          usuarioUpdatePayload.nome = razaoSocial.trim();
+          if (cleanCnpj) usuarioUpdatePayload.cnpj = cleanCnpj;
+          if (responsavelLegal) usuarioUpdatePayload.responsavel_legal = responsavelLegal.trim();
+          if (cpfResponsavel) usuarioUpdatePayload.cpf_responsavel = cpfResponsavel.replace(/\D/g, "");
+        }
+        if (rawDigitsTel) usuarioUpdatePayload.telefone = maskPhone(rawDigitsTel);
+      }
+
+      if (authUserId) {
+        const { error: userErr } = await supabase
+          .from("usuarios")
+          .update(usuarioUpdatePayload)
+          .eq("id", authUserId);
+
+        if (userErr) {
+          console.warn("[AtualizacaoCadastral] Erro ao atualizar public.usuarios:", userErr);
+          throw userErr;
         }
       }
 
-      // 2. Sincronização complementar defensiva na tabela usuarios
-      try {
-        if (rawDigitsTel) {
-          await supabase
-            .from("usuarios")
-            .update({
-              status: "ativo",
-              chave_pix: chavePix || null,
-              tipo_chave_pix: tipoChavePix || null,
-              possui_mercadopago: possuiMercadoPago,
-              metadata: {
-                ...(leadRecord?.metadata || {}),
-                bairro_residencia: effectiveMatrizOrResidencia,
-                bairros_atuacao: bairrosAtuacao,
-                praias: finalPraias,
-                referral_code: finalSlug,
-                cadastro_completo: true,
-                atualizado_em: new Date().toISOString(),
-                ...(isPJ ? {
-                  bairro_matriz: effectiveMatrizOrResidencia,
-                  bairros_filiais: bairrosFiliais,
-                  regioes_atuacao: regioesAtuacao,
-                  nao_atua_praias: naoAtuaPraias,
-                } : {}),
-              },
-            })
-            .eq("telefone", rawDigitsTel);
+      // 2. Sincronização complementar na tabela waitlist (quando o usuário possui registro de fundador)
+      const waitlistId = leadRecord?.waitlist_id || leadRecord?.id;
+      if (waitlistId) {
+        try {
+          const { error: wlErr } = await supabase
+            .from("waitlist")
+            .update(updatePayload)
+            .eq("id", waitlistId);
+
+          if (wlErr) {
+            console.warn("[AtualizacaoCadastral] Aviso no update complementar da waitlist:", wlErr);
+          }
+        } catch (wlCatchErr) {
+          console.warn("[AtualizacaoCadastral] Falha não-bloqueante ao sincronizar waitlist:", wlCatchErr);
         }
-      } catch (uErr) {
-        // Falhas de RLS do lado do cliente são absorvidas pela trigger de banco
       }
 
       // 3. Atualiza senha no Supabase Auth se fornecida
@@ -899,149 +1044,130 @@ export default function AtualizacaoCadastral() {
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Loader2 className="w-10 h-10 text-green animate-spin" />
             <span className="text-xs font-mono text-white/60 tracking-wider">
-              Localizando dados do membro fundador...
+              Preparando ambiente seguro de atualização cadastral...
             </span>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* ESTADO 2: LOCALIZAÇÃO DE LEAD (SEM TELEFONE NA URL OU NÃO ENCONTRADO) */}
+        {/* ESTADO 2: ACESSO SEGURO (PF: E-MAIL+SENHA | ENTIDADE PJ: CNPJ+SENHA) */}
         {/* ========================================================================= */}
-        {lookupState === "lookup" && (
-          <div className="w-full max-w-md mx-auto flex flex-col gap-6 animate-in fade-in duration-300">
-            <div className="text-center flex flex-col items-center">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 border border-green/30 text-green text-[11px] font-mono uppercase tracking-widest font-semibold mb-4">
-                <span className="w-2 h-2 rounded-full bg-green animate-ping" />
-                <span>ETAPA FINAL DE VALIDAÇÃO • MEMBRO FUNDADOR</span>
-              </div>
-              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mb-2">
-                Localize seu cadastro de Fundador
-              </h1>
-              <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed">
-                Digite o número de WhatsApp cadastrado na UBT para puxarmos suas informações e liberar o acesso definitivo.
-              </p>
-            </div>
-
-            <div className="p-6 sm:p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-mono text-white/70 uppercase tracking-wider block mb-2">
-                  Número de WhatsApp:
-                </label>
-                <div className="relative">
-                  <Smartphone className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    value={lookupPhone}
-                    onChange={(e) => {
-                      setLookupPhone(maskPhone(e.target.value));
-                      setLookupError("");
-                    }}
-                    placeholder="(12) 99999-9999"
-                    maxLength={15}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none"
-                  />
-                </div>
-              </div>
-
-              {lookupError && (
-                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{lookupError}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                disabled={isLookingUp || lookupPhone.replace(/\D/g, "").length < 8}
-                onClick={() => {
-                  const clean = lookupPhone.replace(/\D/g, "");
-                  searchLeadByPhone(clean);
-                }}
-                className="w-full py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-green/10"
-              >
-                {isLookingUp ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-navy" />
-                    <span>Localizando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4" />
-                    <span>Continuar</span>
-                  </>
-                )}
-              </button>
-
-              <div className="text-center pt-2">
-                <Link to="/#cadastro-fundadores-cap" className="text-xs text-white/40 hover:text-green underline">
-                  Ainda não se cadastrou? Faça sua inscrição pioneira aqui
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* ESTADO 3: WIZARD DE ATUALIZAÇÃO CADASTRAL EM 4 ETAPAS */}
-        {/* ========================================================================= */}
-        {lookupState === "wizard" && !isUnlocked && (
+        {lookupState === "auth" && (
           <div className="w-full max-w-md mx-auto flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-300">
             <div className="text-center flex flex-col items-center">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-950/40 border border-green/30 text-green text-[11px] font-mono uppercase tracking-widest font-semibold mb-4 shadow-[0_0_15px_rgba(0,255,102,0.15)]">
                 <ShieldCheck className="w-4 h-4 text-green" />
-                <span>AMBIENTE SEGURO • AUTENTICAÇÃO UBT</span>
+                <span>ATUALIZAÇÃO CADASTRAL • ACESSO SEGURO</span>
               </div>
-              
+
               <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green/40 flex items-center justify-center text-green shadow-[0_0_25px_rgba(0,255,102,0.25)] mb-4">
-                <Lock className="w-8 h-8 text-green" />
+                {authMode === "PJ" ? (
+                  <Building2 className="w-8 h-8 text-green" />
+                ) : (
+                  <Lock className="w-8 h-8 text-green" />
+                )}
               </div>
 
               <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-white tracking-tight mb-2">
-                Confirmação de Segurança
+                Acesse seu Cadastro UBT
               </h1>
               <p className="text-xs sm:text-sm text-zinc-400 font-sans leading-relaxed max-w-sm">
-                Para proteger seus dados, confirme a titularidade da sua conta para continuar.
+                {authMode === "PF"
+                  ? "Entre com seu e-mail e senha cadastrados para revisar e atualizar suas informações."
+                  : "Entre com o CNPJ da entidade e a senha cadastrada para atualizar os dados institucionais."}
               </p>
             </div>
 
-            <form onSubmit={handleGatekeeperUnlock} className="p-6 sm:p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-5">
-              {/* Informação contextual do titular sem vazar dados */}
-              <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800 flex items-center justify-between text-xs font-mono">
-                <span className="text-zinc-400">WhatsApp Vinculado:</span>
-                <span className="text-green font-bold">{maskPhone(lookupPhone || gatekeeperMeta?.telefone || "")}</span>
+            <form
+              onSubmit={handleAuthSubmit}
+              className="p-6 sm:p-8 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col gap-5"
+            >
+              {/* Seletor PF vs Entidade / PJ */}
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("PF");
+                    setAuthError("");
+                    setRecoveryEmail(null);
+                    setRecoverySent(false);
+                  }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-display font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    authMode === "PF"
+                      ? "bg-emerald-500/15 text-green border border-green/40 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Pessoa Física</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("PJ");
+                    setAuthError("");
+                    setRecoveryEmail(null);
+                    setRecoverySent(false);
+                  }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-display font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    authMode === "PJ"
+                      ? "bg-emerald-500/15 text-green border border-green/40 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200 border border-transparent"
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>Entidade / PJ</span>
+                </button>
               </div>
 
-              {/* Campo 1: Documento com máscara inteligente */}
-              <div>
-                <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2 flex items-center justify-between">
-                  <span>{gatekeeperMeta?.is_pj ? "CNPJ da Entidade:" : "CPF do Titular:"}</span>
-                  <span className="text-[10px] text-zinc-500 font-sans font-normal">
-                    {gatekeeperMeta?.is_pj ? "CNPJ ou CPF do responsável" : "11 dígitos"}
-                  </span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={gatekeeperDoc}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const digits = val.replace(/\D/g, "");
-                      if (digits.length <= 11 && !gatekeeperMeta?.is_pj) {
-                        setGatekeeperDoc(maskCPF(val));
-                      } else if (digits.length <= 11 && gatekeeperMeta?.is_pj) {
-                        setGatekeeperDoc(maskCPF(val));
-                      } else {
-                        setGatekeeperDoc(maskCNPJ(val));
-                      }
-                      setGatekeeperError("");
-                    }}
-                    placeholder={gatekeeperMeta?.is_pj ? "00.000.000/0000-00 ou CPF" : "000.000.000-00"}
-                    maxLength={18}
-                    autoFocus
-                    className="w-full px-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
-                  />
+              {/* Campo 1: E-mail (PF) ou CNPJ (PJ) */}
+              {authMode === "PF" ? (
+                <div>
+                  <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2">
+                    E-mail Cadastrado:
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={authEmail}
+                      onChange={(e) => {
+                        setAuthEmail(e.target.value);
+                        setAuthError("");
+                      }}
+                      placeholder="seu.email@exemplo.com"
+                      autoComplete="email"
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-sans outline-none transition-all"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-mono text-white/80 uppercase tracking-wider block mb-2 flex items-center justify-between">
+                    <span>CNPJ da Entidade:</span>
+                    <span className="text-[10px] text-zinc-500 font-sans font-normal">
+                      14 dígitos
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <Building2 className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={authCnpj}
+                      onChange={(e) => {
+                        setAuthCnpj(maskCNPJ(e.target.value));
+                        setAuthError("");
+                      }}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Campo 2: Senha com Toggle */}
               <div>
@@ -1049,49 +1175,78 @@ export default function AtualizacaoCadastral() {
                   Senha de Acesso:
                 </label>
                 <div className="relative">
+                  <KeyRound className="w-4 h-4 text-white/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
-                    type={showGatekeeperPassword ? "text" : "password"}
-                    value={gatekeeperPassword}
+                    type={showAuthPassword ? "text" : "password"}
+                    value={authPassword}
                     onChange={(e) => {
-                      setGatekeeperPassword(e.target.value);
-                      setGatekeeperError("");
+                      setAuthPassword(e.target.value);
+                      setAuthError("");
                     }}
                     placeholder="Digite sua senha cadastrada"
-                    className="w-full px-4 py-3 pr-10 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
+                    autoComplete="current-password"
+                    className="w-full pl-10 pr-10 py-3 rounded-xl bg-black border border-zinc-800 focus:border-green text-white text-sm font-mono outline-none transition-all"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowGatekeeperPassword((prev) => !prev)}
+                    onClick={() => setShowAuthPassword((prev) => !prev)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors cursor-pointer"
                     aria-label="Alternar visibilidade da senha"
                   >
-                    {showGatekeeperPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showAuthPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {gatekeeperError && (
-                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex items-start gap-2 animate-in fade-in duration-200">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{gatekeeperError}</span>
+              {authError && (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 flex flex-col gap-2.5 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{authError}</span>
+                  </div>
+                  {recoveryEmail && !recoverySent && (
+                    <button
+                      type="button"
+                      disabled={isSendingRecovery}
+                      onClick={() => void handleSendPasswordRecovery()}
+                      className="self-start px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-green/50 text-zinc-100 hover:text-green text-[11px] font-semibold transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSendingRecovery ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Enviando link...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Enviar link para definir/redefinir senha</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {recoverySent && (
+                    <span className="text-emerald-400 text-[11px] font-semibold">
+                      Link de redefinição enviado! Verifique sua caixa de entrada e spam.
+                    </span>
+                  )}
                 </div>
               )}
 
               {/* Botão de Ação CTA */}
               <button
                 type="submit"
-                disabled={isVerifyingGatekeeper}
+                disabled={isAuthenticating}
                 className="w-full py-3.5 rounded-xl bg-green hover:bg-green-dark text-navy font-display font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-green/20 disabled:opacity-50 disabled:cursor-not-allowed mt-1"
               >
-                {isVerifyingGatekeeper ? (
+                {isAuthenticating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-navy" />
-                    <span>Verificando credenciais...</span>
+                    <span>Validando acesso...</span>
                   </>
                 ) : (
                   <>
                     <Unlock className="w-4 h-4" />
-                    <span>Desbloquear e Continuar</span>
+                    <span>Entrar e Atualizar Cadastro</span>
                   </>
                 )}
               </button>
@@ -1099,26 +1254,19 @@ export default function AtualizacaoCadastral() {
               {/* Links Auxiliares */}
               <div className="flex flex-col items-center gap-2 pt-2 border-t border-zinc-900 text-center">
                 <a
-                  href="https://wa.me/5512997168791?text=Ol%C3%A1%2C%20esqueci%20minha%20senha%20de%20acesso%20ao%20painel%20de%20Fundador%20da%20UBT"
+                  href="https://wa.me/5512997168791?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20minha%20senha%20para%20atualiza%C3%A7%C3%A3o%20cadastral%20na%20UBT"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-zinc-400 hover:text-green underline transition-colors font-sans"
                 >
                   Esqueceu sua senha ou precisa de ajuda? Fale com o suporte UBT
                 </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLookupState("lookup");
-                    setGatekeeperMeta(null);
-                    setGatekeeperDoc("");
-                    setGatekeeperPassword("");
-                    setGatekeeperError("");
-                  }}
-                  className="text-[11px] font-mono text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                <Link
+                  to="/#cadastro-fundadores-cap"
+                  className="text-[11px] font-mono text-zinc-500 hover:text-green transition-colors"
                 >
-                  ← Informar outro número de WhatsApp
-                </button>
+                  Ainda não possui cadastro? Faça sua inscrição aqui
+                </Link>
               </div>
             </form>
           </div>
