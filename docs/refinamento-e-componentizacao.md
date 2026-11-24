@@ -311,3 +311,53 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
 - **Testes:** `npm test -- --run` $\rightarrow$ `21/21` arquivos, `241/241` testes PASS.
 - **Build:** `npm run build` $\rightarrow$ sucesso.
 - **Tag de Release:** `v1.4.0-coco-cia-prod` publicada em `origin/prod`.
+
+
+---
+
+## 8. Pagamentos do Módulo Mototaxistas (PIX Presencial no Motorista, Wallet de Cartões, Repasse de Taxas e Webhook Mercado Pago — `v1.5.0-mototaxi-pagamentos-prod`)
+
+> **Status:** HOMOLOGADO E PROMOVIDO PARA PRODUÇÃO  
+> **Tag de Release:** `v1.5.0-mototaxi-pagamentos-prod`  
+> **Ambientes:** Produção ([ubtservicos.vercel.app](https://ubtservicos.vercel.app) / `bfqidoduceusbqlnrsol`) e Homologação ([ubt-homologacao.vercel.app](https://ubt-homologacao.vercel.app) / `xqujubbqcfqxkfczbidq`)  
+> **Data de Promoção:** 24 de Novembro de 2026  
+
+### 8.1 Migração Idempotente Aplicada (Homologação & Produção — Apenas DDL/RLS/Taxas Padrão)
+
+| Arquivo de Migração | Responsabilidade Principal |
+| :--- | :--- |
+| `20261124120000_mototaxi_payments_wallet_fees_rls.sql` | Registra `taxa_pix` (`0.99%`) e `taxa_cartao` (`4.98%`) via `ON CONFLICT DO NOTHING` em `public.system_settings`; adiciona colunas `base_amount`, `payment_method_fee_pct`, `payment_method_fee_amount` e `payment_method` em `public.pagamentos_split`; cria `public.mp_customer_wallets` com RLS restrita ao dono (`auth.uid() = user_id`) e `service_role`; endurece RLS de `public.mototaxi_corridas` e `public.pagamentos_split` e executa `NOTIFY pgrst, 'reload schema'` / `'reload config'`. |
+
+### 8.2 Cálculo Canônico, Transparência de Taxas ao Tomador e Split Mercado Pago
+- **Taxas dinâmicas (`system_settings` + `FinancialFeeService.ts` + `payment-gateway/index.ts`):**
+  - `taxa_pix` (`0,99%`) e `taxa_cartao` (`4,98%`) são lidas dinamicamente de `public.system_settings` com normalização segura (sem multiplicar percentuais `< 1%` como `0.99` por `100`).
+  - Na tela de pagamento do Passageiro (`MototaxiTomador.tsx` / `CompletedScreen`), são exibidos de forma explícita: **Valor base da corrida**, **Taxa do meio de pagamento arcada pelo Tomador** (comparando PIX vs. Cartão já nos botões de escolha) e **Total a pagar** (`base + taxa`).
+  - No servidor (`supabase/functions/payment-gateway/index.ts`), o valor canônico da corrida é sempre obtido de `public.mototaxi_corridas` (`final_price ?? estimated_price`). O split de 7 vias incide sobre `base_amount`, preservando integralmente **90% líquidos da tarifa base ao Mototaxista** (`prestador_pct`), enquanto `transaction_amount` enviado ao Mercado Pago inclui a taxa do meio de pagamento e `application_fee` (no modo `seller_oauth_split`) equivale a `total_amount - prestador_amount` (cota de 10% do ecossistema + cobertura da taxa do gateway).
+  - O detalhamento financeiro completo é persistido em `public.pagamentos_split` (`base_amount`, `payment_method_fee_pct`, `payment_method_fee_amount`, `payment_method`, `total_amount`, `provider_amount`, `application_fee_amount`).
+
+### 8.3 PIX Presencial Automático no Motorista, `notification_url` e `payment-webhook`
+- **Geração automática e idempotência por tentativa (`PrestadorMototaxiActive.tsx`):**
+  - Ao concluir a corrida (`status = 'completed'`) e o Passageiro selecionar **PIX**, a tela do Motorista dispara automaticamente `create_mototaxi_pix_charge` e exibe em destaque o **QR Code PIX** (PNG base64 do Mercado Pago com fallback SVG), o código Copia e Cola e o valor total com taxa PIX.
+  - Se já existir cobrança PIX pendente e não expirada em `mototaxi_corridas`, ela é reaproveitada; em novas tentativas ou após expiração, um novo `payment_attempt_id` (`crypto.randomUUID()`) é gerado, eliminando colisões de idempotência do antigo `ride.id` fixo.
+  - Removidos o botão de baixa manual no cliente (`UPDATE status = 'paid'`) e o código morto de pagamento em dinheiro (`cash`).
+- **Webhook real e sincronização do Tomador (`payment-gateway`, `payment-webhook`, `MototaxiTomador.tsx`):**
+  - `payment-gateway` envia explicitamente `notification_url` (`MP_WEBHOOK_URL` ou `${supabaseUrl}/functions/v1/payment-webhook`) no payload `POST /v1/payments`.
+  - `payment-webhook` (deployado com `--no-verify-jwt`, autenticado por HMAC-SHA256 `x-signature` + verificação server-side na API do MP) atualiza `pagamentos_split` (`status = 'approved'`, `gateway_status = 'approved'`, `gateway_status_detail`) e `mototaxi_corridas` (`status = 'paid'`, `pix_charge_status = 'approved'`, preservando `final_price` com a tarifa base `base_amount`).
+  - `MototaxiTomador.tsx` trata `status === 'paid'` tanto via Realtime quanto via polling, encerra o polling ao entrar em `rating` e recupera automaticamente corrida ativa ou concluída pendente de pagamento caso a página seja recarregada.
+
+### 8.4 Carteira de Cartões Salvos (Wallet) e Blindagem do `CheckoutUniversal.tsx`
+- **API oficial de Clientes e Cartões do Mercado Pago (`/v1/customers` e `/v1/customers/{customer_id}/cards`):**
+  - `public.mp_customer_wallets` vincula `(user_id, environment, collector_scope)` ao `mp_customer_id`, suportando tanto a rota `seller_oauth_split` quanto `platform_fallback`.
+  - Novas actions autenticadas em `payment-gateway`: `list_saved_cards`, `save_card`, `delete_saved_card`, além de suporte em `create_payment_intent` para pagamento com cartão salvo (`saved_card_id` + `payer.type = "customer"`) e salvamento não-bloqueante de novo cartão após aprovação (`save_card: true` + `save_card_token` separado).
+- **Blindagem e UX em `CheckoutUniversal.tsx`:**
+  - Eliminado o crash síncrono no render quando `VITE_MP_ENVIRONMENT` não está presente no bundle (resolução segura via `get_checkout_config` e fallback por hostname); em Sandbox, aceita credenciais `APP_USR-` e `TEST-` sem falso bloqueio de `live_mode` (mantendo fail-closed em Produção).
+  - Permite alternar entre **Carteira (cartões salvos)** — selecionando cartão salvo e informando apenas o CVV para tokenização via SDK MP (`createCardToken({ cardId, securityCode })`) — e **Novo cartão** (PCI Fields com checkbox para salvar na carteira).
+  - Só avança `onSuccess` quando `status === 'approved'`, trata `in_process`/`pending` como aguardando confirmação assíncrona do webhook e traduz recusas (`status_detail`) do Mercado Pago.
+
+### 8.5 Endurecimento de RLS e Isolamento de Produção (`bfqidoduceusbqlnrsol`)
+- **`public.mototaxi_corridas`:** removidas policies permissivas abertas ao público/anônimos; `UPDATE` autenticado exige participação na corrida e `WITH CHECK (... AND status <> 'paid')`, mantendo promoção para `'paid'` exclusiva de `service_role` (Edge Functions).
+- **`public.pagamentos_split`:** removida a policy de `INSERT` aberto para `authenticated` (escrita restrita a `service_role`).
+- **`public.mp_customer_wallets`:** `SELECT` restrito ao próprio `auth.uid() = user_id` e escrita exclusiva de `service_role`.
+- **Isolamento de ambientes:** Produção (`bfqidoduceusbqlnrsol` / `ubtservicos.vercel.app`) mantém `MP_ENVIRONMENT=production` e credenciais reais exclusivas, sem qualquer secret ou dado de Sandbox/Homologação (`xqujubbqcfqxkfczbidq`).
+- **Edge Functions em Produção:** `payment-gateway` (`v10`, `ACTIVE`, `verify_jwt: true`) e `payment-webhook` (`v5`, `ACTIVE`, `verify_jwt: false`).
+- **Validação & Release (`v1.5.0-mototaxi-pagamentos-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.

@@ -77,6 +77,9 @@ CREATE POLICY "service_role full access mp_customer_wallets"
   USING (true)
   WITH CHECK (true);
 
+GRANT SELECT ON public.mp_customer_wallets TO authenticated;
+GRANT ALL ON public.mp_customer_wallets TO service_role;
+
 -- 4. Harden RLS on public.mototaxi_corridas (remove open OR true policies and block client paid promotion)
 ALTER TABLE public.mototaxi_corridas ENABLE ROW LEVEL SECURITY;
 
@@ -87,6 +90,7 @@ DROP POLICY IF EXISTS "Acesso a corridas próprias ou em busca ou admin" ON publ
 DROP POLICY IF EXISTS "mototaxi_corridas_select_policy" ON public.mototaxi_corridas;
 DROP POLICY IF EXISTS "mototaxi_corridas_insert_policy" ON public.mototaxi_corridas;
 DROP POLICY IF EXISTS "mototaxi_corridas_update_policy" ON public.mototaxi_corridas;
+DROP POLICY IF EXISTS "mototaxi_corridas_service_policy" ON public.mototaxi_corridas;
 DROP POLICY IF EXISTS "mototaxi_corridas_service_role_all" ON public.mototaxi_corridas;
 
 CREATE POLICY "mototaxi_corridas_select_policy"
@@ -137,3 +141,7 @@ CREATE POLICY "mototaxi_corridas_service_role_all"
 
 -- 5. Harden RLS on public.pagamentos_split (remove open authenticated INSERT)
 DROP POLICY IF EXISTS "Inserção de splits por usuários autenticados" ON public.pagamentos_split;
+
+-- 6. Reload PostgREST schema & config cache
+NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload config';
