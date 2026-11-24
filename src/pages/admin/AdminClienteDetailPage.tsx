@@ -2,11 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Star,
   Mail,
   Phone,
   Calendar,
-  Clock,
   Shield,
   CreditCard,
   Copy,
@@ -17,63 +15,57 @@ import {
   Home,
   Loader2,
   Users,
-  User,
   Handshake,
+  Ban,
+  ShieldCheck,
+  Trash2,
+  MessageCircle,
+  KeyRound,
+  Award,
+  Gift,
+  Link2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
-import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
+import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import AdminPixQuickEditor from "@/components/admin/AdminPixQuickEditor";
+import {
+  DeleteClientAlertModal,
+  BlockClientModal,
+  WhatsAppClientModal,
+  isUserBlockedActive,
+  formatBlockedSummary,
+  type AdminActionClientTarget,
+} from "@/components/admin/AdminClienteActionsModals";
 import { supabase } from "@/lib/supabase";
 import { getAppOrigin } from "@/lib/appUrl";
-import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
-import { maskCPF } from "@/utils/masks";
+import { maskCPF, generateReferralSlug } from "@/utils/masks";
 
-interface OrderItem {
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+interface ApadrinhadoItem {
   id: string;
-  created_at: string;
-  total: number;
+  nome: string;
+  tipo_cadastro: string;
   status: string;
-  modalidade: string;
-  type: "entrada" | "saida"; // Custom type for display
-  description: string;
+  cadastro_completo: boolean;
+  criado_em: string;
 }
 
-interface DetailUser {
-  id: string;
-  name: string;
-  role: "tomador" | "prestador" | string;
-  cpf?: string;
-  email: string;
-  phone: string;
-  bairro_moradia?: string;
-  bairro_trabalho?: string;
-  praias_frequenta?: string;
-  referral_code?: string;
-  createdAt: string;
-  kycStatus?: "approved" | "pending" | "rejected";
-  services?: string[];
-  associacao?: string | null;
-  plate?: string;
-  rating?: number | null;
-  totalRides?: number;
-  pagos: number;
-  recebidos: number;
-  ticketsTrabalhador?: number;
-  ticketsConsumidor?: number;
-  contribComunidade?: number;
-}
-
-const formatBR = (n: number) =>
-  "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const STATUS_PILL: Record<string, { bg: string; color: string; label: string }> = {
-  completed: { bg: "rgba(13,184,126,0.10)", color: "#0DB87E", label: "Concluído" },
-  confirmed: { bg: "rgba(13,184,126,0.10)", color: "#0DB87E", label: "Confirmado" },
-  pending: { bg: "rgba(245,166,35,0.10)", color: "#F5A623", label: "Pendente" },
-  cancelled: { bg: "rgba(232,64,64,0.08)", color: "#E84040", label: "Cancelado" },
-  rating: { bg: "rgba(13,184,126,0.10)", color: "#0DB87E", label: "Concluído (Avaliado)" },
-  preparing: { bg: "rgba(43,110,232,0.10)", color: "#2B6EE8", label: "Preparando" },
-  ready: { bg: "rgba(43,110,232,0.10)", color: "#2B6EE8", label: "Pronto" },
+const getBirthMonth = (id: string, dataNascimento?: string | null) => {
+  if (dataNascimento) {
+    const parsed = new Date(dataNascimento);
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed.getUTCMonth() + 1;
+    }
+  }
+  let sum = 0;
+  for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
+  return (sum % 12) + 1;
 };
 
 export default function AdminClienteDetailPage() {
@@ -88,1336 +80,853 @@ export default function AdminClienteDetailPage() {
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
   const [associacaoNome, setAssociacaoNome] = useState<string | null>(null);
-  const [dbOrders, setDbOrders] = useState<any[]>([]);
-  const [filterPeriod, setFilterPeriod] = useState<string>("all");
-  const [loading, setLoading] = useState(true);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
-
-  // Estados para Código de Indicação Personalizado (Vanity Slug)
-  const [customRefCode, setCustomRefCode] = useState<string>("");
-  const [isSavingRefCode, setIsSavingRefCode] = useState(false);
-  const [refCodeStatus, setRefCodeStatus] = useState<"idle" | "saved">("idle");
-  const [refCodeError, setRefCodeError] = useState("");
-
-  interface ApadrinhadoItem {
-    id: string;
-    nome: string;
-    tipo_cadastro: string;
-    status: string;
-    cadastro_completo: boolean;
-    criado_em: string;
-  }
-
+  const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
+  const [mpConnected, setMpConnected] = useState<boolean>(false);
+  const [dbPedidos, setDbPedidos] = useState<any[]>([]);
   const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
   const [loadingApadrinhados, setLoadingApadrinhados] = useState(false);
-  const [saldoContingenciado, setSaldoContingenciado] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const handleCopyLink = async (text: string, type: string) => {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [customRefCode, setCustomRefCode] = useState<string>("");
+  const [isSavingRefCode, setIsSavingRefCode] = useState(false);
+  const [refCodeError, setRefCodeError] = useState("");
+
+  // Action modals
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+
+  const handleCopy = async (text: string, key: string, label = "Copiado!") => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedLink(type);
-      toast.show("Link copiado para a área de transferência! ✓");
-      setTimeout(() => setCopiedLink(null), 2500);
-    } catch (err) {
-      console.error("Erro ao copiar link:", err);
-      toast.show("Erro ao copiar link.");
-    }
-  };
-
-  const handleSaveReferralCode = async () => {
-    if (!id) return;
-    const cleanCode = customRefCode.trim().toLowerCase();
-
-    if (!cleanCode) {
-      setRefCodeError("Informe um código de indicação.");
-      return;
-    }
-
-    if (cleanCode.length < 3 || cleanCode.length > 40) {
-      setRefCodeError("O código deve ter entre 3 e 40 caracteres.");
-      return;
-    }
-
-    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cleanCode)) {
-      setRefCodeError("Use apenas letras minúsculas, números e hífens.");
-      return;
-    }
-
-    setIsSavingRefCode(true);
-    setRefCodeError("");
-
-    try {
-      // 1. Tentar chamar a RPC set_user_referral_code
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc("set_user_referral_code", {
-        p_user_id: id,
-        p_code: cleanCode,
-      });
-
-      if (!rpcErr && rpcRes) {
-        if (rpcRes.success === false) {
-          setRefCodeError(rpcRes.error || "Código de indicação indisponível.");
-          setIsSavingRefCode(false);
-          return;
-        }
-      } else {
-        // Fallback: validação direta no banco
-        const { data: existingUser } = await supabase
-          .from("usuarios")
-          .select("id")
-          .ilike("referral_code", cleanCode)
-          .neq("id", id)
-          .maybeSingle();
-
-        if (existingUser) {
-          setRefCodeError("Este código já está em uso por outro usuário.");
-          setIsSavingRefCode(false);
-          return;
-        }
-
-        const { data: existingWl } = await supabase
-          .from("waitlist")
-          .select("id")
-          .ilike("referral_code", cleanCode)
-          .neq("id", id)
-          .maybeSingle();
-
-        if (existingWl) {
-          setRefCodeError("Este código já está em uso na lista de espera.");
-          setIsSavingRefCode(false);
-          return;
-        }
-
-        const { error: updErr } = await supabase
-          .from("usuarios")
-          .update({ referral_code: cleanCode })
-          .eq("id", id);
-
-        if (updErr) throw updErr;
-
-        if (dbWaitlist?.id) {
-          await supabase
-            .from("waitlist")
-            .update({ referral_code: cleanCode })
-            .eq("id", dbWaitlist.id);
-        }
-      }
-
-      setDbUser((prev: any) => (prev ? { ...prev, referral_code: cleanCode } : prev));
-      setRefCodeStatus("saved");
-      toast.show("Código de indicação atualizado com sucesso! ✓");
-      setTimeout(() => setRefCodeStatus("idle"), 3000);
-    } catch (err: any) {
-      console.error("Erro ao salvar código de indicação:", err);
-      setRefCodeError(err.message || "Erro ao salvar código.");
-    } finally {
-      setIsSavingRefCode(false);
-    }
-  };
-
-  const fetchUserDetail = async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      // 1. Buscar usuário
-      const { data: userData, error: errUser } = await supabase
-        .from("usuarios")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (errUser) throw errUser;
-      if (!userData) {
-        setDbUser(null);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Buscar profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      // Buscar waitlist correspondente se existir
-      let waitlistRow = null;
-      try {
-        const emailFilter = userData?.email || profileData?.email;
-        const phoneFilter = userData?.telefone || userData?.phone || profileData?.phone;
-        const orClauses = [];
-        if (emailFilter) orClauses.push(`email.eq.${emailFilter}`);
-        if (phoneFilter) orClauses.push(`telefone.eq.${phoneFilter}`);
-        if (orClauses.length > 0) {
-          const { data: wlData } = await supabase
-            .from("waitlist")
-            .select("*")
-            .or(orClauses.join(","))
-            .maybeSingle();
-          waitlistRow = wlData;
-        }
-      } catch (wlErr) {
-        console.warn("Aviso ao buscar dados complementares de waitlist:", wlErr);
-      }
-
-      // 3. Buscar mototáxi
-      const { data: motoData } = await supabase
-        .from("prestador_mototaxi")
-        .select("kyc_status, modalidade, plate, is_online")
-        .eq("user_id", id)
-        .maybeSingle();
-
-      // 4. Buscar diarista
-      const { data: diaristaData } = await supabase
-        .from("diarista_perfis")
-        .select("rating, total_servicos")
-        .eq("user_id", id)
-        .maybeSingle();
-
-      // 5. Buscar caminhão
-      const { data: caminhaoData } = await supabase
-        .from("coco_caminhoes")
-        .select("plate, status_aprovacao")
-        .eq("prestador_id", id)
-        .maybeSingle();
-
-      // 6. Buscar associação
-      let assocName: string | null = null;
-      const { data: provAssoc } = await supabase
-        .from("provider_associations")
-        .select("association_id")
-        .eq("provider_id", id)
-        .maybeSingle();
-
-      const { data: membAssoc } = await supabase
-        .from("associacao_membros")
-        .select("association_id")
-        .eq("prestador_id", id)
-        .maybeSingle();
-
-      const assocId = provAssoc?.association_id || membAssoc?.association_id;
-      if (assocId) {
-        const { data: assocData } = await supabase
-          .from("associations")
-          .select("name")
-          .eq("id", assocId)
-          .maybeSingle();
-        if (assocData) assocName = assocData.name;
-      }
-
-      // 7. Buscar pedidos relacionados
-      const { data: dbPedidos, error: errPedidos } = await supabase
-        .from("pedidos")
-        .select("*")
-        .or(`tomador_id.eq.${id},prestador_id.eq.${id}`)
-        .order("created_at", { ascending: false });
-
-      if (errPedidos) throw errPedidos;
-
-      setDbUser(userData);
-      setDbProfile(profileData);
-      setDbWaitlist(waitlistRow);
-      setMototaxi(motoData);
-      setCaminhao(caminhaoData);
-      setDiarista(diaristaData);
-      setAssociacaoNome(assocName);
-      setDbOrders(dbPedidos || []);
-      const initialRef = userData?.referral_code || waitlistRow?.referral_code || profileData?.referral_code || "";
-      if (initialRef) {
-        setCustomRefCode(initialRef);
-      }
-
-      // 8. Buscar apadrinhados deste usuário via RPC
-      try {
-        setLoadingApadrinhados(true);
-        const { data: apadData, error: apadErr } = await supabase.rpc("obter_meus_apadrinhados", {
-          p_padrinho_id: id,
-        });
-        const { data: resumoData } = await supabase.rpc("obter_resumo_financeiro_apadrinhamento", {
-          p_padrinho_id: id,
-        });
-        if (resumoData && typeof (resumoData as any).total_contingenciado === "number") {
-          setSaldoContingenciado(Number((resumoData as any).total_contingenciado || 0));
-        }
-        if (!apadErr && apadData) {
-          setApadrinhados(apadData as ApadrinhadoItem[]);
-        }
-      } catch (errApad) {
-        console.warn("Erro ao buscar apadrinhados do cliente:", errApad);
-      } finally {
-        setLoadingApadrinhados(false);
-      }
-    } catch (err) {
-      console.error("Erro ao carregar detalhes do usuário:", err);
-      toast.show("Erro ao carregar detalhes do usuário.");
-    } finally {
-      setLoading(false);
+      setCopiedKey(key);
+      toast.show(`${label} ✓`);
+      setTimeout(() => setCopiedKey(null), 2200);
+    } catch {
+      toast.show("Não foi possível copiar.");
     }
   };
 
   useEffect(() => {
-    fetchUserDetail();
+    const fetchUserDetail = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const { data: userData, error: errUser } = await supabase
+          .from("usuarios")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (errUser) throw errUser;
+        if (!userData) {
+          setDbUser(null);
+          setLoading(false);
+          return;
+        }
+
+        const [
+          profileRes,
+          motoRes,
+          diaristaRes,
+          caminhaoRes,
+          provAssocRes,
+          membAssocRes,
+          pedidosRes,
+          mpAccountRes,
+        ] = await Promise.allSettled([
+          supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
+          supabase.from("prestador_mototaxi").select("kyc_status, modalidade, plate, is_online").eq("user_id", id).maybeSingle(),
+          supabase.from("diarista_perfis").select("rating, total_servicos").eq("user_id", id).maybeSingle(),
+          supabase.from("coco_caminhoes").select("plate, status_aprovacao").eq("prestador_id", id).maybeSingle(),
+          supabase.from("provider_associations").select("association_id").eq("provider_id", id).maybeSingle(),
+          supabase.from("associacao_membros").select("association_id").eq("prestador_id", id).maybeSingle(),
+          supabase.from("pedidos").select("id, tomador_id, prestador_id, status").or(`tomador_id.eq.${id},prestador_id.eq.${id}`),
+          supabase.from("marketplace_accounts").select("id, status").eq("user_id", id).eq("status", "CONNECTED").limit(1),
+        ]);
+
+        const profileData = profileRes.status === "fulfilled" ? profileRes.value.data : null;
+        const motoData = motoRes.status === "fulfilled" ? motoRes.value.data : null;
+        const diaristaData = diaristaRes.status === "fulfilled" ? diaristaRes.value.data : null;
+        const caminhaoData = caminhaoRes.status === "fulfilled" ? caminhaoRes.value.data : null;
+        const provAssoc = provAssocRes.status === "fulfilled" ? provAssocRes.value.data : null;
+        const membAssoc = membAssocRes.status === "fulfilled" ? membAssocRes.value.data : null;
+        const pedidosData = pedidosRes.status === "fulfilled" ? pedidosRes.value.data || [] : [];
+        const mpAccounts = mpAccountRes.status === "fulfilled" ? mpAccountRes.value.data || [] : [];
+
+        // Waitlist complementar
+        let waitlistRow: any = null;
+        try {
+          const emailFilter = userData?.email || profileData?.email;
+          const phoneFilter = userData?.telefone || userData?.phone || profileData?.phone;
+          const orClauses: string[] = [];
+          if (emailFilter) orClauses.push(`email.eq.${emailFilter}`);
+          if (phoneFilter) orClauses.push(`telefone.eq.${phoneFilter}`);
+          if (orClauses.length > 0) {
+            const { data: wlData } = await supabase
+              .from("waitlist")
+              .select("*")
+              .or(orClauses.join(","))
+              .maybeSingle();
+            waitlistRow = wlData;
+          }
+        } catch {
+          // noop
+        }
+
+        // Associação
+        let assocName: string | null = null;
+        const assocId = provAssoc?.association_id || membAssoc?.association_id;
+        if (assocId) {
+          const { data: assocData } = await supabase
+            .from("associations")
+            .select("name")
+            .eq("id", assocId)
+            .maybeSingle();
+          if (assocData?.name) assocName = assocData.name;
+        }
+
+        // Padrinho
+        const padrinhoId = userData.padrinho_id || waitlistRow?.padrinho_id || null;
+        let padrinhoLabel: string | null = null;
+        if (padrinhoId) {
+          const { data: padRow } = await supabase
+            .from("usuarios")
+            .select("nome, razao_social, referral_code")
+            .eq("id", padrinhoId)
+            .maybeSingle();
+          if (padRow) {
+            padrinhoLabel = padRow.nome || padRow.razao_social || padRow.referral_code || "Padrinho UBT";
+          }
+        }
+
+        setDbUser(userData);
+        setDbProfile(profileData);
+        setDbWaitlist(waitlistRow);
+        setMototaxi(motoData);
+        setDiarista(diaristaData);
+        setCaminhao(caminhaoData);
+        setAssociacaoNome(assocName);
+        setPadrinhoNome(padrinhoLabel);
+        setDbPedidos(pedidosData);
+        setMpConnected(
+          Boolean(mpAccounts.length > 0) ||
+            Boolean(userData.possui_mercadopago) ||
+            Boolean(userData.metadata?.possui_mercado_pago) ||
+            Boolean(userData.metadata?.possui_conta_mercado_pago),
+        );
+
+        const initialRef =
+          userData?.referral_code ||
+          waitlistRow?.referral_code ||
+          waitlistRow?.slug ||
+          profileData?.referral_code ||
+          "";
+        setCustomRefCode(initialRef);
+
+        // Apadrinhados (apenas dados cadastrais, sem valores financeiros)
+        setLoadingApadrinhados(true);
+        try {
+          const { data: apadData, error: apadErr } = await supabase.rpc("obter_meus_apadrinhados", {
+            p_padrinho_id: id,
+          });
+          if (!apadErr && Array.isArray(apadData)) {
+            setApadrinhados(apadData as ApadrinhadoItem[]);
+          } else {
+            setApadrinhados([]);
+          }
+        } catch {
+          setApadrinhados([]);
+        } finally {
+          setLoadingApadrinhados(false);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar ficha cadastral do cliente:", err);
+        toast.show("Erro ao carregar informações do cliente.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchUserDetail();
   }, [id]);
 
-  const { orders, user } = useMemo(() => {
-    if (!dbUser) return { orders: [], user: null };
+  const client = useMemo(() => {
+    if (!dbUser) return null;
 
-    const now = new Date();
-    const filtered = dbOrders.filter((p: any) => {
-      if (filterPeriod === "all") return true;
-      const pDate = new Date(p.created_at);
-      const diffTime = now.getTime() - pDate.getTime();
-      const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      if (filterPeriod === "today") return diffDays <= 1;
-      if (filterPeriod === "week") return diffDays <= 7;
-      if (filterPeriod === "month") return diffDays <= 30;
-      if (filterPeriod === "year") return diffDays <= 365;
-      return true;
-    });
-
-    const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
-
-    const pagos = filtered
-      .filter((p: any) => p.tomador_id === id && validStatuses.includes(p.status))
-      .reduce((acc: number, p: any) => acc + Number(p.total || 0), 0);
-
-    const recebidos = filtered
-      .filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status))
-      .reduce((acc: number, p: any) => acc + Number(p.total || 0), 0);
-
-    const isColab = dbUser.role === "cocoecia-colaborador" || dbUser.role === "cocoecia-dirigentes" || dbUser.role === "cocoecia";
+    const isColab =
+      dbUser.role === "cocoecia-colaborador" ||
+      dbUser.role === "cocoecia-dirigentes" ||
+      dbUser.role === "cocoecia";
 
     const services: string[] = [];
     if (mototaxi && mototaxi.kyc_status === "approved") {
       services.push(mototaxi.modalidade === "entrega" ? "Entrega" : "Mototáxi");
     }
-    if (diarista) {
-      services.push("Diarista");
-    }
+    if (diarista) services.push("Diarista");
     if (isColab || (caminhao && caminhao.status_aprovacao === "approved")) {
       services.push("Reciclagem");
     }
 
-    let kycStatus: "approved" | "pending" | "rejected" | undefined = undefined;
-    if (mototaxi) {
-      kycStatus = mototaxi.kyc_status;
-    } else if (caminhao) {
-      kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
-    } else if (diarista) {
-      kycStatus = "approved";
-    } else if (dbUser.role === "prestador" || isColab) {
-      kycStatus = "pending";
-    }
+    let kycStatus: "approved" | "pending" | "rejected" | undefined;
+    if (mototaxi) kycStatus = mototaxi.kyc_status;
+    else if (caminhao) kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
+    else if (diarista) kycStatus = "approved";
+    else if (dbUser.role === "prestador" || isColab) kycStatus = "pending";
 
-    const ratingVal = diarista ? Number(diarista.rating || 5.0) : null;
-    const totalRidesVal = diarista ? Number(diarista.total_servicos || 0) : undefined;
-
-    const ticketsConsumidor = filtered.filter((p: any) => p.tomador_id === id && validStatuses.includes(p.status)).length;
-    const ticketsTrabalhador = (dbUser.role === "prestador" || isColab || diarista || mototaxi)
-      ? filtered.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length
-      : 0;
-    const contribComunidade = (pagos + recebidos) * 0.01;
+    const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
+    const ticketsConsumidor = dbPedidos.filter(
+      (p: any) => p.tomador_id === id && validStatuses.includes(p.status),
+    ).length;
+    const ticketsTrabalhador =
+      dbUser.role === "prestador" || isColab || diarista || mototaxi
+        ? dbPedidos.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length
+        : 0;
 
     const name = dbUser.nome || dbUser.razao_social || dbProfile?.name || "Sem nome";
     const email = dbUser.email || dbProfile?.email || "Não informado";
     const phone = dbUser.telefone || dbProfile?.phone || dbUser.phone || "Não cadastrado";
     const rawCpf = dbProfile?.cpf || dbUser?.cpf || dbWaitlist?.cpf || null;
     const cpf = rawCpf ? maskCPF(rawCpf) : "Não informado";
+    const dataNascimento =
+      dbUser.metadata?.data_nascimento ||
+      dbWaitlist?.data_nascimento ||
+      dbProfile?.data_nascimento ||
+      null;
+    const birthMonth = getBirthMonth(dbUser.id, dataNascimento);
 
-    const extractPraias = (obs?: string | null) => {
-      if (!obs) return null;
-      const match = obs.match(/Praias:\s*([^|]+)/i);
-      return match ? match[1].trim() : null;
-    };
+    const isCadastroCompleto =
+      dbUser.cadastro_completo === true ||
+      dbUser.metadata?.cadastro_completo === true ||
+      dbWaitlist?.cadastro_completo === true;
+    const isPendente =
+      dbUser.status === "pendente_aprovacao" ||
+      dbUser.status === "pending" ||
+      dbWaitlist?.status === "pendente_aprovacao" ||
+      dbWaitlist?.status === "pending";
 
-    const bairroMoradia = dbProfile?.bairro_moradia || dbUser?.bairro_moradia || dbWaitlist?.bairro_moradia || null;
-    const bairroTrabalho = dbProfile?.bairro_trabalho || dbUser?.bairro_trabalho || dbWaitlist?.bairro_trabalho || null;
-    const praiasFrequenta = dbProfile?.praias_frequenta || dbUser?.praias_frequenta || extractPraias(dbWaitlist?.observacoes) || null;
+    const slug =
+      dbUser.referral_code ||
+      dbWaitlist?.referral_code ||
+      dbWaitlist?.slug ||
+      dbUser.metadata?.referral_code ||
+      generateReferralSlug(name, dbUser.cpf || dbUser.id);
 
-    const currentRefCode = dbUser?.referral_code || dbWaitlist?.referral_code || dbProfile?.referral_code || "";
+    const bairroMoradia =
+      dbProfile?.bairro_moradia || dbUser?.bairro_moradia || dbUser?.bairro_residencia || dbUser?.bairro || dbWaitlist?.bairro_moradia || null;
+    const bairroTrabalho =
+      dbProfile?.bairro_trabalho || dbUser?.bairro_trabalho || dbWaitlist?.bairro_trabalho || null;
+    const cidade = dbUser.metadata?.cidade || dbProfile?.cidade || "Ubatuba - SP";
+    const endereco = dbUser.metadata?.endereco || dbProfile?.endereco || null;
+    const praiasFrequenta =
+      dbProfile?.praias_frequenta ||
+      dbUser?.praias_frequenta ||
+      (Array.isArray(dbUser?.praias) && dbUser.praias.length > 0 ? dbUser.praias.join(", ") : null);
 
-    const detailUser: DetailUser = {
+    const chavePix = String(
+      dbUser.chave_pix || dbProfile?.pix_key || dbWaitlist?.chave_pix || dbWaitlist?.pix_chave || "",
+    ).trim();
+    const tipoChavePix = String(dbUser.tipo_chave_pix || dbWaitlist?.tipo_chave_pix || "").trim();
+
+    const isBlocked = Boolean(dbUser.is_blocked);
+    const blockedUntil = dbUser.blocked_until || null;
+    const blockDurationLabel = dbUser.block_duration_label || null;
+    const blockedReason = dbUser.blocked_reason || null;
+
+    return {
       id: dbUser.id,
       name,
-      role: (dbUser.role && (dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador")) || services.length > 0 ? "prestador" : "tomador",
-      cpf,
       email,
       phone,
-      bairro_moradia: bairroMoradia,
-      bairro_trabalho: bairroTrabalho,
-      praias_frequenta: praiasFrequenta,
-      referral_code: currentRefCode,
+      cpf,
+      dataNascimento,
+      birthMonth,
+      role:
+        (dbUser.role && (dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador")) ||
+        services.length > 0
+          ? "prestador"
+          : "tomador",
+      rawRole: dbUser.role || "tomador",
+      slug,
       createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
+      isCadastroCompleto,
+      isPendente,
       kycStatus,
       services,
       associacao: associacaoNome,
-      plate: mototaxi?.plate || caminhao?.plate || undefined,
-      rating: ratingVal,
-      totalRides: totalRidesVal,
-      pagos,
-      recebidos,
+      coletivoParticipa: Boolean(associacaoNome) || ticketsConsumidor + ticketsTrabalhador > 0,
+      padrinhoNome,
       ticketsConsumidor,
       ticketsTrabalhador,
-      contribComunidade,
+      cidade,
+      bairroMoradia,
+      bairroTrabalho,
+      endereco,
+      praiasFrequenta,
+      chavePix,
+      tipoChavePix,
+      hasPix: Boolean(chavePix),
+      mpConnected,
+      isBlocked,
+      blockedUntil,
+      blockDurationLabel,
+      blockedReason,
+      isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
     };
+  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, dbPedidos, mpConnected, id]);
 
-    const mappedOrders: OrderItem[] = filtered.map((p: any) => {
-      const isOut = p.tomador_id === id;
-      return {
-        id: p.id,
-        created_at: p.created_at,
-        total: Number(p.total || 0),
-        status: p.status,
-        modalidade: p.modalidade || "Geral",
-        type: isOut ? "saida" : "entrada",
-        description: isOut
-          ? `Pagamento de serviço (${p.modalidade === "delivery" ? "Ambulante" : "Mototaxi"})`
-          : `Recebimento de serviço (${p.modalidade === "delivery" ? "Ambulante" : "Mototaxi"})`,
-      };
-    });
-
-    return { orders: mappedOrders, user: detailUser };
-  }, [dbUser, dbProfile, dbOrders, mototaxi, diarista, caminhao, associacaoNome, filterPeriod, id]);
-
-  const setKyc = async (status: "approved" | "rejected") => {
-    if (!dbUser) return;
-    try {
-      const newRole = status === "approved" ? "prestador" : "tomador";
-      const { error } = await supabase
-        .from("usuarios")
-        .update({ role: newRole })
-        .eq("id", dbUser.id);
-
-      if (error) throw error;
-
-      setDbUser((prev: any) => prev ? { ...prev, role: newRole } : null);
-      toast.show(status === "approved" ? "KYC aprovado! Papel atualizado para Prestador." : "KYC reprovado.");
-    } catch (e) {
-      console.error("Erro ao atualizar KYC:", e);
-      toast.show("Erro ao atualizar status do KYC.");
-    }
-  };
-
-  const [userStatus, setUserStatus] = useState<string>("active");
-  const [rules, setRules] = useState<StatusRule[]>([]);
-
-  useEffect(() => {
-    if (dbUser) {
-      setUserStatus(dbUser.status || "active");
-    }
-    setRules(getStatusRules());
-  }, [dbUser]);
-
-  const changeStatus = async (newStatus: string) => {
+  const handleSaveReferralCode = async () => {
     if (!id) return;
+    const cleanCode = customRefCode.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
+    if (!cleanCode || cleanCode.length < 3 || cleanCode.length > 40) {
+      setRefCodeError("O slug deve ter entre 3 e 40 caracteres (letras minúsculas, números e hífens).");
+      return;
+    }
+    setIsSavingRefCode(true);
+    setRefCodeError("");
     try {
-      const { error } = await supabase
-        .from("usuarios")
-        .update({ status: newStatus })
-        .eq("id", id);
-
-      if (error) throw error;
-      setUserStatus(newStatus);
-      toast.show("Status do usuário alterado com sucesso!");
-    } catch (e) {
-      console.error("Erro ao alterar status:", e);
-      toast.show("Erro ao alterar status no banco.");
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("set_user_referral_code", {
+        p_user_id: id,
+        p_code: cleanCode,
+      });
+      if (!rpcErr && rpcRes && rpcRes.success === false) {
+        setRefCodeError(rpcRes.error || "Slug indisponível.");
+        return;
+      }
+      if (rpcErr) {
+        const { error: updErr } = await supabase
+          .from("usuarios")
+          .update({ referral_code: cleanCode })
+          .eq("id", id);
+        if (updErr) throw updErr;
+      }
+      setDbUser((prev: any) => (prev ? { ...prev, referral_code: cleanCode } : prev));
+      setCustomRefCode(cleanCode);
+      toast.show("Slug UBT atualizado com sucesso! ✓");
+    } catch (err: any) {
+      setRefCodeError(err?.message || "Erro ao salvar slug.");
+    } finally {
+      setIsSavingRefCode(false);
     }
   };
 
   if (loading) {
     return (
-      <div style={{ padding: 32, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
-        <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)" }}>Carregando informações do usuário...</div>
+      <div style={{ padding: 48, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", gap: 10, color: "#9CA3AF" }}>
+        <Loader2 size={18} className="animate-spin text-emerald-400" />
+        <span>Carregando ficha cadastral do cliente...</span>
       </div>
     );
   }
 
-  if (!user) {
+  if (!client) {
     return (
       <div style={{ padding: 32 }}>
         <button
+          type="button"
           onClick={() => navigate("/admin/clientes")}
-          style={{
-            background: "none",
-            border: "none",
-            color: "var(--admin-subtle)",
-            fontFamily: "DM Sans",
-            fontSize: 14,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            cursor: "pointer",
-            marginBottom: 20,
-          }}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-white mb-6"
         >
-          <ArrowLeft size={16} /> Voltar para clientes
+          <ArrowLeft size={16} /> Voltar para Cadastro de Clientes
         </button>
-        <Card style={{ padding: 40, textAlign: "center" }}>
-          <div style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "#E84040" }}>Usuário não encontrado</div>
-          <div style={{ fontFamily: "DM Sans", color: "var(--admin-muted)", marginTop: 8 }}>O ID solicitado não existe no sistema.</div>
+        <Card style={{ padding: 40, textAlign: "center", background: "#111827", border: "1px solid rgba(239,68,68,0.35)" }}>
+          <div className="font-display text-lg font-bold text-red-400">Cliente não encontrado</div>
+          <div className="text-sm text-zinc-400 mt-2">O registro solicitado não existe ou foi removido.</div>
         </Card>
       </div>
     );
   }
 
+  const actionTarget: AdminActionClientTarget = {
+    id: client.id,
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+    slug: client.slug,
+    isBlocked: client.isBlocked,
+    blockedUntil: client.blockedUntil,
+    blockDurationLabel: client.blockDurationLabel,
+    blockedReason: client.blockedReason,
+  };
+
+  const sectionCardStyle = {
+    padding: 22,
+    background: "#111827",
+    border: "1px solid rgba(16,185,129,0.22)",
+    borderRadius: 16,
+  } as const;
+
+  const fieldRow = (icon: React.ReactNode, label: string, value: React.ReactNode) => (
+    <div className="flex items-start gap-3 py-2 border-b border-white/[0.06] last:border-none">
+      <div className="mt-0.5 text-emerald-400/80 shrink-0">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">{label}</div>
+        <div className="text-[14px] text-zinc-100 font-medium mt-0.5 break-words">{value}</div>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ padding: "32px 24px", maxWidth: 1200, margin: "0 auto" }}>
-      {/* Back button */}
-      <button
-        onClick={() => navigate("/admin/clientes")}
-        style={{
-          background: "none",
-          border: "none",
-          color: "var(--admin-subtle)",
-          fontFamily: "DM Sans",
-          fontSize: 14,
-          fontWeight: 600,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          cursor: "pointer",
-          marginBottom: 24,
-          transition: "color 150ms",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--admin-text)")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--admin-subtle)")}
-      >
-        <ArrowLeft size={16} /> Voltar para clientes
-      </button>
-
-      {/* Period Filter Bar */}
-      <div style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 24,
-        background: "var(--admin-bg)",
-        padding: "12px 16px",
-        borderRadius: 12,
-        border: "1px solid var(--admin-border)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
-      }}>
-        <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-subtle)" }}>Período dos Dados:</span>
-        <select
-          value={filterPeriod}
-          onChange={(e) => setFilterPeriod(e.target.value)}
-          style={{
-            height: 36,
-            background: "var(--admin-bg)",
-            border: "1px solid var(--admin-border)",
-            borderRadius: 8,
-            padding: "0 12px",
-            fontFamily: "DM Sans",
-            fontSize: 13,
-            fontWeight: 500,
-            color: "var(--admin-text)",
-            outline: "none",
-            cursor: "pointer",
-          }}
+    <div style={{ padding: "28px 24px", maxWidth: 1220, margin: "0 auto" }}>
+      {/* Top Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <button
+          type="button"
+          onClick={() => navigate("/admin/clientes")}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-emerald-300 transition-colors"
         >
-          <option value="all">Todo o período</option>
-          <option value="today">Hoje</option>
-          <option value="week">Última Semana</option>
-          <option value="month">Último Mês</option>
-          <option value="year">Último Ano</option>
-        </select>
+          <ArrowLeft size={16} /> Voltar para Cadastro de Clientes
+        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowWhatsAppModal(true)}
+            className="h-9 px-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+          >
+            <MessageCircle size={14} /> WhatsApp
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowBlockModal(true)}
+            className={`h-9 px-3.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-colors ${
+              client.isBlockedActive
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
+                : "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
+            }`}
+          >
+            {client.isBlockedActive ? <ShieldCheck size={14} /> : <Ban size={14} />}
+            {client.isBlockedActive ? "Desbloquear" : "Bloquear"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDeleteModal(true)}
+            className="h-9 px-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+          >
+            <Trash2 size={14} /> Deletar
+          </button>
+        </div>
       </div>
 
-      {/* Header Info */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 24, marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Avatar name={user.name} size={64} />
-          <div>
-            <h1 style={{ fontFamily: "Syne", fontSize: 24, fontWeight: 700, color: "var(--admin-text)", margin: 0, display: "flex", alignItems: "center", gap: 12 }}>
-              {user.name}
-              {userStatus !== "active" && (() => {
-                const rule = rules.find((r) => r.key === userStatus);
-                if (!rule) return null;
-                const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
-                return (
-                  <span style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, background: colors.bg, color: colors.color, border: `1px solid ${colors.border}`, borderRadius: 6, padding: "2px 8px" }}>
-                    {rule.label}
+      {/* Header Cadastral (ZERO valores financeiros) */}
+      <Card
+        style={{
+          padding: 24,
+          marginBottom: 24,
+          background: "linear-gradient(135deg, #0B0F14 0%, #111827 100%)",
+          border: client.isBlockedActive
+            ? "1px solid rgba(239,68,68,0.45)"
+            : "1px solid rgba(16,185,129,0.35)",
+          borderRadius: 18,
+        }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar name={client.name} size={64} />
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-display text-2xl font-bold text-white m-0">{client.name}</h1>
+                {client.isBlockedActive ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/45">
+                    Bloqueado · {formatBlockedSummary(client)}
                   </span>
-                );
-              })()}
-            </h1>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              <Pill bg="rgba(43,110,232,0.10)" color="#2B6EE8">
-                tomador
-              </Pill>
-              {(user.role === "prestador" || user.recebidos > 0) && (
-                <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E">
-                  prestador
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/35">
+                    Acesso Ativo
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <Pill bg="rgba(43,110,232,0.16)" color="#60A5FA" size="sm">
+                  tomador
                 </Pill>
-              )}
-              {user.role === "prestador" && user.kycStatus && (
-                <Pill {...KYC_PILL[user.kycStatus]}>{KYC_PILL[user.kycStatus].label}</Pill>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Financial Highlights */}
-        <div style={{ display: "flex", gap: 16 }}>
-          <Card style={{ padding: "14px 20px", background: "rgba(13,184,126,0.04)", border: "1px solid rgba(13,184,126,0.15)" }}>
-            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Total Recebido
-            </div>
-            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#0DB87E", marginTop: 4 }}>
-              {formatBR(user.recebidos)}
-            </div>
-          </Card>
-          <Card style={{ padding: "14px 20px", background: "rgba(232,64,64,0.03)", border: "1px solid rgba(232,64,64,0.10)" }}>
-            <div style={{ fontFamily: "DM Sans", fontSize: 11, fontWeight: 600, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              Total Pago
-            </div>
-            <div style={{ fontFamily: "Syne", fontSize: 20, fontWeight: 700, color: "#E84040", marginTop: 4 }}>
-              {formatBR(user.pagos)}
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
-        {/* Profile Details Card */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <Card style={{ padding: 24 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-              Dados do Usuário
-            </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <CreditCard size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>CPF</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 600, marginTop: 1 }}>{user.cpf || "Não informado"}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Mail size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>E-mail</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.email}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Phone size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Telefone</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.phone}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Calendar size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Cadastro no Sistema</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>
-                    {new Date(user.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Shield size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>ID do Usuário</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--admin-subtle)", marginTop: 1 }}>{user.id}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Home size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Bairro de Moradia</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.bairro_moradia || "Não informado"}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Building2 size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Bairro de Trabalho</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.bairro_trabalho || "Não informado"}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Waves size={16} color="var(--admin-muted)" />
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Praias que Frequenta</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.praias_frequenta || "Não informado"}</div>
-                </div>
-              </div>
-
-              {/* Links de Acesso e Indicação */}
-              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16, marginTop: 4, display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 700, color: "var(--admin-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Links de Acesso e Indicação
-                </div>
-
-                {/* Link de Onboarding */}
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Link de Onboarding:
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      readOnly
-                      type="text"
-                      value={`${getAppOrigin()}/onboarding?token=${user.id}`}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                        cursor: "text",
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/onboarding?token=${user.id}`, "onboarding")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: copiedLink === "onboarding" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                        color: copiedLink === "onboarding" ? "#0DB87E" : "var(--admin-text)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {copiedLink === "onboarding" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copiar
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Código de Indicação Personalizado (Vanity Slug) */}
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>Código de Indicação Personalizado:</span>
-                    <span style={{ fontSize: 10, color: "var(--admin-muted)", fontWeight: 400 }}>Apenas letras minúsculas, números e hífens</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      type="text"
-                      placeholder="ex: pousada-brisa"
-                      value={customRefCode}
-                      onChange={(e) => {
-                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-                        setCustomRefCode(val);
-                        setRefCodeStatus("idle");
-                        setRefCodeError("");
-                      }}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: refCodeError ? "1px solid #E84040" : "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={isSavingRefCode || !customRefCode.trim()}
-                      onClick={handleSaveReferralCode}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: refCodeStatus === "saved" ? "rgba(13,184,126,0.15)" : "#0DB87E",
-                        color: refCodeStatus === "saved" ? "#0DB87E" : "#0E0F12",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: isSavingRefCode || !customRefCode.trim() ? "not-allowed" : "pointer",
-                        opacity: isSavingRefCode || !customRefCode.trim() ? 0.6 : 1,
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {isSavingRefCode ? (
-                        <>
-                          <Loader2 size={13} className="animate-spin" /> Salvando...
-                        </>
-                      ) : refCodeStatus === "saved" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Salvo!
-                        </>
-                      ) : (
-                        "Salvar Slug"
-                      )}
-                    </button>
-                  </div>
-                  {refCodeError && (
-                    <div style={{ fontSize: 11, color: "#E84040", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      <span>⚠</span> {refCodeError}
-                    </div>
-                  )}
-                </div>
-
-                {/* Link Padrinho/Madrinha */}
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
-                    Link Padrinho/Madrinha:
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <input
-                      readOnly
-                      type="text"
-                      value={`${getAppOrigin()}/cadastro?ref=${user.referral_code || user.id}`}
-                      style={{
-                        flex: 1,
-                        background: "var(--admin-bg)",
-                        border: "1px solid var(--admin-border)",
-                        borderRadius: 6,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                        fontFamily: "monospace",
-                        color: "var(--admin-text)",
-                        outline: "none",
-                        cursor: "text",
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleCopyLink(`${getAppOrigin()}/cadastro?ref=${user.referral_code || user.id}`, "padrinho")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "6px 10px",
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: copiedLink === "padrinho" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                        color: copiedLink === "padrinho" ? "#0DB87E" : "var(--admin-text)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {copiedLink === "padrinho" ? (
-                        <>
-                          <Check size={13} color="#0DB87E" /> Copiado
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={13} /> Copiar
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Link de Atualização Cadastral */}
-                {(() => {
-                  const rawPhone = user.phone || dbUser?.telefone || dbWaitlist?.telefone || "";
-                  const telLimpo = String(rawPhone).replace(/\D/g, "");
-                  const linkAtualizacao = `${getAppOrigin()}/atualizacao-cadastral?tel=${telLimpo}`;
-                  const firstName = (user.name || "Cliente").trim().split(" ")[0];
-                  const waMsg = `Olá, ${firstName}! Aqui é da equipe UBT Serviços. Para dar continuidade ao seu cadastro e configuração de localização, acesse este link seguro: ${linkAtualizacao}`;
-                  const formattedPhone = telLimpo.length >= 10 && !telLimpo.startsWith("55") ? `55${telLimpo}` : telLimpo;
-                  const waLink = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(waMsg)}`;
-
-                  return (
-                    <div>
-                      <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span>Link de Atualização Cadastral (Geográfico / Localização):</span>
-                        {telLimpo ? (
-                          <span style={{ fontSize: 10, color: "#0DB87E", fontWeight: 600 }}>Pronto para envio</span>
-                        ) : (
-                          <span style={{ fontSize: 10, color: "#E84040", fontWeight: 600 }}>Telefone não cadastrado</span>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <input
-                          readOnly
-                          type="text"
-                          value={telLimpo ? linkAtualizacao : "Telefone do usuário não informado"}
-                          style={{
-                            flex: 1,
-                            minWidth: 200,
-                            background: "var(--admin-bg)",
-                            border: "1px solid var(--admin-border)",
-                            borderRadius: 6,
-                            padding: "6px 10px",
-                            fontSize: 12,
-                            fontFamily: "monospace",
-                            color: "var(--admin-text)",
-                            outline: "none",
-                            cursor: telLimpo ? "text" : "not-allowed",
-                            opacity: telLimpo ? 1 : 0.6,
-                          }}
-                          onClick={(e) => telLimpo && (e.target as HTMLInputElement).select()}
-                        />
-                        <button
-                          type="button"
-                          disabled={!telLimpo}
-                          onClick={() => handleCopyLink(linkAtualizacao, "atualizacao")}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "6px 10px",
-                            borderRadius: 6,
-                            border: "1px solid var(--admin-border)",
-                            background: copiedLink === "atualizacao" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
-                            color: copiedLink === "atualizacao" ? "#0DB87E" : "var(--admin-text)",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: telLimpo ? "pointer" : "not-allowed",
-                            opacity: telLimpo ? 1 : 0.5,
-                            whiteSpace: "nowrap",
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          {copiedLink === "atualizacao" ? (
-                            <>
-                              <Check size={13} color="#0DB87E" /> Copiado
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={13} /> Copiar
-                            </>
-                          )}
-                        </button>
-                        {telLimpo && (
-                          <>
-                            <a
-                              href={linkAtualizacao}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                                padding: "6px 10px",
-                                borderRadius: 6,
-                                border: "1px solid var(--admin-border)",
-                                background: "var(--admin-bg)",
-                                color: "#2B6EE8",
-                                fontSize: 12,
-                                fontWeight: 600,
-                                textDecoration: "none",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              Abrir
-                            </a>
-                            <a
-                              href={waLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 5,
-                                padding: "6px 12px",
-                                borderRadius: 6,
-                                background: "#25D366",
-                                color: "#000000",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                                textDecoration: "none",
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 14, height: 14 }}>
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                              </svg>
-                              <span>WhatsApp</span>
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          </Card>
-
-          <Card style={{ padding: 24 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-              Prêmios & Fundo Coletivo
-            </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Tickets Prêmio 1/5</div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
-                  {user.ticketsTrabalhador ?? 0}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Tickets Prêmio 1/11</div>
-                <div style={{ fontFamily: "DM Sans", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", marginTop: 4 }}>
-                  {user.ticketsConsumidor ?? 0}
-                </div>
-              </div>
-              <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", marginBottom: 6 }}>Associação & Fundo Coletivo</div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)" }}>
-                    {user.associacao || "Sem associação vinculada"}
+                {client.role === "prestador" && (
+                  <Pill bg="rgba(16,185,129,0.16)" color="#34D399" size="sm">
+                    prestador
+                  </Pill>
+                )}
+                {client.kycStatus && (
+                  <Pill {...KYC_PILL[client.kycStatus]} size="sm">
+                    {KYC_PILL[client.kycStatus].label}
+                  </Pill>
+                )}
+                {client.isPendente ? (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                    Cadastro Pendente
                   </span>
-                  <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#9B59B6" }}>
-                    {(user.contribComunidade ?? 0) > 0 ? formatBR(user.contribComunidade ?? 0) : "—"}
+                ) : client.isCadastroCompleto ? (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    Cadastro Completo
                   </span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {user.role === "prestador" && (
-            <Card style={{ padding: 24 }}>
-              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-                Dados de Prestador
-              </h2>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Placa</div>
-                  <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "var(--admin-text)", marginTop: 4 }}>
-                    {user.plate || "—"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Avaliação Média</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                    {user.rating ? (
-                      <>
-                        <Star size={14} fill="#F5A623" color="#F5A623" />
-                        {user.rating.toFixed(1)}
-                      </>
-                    ) : "—"}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Total de Serviços</div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 4 }}>
-                    {user.totalRides ?? 0}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Serviços Ativos</div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                    {(user.services ?? []).map((s) => (
-                      <Pill key={s} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
-                        {s}
-                      </Pill>
-                    ))}
-                    {(user.services ?? []).length === 0 && (
-                      <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Verification / KYC Actions */}
-          {user.role === "tomador" && (
-            <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-              <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-                Ações de KYC / Credenciamento
-              </h2>
-              <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 4px" }}>
-                Aprove este usuário para habilitar a prestação de serviços no Superapp.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <PrimaryButton onClick={() => setKyc("approved")}>
-                  Aprovar KYC e Tornar Prestador
-                </PrimaryButton>
-                <button
-                  onClick={() => setKyc("rejected")}
-                  style={{
-                    background: "rgba(232,64,64,0.08)",
-                    border: "1px solid rgba(232,64,64,0.20)",
-                    color: "#E84040",
-                    fontFamily: "DM Sans",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    borderRadius: 10,
-                    padding: "10px 18px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Reprovar KYC
-                </button>
-              </div>
-            </Card>
-          )}
-
-          {/* Arbitration / Account Status Actions */}
-          <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-              Arbitragem / Status da Conta
-            </h2>
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", margin: "0 0 4px" }}>
-              Controle o status do usuário no Superapp (Quarentena ou Desativação por tempo indeterminado).
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {userStatus !== "active" && (
-                <PrimaryButton onClick={() => changeStatus("active")} style={{ background: "#0DB87E", borderColor: "#0DB87E" }}>
-                  Reativar Conta (Definir como Ativo)
-                </PrimaryButton>
-              )}
-              {rules.map((rule) => {
-                if (userStatus === rule.key) return null;
-                const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
-                return (
-                  <button
-                    key={rule.key}
-                    onClick={() => changeStatus(rule.key)}
-                    style={{
-                      background: colors.bg,
-                      border: `1px solid ${colors.border}`,
-                      color: colors.color,
-                      fontFamily: "DM Sans",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      borderRadius: 10,
-                      padding: "10px 18px",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      transition: "opacity 100ms",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.8")}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-                  >
-                    Alterar para {rule.label} {rule.durationDays ? `(${rule.durationDays} dias)` : "(Sem limite)"}
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-
-        {/* Chave PIX e Contingenciamento de Repasses */}
-        <Card style={{ padding: 24 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 12px" }}>
-            Chave PIX & Repasses por Apadrinhamento
-          </h2>
-          <AdminPixQuickEditor
-            userId={user.id}
-            chavePix={dbUser?.chave_pix || dbProfile?.pix_key || dbWaitlist?.chave_pix || ""}
-            tipoChavePix={dbUser?.tipo_chave_pix || dbWaitlist?.tipo_chave_pix || ""}
-            saldoContingenciado={saldoContingenciado}
-            onToast={(msg) => toast.show(msg)}
-            onSaved={(novaChave, novoTipo) => {
-              setDbUser((prev: any) => prev ? { ...prev, chave_pix: novaChave, tipo_chave_pix: novoTipo } : prev);
-              setSaldoContingenciado(0);
-            }}
-          />
-        </Card>
-
-        {/* Rede de Apadrinhados deste Membro */}
-        <Card style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#00FF66" }}>
-                <Handshake size={20} />
-              </div>
-              <div>
-                <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
-                  🤝 Rede de Apadrinhados deste Membro
-                </h2>
-                <span style={{ fontSize: 12, color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
-                  Membros cadastrados e vinculados através do link exclusivo deste usuário
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    Cadastro Incompleto
+                  </span>
+                )}
+                <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#0B0F14] text-emerald-300 border border-emerald-500/25">
+                  @{client.slug}
                 </span>
               </div>
             </div>
-
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,102,0.1)", border: "1px solid rgba(0,255,102,0.3)" }}>
-              <Users size={14} color="#00FF66" />
-              <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>
-                Total de Indicados:
-              </span>
-              <strong style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 800, color: "#00FF66" }}>
-                {apadrinhados.length}
-              </strong>
-            </div>
           </div>
 
-          {loadingApadrinhados ? (
-            <div style={{ padding: "30px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>
-              Carregando apadrinhados...
+          <div className="text-xs text-zinc-400 font-mono">
+            <div>ID: {client.id}</div>
+            <div className="mt-1">
+              Desde {new Date(client.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
             </div>
-          ) : apadrinhados.length === 0 ? (
-            <div style={{ padding: "30px 16px", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13, background: "var(--admin-bg)", borderRadius: 12, border: "1px dashed var(--admin-border)" }}>
-              Este membro ainda não possui apadrinhados vinculados.
+          </div>
+        </div>
+      </Card>
+
+      {/* Grid das 5 Seções Cadastrais */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 1. IDENTIFICAÇÃO & PERFIL */}
+        <Card style={sectionCardStyle}>
+          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+            1. Identificação & Perfil
+          </h2>
+          <div>
+            {fieldRow(<Users size={15} />, "Nome Completo", client.name)}
+            {fieldRow(<Mail size={15} />, "E-mail", client.email)}
+            {fieldRow(<CreditCard size={15} />, "CPF / Documento", client.cpf)}
+            {fieldRow(
+              <Calendar size={15} />,
+              "Data de Nascimento / Mês de Aniversário",
+              client.dataNascimento
+                ? `${new Date(client.dataNascimento).toLocaleDateString("pt-BR")} (${MONTHS[client.birthMonth - 1]})`
+                : `Mês de referência: ${MONTHS[client.birthMonth - 1]}`,
+            )}
+            {fieldRow(<Shield size={15} />, "Papel / Role na Plataforma", client.rawRole)}
+            {fieldRow(
+              <Calendar size={15} />,
+              "Data de Cadastro",
+              new Date(client.createdAt).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" }),
+            )}
+          </div>
+
+          {/* Slug UBT Editável + Links */}
+          <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-emerald-400">
+              Slug UBT & Links de Indicação
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {apadrinhados.map((item) => {
-                const isPJ = item.tipo_cadastro?.toLowerCase() === "pj";
-                const dataFormatada = item.criado_em
-                  ? new Date(item.criado_em).toLocaleDateString("pt-BR")
-                  : "—";
-
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 16px",
-                      borderRadius: 12,
-                      background: "var(--admin-bg)",
-                      border: "1px solid var(--admin-border)",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 200 }}>
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 8,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          background: isPJ ? "rgba(56,189,248,0.15)" : "rgba(0,255,102,0.1)",
-                          color: isPJ ? "#38BDF8" : "#00FF66",
-                          border: `1px solid ${isPJ ? "rgba(56,189,248,0.3)" : "rgba(0,255,102,0.25)"}`,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isPJ ? <Building2 size={16} /> : <User size={16} />}
-                      </div>
-                      <div>
-                        <div style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 700, color: "var(--admin-text)" }}>
-                          {item.nome}
-                        </div>
-                        <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                          <span>Cadastro: {dataFormatada}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: 6,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          fontFamily: "monospace",
-                          textTransform: "uppercase",
-                          background: isPJ ? "rgba(56,189,248,0.15)" : "rgba(13,184,126,0.12)",
-                          color: isPJ ? "#38BDF8" : "#0DB87E",
-                          border: `1px solid ${isPJ ? "rgba(56,189,248,0.3)" : "rgba(13,184,126,0.25)"}`,
-                        }}
-                      >
-                        {isPJ ? "PJ" : "PF"}
-                      </span>
-
-                      {item.cadastro_completo ? (
-                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(0,255,102,0.12)", color: "#00FF66", border: "1px solid rgba(0,255,102,0.3)" }}>
-                          Cadastro Completo
-                        </span>
-                      ) : item.status === "aprovado" || item.status === "approved" ? (
-                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(43,110,232,0.12)", color: "#2B6EE8", border: "1px solid rgba(43,110,232,0.3)" }}>
-                          Aprovado
-                        </span>
-                      ) : (
-                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: "rgba(245,166,35,0.12)", color: "#F5A623", border: "1px solid rgba(245,166,35,0.3)" }}>
-                          Em Aprovação
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customRefCode}
+                onChange={(e) => {
+                  setCustomRefCode(e.target.value);
+                  setRefCodeError("");
+                }}
+                placeholder="slug-do-cliente"
+                className="flex-1 h-9 rounded-lg px-3 bg-[#0B0F14] border border-white/15 font-mono text-xs text-emerald-300 outline-none focus:border-emerald-400"
+              />
+              <button
+                type="button"
+                disabled={isSavingRefCode}
+                onClick={handleSaveReferralCode}
+                className="h-9 px-3.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#04130D] text-xs font-bold disabled:opacity-50"
+              >
+                {isSavingRefCode ? "Salvando..." : "Salvar Slug"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopy(client.slug, "slug", "Slug copiado")}
+                className="h-9 px-2.5 rounded-lg bg-[#0B0F14] border border-white/15 text-zinc-300 hover:text-emerald-300"
+                title="Copiar slug"
+              >
+                {copiedKey === "slug" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              </button>
             </div>
-          )}
+            {refCodeError && <p className="text-xs text-red-400 m-0">{refCodeError}</p>}
+
+            <div className="flex items-center gap-2 text-xs">
+              <Link2 size={13} className="text-zinc-400 shrink-0" />
+              <span className="font-mono text-zinc-300 truncate flex-1">
+                {getAppOrigin()}/{client.slug}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  void handleCopy(`${getAppOrigin()}/${client.slug}`, "reflink", "Link de indicação copiado")
+                }
+                className="text-emerald-400 hover:text-emerald-300 font-semibold shrink-0"
+              >
+                {copiedKey === "reflink" ? "Copiado ✓" : "Copiar link"}
+              </button>
+            </div>
+          </div>
         </Card>
 
-        {/* Transaction History Card */}
-        <Card style={{ padding: 24, display: "flex", flexDirection: "column" }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-            Histórico de Transações
+        {/* 2. CONTATO & ENDEREÇO */}
+        <Card style={sectionCardStyle}>
+          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+            2. Contato & Endereço
           </h2>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-            {orders.length === 0 ? (
-              <div style={{ padding: "40px 0", textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
-                Sem transações ou pedidos registrados para este usuário.
-              </div>
+          <div>
+            {fieldRow(<Phone size={15} />, "Telefone / WhatsApp", client.phone)}
+            {fieldRow(<MapPin size={15} />, "Cidade", client.cidade)}
+            {fieldRow(<Home size={15} />, "Bairro de Moradia", client.bairroMoradia || "Não informado")}
+            {fieldRow(<Building2 size={15} />, "Bairro de Trabalho", client.bairroTrabalho || "Não informado")}
+            {fieldRow(<MapPin size={15} />, "Endereço Cadastrado", client.endereco || "Não informado")}
+            {fieldRow(<Waves size={15} />, "Praias que Frequenta", client.praiasFrequenta || "Não informado")}
+          </div>
+        </Card>
+
+        {/* 3. VÍNCULOS NA PLATAFORMA (SEM VALORES FINANCEIROS) */}
+        <Card style={sectionCardStyle}>
+          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+            3. Vínculos na Plataforma
+          </h2>
+          <div>
+            {fieldRow(<Building2 size={15} />, "Associação", client.associacao || "Sem vínculo")}
+            {fieldRow(
+              <Users size={15} />,
+              "Coletivo / Comunidade",
+              client.coletivoParticipa ? "Participante ativo na rede comunitária" : "Sem vínculo registrado",
+            )}
+            {fieldRow(<Handshake size={15} />, "Padrinho / Indicação", client.padrinhoNome || "Cadastro orgânico (sem padrinho)")}
+            {fieldRow(
+              <Award size={15} />,
+              "Prêmios 1/5 (Trabalhador) · Prêmios 1/11 (Consumidor)",
+              <div className="flex flex-wrap gap-3 mt-1">
+                <span className="px-2.5 py-1 rounded-lg bg-[#0B0F14] border border-white/10 text-xs">
+                  <Gift size={12} className="inline mr-1 text-emerald-400" />
+                  1/5: <strong>{client.ticketsTrabalhador}</strong> participações
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-[#0B0F14] border border-white/10 text-xs">
+                  <Gift size={12} className="inline mr-1 text-sky-400" />
+                  1/11: <strong>{client.ticketsConsumidor}</strong> participações
+                </span>
+              </div>,
+            )}
+            {fieldRow(
+              <Shield size={15} />,
+              "Serviços Utilizados / Habilitados",
+              client.services.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {client.services.map((s) => (
+                    <Pill key={s} bg="#0B0F14" color="#34D399" size="sm">
+                      {s}
+                    </Pill>
+                  ))}
+                </div>
+              ) : (
+                "Nenhum serviço de prestador habilitado"
+              ),
+            )}
+          </div>
+
+          {/* Lista de Apadrinhados (somente dados cadastrais) */}
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-zinc-400 mb-2">
+              Apadrinhados Diretos ({apadrinhados.length})
+            </div>
+            {loadingApadrinhados ? (
+              <p className="text-xs text-zinc-500">Carregando apadrinhados...</p>
+            ) : apadrinhados.length === 0 ? (
+              <p className="text-xs text-zinc-500">Nenhum apadrinhado registrado.</p>
             ) : (
-              orders.map((o) => {
-                const sp = STATUS_PILL[o.status] || { bg: "var(--admin-bg)", color: "var(--admin-subtle)", label: o.status };
-                return (
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                {apadrinhados.map((ap) => (
                   <div
-                    key={o.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      border: "1px solid var(--admin-bg)",
-                      borderRadius: 12,
-                      background: "var(--admin-bg)",
-                    }}
+                    key={ap.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0B0F14] border border-white/[0.06] text-xs"
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
-                        {o.description}
-                      </span>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>
-                        {new Date(o.created_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                      <span
-                        style={{
-                          fontFamily: "Syne",
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: o.type === "saida" ? "#E84040" : "#0DB87E",
-                        }}
-                      >
-                        {o.type === "saida" ? "-" : "+"} {formatBR(o.total)}
-                      </span>
-                      <Pill bg={sp.bg} color={sp.color} size="sm">
-                        {sp.label}
-                      </Pill>
-                    </div>
+                    <span className="text-zinc-200 font-medium truncate">{ap.nome}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 shrink-0">
+                      {ap.cadastro_completo ? "Completo" : "Incompleto"}
+                    </span>
                   </div>
-                );
-              })
+                ))}
+              </div>
             )}
           </div>
         </Card>
+
+        {/* 4 & 5. SITUAÇÃO CADASTRAL PIX & MERCADO PAGO + STATUS DE ACESSO / BLOQUEIO */}
+        <div className="flex flex-col gap-6">
+          {/* 4. SITUAÇÃO CADASTRAL PIX & MERCADO PAGO (APENAS STATUS BOOLEANO) */}
+          <Card style={sectionCardStyle}>
+            <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+              4. Situação Cadastral PIX & Mercado Pago
+            </h2>
+            <p className="text-xs text-zinc-400 mb-3">
+              Exibição exclusivamente cadastral (sem saldos, extratos ou valores financeiros).
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div
+                className="p-3.5 rounded-xl border"
+                style={{
+                  background: "#0B0F14",
+                  borderColor: client.hasPix ? "rgba(16,185,129,0.40)" : "rgba(245,158,11,0.40)",
+                }}
+              >
+                <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
+                  Chave PIX Cadastrada
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {client.hasPix ? (
+                    <CheckCircle2 size={18} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={18} className="text-amber-400" />
+                  )}
+                  <span className={`text-base font-bold ${client.hasPix ? "text-emerald-300" : "text-amber-300"}`}>
+                    {client.hasPix ? "Sim" : "Não"}
+                  </span>
+                </div>
+                {client.hasPix && client.tipoChavePix && (
+                  <div className="text-[11px] text-zinc-400 mt-1">
+                    Tipo: <strong className="text-zinc-200 uppercase">{client.tipoChavePix}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="p-3.5 rounded-xl border"
+                style={{
+                  background: "#0B0F14",
+                  borderColor: client.mpConnected ? "rgba(16,185,129,0.40)" : "rgba(255,255,255,0.12)",
+                }}
+              >
+                <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
+                  Conta Mercado Pago
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {client.mpConnected ? (
+                    <CheckCircle2 size={18} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={18} className="text-zinc-400" />
+                  )}
+                  <span className={`text-base font-bold ${client.mpConnected ? "text-emerald-300" : "text-zinc-300"}`}>
+                    {client.mpConnected ? "Sim (Conectada)" : "Não conectada"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-white/10">
+              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-zinc-400 mb-2">
+                <KeyRound size={13} className="text-emerald-400" /> Atualização Cadastral da Chave PIX
+              </div>
+              <AdminPixQuickEditor
+                userId={client.id}
+                initialPix={client.chavePix}
+                initialTipo={client.tipoChavePix}
+                onSaved={(newPix, newTipo) => {
+                  setDbUser((prev: any) =>
+                    prev ? { ...prev, chave_pix: newPix, tipo_chave_pix: newTipo } : prev,
+                  );
+                }}
+              />
+            </div>
+          </Card>
+
+          {/* 5. STATUS DE ACESSO / BLOQUEIO */}
+          <Card
+            style={{
+              ...sectionCardStyle,
+              border: client.isBlockedActive
+                ? "1px solid rgba(239,68,68,0.45)"
+                : "1px solid rgba(16,185,129,0.25)",
+            }}
+          >
+            <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+              5. Status de Acesso / Bloqueio
+            </h2>
+
+            {client.isBlockedActive ? (
+              <div className="rounded-xl p-4 bg-red-500/10 border border-red-500/35 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold text-red-300 flex items-center gap-2">
+                    <Ban size={16} /> Conta Bloqueada
+                  </span>
+                  <span className="text-xs font-semibold text-red-200 bg-red-500/20 px-2.5 py-0.5 rounded-full">
+                    {formatBlockedSummary(client)}
+                  </span>
+                </div>
+                {client.blockDurationLabel && (
+                  <div className="text-xs text-zinc-300">
+                    Modalidade: <strong>{client.blockDurationLabel}</strong>
+                  </div>
+                )}
+                {client.blockedReason && (
+                  <div className="text-xs text-zinc-300">
+                    Motivo: <strong>{client.blockedReason}</strong>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl p-4 bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3">
+                <ShieldCheck size={20} className="text-emerald-400 shrink-0" />
+                <div>
+                  <div className="text-sm font-bold text-emerald-300">Acesso Liberado</div>
+                  <div className="text-xs text-zinc-400">
+                    Este cliente pode acessar normalmente a plataforma UBT.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowBlockModal(true)}
+                className={`h-10 px-4 rounded-xl text-xs font-bold inline-flex items-center gap-2 transition-colors ${
+                  client.isBlockedActive
+                    ? "bg-emerald-500 hover:bg-emerald-400 text-[#04130D]"
+                    : "bg-amber-400 hover:bg-amber-300 text-[#0B0F14]"
+                }`}
+              >
+                {client.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
+                {client.isBlockedActive ? "Desbloquear / Alterar Prazo" : "Bloquear Cliente"}
+              </button>
+            </div>
+          </Card>
+        </div>
       </div>
+
+      {/* Modais de Ação */}
+      <DeleteClientAlertModal
+        client={showDeleteModal ? actionTarget : null}
+        onClose={() => setShowDeleteModal(false)}
+        onDeleted={() => {
+          toast.show("Cliente excluído definitivamente com sucesso! ✓");
+          navigate("/admin/clientes", { replace: true });
+        }}
+      />
+
+      <BlockClientModal
+        client={showBlockModal ? actionTarget : null}
+        onClose={() => setShowBlockModal(false)}
+        onUpdated={(_userId, patch) => {
+          setDbUser((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  is_blocked: patch.isBlocked,
+                  blocked_until: patch.blockedUntil,
+                  block_duration_label: patch.blockDurationLabel,
+                  blocked_reason: patch.blockedReason,
+                  status: patch.status,
+                }
+              : prev,
+          );
+          toast.show(
+            patch.isBlocked
+              ? `Cliente bloqueado (${patch.blockDurationLabel || "ativo"}).`
+              : "Cliente desbloqueado com sucesso! ✓",
+          );
+        }}
+      />
+
+      <WhatsAppClientModal
+        client={showWhatsAppModal ? actionTarget : null}
+        onClose={() => setShowWhatsAppModal(false)}
+      />
     </div>
   );
 }

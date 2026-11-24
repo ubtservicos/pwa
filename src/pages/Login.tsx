@@ -55,6 +55,29 @@ const Login = () => {
         trackEvent("login_failed", "ux", { reason: error.message });
         logSystem("WARNING", "AUTH", "login_submit", "failed", duration, error.message, error.status?.toString() || "AUTH_FAILED", { email });
       } else if (data?.user) {
+        // Verifica bloqueio administrativo ativo antes de prosseguir
+        const { data: blockCheck } = await supabase
+          .from("usuarios")
+          .select("is_blocked, blocked_until, block_duration_label, blocked_reason")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        const isBlockActive =
+          Boolean(blockCheck?.is_blocked) &&
+          (!blockCheck?.blocked_until || new Date(blockCheck.blocked_until).getTime() > Date.now());
+
+        if (isBlockActive) {
+          await supabase.auth.signOut().catch(() => {});
+          const untilText = blockCheck?.blocked_until
+            ? `até ${new Date(blockCheck.blocked_until).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`
+            : "por tempo indefinido";
+          const reasonSuffix = blockCheck?.blocked_reason ? ` Motivo: ${blockCheck.blocked_reason}` : "";
+          setLoginError(true);
+          showToast(`Conta bloqueada ${untilText}.${reasonSuffix}`);
+          setLoading(false);
+          return;
+        }
+
         trackEvent("login", "ux", { user_id: data.user.id });
         logSystem("INFO", "AUTH", "login_submit", "success", duration, undefined, undefined, { email });
 
