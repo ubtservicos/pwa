@@ -21,9 +21,9 @@ import {
   Trash2,
   MessageCircle,
   KeyRound,
-  Award,
-  Gift,
   Link2,
+  AtSign,
+  History,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -34,6 +34,7 @@ import {
   DeleteClientAlertModal,
   BlockClientModal,
   WhatsAppClientModal,
+  ClientHistoryModal,
   isUserBlockedActive,
   formatBlockedSummary,
   type AdminActionClientTarget,
@@ -82,7 +83,6 @@ export default function AdminClienteDetailPage() {
   const [associacaoNome, setAssociacaoNome] = useState<string | null>(null);
   const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
   const [mpConnected, setMpConnected] = useState<boolean>(false);
-  const [dbPedidos, setDbPedidos] = useState<any[]>([]);
   const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
   const [loadingApadrinhados, setLoadingApadrinhados] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -96,6 +96,7 @@ export default function AdminClienteDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const handleCopy = async (text: string, key: string, label = "Copiado!") => {
     try {
@@ -133,7 +134,6 @@ export default function AdminClienteDetailPage() {
           caminhaoRes,
           provAssocRes,
           membAssocRes,
-          pedidosRes,
           mpAccountRes,
         ] = await Promise.allSettled([
           supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
@@ -142,7 +142,6 @@ export default function AdminClienteDetailPage() {
           supabase.from("coco_caminhoes").select("plate, status_aprovacao").eq("prestador_id", id).maybeSingle(),
           supabase.from("provider_associations").select("association_id").eq("provider_id", id).maybeSingle(),
           supabase.from("associacao_membros").select("association_id").eq("prestador_id", id).maybeSingle(),
-          supabase.from("pedidos").select("id, tomador_id, prestador_id, status").or(`tomador_id.eq.${id},prestador_id.eq.${id}`),
           supabase.from("marketplace_accounts").select("id, status").eq("user_id", id).eq("status", "CONNECTED").limit(1),
         ]);
 
@@ -152,10 +151,8 @@ export default function AdminClienteDetailPage() {
         const caminhaoData = caminhaoRes.status === "fulfilled" ? caminhaoRes.value.data : null;
         const provAssoc = provAssocRes.status === "fulfilled" ? provAssocRes.value.data : null;
         const membAssoc = membAssocRes.status === "fulfilled" ? membAssocRes.value.data : null;
-        const pedidosData = pedidosRes.status === "fulfilled" ? pedidosRes.value.data || [] : [];
         const mpAccounts = mpAccountRes.status === "fulfilled" ? mpAccountRes.value.data || [] : [];
 
-        // Waitlist complementar
         let waitlistRow: any = null;
         try {
           const emailFilter = userData?.email || profileData?.email;
@@ -175,7 +172,6 @@ export default function AdminClienteDetailPage() {
           // noop
         }
 
-        // Associação
         let assocName: string | null = null;
         const assocId = provAssoc?.association_id || membAssoc?.association_id;
         if (assocId) {
@@ -187,7 +183,6 @@ export default function AdminClienteDetailPage() {
           if (assocData?.name) assocName = assocData.name;
         }
 
-        // Padrinho
         const padrinhoId = userData.padrinho_id || waitlistRow?.padrinho_id || null;
         let padrinhoLabel: string | null = null;
         if (padrinhoId) {
@@ -205,11 +200,10 @@ export default function AdminClienteDetailPage() {
         setDbProfile(profileData);
         setDbWaitlist(waitlistRow);
         setMototaxi(motoData);
-        setDiarista(diaristaData);
         setCaminhao(caminhaoData);
+        setDiarista(diaristaData);
         setAssociacaoNome(assocName);
         setPadrinhoNome(padrinhoLabel);
-        setDbPedidos(pedidosData);
         setMpConnected(
           Boolean(mpAccounts.length > 0) ||
             Boolean(userData.possui_mercadopago) ||
@@ -225,7 +219,6 @@ export default function AdminClienteDetailPage() {
           "";
         setCustomRefCode(initialRef);
 
-        // Apadrinhados (apenas dados cadastrais, sem valores financeiros)
         setLoadingApadrinhados(true);
         try {
           const { data: apadData, error: apadErr } = await supabase.rpc("obter_meus_apadrinhados", {
@@ -274,15 +267,6 @@ export default function AdminClienteDetailPage() {
     else if (caminhao) kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
     else if (diarista) kycStatus = "approved";
     else if (dbUser.role === "prestador" || isColab) kycStatus = "pending";
-
-    const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
-    const ticketsConsumidor = dbPedidos.filter(
-      (p: any) => p.tomador_id === id && validStatuses.includes(p.status),
-    ).length;
-    const ticketsTrabalhador =
-      dbUser.role === "prestador" || isColab || diarista || mototaxi
-        ? dbPedidos.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length
-        : 0;
 
     const name = dbUser.nome || dbUser.razao_social || dbProfile?.name || "Sem nome";
     const email = dbUser.email || dbProfile?.email || "Não informado";
@@ -350,15 +334,14 @@ export default function AdminClienteDetailPage() {
       rawRole: dbUser.role || "tomador",
       slug,
       createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
+      updatedAt: dbUser.updated_at || null,
       isCadastroCompleto,
       isPendente,
       kycStatus,
       services,
       associacao: associacaoNome,
-      coletivoParticipa: Boolean(associacaoNome) || ticketsConsumidor + ticketsTrabalhador > 0,
+      coletivoParticipa: Boolean(associacaoNome) || services.length > 0,
       padrinhoNome,
-      ticketsConsumidor,
-      ticketsTrabalhador,
       cidade,
       bairroMoradia,
       bairroTrabalho,
@@ -374,7 +357,7 @@ export default function AdminClienteDetailPage() {
       blockedReason,
       isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
     };
-  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, dbPedidos, mpConnected, id]);
+  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, mpConnected]);
 
   const handleSaveReferralCode = async () => {
     if (!id) return;
@@ -413,7 +396,7 @@ export default function AdminClienteDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 48, display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", gap: 10, color: "#9CA3AF" }}>
+      <div className="p-12 flex justify-center items-center min-h-[60vh] gap-2.5 text-zinc-400">
         <Loader2 size={18} className="animate-spin text-emerald-400" />
         <span>Carregando ficha cadastral do cliente...</span>
       </div>
@@ -426,11 +409,11 @@ export default function AdminClienteDetailPage() {
         <button
           type="button"
           onClick={() => navigate("/admin/clientes")}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-white mb-6"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-zinc-100 mb-6"
         >
           <ArrowLeft size={16} /> Voltar para Cadastro de Clientes
         </button>
-        <Card style={{ padding: 40, textAlign: "center", background: "#111827", border: "1px solid rgba(239,68,68,0.35)" }}>
+        <Card style={{ padding: 40, textAlign: "center", background: "#121215", border: "1px solid rgba(239,68,68,0.4)" }}>
           <div className="font-display text-lg font-bold text-red-400">Cliente não encontrado</div>
           <div className="text-sm text-zinc-400 mt-2">O registro solicitado não existe ou foi removido.</div>
         </Card>
@@ -444,24 +427,29 @@ export default function AdminClienteDetailPage() {
     email: client.email,
     phone: client.phone,
     slug: client.slug,
+    createdAt: client.createdAt,
+    updatedAt: client.updatedAt,
+    cadastroCompleto: client.isCadastroCompleto,
     isBlocked: client.isBlocked,
     blockedUntil: client.blockedUntil,
     blockDurationLabel: client.blockDurationLabel,
     blockedReason: client.blockedReason,
   };
 
+  const referralInviteUrl = `${getAppOrigin()}/${client.slug}`;
+
   const sectionCardStyle = {
     padding: 22,
-    background: "#111827",
-    border: "1px solid rgba(16,185,129,0.22)",
+    background: "#121215",
+    border: "1px solid #27272A",
     borderRadius: 16,
   } as const;
 
   const fieldRow = (icon: React.ReactNode, label: string, value: React.ReactNode) => (
-    <div className="flex items-start gap-3 py-2 border-b border-white/[0.06] last:border-none">
-      <div className="mt-0.5 text-emerald-400/80 shrink-0">{icon}</div>
+    <div className="flex items-start gap-3 py-2 border-b border-zinc-800/80 last:border-none">
+      <div className="mt-0.5 text-zinc-400 shrink-0">{icon}</div>
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">{label}</div>
+        <div className="text-[11px] uppercase tracking-wider font-semibold text-zinc-500">{label}</div>
         <div className="text-[14px] text-zinc-100 font-medium mt-0.5 break-words">{value}</div>
       </div>
     </div>
@@ -474,7 +462,7 @@ export default function AdminClienteDetailPage() {
         <button
           type="button"
           onClick={() => navigate("/admin/clientes")}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-emerald-300 transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-zinc-100 transition-colors"
         >
           <ArrowLeft size={16} /> Voltar para Cadastro de Clientes
         </button>
@@ -482,8 +470,15 @@ export default function AdminClienteDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowHistoryModal(true)}
+            className="h-9 px-3.5 rounded-xl bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+          >
+            <History size={14} /> Histórico
+          </button>
+          <button
+            type="button"
             onClick={() => setShowWhatsAppModal(true)}
-            className="h-9 px-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+            className="h-9 px-3.5 rounded-xl bg-[#09090B] border border-emerald-500/45 text-emerald-400 hover:bg-emerald-950/40 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
           >
             <MessageCircle size={14} /> WhatsApp
           </button>
@@ -492,32 +487,30 @@ export default function AdminClienteDetailPage() {
             onClick={() => setShowBlockModal(true)}
             className={`h-9 px-3.5 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-colors ${
               client.isBlockedActive
-                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
-                : "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25"
+                ? "bg-[#09090B] border-emerald-500 text-emerald-400 hover:bg-emerald-950/40"
+                : "bg-[#09090B] border-red-500 text-red-400 hover:bg-red-950/50"
             }`}
           >
             {client.isBlockedActive ? <ShieldCheck size={14} /> : <Ban size={14} />}
-            {client.isBlockedActive ? "Desbloquear" : "Bloquear"}
+            {client.isBlockedActive ? "Desbloquear Usuário" : "Bloquear Usuário"}
           </button>
           <button
             type="button"
             onClick={() => setShowDeleteModal(true)}
-            className="h-9 px-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+            className="h-9 px-3.5 rounded-xl bg-red-950/35 border border-red-500/60 text-red-400 hover:bg-red-950/70 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
           >
             <Trash2 size={14} /> Deletar
           </button>
         </div>
       </div>
 
-      {/* Header Cadastral (ZERO valores financeiros) */}
+      {/* Header Cadastral (Preto & Cinza — ZERO valores financeiros) */}
       <Card
         style={{
           padding: 24,
           marginBottom: 24,
-          background: "linear-gradient(135deg, #0B0F14 0%, #111827 100%)",
-          border: client.isBlockedActive
-            ? "1px solid rgba(239,68,68,0.45)"
-            : "1px solid rgba(16,185,129,0.35)",
+          background: "linear-gradient(135deg, #09090B 0%, #121215 100%)",
+          border: client.isBlockedActive ? "1px solid rgba(239,68,68,0.5)" : "1px solid #27272A",
           borderRadius: 18,
         }}
       >
@@ -526,26 +519,26 @@ export default function AdminClienteDetailPage() {
             <Avatar name={client.name} size={64} />
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-display text-2xl font-bold text-white m-0">{client.name}</h1>
+                <h1 className="font-display text-2xl font-bold text-zinc-100 m-0">{client.name}</h1>
                 {client.isBlockedActive ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/45">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-950/60 text-red-400 border border-red-500/50">
                     Bloqueado · {formatBlockedSummary(client)}
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/35">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                     Acesso Ativo
                   </span>
                 )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Pill bg="rgba(43,110,232,0.16)" color="#60A5FA" size="sm">
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700">
                   tomador
-                </Pill>
+                </span>
                 {client.role === "prestador" && (
-                  <Pill bg="rgba(16,185,129,0.16)" color="#34D399" size="sm">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                     prestador
-                  </Pill>
+                  </span>
                 )}
                 {client.kycStatus && (
                   <Pill {...KYC_PILL[client.kycStatus]} size="sm">
@@ -553,19 +546,19 @@ export default function AdminClienteDetailPage() {
                   </Pill>
                 )}
                 {client.isPendente ? (
-                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700">
                     Cadastro Pendente
                   </span>
                 ) : client.isCadastroCompleto ? (
-                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                     Cadastro Completo
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
                     Cadastro Incompleto
                   </span>
                 )}
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#0B0F14] text-emerald-300 border border-emerald-500/25">
+                <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#09090B] text-zinc-200 border border-zinc-800">
                   @{client.slug}
                 </span>
               </div>
@@ -575,7 +568,7 @@ export default function AdminClienteDetailPage() {
           <div className="text-xs text-zinc-400 font-mono">
             <div>ID: {client.id}</div>
             <div className="mt-1">
-              Desde {new Date(client.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
+              Cliente desde {new Date(client.createdAt).toLocaleDateString("pt-BR")}
             </div>
           </div>
         </div>
@@ -585,7 +578,7 @@ export default function AdminClienteDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 1. IDENTIFICAÇÃO & PERFIL */}
         <Card style={sectionCardStyle}>
-          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+          <h2 className="font-display text-sm font-bold text-zinc-200 uppercase tracking-wider mb-3">
             1. Identificação & Perfil
           </h2>
           <div>
@@ -602,59 +595,71 @@ export default function AdminClienteDetailPage() {
             {fieldRow(<Shield size={15} />, "Papel / Role na Plataforma", client.rawRole)}
             {fieldRow(
               <Calendar size={15} />,
-              "Data de Cadastro",
+              "Cliente desde",
               new Date(client.createdAt).toLocaleString("pt-BR", { dateStyle: "long", timeStyle: "short" }),
             )}
           </div>
 
-          {/* Slug UBT Editável + Links */}
-          <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-            <div className="text-[11px] uppercase tracking-wider font-bold text-emerald-400">
-              Slug UBT & Links de Indicação
+          {/* BLOCO SEPARADO A: SLUG UBT (IDENTIFICADOR DO USUÁRIO) */}
+          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-zinc-300">
+              <AtSign size={13} className="text-emerald-400" />
+              Slug UBT (Identificador do Usuário)
             </div>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={customRefCode}
-                onChange={(e) => {
-                  setCustomRefCode(e.target.value);
-                  setRefCodeError("");
-                }}
-                placeholder="slug-do-cliente"
-                className="flex-1 h-9 rounded-lg px-3 bg-[#0B0F14] border border-white/15 font-mono text-xs text-emerald-300 outline-none focus:border-emerald-400"
-              />
+              <div className="flex-1 flex items-center rounded-lg bg-[#09090B] border border-zinc-800 px-3">
+                <span className="font-mono text-xs text-zinc-500 mr-0.5">@</span>
+                <input
+                  type="text"
+                  value={customRefCode}
+                  onChange={(e) => {
+                    setCustomRefCode(e.target.value);
+                    setRefCodeError("");
+                  }}
+                  placeholder="slug-do-cliente"
+                  className="flex-1 h-9 bg-transparent font-mono text-xs text-zinc-100 outline-none"
+                />
+              </div>
               <button
                 type="button"
                 disabled={isSavingRefCode}
                 onClick={handleSaveReferralCode}
-                className="h-9 px-3.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#04130D] text-xs font-bold disabled:opacity-50"
+                className="h-9 px-3.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold disabled:opacity-50"
               >
                 {isSavingRefCode ? "Salvando..." : "Salvar Slug"}
               </button>
               <button
                 type="button"
-                onClick={() => void handleCopy(client.slug, "slug", "Slug copiado")}
-                className="h-9 px-2.5 rounded-lg bg-[#0B0F14] border border-white/15 text-zinc-300 hover:text-emerald-300"
-                title="Copiar slug"
+                onClick={() => void handleCopy(client.slug, "slug", "Slug UBT copiado")}
+                className="h-9 px-3 rounded-lg bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 text-xs font-semibold inline-flex items-center gap-1.5"
+                title="Copiar apenas o slug"
               >
-                {copiedKey === "slug" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copiedKey === "slug" ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                Copiar
               </button>
             </div>
             {refCodeError && <p className="text-xs text-red-400 m-0">{refCodeError}</p>}
+          </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <Link2 size={13} className="text-zinc-400 shrink-0" />
-              <span className="font-mono text-zinc-300 truncate flex-1">
-                {getAppOrigin()}/{client.slug}
+          {/* BLOCO SEPARADO B: LINK DE APADRINHAMENTO (CONVITE) */}
+          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2">
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-zinc-300">
+              <Link2 size={13} className="text-emerald-400" />
+              Link de Apadrinhamento (Convite)
+            </div>
+            <div className="flex items-center gap-2 rounded-lg bg-[#09090B] border border-zinc-800 p-2 pl-3">
+              <span className="font-mono text-xs text-zinc-300 truncate flex-1 select-all">
+                {referralInviteUrl}
               </span>
               <button
                 type="button"
                 onClick={() =>
-                  void handleCopy(`${getAppOrigin()}/${client.slug}`, "reflink", "Link de indicação copiado")
+                  void handleCopy(referralInviteUrl, "reflink", "Link de apadrinhamento copiado")
                 }
-                className="text-emerald-400 hover:text-emerald-300 font-semibold shrink-0"
+                className="h-8 px-3 rounded-lg bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0"
               >
-                {copiedKey === "reflink" ? "Copiado ✓" : "Copiar link"}
+                {copiedKey === "reflink" ? <Check size={13} /> : <Copy size={13} />}
+                {copiedKey === "reflink" ? "Copiado" : "Copiar Link"}
               </button>
             </div>
           </div>
@@ -662,7 +667,7 @@ export default function AdminClienteDetailPage() {
 
         {/* 2. CONTATO & ENDEREÇO */}
         <Card style={sectionCardStyle}>
-          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+          <h2 className="font-display text-sm font-bold text-zinc-200 uppercase tracking-wider mb-3">
             2. Contato & Endereço
           </h2>
           <div>
@@ -675,9 +680,9 @@ export default function AdminClienteDetailPage() {
           </div>
         </Card>
 
-        {/* 3. VÍNCULOS NA PLATAFORMA (SEM VALORES FINANCEIROS) */}
+        {/* 3. VÍNCULOS NA PLATAFORMA (SEM PRÊMIOS FINANCEIROS OU VALORES) */}
         <Card style={sectionCardStyle}>
-          <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+          <h2 className="font-display text-sm font-bold text-zinc-200 uppercase tracking-wider mb-3">
             3. Vínculos na Plataforma
           </h2>
           <div>
@@ -689,28 +694,17 @@ export default function AdminClienteDetailPage() {
             )}
             {fieldRow(<Handshake size={15} />, "Padrinho / Indicação", client.padrinhoNome || "Cadastro orgânico (sem padrinho)")}
             {fieldRow(
-              <Award size={15} />,
-              "Prêmios 1/5 (Trabalhador) · Prêmios 1/11 (Consumidor)",
-              <div className="flex flex-wrap gap-3 mt-1">
-                <span className="px-2.5 py-1 rounded-lg bg-[#0B0F14] border border-white/10 text-xs">
-                  <Gift size={12} className="inline mr-1 text-emerald-400" />
-                  1/5: <strong>{client.ticketsTrabalhador}</strong> participações
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-[#0B0F14] border border-white/10 text-xs">
-                  <Gift size={12} className="inline mr-1 text-sky-400" />
-                  1/11: <strong>{client.ticketsConsumidor}</strong> participações
-                </span>
-              </div>,
-            )}
-            {fieldRow(
               <Shield size={15} />,
               "Serviços Utilizados / Habilitados",
               client.services.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {client.services.map((s) => (
-                    <Pill key={s} bg="#0B0F14" color="#34D399" size="sm">
+                    <span
+                      key={s}
+                      className="px-2 py-0.5 rounded text-xs font-semibold bg-[#09090B] text-emerald-400 border border-zinc-800"
+                    >
                       {s}
-                    </Pill>
+                    </span>
                   ))}
                 </div>
               ) : (
@@ -720,7 +714,7 @@ export default function AdminClienteDetailPage() {
           </div>
 
           {/* Lista de Apadrinhados (somente dados cadastrais) */}
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-zinc-800">
             <div className="text-[11px] uppercase tracking-wider font-bold text-zinc-400 mb-2">
               Apadrinhados Diretos ({apadrinhados.length})
             </div>
@@ -733,10 +727,10 @@ export default function AdminClienteDetailPage() {
                 {apadrinhados.map((ap) => (
                   <div
                     key={ap.id}
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0B0F14] border border-white/[0.06] text-xs"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#09090B] border border-zinc-800 text-xs"
                   >
                     <span className="text-zinc-200 font-medium truncate">{ap.nome}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 shrink-0">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
                       {ap.cadastro_completo ? "Completo" : "Incompleto"}
                     </span>
                   </div>
@@ -748,9 +742,9 @@ export default function AdminClienteDetailPage() {
 
         {/* 4 & 5. SITUAÇÃO CADASTRAL PIX & MERCADO PAGO + STATUS DE ACESSO / BLOQUEIO */}
         <div className="flex flex-col gap-6">
-          {/* 4. SITUAÇÃO CADASTRAL PIX & MERCADO PAGO (APENAS STATUS BOOLEANO) */}
+          {/* 4. SITUAÇÃO CADASTRAL PIX & MERCADO PAGO */}
           <Card style={sectionCardStyle}>
-            <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+            <h2 className="font-display text-sm font-bold text-zinc-200 uppercase tracking-wider mb-3">
               4. Situação Cadastral PIX & Mercado Pago
             </h2>
             <p className="text-xs text-zinc-400 mb-3">
@@ -759,9 +753,8 @@ export default function AdminClienteDetailPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div
-                className="p-3.5 rounded-xl border"
+                className="p-3.5 rounded-xl border bg-[#09090B]"
                 style={{
-                  background: "#0B0F14",
                   borderColor: client.hasPix ? "rgba(16,185,129,0.40)" : "rgba(245,158,11,0.40)",
                 }}
               >
@@ -774,7 +767,7 @@ export default function AdminClienteDetailPage() {
                   ) : (
                     <AlertCircle size={18} className="text-amber-400" />
                   )}
-                  <span className={`text-base font-bold ${client.hasPix ? "text-emerald-300" : "text-amber-300"}`}>
+                  <span className={`text-base font-bold ${client.hasPix ? "text-emerald-400" : "text-amber-400"}`}>
                     {client.hasPix ? "Sim" : "Não"}
                   </span>
                 </div>
@@ -786,10 +779,9 @@ export default function AdminClienteDetailPage() {
               </div>
 
               <div
-                className="p-3.5 rounded-xl border"
+                className="p-3.5 rounded-xl border bg-[#09090B]"
                 style={{
-                  background: "#0B0F14",
-                  borderColor: client.mpConnected ? "rgba(16,185,129,0.40)" : "rgba(255,255,255,0.12)",
+                  borderColor: client.mpConnected ? "rgba(16,185,129,0.40)" : "#27272A",
                 }}
               >
                 <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
@@ -799,16 +791,16 @@ export default function AdminClienteDetailPage() {
                   {client.mpConnected ? (
                     <CheckCircle2 size={18} className="text-emerald-400" />
                   ) : (
-                    <AlertCircle size={18} className="text-zinc-400" />
+                    <AlertCircle size={18} className="text-zinc-500" />
                   )}
-                  <span className={`text-base font-bold ${client.mpConnected ? "text-emerald-300" : "text-zinc-300"}`}>
+                  <span className={`text-base font-bold ${client.mpConnected ? "text-emerald-400" : "text-zinc-300"}`}>
                     {client.mpConnected ? "Sim (Conectada)" : "Não conectada"}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-white/10">
+            <div className="pt-3 border-t border-zinc-800">
               <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-zinc-400 mb-2">
                 <KeyRound size={13} className="text-emerald-400" /> Atualização Cadastral da Chave PIX
               </div>
@@ -829,19 +821,17 @@ export default function AdminClienteDetailPage() {
           <Card
             style={{
               ...sectionCardStyle,
-              border: client.isBlockedActive
-                ? "1px solid rgba(239,68,68,0.45)"
-                : "1px solid rgba(16,185,129,0.25)",
+              border: client.isBlockedActive ? "1px solid rgba(239,68,68,0.5)" : "1px solid #27272A",
             }}
           >
-            <h2 className="font-display text-base font-bold text-emerald-300 uppercase tracking-wider mb-3">
+            <h2 className="font-display text-sm font-bold text-zinc-200 uppercase tracking-wider mb-3">
               5. Status de Acesso / Bloqueio
             </h2>
 
             {client.isBlockedActive ? (
-              <div className="rounded-xl p-4 bg-red-500/10 border border-red-500/35 space-y-2">
+              <div className="rounded-xl p-4 bg-red-950/30 border border-red-500/40 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold text-red-300 flex items-center gap-2">
+                  <span className="text-sm font-bold text-red-400 flex items-center gap-2">
                     <Ban size={16} /> Conta Bloqueada
                   </span>
                   <span className="text-xs font-semibold text-red-200 bg-red-500/20 px-2.5 py-0.5 rounded-full">
@@ -860,10 +850,10 @@ export default function AdminClienteDetailPage() {
                 )}
               </div>
             ) : (
-              <div className="rounded-xl p-4 bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3">
+              <div className="rounded-xl p-4 bg-[#09090B] border border-zinc-800 flex items-center gap-3">
                 <ShieldCheck size={20} className="text-emerald-400 shrink-0" />
                 <div>
-                  <div className="text-sm font-bold text-emerald-300">Acesso Liberado</div>
+                  <div className="text-sm font-bold text-emerald-400">Acesso Liberado</div>
                   <div className="text-xs text-zinc-400">
                     Este cliente pode acessar normalmente a plataforma UBT.
                   </div>
@@ -875,14 +865,14 @@ export default function AdminClienteDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowBlockModal(true)}
-                className={`h-10 px-4 rounded-xl text-xs font-bold inline-flex items-center gap-2 transition-colors ${
+                className={`h-10 px-4 rounded-xl text-xs font-bold inline-flex items-center gap-2 border transition-colors ${
                   client.isBlockedActive
-                    ? "bg-emerald-500 hover:bg-emerald-400 text-[#04130D]"
-                    : "bg-amber-400 hover:bg-amber-300 text-[#0B0F14]"
+                    ? "bg-emerald-500 hover:bg-emerald-400 border-emerald-500 text-zinc-950"
+                    : "bg-[#09090B] border-red-500 text-red-400 hover:bg-red-950/50"
                 }`}
               >
                 {client.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
-                {client.isBlockedActive ? "Desbloquear / Alterar Prazo" : "Bloquear Cliente"}
+                {client.isBlockedActive ? "Desbloquear / Alterar Prazo" : "Bloquear Usuário"}
               </button>
             </div>
           </Card>
@@ -926,6 +916,11 @@ export default function AdminClienteDetailPage() {
       <WhatsAppClientModal
         client={showWhatsAppModal ? actionTarget : null}
         onClose={() => setShowWhatsAppModal(false)}
+      />
+
+      <ClientHistoryModal
+        client={showHistoryModal ? actionTarget : null}
+        onClose={() => setShowHistoryModal(false)}
       />
     </div>
   );

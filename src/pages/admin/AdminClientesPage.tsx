@@ -9,8 +9,12 @@ import {
   Ban,
   ShieldCheck,
   MessageCircle,
+  History,
   Copy,
   Check,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { maskCPF, generateReferralSlug } from "@/utils/masks";
 import { Card, Avatar, Pill } from "@/components/admin/ui";
@@ -19,6 +23,7 @@ import {
   DeleteClientAlertModal,
   BlockClientModal,
   WhatsAppClientModal,
+  ClientHistoryModal,
   isUserBlockedActive,
   formatBlockedSummary,
   type AdminActionClientTarget,
@@ -28,6 +33,8 @@ import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
 
 type Tab = "todos" | "tomadores" | "prestadores";
 type PixFilter = "all" | "com_pix" | "sem_pix";
+type SortField = "name" | "slug" | "role" | "cadastro" | "services" | "createdAt" | "status";
+type SortDir = "asc" | "desc";
 
 const getBirthMonth = (id: string, dataNascimento?: string | null) => {
   if (dataNascimento) {
@@ -43,6 +50,16 @@ const getBirthMonth = (id: string, dataNascimento?: string | null) => {
   return (sum % 12) + 1;
 };
 
+const formatDateDDMMYYYY = (iso?: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -54,12 +71,10 @@ export default function AdminClientesPage() {
 
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbProfiles, setDbProfiles] = useState<any[]>([]);
-  const [dbPedidos, setDbPedidos] = useState<any[]>([]);
   const [dbWaitlist, setDbWaitlist] = useState<any[]>([]);
   const [mototaxisMap, setMototaxisMap] = useState<Map<string, any>>(new Map());
   const [diaristasMap, setDiaristasMap] = useState<Map<string, any>>(new Map());
   const [caminhoesMap, setCaminhoesMap] = useState<Map<string, any>>(new Map());
-  const [userAssocMap, setUserAssocMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState<Tab>("todos");
@@ -68,6 +83,8 @@ export default function AdminClientesPage() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [filterPix, setFilterPix] = useState<PixFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -78,6 +95,7 @@ export default function AdminClientesPage() {
   const [deleteTarget, setDeleteTarget] = useState<AdminActionClientTarget | null>(null);
   const [blockTarget, setBlockTarget] = useState<AdminActionClientTarget | null>(null);
   const [whatsAppTarget, setWhatsAppTarget] = useState<AdminActionClientTarget | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<AdminActionClientTarget | null>(null);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -107,20 +125,12 @@ export default function AdminClientesPage() {
           motoRes,
           diaristasRes,
           caminhoesRes,
-          assocsRes,
-          provAssocsRes,
-          membAssocsRes,
-          pedidosRes,
           waitlistRes,
         ] = await Promise.allSettled([
           supabase.from("profiles").select("*"),
           supabase.from("prestador_mototaxi").select("user_id, kyc_status, modalidade, plate, is_online"),
           supabase.from("diarista_perfis").select("user_id, rating, total_servicos, is_online"),
           supabase.from("coco_caminhoes").select("prestador_id, plate, status_aprovacao, is_online"),
-          supabase.from("associations").select("id, name"),
-          supabase.from("provider_associations").select("provider_id, association_id"),
-          supabase.from("associacao_membros").select("*"),
-          supabase.from("pedidos").select("tomador_id, prestador_id, status, created_at"),
           supabase
             .from("waitlist")
             .select("id, email, telefone, user_id, cadastro_completo, status, referral_code, referral_slug, slug, padrinho_id, tipo_cadastro, cnpj, chave_pix, pix_chave, tipo_chave_pix, data_nascimento"),
@@ -147,33 +157,6 @@ export default function AdminClientesPage() {
           caminhoesRes.value.data.forEach((c: any) => cMap.set(c.prestador_id, c));
         }
         setCaminhoesMap(cMap);
-
-        const assocNames = new Map<string, string>();
-        if (assocsRes.status === "fulfilled" && assocsRes.value.data) {
-          assocsRes.value.data.forEach((a: any) => assocNames.set(a.id, a.name));
-        }
-
-        const uAssocMap = new Map<string, string>();
-        if (provAssocsRes.status === "fulfilled" && provAssocsRes.value.data) {
-          provAssocsRes.value.data.forEach((pa: any) => {
-            if (assocNames.has(pa.association_id)) {
-              uAssocMap.set(pa.provider_id, assocNames.get(pa.association_id)!);
-            }
-          });
-        }
-        if (membAssocsRes.status === "fulfilled" && membAssocsRes.value.data) {
-          membAssocsRes.value.data.forEach((ma: any) => {
-            const assocId = ma.associacao_id || ma.association_id;
-            if (assocId && assocNames.has(assocId)) {
-              uAssocMap.set(ma.prestador_id, assocNames.get(assocId)!);
-            }
-          });
-        }
-        setUserAssocMap(uAssocMap);
-
-        if (pedidosRes.status === "fulfilled" && pedidosRes.value.data) {
-          setDbPedidos(pedidosRes.value.data);
-        }
 
         if (waitlistRes.status === "fulfilled" && waitlistRes.value.data) {
           setDbWaitlist(waitlistRes.value.data);
@@ -204,18 +187,6 @@ export default function AdminClientesPage() {
       if (w.email) wlEmailMap.set(String(w.email).toLowerCase().trim(), w);
       if (w.user_id) wlUserIdMap.set(w.user_id, w);
       if (w.id) wlUserIdMap.set(w.id, w);
-    });
-
-    const now = new Date();
-    const filteredPedidos = dbPedidos.filter((p: any) => {
-      if (filterPeriod === "all") return true;
-      const pDate = new Date(p.created_at);
-      const diffDays = (now.getTime() - pDate.getTime()) / (1000 * 60 * 60 * 24);
-      if (filterPeriod === "today") return diffDays <= 1;
-      if (filterPeriod === "week") return diffDays <= 7;
-      if (filterPeriod === "month") return diffDays <= 30;
-      if (filterPeriod === "year") return diffDays <= 365;
-      return true;
     });
 
     return dbUsers
@@ -258,19 +229,6 @@ export default function AdminClientesPage() {
         if (isColab || (caminhao && caminhao.status_aprovacao === "approved")) {
           services.push("Reciclagem");
         }
-
-        const associacao = userAssocMap.get(u.id) || null;
-        const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
-
-        const ticketsConsumidor = filteredPedidos.filter(
-          (p: any) => p.tomador_id === u.id && validStatuses.includes(p.status),
-        ).length;
-        const ticketsTrabalhador =
-          u.role === "prestador" || isColab || diarista || moto
-            ? filteredPedidos.filter(
-                (p: any) => p.prestador_id === u.id && validStatuses.includes(p.status),
-              ).length
-            : 0;
 
         const status = u.status || (prof?.is_active === false ? "inactive" : "active");
         const name = u.nome || u.razao_social || prof?.name || "Sem nome";
@@ -316,6 +274,8 @@ export default function AdminClientesPage() {
         const blockedUntil = u.blocked_until || null;
         const blockDurationLabel = u.block_duration_label || null;
         const blockedReason = u.blocked_reason || null;
+        const createdAt = u.created_at || prof?.created_at || new Date().toISOString();
+        const updatedAt = u.updated_at || null;
 
         return {
           id: u.id,
@@ -329,15 +289,15 @@ export default function AdminClientesPage() {
           phone,
           cpf,
           referralSlug,
-          createdAt: u.created_at || prof?.created_at || new Date().toISOString(),
+          createdAt,
+          updatedAt,
           services,
-          associacao,
+          servicesLabel: services.join(", "),
           status,
           birthMonth,
-          ticketsConsumidor,
-          ticketsTrabalhador,
           cadastroCompleto: isCadastroCompleto,
           isPendente,
+          cadastroRank: isPendente ? 0 : isCadastroCompleto ? 2 : 1,
           chavePix,
           hasPix: Boolean(chavePix),
           isBlocked,
@@ -347,21 +307,12 @@ export default function AdminClientesPage() {
           isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
         };
       });
-  }, [
-    dbUsers,
-    dbProfiles,
-    dbPedidos,
-    mototaxisMap,
-    diaristasMap,
-    caminhoesMap,
-    userAssocMap,
-    dbWaitlist,
-    filterPeriod,
-  ]);
+  }, [dbUsers, dbProfiles, mototaxisMap, diaristasMap, caminhoesMap, dbWaitlist]);
 
-  const filtered = useMemo(() => {
+  const filteredAndSorted = useMemo(() => {
     const ql = q.trim().toLowerCase();
-    return users.filter((u) => {
+    const now = Date.now();
+    const list = users.filter((u) => {
       const okTab =
         tab === "todos" ||
         (tab === "tomadores" && u.role === "tomador") ||
@@ -377,9 +328,64 @@ export default function AdminClientesPage() {
         filterPix === "all" ||
         (filterPix === "com_pix" && u.hasPix) ||
         (filterPix === "sem_pix" && !u.hasPix);
-      return okTab && okQ && okMonth && okCategory && okPix;
+
+      let okPeriod = true;
+      if (filterPeriod !== "all") {
+        const diffDays = (now - new Date(u.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (filterPeriod === "today") okPeriod = diffDays <= 1;
+        else if (filterPeriod === "week") okPeriod = diffDays <= 7;
+        else if (filterPeriod === "month") okPeriod = diffDays <= 30;
+        else if (filterPeriod === "year") okPeriod = diffDays <= 365;
+      }
+
+      return okTab && okQ && okMonth && okCategory && okPix && okPeriod;
     });
-  }, [users, tab, q, filterMonth, filterCategory, filterPix]);
+
+    const mult = sortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sortField) {
+        case "name":
+          return a.name.localeCompare(b.name, "pt-BR") * mult;
+        case "slug":
+          return a.referralSlug.localeCompare(b.referralSlug, "pt-BR") * mult;
+        case "role":
+          return a.role.localeCompare(b.role, "pt-BR") * mult;
+        case "cadastro":
+          return (a.cadastroRank - b.cadastroRank) * mult;
+        case "services":
+          return a.servicesLabel.localeCompare(b.servicesLabel, "pt-BR") * mult;
+        case "status":
+          return (Number(a.isBlockedActive) - Number(b.isBlockedActive)) * mult;
+        case "createdAt":
+        default: {
+          const ta = new Date(a.createdAt).getTime() || 0;
+          const tb = new Date(b.createdAt).getTime() || 0;
+          return (ta - tb) * mult;
+        }
+      }
+    });
+  }, [users, tab, q, filterMonth, filterCategory, filterPix, filterPeriod, sortField, sortDir]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "createdAt" ? "desc" : "asc");
+    }
+    setPage(0);
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown size={12} className="text-zinc-600 inline-block ml-1" />;
+    }
+    return sortDir === "asc" ? (
+      <ArrowUp size={12} className="text-emerald-400 inline-block ml-1" />
+    ) : (
+      <ArrowDown size={12} className="text-emerald-400 inline-block ml-1" />
+    );
+  };
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "todos", label: "Todos" },
@@ -387,12 +393,12 @@ export default function AdminClientesPage() {
     { key: "prestadores", label: "Prestadores" },
   ];
 
-  const total = filtered.length;
+  const total = filteredAndSorted.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages - 1);
   const paged = useMemo(
-    () => filtered.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [filtered, safePage, pageSize],
+    () => filteredAndSorted.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [filteredAndSorted, safePage, pageSize],
   );
 
   const handleCopySlug = async (slug: string, userId: string) => {
@@ -413,6 +419,9 @@ export default function AdminClientesPage() {
     email: u.email,
     phone: u.phone,
     slug: u.referralSlug,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+    cadastroCompleto: u.cadastroCompleto,
     isBlocked: u.isBlocked,
     blockedUntil: u.blockedUntil,
     blockDurationLabel: u.blockDurationLabel,
@@ -456,18 +465,18 @@ export default function AdminClientesPage() {
     );
   };
 
-  const selectStyle = {
-    height: 40,
-    background: "#0B0F14",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 10,
-    padding: "0 12px",
-    fontFamily: "DM Sans",
-    fontSize: 13,
-    color: "#E5E7EB",
-    outline: "none",
-    cursor: "pointer",
-  } as const;
+  const selectClass =
+    "h-10 bg-[#09090B] border border-zinc-800 rounded-xl px-3 font-sans text-[13px] text-zinc-200 outline-none cursor-pointer focus:border-zinc-600";
+
+  const COLUMNS: Array<{ field: SortField; label: string; align?: "left" | "center" }> = [
+    { field: "name", label: "Nome" },
+    { field: "slug", label: "Slug" },
+    { field: "role", label: "Papel" },
+    { field: "cadastro", label: "Cadastro" },
+    { field: "services", label: "Serviços" },
+    { field: "createdAt", label: "Cliente desde", align: "center" },
+    { field: "status", label: "Status", align: "center" },
+  ];
 
   return (
     <div style={{ padding: "28px 24px" }}>
@@ -483,25 +492,17 @@ export default function AdminClientesPage() {
         }}
       >
         <div>
-          <h1
-            style={{
-              fontFamily: "Syne",
-              fontSize: 22,
-              fontWeight: 700,
-              color: "var(--admin-text)",
-              margin: 0,
-            }}
-          >
+          <h1 className="font-display text-[22px] font-bold text-zinc-100 m-0">
             Cadastro de Clientes
           </h1>
-          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-muted)", margin: "2px 0 0" }}>
-            Gestão cadastral, slug UBT, chave PIX, bloqueios e comunicação direta
+          <p className="font-sans text-xs text-zinc-400 mt-0.5 mb-0">
+            Gestão cadastral, slug UBT, chave PIX, histórico, bloqueios e comunicação direta
           </p>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           <div style={{ position: "relative", width: 240 }}>
-            <Search size={15} color="#9CA3AF" style={{ position: "absolute", left: 12, top: 12 }} />
+            <Search size={15} className="text-zinc-500 absolute left-3 top-3" />
             <input
               value={q}
               onChange={(e) => {
@@ -509,18 +510,7 @@ export default function AdminClientesPage() {
                 setPage(0);
               }}
               placeholder="Buscar nome, e-mail ou slug"
-              style={{
-                width: "100%",
-                height: 40,
-                background: "#0B0F14",
-                border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 10,
-                padding: "0 14px 0 36px",
-                fontFamily: "DM Sans",
-                fontSize: 13,
-                color: "#F9FAFB",
-                outline: "none",
-              }}
+              className="w-full h-10 bg-[#09090B] border border-zinc-800 rounded-xl pl-9 pr-3 font-sans text-[13px] text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600"
             />
           </div>
 
@@ -530,20 +520,20 @@ export default function AdminClientesPage() {
               setFilterPix(e.target.value as PixFilter);
               setPage(0);
             }}
+            className={selectClass}
             style={{
-              ...selectStyle,
-              border:
+              borderColor:
                 filterPix === "sem_pix"
-                  ? "1px solid rgba(245, 158, 11, 0.7)"
+                  ? "rgba(245, 158, 11, 0.7)"
                   : filterPix === "com_pix"
-                    ? "1px solid rgba(16, 185, 129, 0.7)"
-                    : "1px solid rgba(255,255,255,0.12)",
+                    ? "rgba(16, 185, 129, 0.7)"
+                    : undefined,
               color:
                 filterPix === "sem_pix"
                   ? "#FBBF24"
                   : filterPix === "com_pix"
                     ? "#34D399"
-                    : "#E5E7EB",
+                    : undefined,
             }}
           >
             <option value="all">Chave PIX: Todos</option>
@@ -557,7 +547,7 @@ export default function AdminClientesPage() {
               setFilterMonth(e.target.value);
               setPage(0);
             }}
-            style={selectStyle}
+            className={selectClass}
           >
             <option value="all">Mês de Aniversário: Todos</option>
             {MONTHS.map((m, idx) => (
@@ -573,7 +563,7 @@ export default function AdminClientesPage() {
               setFilterCategory(e.target.value);
               setPage(0);
             }}
-            style={selectStyle}
+            className={selectClass}
           >
             <option value="all">Serviço: Todos</option>
             <option value="Mototáxi">Mototáxi</option>
@@ -588,7 +578,7 @@ export default function AdminClientesPage() {
               setFilterPeriod(e.target.value);
               setPage(0);
             }}
-            style={selectStyle}
+            className={selectClass}
           >
             <option value="all">Período: Todo o período</option>
             <option value="today">Período: Hoje</option>
@@ -603,7 +593,7 @@ export default function AdminClientesPage() {
               setPageSize(Number(e.target.value));
               setPage(0);
             }}
-            style={selectStyle}
+            className={selectClass}
           >
             <option value={10}>10 por página</option>
             <option value={25}>25 por página</option>
@@ -614,49 +604,19 @@ export default function AdminClientesPage() {
       </div>
 
       {/* Mobile Title & Filters Bar */}
-      <div
-        className="flex md:hidden"
-        style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}
-      >
-        <h1 style={{ fontFamily: "Syne", fontSize: 21, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+      <div className="flex md:hidden items-center justify-between mb-4">
+        <h1 className="font-display text-[21px] font-bold text-zinc-100 m-0">
           Cadastro de Clientes
         </h1>
         <button
           type="button"
           onClick={() => setShowMobileFilters(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            height: 40,
-            background: "#0B0F14",
-            border: "1px solid rgba(16,185,129,0.35)",
-            borderRadius: 10,
-            padding: "0 14px",
-            fontFamily: "DM Sans",
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#E5E7EB",
-            cursor: "pointer",
-          }}
+          className="flex items-center gap-2 h-10 bg-[#09090B] border border-zinc-800 rounded-xl px-3.5 text-[13px] font-semibold text-zinc-200"
         >
-          <Filter size={15} color="#10B981" />
+          <Filter size={15} className="text-emerald-400" />
           Filtros
           {activeFiltersCount > 0 && (
-            <span
-              style={{
-                background: "#10B981",
-                color: "#04130D",
-                borderRadius: 99,
-                width: 18,
-                height: 18,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 10,
-                fontWeight: 800,
-              }}
-            >
+            <span className="bg-emerald-500 text-zinc-950 rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-extrabold">
               {activeFiltersCount}
             </span>
           )}
@@ -664,14 +624,7 @@ export default function AdminClientesPage() {
       </div>
 
       {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: 24,
-          borderBottom: "1px solid var(--admin-border)",
-          marginBottom: 16,
-        }}
-      >
+      <div className="flex gap-6 border-b border-zinc-800 mb-4">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -680,85 +633,78 @@ export default function AdminClientesPage() {
               setTab(t.key);
               setPage(0);
             }}
-            style={{
-              background: "none",
-              border: "none",
-              padding: "10px 0",
-              fontFamily: "DM Sans",
-              fontSize: 14,
-              fontWeight: 600,
-              color: tab === t.key ? "#10B981" : "var(--admin-subtle)",
-              borderBottom: tab === t.key ? "2px solid #10B981" : "2px solid transparent",
-              cursor: "pointer",
-              marginBottom: -1,
-            }}
+            className={`bg-transparent border-0 py-2.5 font-sans text-sm font-semibold cursor-pointer -mb-px transition-colors ${
+              tab === t.key
+                ? "text-emerald-400 border-b-2 border-emerald-400"
+                : "text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent"
+            }`}
           >
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Desktop view: Table (ZERO financial columns) */}
+      {/* Desktop view: Table (Preto/Cinza + Ordenação por coluna) */}
       <div className="hidden md:block">
         <Card
           style={{
             overflow: "hidden",
             padding: 0,
-            background: "#111827",
-            border: "1px solid rgba(16,185,129,0.20)",
+            background: "#121215",
+            border: "1px solid #27272A",
           }}
         >
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#0B0F14" }}>
+              <thead style={{ background: "#09090B" }}>
                 <tr>
-                  {[
-                    "Nome",
-                    "Slug",
-                    "Papel",
-                    "Cadastro",
-                    "Serviços",
-                    "Prêmio 1/5",
-                    "Prêmio 1/11",
-                    "Associação",
-                    "Ações",
-                  ].map((h) => (
+                  {COLUMNS.map((col) => (
                     <th
-                      key={h}
+                      key={col.field}
+                      onClick={() => handleSort(col.field)}
+                      title={`Ordenar por ${col.label}`}
                       style={{
-                        textAlign:
-                          h === "Prêmio 1/5" || h === "Prêmio 1/11"
-                            ? "center"
-                            : h === "Ações"
-                              ? "right"
-                              : "left",
+                        textAlign: col.align || "left",
                         padding: "12px 14px",
                         fontFamily: "DM Sans",
                         fontSize: 11,
                         fontWeight: 700,
-                        color: "#9CA3AF",
+                        color: sortField === col.field ? "#34D399" : "#A1A1AA",
                         textTransform: "uppercase",
                         letterSpacing: 1,
-                        borderBottom: "1px solid rgba(255,255,255,0.08)",
+                        borderBottom: "1px solid #27272A",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {h}
+                      {col.label}
+                      {renderSortIcon(col.field)}
                     </th>
                   ))}
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "12px 14px",
+                      fontFamily: "DM Sans",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#A1A1AA",
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                      borderBottom: "1px solid #27272A",
+                    }}
+                  >
+                    Ações
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
                     <td
-                      colSpan={9}
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        color: "#9CA3AF",
-                        fontFamily: "DM Sans",
-                        fontSize: 14,
-                      }}
+                      colSpan={8}
+                      className="py-10 text-center text-zinc-400 font-sans text-sm"
                     >
                       Carregando clientes...
                     </td>
@@ -770,41 +716,23 @@ export default function AdminClientesPage() {
                     <tr
                       key={u.id}
                       onClick={() => navigate(`/admin/clientes/${u.id}`)}
-                      style={{
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        transition: "background 120ms",
-                        cursor: "pointer",
-                        background: u.isBlockedActive ? "rgba(239,68,68,0.04)" : "transparent",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = u.isBlockedActive
-                          ? "rgba(239,68,68,0.09)"
-                          : "rgba(16,185,129,0.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = u.isBlockedActive
-                          ? "rgba(239,68,68,0.04)"
-                          : "transparent";
-                      }}
+                      className={`border-b border-zinc-800/80 transition-colors cursor-pointer ${
+                        u.isBlockedActive
+                          ? "bg-red-950/15 hover:bg-red-950/30"
+                          : "hover:bg-zinc-900/80"
+                      }`}
                     >
-                      {/* NOME + PIX + BLOQUEIO */}
+                      {/* NOME + PIX */}
                       <td style={{ padding: "11px 14px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div className="flex items-center gap-2.5">
                           <Avatar name={u.name} />
                           <div>
-                            <div
-                              style={{
-                                fontFamily: "DM Sans",
-                                fontSize: 14,
-                                color: "#F9FAFB",
-                                fontWeight: 600,
-                              }}
-                            >
+                            <div className="font-sans text-sm text-zinc-100 font-semibold">
                               {u.name}
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 3 }}>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                               {u.hasPix ? (
-                                <span className="text-[10px] font-semibold text-emerald-400/90 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded">
                                   PIX OK
                                 </span>
                               ) : (
@@ -812,30 +740,6 @@ export default function AdminClientesPage() {
                                   Sem chave PIX
                                 </span>
                               )}
-
-                              {u.isBlockedActive && (
-                                <span className="text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/40 px-1.5 py-0.5 rounded">
-                                  Bloqueado · {formatBlockedSummary(u)}
-                                </span>
-                              )}
-
-                              {!u.isBlockedActive &&
-                                u.status !== "active" &&
-                                (() => {
-                                  const rule = rules.find((r) => r.key === u.status);
-                                  if (!rule) return null;
-                                  const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
-                                  return (
-                                    <Pill
-                                      bg={colors.bg}
-                                      color={colors.color}
-                                      border={colors.border}
-                                      size="sm"
-                                    >
-                                      {rule.label}
-                                    </Pill>
-                                  );
-                                })()}
                             </div>
                           </div>
                         </div>
@@ -844,15 +748,15 @@ export default function AdminClientesPage() {
                       {/* SLUG */}
                       <td style={{ padding: "11px 14px" }} onClick={(e) => e.stopPropagation()}>
                         {u.referralSlug ? (
-                          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#0B0F14] border border-emerald-500/25">
-                            <span className="font-mono text-[12px] text-emerald-300">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#09090B] border border-zinc-800">
+                            <span className="font-mono text-[12px] text-zinc-200">
                               @{u.referralSlug}
                             </span>
                             <button
                               type="button"
                               title="Copiar slug"
                               onClick={() => void handleCopySlug(u.referralSlug, u.id)}
-                              className="text-zinc-400 hover:text-emerald-300 transition-colors"
+                              className="text-zinc-500 hover:text-emerald-400 transition-colors"
                             >
                               {copiedSlugId === u.id ? (
                                 <Check size={12} className="text-emerald-400" />
@@ -868,14 +772,14 @@ export default function AdminClientesPage() {
 
                       {/* PAPEL */}
                       <td style={{ padding: "11px 14px" }}>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          <Pill bg="rgba(43,110,232,0.14)" color="#60A5FA" size="sm">
+                        <div className="flex gap-1 flex-wrap">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700">
                             tomador
-                          </Pill>
+                          </span>
                           {(u.role === "prestador" || (u.services ?? []).length > 0) && (
-                            <Pill bg="rgba(16,185,129,0.14)" color="#34D399" size="sm">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                               prestador
-                            </Pill>
+                            </span>
                           )}
                         </div>
                       </td>
@@ -883,7 +787,7 @@ export default function AdminClientesPage() {
                       {/* CADASTRO */}
                       <td style={{ padding: "11px 14px" }}>
                         {u.isPendente ? (
-                          <span className="bg-zinc-800/90 text-zinc-300 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
+                          <span className="bg-zinc-900 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded text-xs font-semibold inline-block">
                             Pendente
                           </span>
                         ) : u.cadastroCompleto ? (
@@ -899,58 +803,73 @@ export default function AdminClientesPage() {
 
                       {/* SERVIÇOS */}
                       <td style={{ padding: "11px 14px" }}>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        <div className="flex gap-1 flex-wrap">
                           {(u.services ?? []).map((s: string) => (
-                            <Pill key={s} bg="#0B0F14" color="#D1D5DB" size="sm">
+                            <span
+                              key={s}
+                              className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#09090B] text-zinc-300 border border-zinc-800"
+                            >
                               {s}
-                            </Pill>
+                            </span>
                           ))}
                           {(u.services ?? []).length === 0 && (
-                            <span style={{ color: "#6B7280", fontSize: 13 }}>—</span>
+                            <span className="text-zinc-500 text-xs">—</span>
                           )}
                         </div>
                       </td>
 
-                      {/* PRÊMIO 1/5 */}
+                      {/* CLIENTE DESDE */}
                       <td
-                        style={{
-                          padding: "11px 14px",
-                          textAlign: "center",
-                          fontFamily: "DM Sans",
-                          fontSize: 13,
-                          color: "#F3F4F6",
-                          fontWeight: 600,
-                        }}
+                        style={{ padding: "11px 14px", textAlign: "center" }}
+                        className="font-mono text-xs text-zinc-300 whitespace-nowrap"
                       >
-                        {u.ticketsTrabalhador ?? 0}
+                        {formatDateDDMMYYYY(u.createdAt)}
                       </td>
 
-                      {/* PRÊMIO 1/11 */}
-                      <td
-                        style={{
-                          padding: "11px 14px",
-                          textAlign: "center",
-                          fontFamily: "DM Sans",
-                          fontSize: 13,
-                          color: "#F3F4F6",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {u.ticketsConsumidor ?? 0}
-                      </td>
-
-                      {/* ASSOCIAÇÃO */}
-                      <td style={{ padding: "11px 14px" }}>
-                        {u.associacao ? (
-                          <span style={{ fontSize: 13, color: "#D1D5DB", fontWeight: 500 }}>
-                            {u.associacao}
+                      {/* STATUS / BLOQUEIO */}
+                      <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                        {u.isBlockedActive ? (
+                          <span className="text-[11px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded inline-block whitespace-nowrap">
+                            Bloqueado · {formatBlockedSummary(u)}
                           </span>
+                        ) : u.status !== "active" &&
+                          (() => {
+                            const rule = rules.find((r) => r.key === u.status);
+                            if (!rule) return false;
+                            const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
+                            return (
+                              <Pill
+                                bg={colors.bg}
+                                color={colors.color}
+                                border={colors.border}
+                                size="sm"
+                              >
+                                {rule.label}
+                              </Pill>
+                            );
+                          })() ? (
+                          (() => {
+                            const rule = rules.find((r) => r.key === u.status)!;
+                            const colors = STATUS_THEMES[rule.theme] || STATUS_THEMES.Grey;
+                            return (
+                              <Pill
+                                bg={colors.bg}
+                                color={colors.color}
+                                border={colors.border}
+                                size="sm"
+                              >
+                                {rule.label}
+                              </Pill>
+                            );
+                          })()
                         ) : (
-                          <span style={{ color: "#6B7280", fontSize: 13 }}>—</span>
+                          <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded inline-block">
+                            Ativo
+                          </span>
                         )}
                       </td>
 
-                      {/* AÇÕES (4 ações dedicadas) */}
+                      {/* AÇÕES (5 ações: Visualizar, Histórico, Bloquear com borda vermelha, WhatsApp, Deletar) */}
                       <td
                         style={{ padding: "11px 14px", textAlign: "right" }}
                         onClick={(e) => e.stopPropagation()}
@@ -961,20 +880,30 @@ export default function AdminClientesPage() {
                             title="Visualizar ficha cadastral"
                             aria-label="Visualizar"
                             onClick={() => navigate(`/admin/clientes/${u.id}`)}
-                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#0B0F14] border border-sky-500/30 text-sky-400 hover:bg-sky-500/15 transition-colors"
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-200 hover:bg-zinc-800 transition-colors"
                           >
                             <Eye size={15} />
                           </button>
 
                           <button
                             type="button"
-                            title={u.isBlockedActive ? "Gerenciar / Desbloquear cliente" : "Bloquear cliente"}
-                            aria-label={u.isBlockedActive ? "Desbloquear" : "Bloquear"}
+                            title="Histórico do cliente"
+                            aria-label="Histórico"
+                            onClick={() => setHistoryTarget(toActionTarget(u))}
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                          >
+                            <History size={15} />
+                          </button>
+
+                          <button
+                            type="button"
+                            title={u.isBlockedActive ? "Desbloquear / Gerenciar bloqueio" : "Bloquear Usuário"}
+                            aria-label={u.isBlockedActive ? "Desbloquear" : "Bloquear Usuário"}
                             onClick={() => setBlockTarget(toActionTarget(u))}
-                            className={`w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#0B0F14] border transition-colors ${
+                            className={`w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border transition-colors ${
                               u.isBlockedActive
-                                ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/15"
-                                : "border-amber-500/35 text-amber-400 hover:bg-amber-500/15"
+                                ? "border-emerald-500 text-emerald-400 hover:bg-emerald-950/40"
+                                : "border-red-500 text-red-400 hover:bg-red-950/50"
                             }`}
                           >
                             {u.isBlockedActive ? <ShieldCheck size={15} /> : <Ban size={15} />}
@@ -985,7 +914,7 @@ export default function AdminClientesPage() {
                             title="Enviar mensagem por WhatsApp"
                             aria-label="WhatsApp"
                             onClick={() => setWhatsAppTarget(toActionTarget(u))}
-                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#0B0F14] border border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/15 transition-colors"
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-emerald-500/45 text-emerald-400 hover:bg-emerald-950/40 transition-colors"
                           >
                             <MessageCircle size={15} />
                           </button>
@@ -995,7 +924,7 @@ export default function AdminClientesPage() {
                             title="Deletar cliente (requer senha do Superadmin)"
                             aria-label="Deletar"
                             onClick={() => setDeleteTarget(toActionTarget(u))}
-                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#0B0F14] border border-red-500/35 text-red-400 hover:bg-red-500/15 transition-colors"
+                            className="w-8 h-8 rounded-lg inline-flex items-center justify-center bg-[#09090B] border border-red-500/50 text-red-400 hover:bg-red-950/50 transition-colors"
                           >
                             <Trash2 size={15} />
                           </button>
@@ -1007,14 +936,8 @@ export default function AdminClientesPage() {
                 {!loading && paged.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        color: "#9CA3AF",
-                        fontFamily: "DM Sans",
-                        fontSize: 14,
-                      }}
+                      colSpan={8}
+                      className="py-10 text-center text-zinc-400 font-sans text-sm"
                     >
                       Nenhum cliente encontrado com os filtros selecionados.
                     </td>
@@ -1026,10 +949,10 @@ export default function AdminClientesPage() {
         </Card>
       </div>
 
-      {/* Mobile view: Cards (sem dados financeiros + 4 ações) */}
+      {/* Mobile view: Cards (Preto/Cinza + 5 ações) */}
       <div className="flex flex-col gap-3 md:hidden">
         {loading && (
-          <Card style={{ padding: 32, textAlign: "center", color: "#9CA3AF" }}>
+          <Card style={{ padding: 32, textAlign: "center", background: "#121215", border: "1px solid #27272A", color: "#A1A1AA" }}>
             Carregando clientes...
           </Card>
         )}
@@ -1040,19 +963,19 @@ export default function AdminClientesPage() {
               key={u.id}
               style={{
                 padding: 16,
-                background: "#111827",
+                background: "#121215",
                 border: u.isBlockedActive
-                  ? "1px solid rgba(239,68,68,0.45)"
-                  : "1px solid rgba(16,185,129,0.20)",
+                  ? "1px solid rgba(239,68,68,0.5)"
+                  : "1px solid #27272A",
               }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <Avatar name={u.name} />
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-white truncate">{u.name}</div>
-                    <div className="font-mono text-[11px] text-emerald-300 truncate">
-                      {u.referralSlug ? `@${u.referralSlug}` : "Sem slug"}
+                    <div className="text-sm font-bold text-zinc-100 truncate">{u.name}</div>
+                    <div className="font-mono text-[11px] text-zinc-400 truncate">
+                      {u.referralSlug ? `@${u.referralSlug}` : "Sem slug"} · Desde {formatDateDDMMYYYY(u.createdAt)}
                     </div>
                   </div>
                 </div>
@@ -1068,13 +991,13 @@ export default function AdminClientesPage() {
               </div>
 
               <div className="flex flex-wrap gap-1.5 mt-3">
-                <Pill bg="rgba(43,110,232,0.14)" color="#60A5FA" size="sm">
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-zinc-300 border border-zinc-700">
                   tomador
-                </Pill>
+                </span>
                 {u.role === "prestador" && (
-                  <Pill bg="rgba(16,185,129,0.14)" color="#34D399" size="sm">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                     prestador
-                  </Pill>
+                  </span>
                 )}
                 <span
                   className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
@@ -1086,87 +1009,81 @@ export default function AdminClientesPage() {
                   {u.hasPix ? "PIX OK" : "Sem chave PIX"}
                 </span>
                 {u.isBlockedActive && (
-                  <span className="text-[10px] font-bold text-red-300 bg-red-500/15 border border-red-500/40 px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded">
                     Bloqueado · {formatBlockedSummary(u)}
                   </span>
                 )}
               </div>
 
-              <div className="grid grid-cols-4 gap-2 mt-3.5 pt-3 border-t border-white/10">
+              <div className="grid grid-cols-5 gap-1.5 mt-3.5 pt-3 border-t border-zinc-800">
                 <button
                   type="button"
                   onClick={() => navigate(`/admin/clientes/${u.id}`)}
-                  className="h-9 rounded-lg bg-[#0B0F14] border border-sky-500/30 text-sky-400 text-xs font-semibold flex items-center justify-center gap-1"
+                  className="h-9 rounded-lg bg-[#09090B] border border-zinc-700 text-zinc-200 text-[11px] font-semibold flex items-center justify-center"
+                  title="Visualizar"
                 >
-                  <Eye size={14} /> Ver
+                  <Eye size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryTarget(toActionTarget(u))}
+                  className="h-9 rounded-lg bg-[#09090B] border border-zinc-700 text-zinc-300 text-[11px] font-semibold flex items-center justify-center"
+                  title="Histórico"
+                >
+                  <History size={14} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setBlockTarget(toActionTarget(u))}
-                  className="h-9 rounded-lg bg-[#0B0F14] border border-amber-500/35 text-amber-400 text-xs font-semibold flex items-center justify-center gap-1"
+                  className={`h-9 rounded-lg bg-[#09090B] border text-[11px] font-semibold flex items-center justify-center ${
+                    u.isBlockedActive
+                      ? "border-emerald-500 text-emerald-400"
+                      : "border-red-500 text-red-400"
+                  }`}
+                  title={u.isBlockedActive ? "Desbloquear" : "Bloquear Usuário"}
                 >
                   {u.isBlockedActive ? <ShieldCheck size={14} /> : <Ban size={14} />}
-                  {u.isBlockedActive ? "Liberar" : "Bloq."}
                 </button>
                 <button
                   type="button"
                   onClick={() => setWhatsAppTarget(toActionTarget(u))}
-                  className="h-9 rounded-lg bg-[#0B0F14] border border-emerald-500/35 text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1"
+                  className="h-9 rounded-lg bg-[#09090B] border border-emerald-500/45 text-emerald-400 text-[11px] font-semibold flex items-center justify-center"
+                  title="WhatsApp"
                 >
-                  <MessageCircle size={14} /> Zap
+                  <MessageCircle size={14} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(toActionTarget(u))}
-                  className="h-9 rounded-lg bg-[#0B0F14] border border-red-500/35 text-red-400 text-xs font-semibold flex items-center justify-center gap-1"
+                  className="h-9 rounded-lg bg-[#09090B] border border-red-500/50 text-red-400 text-[11px] font-semibold flex items-center justify-center"
+                  title="Deletar"
                 >
-                  <Trash2 size={14} /> Del
+                  <Trash2 size={14} />
                 </button>
               </div>
             </Card>
           ))}
 
         {!loading && paged.length === 0 && (
-          <Card style={{ padding: 32, textAlign: "center", color: "#9CA3AF" }}>
+          <Card style={{ padding: 32, textAlign: "center", background: "#121215", border: "1px solid #27272A", color: "#A1A1AA" }}>
             Nenhum cliente encontrado.
           </Card>
         )}
       </div>
 
       {/* Pagination Footer */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginTop: 16,
-          fontFamily: "DM Sans",
-          fontSize: 13,
-          color: "#9CA3AF",
-        }}
-      >
+      <div className="flex flex-wrap gap-3 items-center justify-between mt-4 font-sans text-[13px] text-zinc-400">
         <div>
-          Exibindo <strong style={{ color: "#F9FAFB" }}>{paged.length}</strong> de{" "}
-          <strong style={{ color: "#F9FAFB" }}>{total}</strong> clientes · Página{" "}
-          <strong style={{ color: "#10B981" }}>{safePage + 1}</strong> de {totalPages}
+          Exibindo <strong className="text-zinc-100">{paged.length}</strong> de{" "}
+          <strong className="text-zinc-100">{total}</strong> clientes · Página{" "}
+          <strong className="text-emerald-400">{safePage + 1}</strong> de {totalPages}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="flex gap-2">
           <button
             type="button"
             disabled={safePage === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
-            style={{
-              height: 36,
-              padding: "0 14px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "#0B0F14",
-              color: safePage === 0 ? "#4B5563" : "#F9FAFB",
-              cursor: safePage === 0 ? "not-allowed" : "pointer",
-              fontWeight: 600,
-            }}
+            className="h-9 px-3.5 rounded-lg border border-zinc-800 bg-[#09090B] text-zinc-200 disabled:text-zinc-600 disabled:cursor-not-allowed font-semibold"
           >
             Anterior
           </button>
@@ -1174,16 +1091,7 @@ export default function AdminClientesPage() {
             type="button"
             disabled={safePage + 1 >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            style={{
-              height: 36,
-              padding: "0 14px",
-              borderRadius: 8,
-              border: "1px solid rgba(16,185,129,0.35)",
-              background: "#0B0F14",
-              color: safePage + 1 >= totalPages ? "#4B5563" : "#10B981",
-              cursor: safePage + 1 >= totalPages ? "not-allowed" : "pointer",
-              fontWeight: 600,
-            }}
+            className="h-9 px-3.5 rounded-lg border border-zinc-700 bg-[#09090B] text-emerald-400 disabled:text-zinc-600 disabled:cursor-not-allowed font-semibold"
           >
             Próxima
           </button>
@@ -1194,16 +1102,15 @@ export default function AdminClientesPage() {
       {showMobileFilters && (
         <div
           className="fixed inset-0 z-[900] flex items-end justify-center p-4 md:hidden"
-          style={{ background: "rgba(4,7,12,0.8)", backdropFilter: "blur(4px)" }}
+          style={{ background: "rgba(0,0,0,0.82)", backdropFilter: "blur(4px)" }}
           onClick={() => setShowMobileFilters(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl p-5 space-y-3 border"
-            style={{ background: "#111827", borderColor: "rgba(16,185,129,0.35)" }}
+            className="w-full max-w-md rounded-2xl p-5 space-y-3 border border-zinc-800 bg-[#121215]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-base font-bold text-white m-0">Filtros</h3>
+              <h3 className="font-display text-base font-bold text-zinc-100 m-0">Filtros</h3>
               <button
                 type="button"
                 onClick={() => setShowMobileFilters(false)}
@@ -1220,7 +1127,7 @@ export default function AdminClientesPage() {
                 setPage(0);
               }}
               placeholder="Buscar por nome, e-mail ou slug"
-              style={{ ...selectStyle, width: "100%", cursor: "text" }}
+              className="w-full h-10 bg-[#09090B] border border-zinc-800 rounded-xl px-3 text-sm text-zinc-100 outline-none"
             />
 
             <select
@@ -1229,7 +1136,7 @@ export default function AdminClientesPage() {
                 setFilterPix(e.target.value as PixFilter);
                 setPage(0);
               }}
-              style={{ ...selectStyle, width: "100%" }}
+              className={`${selectClass} w-full`}
             >
               <option value="all">Chave PIX: Todos</option>
               <option value="com_pix">Com chave PIX</option>
@@ -1242,7 +1149,7 @@ export default function AdminClientesPage() {
                 setFilterMonth(e.target.value);
                 setPage(0);
               }}
-              style={{ ...selectStyle, width: "100%" }}
+              className={`${selectClass} w-full`}
             >
               <option value="all">Mês de Aniversário: Todos</option>
               {MONTHS.map((m, idx) => (
@@ -1258,7 +1165,7 @@ export default function AdminClientesPage() {
                 setFilterCategory(e.target.value);
                 setPage(0);
               }}
-              style={{ ...selectStyle, width: "100%" }}
+              className={`${selectClass} w-full`}
             >
               <option value="all">Serviço: Todos</option>
               <option value="Mototáxi">Mototáxi</option>
@@ -1273,7 +1180,7 @@ export default function AdminClientesPage() {
                 setFilterPeriod(e.target.value);
                 setPage(0);
               }}
-              style={{ ...selectStyle, width: "100%" }}
+              className={`${selectClass} w-full`}
             >
               <option value="all">Período: Todo o período</option>
               <option value="today">Hoje</option>
@@ -1293,14 +1200,14 @@ export default function AdminClientesPage() {
                   setFilterPeriod("all");
                   setPage(0);
                 }}
-                className="flex-1 h-10 rounded-xl border border-white/10 text-zinc-300 text-sm font-semibold"
+                className="flex-1 h-10 rounded-xl border border-zinc-800 text-zinc-300 text-sm font-semibold"
               >
                 Limpar
               </button>
               <button
                 type="button"
                 onClick={() => setShowMobileFilters(false)}
-                className="flex-1 h-10 rounded-xl bg-emerald-500 text-[#04130D] text-sm font-bold"
+                className="flex-1 h-10 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-bold"
               >
                 Aplicar
               </button>
@@ -1325,6 +1232,11 @@ export default function AdminClientesPage() {
       <WhatsAppClientModal
         client={whatsAppTarget}
         onClose={() => setWhatsAppTarget(null)}
+      />
+
+      <ClientHistoryModal
+        client={historyTarget}
+        onClose={() => setHistoryTarget(null)}
       />
     </div>
   );

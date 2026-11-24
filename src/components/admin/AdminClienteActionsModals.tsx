@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Ban,
+  CheckCircle2,
   Clock,
   Eye,
   EyeOff,
+  History,
   Loader2,
   Lock,
   MessageCircle,
   Send,
   ShieldCheck,
   Trash2,
+  UserCheck,
+  UserPlus,
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -22,6 +26,9 @@ export interface AdminActionClientTarget {
   email: string;
   phone?: string | null;
   slug?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  cadastroCompleto?: boolean;
   isBlocked?: boolean;
   blockedUntil?: string | null;
   blockDurationLabel?: string | null;
@@ -60,8 +67,27 @@ export function formatBlockedSummary(target: {
   const until = target.blockedUntil ?? target.blocked_until;
   if (!until) return "Indefinido";
   const d = new Date(until);
-  if (!Number.isFinite(d.getTime())) return target.blockDurationLabel || target.block_duration_label || "Indefinido";
-  return `até ${d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+  if (!Number.isFinite(d.getTime())) {
+    return target.blockDurationLabel || target.block_duration_label || "Indefinido";
+  }
+  return `até ${d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+export function formatDateTimeBR(iso?: string | null): string {
+  if (!iso) return "Não registrada";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "Não registrada";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
 function cleanBrazilPhone(raw?: string | null): string {
@@ -73,6 +99,15 @@ function cleanBrazilPhone(raw?: string | null): string {
   return `55${digits}`;
 }
 
+function cleanLocalPhoneDigits(raw?: string | null): string {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length < 8) return "";
+  if (digits.startsWith("55") && digits.length > 10) {
+    return digits.slice(2);
+  }
+  return digits;
+}
+
 export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   key: WhatsAppTemplateKey;
   label: string;
@@ -81,7 +116,7 @@ export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   {
     key: "completar_cadastro",
     label: "1. Completar o cadastro",
-    description: "Convite para finalizar os dados cadastrais na plataforma UBT",
+    description: "Link direto de atualização cadastral com o telefone do cliente",
   },
   {
     key: "abrir_mercadopago",
@@ -105,12 +140,26 @@ export const WHATSAPP_TEMPLATE_OPTIONS: Array<{
   },
 ];
 
-export function buildWhatsAppTemplate(key: WhatsAppTemplateKey, clientName: string): string {
+export function buildCadastralUpdateUrl(clientPhone?: string | null): string {
+  const appOrigin = getAppOrigin();
+  const localDigits = cleanLocalPhoneDigits(clientPhone);
+  return localDigits
+    ? `${appOrigin}/atualizacao-cadastral?telefone=${encodeURIComponent(localDigits)}`
+    : `${appOrigin}/atualizacao-cadastral`;
+}
+
+export function buildWhatsAppTemplate(
+  key: WhatsAppTemplateKey,
+  clientName: string,
+  clientPhone?: string | null,
+): string {
   const firstName = String(clientName || "Cliente").trim().split(/\s+/)[0] || "Cliente";
   const appOrigin = getAppOrigin();
   switch (key) {
-    case "completar_cadastro":
-      return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 🌴\n\nNotamos que o seu cadastro na plataforma ainda está incompleto. Complete seus dados para aproveitar todos os benefícios, indicações e sorteios da UBT:\n${appOrigin}/login\n\nQualquer dúvida, estamos por aqui!`;
+    case "completar_cadastro": {
+      const updateUrl = buildCadastralUpdateUrl(clientPhone);
+      return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 🌴\n\nNotamos que o seu cadastro na plataforma ainda precisa ser completado. Acesse o link abaixo para atualizar seus dados em poucos minutos:\n${updateUrl}\n\nQualquer dúvida, estamos por aqui!`;
+    }
     case "abrir_mercadopago":
       return `Olá, ${firstName}! Tudo bem? Aqui é da equipe UBT Serviços 💳\n\nPara receber seus pagamentos e repasses automaticamente com split na UBT, conecte ou abra sua conta no Mercado Pago:\n• Abrir conta: https://www.mercadopago.com.br/hub/registration/landing\n• Conectar no app UBT: ${appOrigin}/app/config/financeiro\n\nSe precisar de ajuda, conte com a gente!`;
     case "cadastrar_pix":
@@ -186,25 +235,14 @@ export function DeleteClientAlertModal({
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ background: "rgba(4, 7, 12, 0.82)", backdropFilter: "blur(6px)" }}
+      style={{ background: "rgba(0, 0, 0, 0.84)", backdropFilter: "blur(6px)" }}
       onClick={() => !loading && onClose()}
     >
       <div
-        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          background: "#111827",
-          borderColor: "rgba(239, 68, 68, 0.45)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.65)",
-        }}
+        className="w-full max-w-md rounded-2xl border border-red-500/50 bg-[#121215] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="px-6 py-4 flex items-center justify-between border-b"
-          style={{
-            background: "rgba(239, 68, 68, 0.10)",
-            borderColor: "rgba(239, 68, 68, 0.25)",
-          }}
-        >
+        <div className="px-6 py-4 flex items-center justify-between border-b border-red-500/25 bg-red-950/30">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center">
               <AlertTriangle size={18} className="text-red-400" />
@@ -230,17 +268,11 @@ export function DeleteClientAlertModal({
         </div>
 
         <div className="p-6 space-y-4">
-          <div
-            className="rounded-xl p-4 border space-y-1.5"
-            style={{
-              background: "rgba(239, 68, 68, 0.08)",
-              borderColor: "rgba(239, 68, 68, 0.35)",
-            }}
-          >
+          <div className="rounded-xl p-4 border border-red-500/35 bg-red-950/25 space-y-1.5">
             <div className="text-[11px] uppercase tracking-wider font-bold text-red-400">
               Cliente selecionado para exclusão
             </div>
-            <div className="text-[15px] font-bold text-white">{client.name}</div>
+            <div className="text-[15px] font-bold text-zinc-100">{client.name}</div>
             <div className="text-[13px] text-red-200/90">{client.email}</div>
             <div className="text-[12px] font-mono text-red-300">
               Slug: {client.slug ? `@${client.slug}` : "Não definido"}
@@ -265,11 +297,7 @@ export function DeleteClientAlertModal({
                 placeholder="Digite sua senha de acesso"
                 autoComplete="current-password"
                 disabled={loading}
-                className="w-full h-10 rounded-xl pl-9 pr-10 text-sm text-white outline-none"
-                style={{
-                  background: "#0B0F14",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                }}
+                className="w-full h-10 rounded-xl pl-9 pr-10 text-sm text-zinc-100 bg-[#09090B] border border-zinc-800 outline-none focus:border-red-500"
               />
               <button
                 type="button"
@@ -292,11 +320,7 @@ export function DeleteClientAlertModal({
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ex.: solicitação do titular / cadastro duplicado"
               disabled={loading}
-              className="w-full h-10 rounded-xl px-3 text-sm text-white outline-none"
-              style={{
-                background: "#0B0F14",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
+              className="w-full h-10 rounded-xl px-3 text-sm text-zinc-100 bg-[#09090B] border border-zinc-800 outline-none focus:border-zinc-600"
             />
           </div>
 
@@ -311,7 +335,7 @@ export function DeleteClientAlertModal({
               type="button"
               disabled={loading}
               onClick={onClose}
-              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-white/10 hover:bg-white/5"
+              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60"
             >
               Cancelar
             </button>
@@ -405,32 +429,21 @@ export function BlockClientModal({
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ background: "rgba(4, 7, 12, 0.82)", backdropFilter: "blur(6px)" }}
+      style={{ background: "rgba(0, 0, 0, 0.84)", backdropFilter: "blur(6px)" }}
       onClick={() => !loading && onClose()}
     >
       <div
-        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          background: "#111827",
-          borderColor: currentlyBlocked ? "rgba(16, 185, 129, 0.35)" : "rgba(245, 158, 11, 0.40)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.65)",
-        }}
+        className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#121215] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="px-6 py-4 flex items-center justify-between border-b"
-          style={{
-            background: "#0B0F14",
-            borderColor: "rgba(255,255,255,0.08)",
-          }}
-        >
+        <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-800 bg-[#09090B]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center">
-              <Ban size={18} className="text-amber-400" />
+            <div className="w-9 h-9 rounded-xl bg-red-950/50 border border-red-500/60 flex items-center justify-center">
+              <Ban size={18} className="text-red-400" />
             </div>
             <div>
-              <h3 className="font-display text-[16px] font-bold text-white m-0">
-                {currentlyBlocked ? "Gerenciar Bloqueio" : "Bloquear Cliente"}
+              <h3 className="font-display text-[16px] font-bold text-zinc-100 m-0">
+                {currentlyBlocked ? "Gerenciar Bloqueio" : "Bloquear Usuário"}
               </h3>
               <p className="text-[12px] text-zinc-400 truncate max-w-[260px]">{client.name}</p>
             </div>
@@ -448,7 +461,7 @@ export function BlockClientModal({
 
         <div className="p-6 space-y-4">
           {currentlyBlocked && (
-            <div className="rounded-xl p-3.5 bg-red-500/10 border border-red-500/30 space-y-1.5">
+            <div className="rounded-xl p-3.5 bg-red-950/30 border border-red-500/40 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] uppercase tracking-wider font-bold text-red-400">
                   Bloqueio ativo atualmente
@@ -464,10 +477,10 @@ export function BlockClientModal({
                 type="button"
                 disabled={loading}
                 onClick={() => void runRpc("unblock")}
-                className="mt-2 w-full h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-[#04130D] font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                className="mt-2 w-full h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={16} />}
-                Desbloquear Cliente Agora
+                Desbloquear Usuário Agora
               </button>
             </div>
           )}
@@ -485,16 +498,14 @@ export function BlockClientModal({
                     type="button"
                     disabled={loading}
                     onClick={() => setDuration(opt.key)}
-                    className="p-3 rounded-xl text-left transition-all"
-                    style={{
-                      background: selected ? "rgba(245, 158, 11, 0.16)" : "#0B0F14",
-                      border: selected
-                        ? "1.5px solid #F59E0B"
-                        : "1px solid rgba(255,255,255,0.10)",
-                    }}
+                    className={`p-3 rounded-xl text-left transition-all border ${
+                      selected
+                        ? "bg-red-950/40 border-red-500 text-zinc-100"
+                        : "bg-[#09090B] border-zinc-800 text-zinc-300 hover:border-zinc-700"
+                    }`}
                   >
-                    <div className="flex items-center gap-1.5 text-[13px] font-bold text-white">
-                      <Clock size={13} className={selected ? "text-amber-400" : "text-zinc-500"} />
+                    <div className="flex items-center gap-1.5 text-[13px] font-bold">
+                      <Clock size={13} className={selected ? "text-red-400" : "text-zinc-500"} />
                       {opt.label}
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5">{opt.hint}</div>
@@ -514,11 +525,7 @@ export function BlockClientModal({
               onChange={(e) => setReason(e.target.value)}
               placeholder="Descreva brevemente o motivo (visível na auditoria e aviso ao cliente)..."
               disabled={loading}
-              className="w-full rounded-xl p-3 text-sm text-white outline-none resize-none"
-              style={{
-                background: "#0B0F14",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
+              className="w-full rounded-xl p-3 text-sm text-zinc-100 bg-[#09090B] border border-zinc-800 outline-none resize-none focus:border-zinc-600"
             />
           </div>
 
@@ -533,7 +540,7 @@ export function BlockClientModal({
               type="button"
               disabled={loading}
               onClick={onClose}
-              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-white/10 hover:bg-white/5"
+              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60"
             >
               Cancelar
             </button>
@@ -541,10 +548,10 @@ export function BlockClientModal({
               type="button"
               disabled={loading}
               onClick={() => void runRpc("block")}
-              className="h-10 px-4 rounded-xl text-sm font-bold text-[#0B0F14] bg-amber-400 hover:bg-amber-300 disabled:opacity-50 flex items-center gap-2 transition-colors"
+              className="h-10 px-4 rounded-xl text-sm font-bold border border-red-500 text-red-400 bg-red-950/35 hover:bg-red-950/70 disabled:opacity-50 flex items-center gap-2 transition-colors"
             >
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} />}
-              Aplicar Bloqueio
+              Bloquear Usuário
             </button>
           </div>
         </div>
@@ -569,9 +576,9 @@ export function WhatsAppClientModal({
   useEffect(() => {
     if (client) {
       setTemplateKey("completar_cadastro");
-      setMessageText(buildWhatsAppTemplate("completar_cadastro", client.name));
+      setMessageText(buildWhatsAppTemplate("completar_cadastro", client.name, client.phone));
     }
-  }, [client?.id]);
+  }, [client?.id, client?.phone]);
 
   const normalizedPhone = useMemo(() => cleanBrazilPhone(client?.phone), [client?.phone]);
 
@@ -579,7 +586,7 @@ export function WhatsAppClientModal({
 
   const handleSelectTemplate = (key: WhatsAppTemplateKey) => {
     setTemplateKey(key);
-    setMessageText(buildWhatsAppTemplate(key, client.name));
+    setMessageText(buildWhatsAppTemplate(key, client.name, client.phone));
   };
 
   const handleOpenWhatsApp = () => {
@@ -592,31 +599,20 @@ export function WhatsAppClientModal({
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ background: "rgba(4, 7, 12, 0.82)", backdropFilter: "blur(6px)" }}
+      style={{ background: "rgba(0, 0, 0, 0.84)", backdropFilter: "blur(6px)" }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          background: "#111827",
-          borderColor: "rgba(16, 185, 129, 0.40)",
-          boxShadow: "0 24px 60px rgba(0,0,0,0.65)",
-        }}
+        className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-[#121215] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="px-6 py-4 flex items-center justify-between border-b"
-          style={{
-            background: "#0B0F14",
-            borderColor: "rgba(255,255,255,0.08)",
-          }}
-        >
+        <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-800 bg-[#09090B]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center">
               <MessageCircle size={18} className="text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-display text-[16px] font-bold text-white m-0">
+              <h3 className="font-display text-[16px] font-bold text-zinc-100 m-0">
                 Enviar Mensagem por WhatsApp
               </h3>
               <p className="text-[12px] text-zinc-400">
@@ -653,17 +649,15 @@ export function WhatsAppClientModal({
                     key={opt.key}
                     type="button"
                     onClick={() => handleSelectTemplate(opt.key)}
-                    className={`p-2.5 rounded-xl text-left transition-all ${
+                    className={`p-2.5 rounded-xl text-left transition-all border ${
                       opt.key === "livre" ? "sm:col-span-2" : ""
+                    } ${
+                      selected
+                        ? "bg-emerald-500/15 border-emerald-500 text-zinc-100"
+                        : "bg-[#09090B] border-zinc-800 text-zinc-300 hover:border-zinc-700"
                     }`}
-                    style={{
-                      background: selected ? "rgba(16, 185, 129, 0.16)" : "#0B0F14",
-                      border: selected
-                        ? "1.5px solid #10B981"
-                        : "1px solid rgba(255,255,255,0.10)",
-                    }}
                   >
-                    <div className="text-[12px] font-bold text-white">{opt.label}</div>
+                    <div className="text-[12px] font-bold">{opt.label}</div>
                     <div className="text-[10px] text-zinc-400 mt-0.5">{opt.description}</div>
                   </button>
                 );
@@ -680,11 +674,7 @@ export function WhatsAppClientModal({
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               placeholder="Escreva sua mensagem..."
-              className="w-full rounded-xl p-3 text-sm text-white outline-none resize-y leading-relaxed"
-              style={{
-                background: "#0B0F14",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
+              className="w-full rounded-xl p-3 text-sm text-zinc-100 bg-[#09090B] border border-zinc-800 outline-none resize-y leading-relaxed focus:border-zinc-600"
             />
           </div>
 
@@ -692,7 +682,7 @@ export function WhatsAppClientModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-white/10 hover:bg-white/5"
+              className="h-10 px-4 rounded-xl text-sm font-semibold text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60"
             >
               Cancelar
             </button>
@@ -700,12 +690,304 @@ export function WhatsAppClientModal({
               type="button"
               disabled={!normalizedPhone || !messageText.trim()}
               onClick={handleOpenWhatsApp}
-              className="h-10 px-5 rounded-xl text-sm font-bold text-[#04130D] bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 flex items-center gap-2 transition-colors"
+              className="h-10 px-5 rounded-xl text-sm font-bold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 flex items-center gap-2 transition-colors"
             >
               <Send size={15} />
               Abrir no WhatsApp
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/* 4. MODAL DE HISTÓRICO AMIGÁVEL DO CLIENTE (LINHA DO TEMPO CRONOLÓGICA)     */
+/* ========================================================================== */
+interface TimelineEntry {
+  id: string;
+  timestamp: string;
+  title: string;
+  description: string;
+  actor?: string | null;
+  tone: "emerald" | "red" | "amber" | "zinc";
+}
+
+function translateAuditAction(row: any): {
+  title: string;
+  description: string;
+  tone: "emerald" | "red" | "amber" | "zinc";
+} {
+  const acao = String(row.acao || "").toLowerCase();
+  const motivo = row.motivo ? String(row.motivo) : "";
+  const durLabel = row.valor_novo?.block_duration_label || row.metadata?.duration_label || "";
+  const untilIso = row.valor_novo?.blocked_until || null;
+
+  if (acao === "bloquear_cliente") {
+    const prazo = untilIso
+      ? `até ${formatDateTimeBR(untilIso)}`
+      : durLabel || "Tempo indefinido";
+    return {
+      title: "Conta bloqueada pela administração",
+      description: [
+        `Prazo aplicado: ${durLabel ? `${durLabel} (${prazo})` : prazo}.`,
+        motivo ? `Motivo: ${motivo}` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      tone: "red",
+    };
+  }
+  if (acao === "desbloquear_cliente") {
+    return {
+      title: "Conta desbloqueada pela administração",
+      description: motivo || "O acesso do cliente à plataforma foi restabelecido.",
+      tone: "emerald",
+    };
+  }
+  if (acao === "deletar_cliente" || acao === "deletar_cliente_concluido") {
+    return {
+      title: "Exclusão definitiva de conta",
+      description: motivo || "Registro de exclusão administrativa.",
+      tone: "red",
+    };
+  }
+  if (acao.includes("pix")) {
+    return {
+      title: "Atualização de Chave PIX",
+      description: motivo || "Dados cadastrais de chave PIX atualizados.",
+      tone: "emerald",
+    };
+  }
+  if (acao.includes("slug") || acao.includes("referral")) {
+    return {
+      title: "Atualização de Slug UBT",
+      description: motivo || "Identificador/slug de indicação alterado.",
+      tone: "zinc",
+    };
+  }
+  if (acao.includes("kyc") || acao.includes("aprov")) {
+    return {
+      title: "Atualização de verificação / aprovação",
+      description: motivo || `Evento registrado (${acao.replace(/_/g, " ")}).`,
+      tone: "amber",
+    };
+  }
+  return {
+    title: acao ? acao.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : "Ação administrativa",
+    description: motivo || "Alteração registrada na trilha de auditoria do sistema.",
+    tone: "zinc",
+  };
+}
+
+export function ClientHistoryModal({
+  client,
+  onClose,
+}: {
+  client: AdminActionClientTarget | null;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!client?.id) {
+      setEntries([]);
+      return;
+    }
+
+    let active = true;
+    const loadHistory = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [{ data: userRow }, { data: auditRows, error: auditErr }] = await Promise.all([
+          supabase
+            .from("usuarios")
+            .select("created_at, updated_at, cadastro_completo, is_blocked, blocked_at, blocked_until, block_duration_label, blocked_reason")
+            .eq("id", client.id)
+            .maybeSingle(),
+          supabase
+            .from("admin_audit_logs")
+            .select("id, created_at, admin_nome, admin_email, acao, motivo, resultado, valor_novo, metadata")
+            .eq("registro_id", client.id)
+            .order("created_at", { ascending: false })
+            .limit(50),
+        ]);
+
+        if (auditErr) {
+          console.warn("[ClientHistoryModal] Aviso ao ler admin_audit_logs:", auditErr.message);
+        }
+
+        const timeline: TimelineEntry[] = [];
+
+        const createdAt = userRow?.created_at || client.createdAt;
+        if (createdAt) {
+          timeline.push({
+            id: `created-${client.id}`,
+            timestamp: createdAt,
+            title: "Conta criada na plataforma UBT",
+            description: "Cadastro inicial do cliente registrado no sistema.",
+            tone: "emerald",
+          });
+        }
+
+        const updatedAt = userRow?.updated_at || client.updatedAt;
+        if (
+          updatedAt &&
+          createdAt &&
+          Math.abs(new Date(updatedAt).getTime() - new Date(createdAt).getTime()) > 60_000
+        ) {
+          timeline.push({
+            id: `updated-${client.id}`,
+            timestamp: updatedAt,
+            title: userRow?.cadastro_completo || client.cadastroCompleto
+              ? "Cadastro atualizado / concluído"
+              : "Última atualização cadastral",
+            description:
+              userRow?.cadastro_completo || client.cadastroCompleto
+                ? "Os dados cadastrais do cliente foram atualizados e constam como completos."
+                : "Última modificação registrada na ficha do cliente.",
+            tone: "zinc",
+          });
+        }
+
+        for (const row of auditRows || []) {
+          const translated = translateAuditAction(row);
+          const actor = row.admin_nome || row.admin_email || null;
+          timeline.push({
+            id: String(row.id),
+            timestamp: row.created_at,
+            title: translated.title,
+            description: translated.description,
+            actor,
+            tone: translated.tone,
+          });
+        }
+
+        timeline.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        if (active) setEntries(timeline);
+      } catch (err: any) {
+        if (active) setError(err?.message || "Não foi possível carregar o histórico do cliente.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadHistory();
+    return () => {
+      active = false;
+    };
+  }, [client?.id]);
+
+  if (!client) return null;
+
+  const toneBadge = (tone: TimelineEntry["tone"]) => {
+    if (tone === "emerald") return "bg-emerald-500/15 border-emerald-500/40 text-emerald-400";
+    if (tone === "red") return "bg-red-950/60 border-red-500/50 text-red-400";
+    if (tone === "amber") return "bg-amber-500/15 border-amber-500/40 text-amber-400";
+    return "bg-zinc-900 border-zinc-700 text-zinc-300";
+  };
+
+  const toneIcon = (tone: TimelineEntry["tone"], title: string) => {
+    if (title.includes("criada")) return <UserPlus size={14} />;
+    if (tone === "red") return <Ban size={14} />;
+    if (tone === "emerald") return <CheckCircle2 size={14} />;
+    return <UserCheck size={14} />;
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      style={{ background: "rgba(0, 0, 0, 0.84)", backdropFilter: "blur(6px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-zinc-800 bg-[#121215] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 flex items-center justify-between border-b border-zinc-800 bg-[#09090B]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-700 flex items-center justify-center">
+              <History size={18} className="text-zinc-200" />
+            </div>
+            <div>
+              <h3 className="font-display text-[16px] font-bold text-zinc-100 m-0">
+                Histórico do Cliente
+              </h3>
+              <p className="text-[12px] text-zinc-400">
+                {client.name} {client.slug ? `· @${client.slug}` : ""}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white p-1 rounded-lg"
+            aria-label="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-3 flex-1">
+          {loading ? (
+            <div className="py-12 flex items-center justify-center gap-2 text-zinc-400 text-sm">
+              <Loader2 size={16} className="animate-spin text-emerald-400" />
+              Carregando linha do tempo...
+            </div>
+          ) : error ? (
+            <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs">
+              ⚠️ {error}
+            </div>
+          ) : entries.length === 0 ? (
+            <div className="py-10 text-center text-zinc-400 text-sm">
+              Nenhum evento registrado para este cliente até o momento.
+            </div>
+          ) : (
+            <div className="relative pl-5 border-l border-zinc-800 space-y-4">
+              {entries.map((item) => (
+                <div key={item.id} className="relative">
+                  <span
+                    className={`absolute -left-[29px] top-0.5 w-6 h-6 rounded-full border flex items-center justify-center ${toneBadge(
+                      item.tone,
+                    )}`}
+                  >
+                    {toneIcon(item.tone, item.title)}
+                  </span>
+                  <div className="rounded-xl p-3.5 bg-[#09090B] border border-zinc-800/90">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[13px] font-bold text-zinc-100">{item.title}</span>
+                      <span className="font-mono text-[11px] text-zinc-400">
+                        {formatDateTimeBR(item.timestamp)}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-zinc-300 mt-1 mb-0 leading-relaxed">
+                      {item.description}
+                    </p>
+                    {item.actor && (
+                      <div className="text-[11px] text-zinc-500 mt-1.5">
+                        Executado por: <span className="text-zinc-300 font-medium">{item.actor}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-3.5 border-t border-zinc-800 bg-[#09090B] flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 px-4 rounded-xl text-xs font-semibold text-zinc-200 border border-zinc-700 hover:bg-zinc-800"
+          >
+            Fechar
+          </button>
         </div>
       </div>
     </div>
