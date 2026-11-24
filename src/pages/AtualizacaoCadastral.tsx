@@ -112,6 +112,8 @@ export default function AtualizacaoCadastral() {
 
   // Etapa 1: Dados Pessoais
   const [isPersonalUnlocked, setIsPersonalUnlocked] = useState(false);
+  const [hasInitialCpf, setHasInitialCpf] = useState(false);
+  const [hasInitialCnpj, setHasInitialCnpj] = useState(false);
   const [tipoPessoa, setTipoPessoa] = useState<"PF" | "PJ">("PF");
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
@@ -193,9 +195,13 @@ export default function AtualizacaoCadastral() {
 
     setTipoPessoa(isPJLead ? "PJ" : "PF");
     setNome(leadData.nome || "");
-    setCpf(leadData.cpf ? maskCPF(leadData.cpf) : "");
+    const rawCpfDigits = String(leadData.cpf || "").replace(/\D/g, "");
+    const rawCnpjDigits = String(leadData.cnpj || "").replace(/\D/g, "");
+    setHasInitialCpf(rawCpfDigits.length === 11);
+    setHasInitialCnpj(rawCnpjDigits.length === 14);
+    setCpf(rawCpfDigits ? maskCPF(rawCpfDigits) : "");
     setRazaoSocial(leadData.razao_social || leadData.nome || "");
-    setCnpj(leadData.cnpj ? maskCNPJ(leadData.cnpj) : "");
+    setCnpj(rawCnpjDigits ? maskCNPJ(rawCnpjDigits) : "");
     setResponsavelLegal(leadData.responsavel_legal || "");
     setCpfResponsavel(
       leadData.cpf_responsavel 
@@ -1008,31 +1014,29 @@ export default function AtualizacaoCadastral() {
   const validateStep1 = (): boolean => {
     setStep1Error("");
 
-    if (isPersonalUnlocked) {
-      if (tipoPessoa === "PF") {
-        if (!nome.trim() || nome.trim().length < 3) {
-          setStep1Error("O nome completo deve ter no mínimo 3 caracteres.");
-          return false;
-        }
-        if (cpf && !isValidCPF(cpf)) {
-          setStep1Error("O CPF informado é inválido.");
-          return false;
-        }
-      } else {
-        if (!razaoSocial.trim() || razaoSocial.trim().length < 3) {
-          setStep1Error("A razão social / nome da entidade é obrigatório.");
-          return false;
-        }
-        if (cnpj && !isValidCNPJ(cnpj)) {
-          setStep1Error("O CNPJ informado é inválido.");
-          return false;
-        }
-      }
-
-      if (email && !isValidEmail(email)) {
-        setStep1Error("Informe um e-mail válido.");
+    if (tipoPessoa === "PF") {
+      if (cpf.trim() && !isValidCPF(cpf)) {
+        setStep1Error("O CPF informado é inválido.");
         return false;
       }
+      if (isPersonalUnlocked && (!nome.trim() || nome.trim().length < 3)) {
+        setStep1Error("O nome completo deve ter no mínimo 3 caracteres.");
+        return false;
+      }
+    } else {
+      if (cnpj.trim() && !isValidCNPJ(cnpj)) {
+        setStep1Error("O CNPJ informado é inválido.");
+        return false;
+      }
+      if (isPersonalUnlocked && (!razaoSocial.trim() || razaoSocial.trim().length < 3)) {
+        setStep1Error("A razão social / nome da entidade é obrigatório.");
+        return false;
+      }
+    }
+
+    if (isPersonalUnlocked && email && !isValidEmail(email)) {
+      setStep1Error("Informe um e-mail válido.");
+      return false;
     }
 
     // Senha (opcional na atualização se já tiver conta, mas se digitou deve ser válida)
@@ -1132,14 +1136,19 @@ export default function AtualizacaoCadastral() {
         updatePayload.nao_atua_praias = naoAtuaPraias;
       }
 
+      // Sempre envia CPF/CNPJ quando preenchidos (inclusive quando estavam vazios no banco e foram preenchidos agora)
+      if (tipoPessoa === "PF" && cleanCpf) {
+        updatePayload.cpf = cleanCpf;
+      } else if (tipoPessoa === "PJ" && cleanCnpj) {
+        updatePayload.cnpj = cleanCnpj;
+      }
+
       if (isPersonalUnlocked) {
         if (tipoPessoa === "PF") {
           updatePayload.nome = nome.trim();
-          if (cleanCpf) updatePayload.cpf = cleanCpf;
         } else {
           updatePayload.razao_social = razaoSocial.trim();
           updatePayload.nome = razaoSocial.trim();
-          if (cleanCnpj) updatePayload.cnpj = cleanCnpj;
           if (responsavelLegal) updatePayload.responsavel_legal = responsavelLegal.trim();
           if (cpfResponsavel) updatePayload.cpf_responsavel = cpfResponsavel.replace(/\D/g, "");
         }
@@ -1147,7 +1156,7 @@ export default function AtualizacaoCadastral() {
         if (rawDigitsTel) updatePayload.telefone = rawDigitsTel;
       }
 
-      // 1. Atualiza na tabela usuarios via RPC SECURITY DEFINER (garante persistência de chave_pix, cadastro_completo e slug único)
+      // 1. Atualiza na tabela usuarios via RPC SECURITY DEFINER (garante persistência de chave_pix, cpf/cnpj, cadastro_completo e slug único)
       const usuarioUpdatePayload: Record<string, any> = {
         bairro_residencia: effectiveMatrizOrResidencia || null,
         bairro_moradia: effectiveMatrizOrResidencia || null,
@@ -1184,14 +1193,18 @@ export default function AtualizacaoCadastral() {
         },
       };
 
+      if (tipoPessoa === "PF" && cleanCpf) {
+        usuarioUpdatePayload.cpf = cleanCpf;
+      } else if (tipoPessoa === "PJ" && cleanCnpj) {
+        usuarioUpdatePayload.cnpj = cleanCnpj;
+      }
+
       if (isPersonalUnlocked) {
         if (tipoPessoa === "PF") {
           usuarioUpdatePayload.nome = nome.trim();
-          if (cleanCpf) usuarioUpdatePayload.cpf = cleanCpf;
         } else {
           usuarioUpdatePayload.razao_social = razaoSocial.trim();
           usuarioUpdatePayload.nome = razaoSocial.trim();
-          if (cleanCnpj) usuarioUpdatePayload.cnpj = cleanCnpj;
           if (responsavelLegal) usuarioUpdatePayload.responsavel_legal = responsavelLegal.trim();
           if (cpfResponsavel) usuarioUpdatePayload.cpf_responsavel = cpfResponsavel.replace(/\D/g, "");
         }
@@ -1783,12 +1796,14 @@ export default function AtualizacaoCadastral() {
                         </label>
                         <input
                           type="text"
-                          readOnly={!isPersonalUnlocked}
+                          inputMode="numeric"
+                          readOnly={hasInitialCpf && !isPersonalUnlocked}
                           value={cpf}
                           onChange={(e) => setCpf(maskCPF(e.target.value))}
+                          placeholder="000.000.000-00"
                           maxLength={14}
                           className={`w-full px-4 py-2.5 rounded-xl bg-black border text-sm font-mono outline-none ${
-                            isPersonalUnlocked
+                            !hasInitialCpf || isPersonalUnlocked
                               ? "border-zinc-700 focus:border-green text-white"
                               : "border-zinc-800 text-zinc-400 cursor-not-allowed bg-zinc-900/30"
                           }`}
@@ -1855,12 +1870,14 @@ export default function AtualizacaoCadastral() {
                         </label>
                         <input
                           type="text"
-                          readOnly={!isPersonalUnlocked}
+                          inputMode="numeric"
+                          readOnly={hasInitialCnpj && !isPersonalUnlocked}
                           value={cnpj}
                           onChange={(e) => setCnpj(maskCNPJ(e.target.value))}
+                          placeholder="00.000.000/0000-00"
                           maxLength={18}
                           className={`w-full px-4 py-2.5 rounded-xl bg-black border text-sm font-mono outline-none ${
-                            isPersonalUnlocked
+                            !hasInitialCnpj || isPersonalUnlocked
                               ? "border-zinc-700 focus:border-green text-white"
                               : "border-zinc-800 text-zinc-400 cursor-not-allowed bg-zinc-900/30"
                           }`}
