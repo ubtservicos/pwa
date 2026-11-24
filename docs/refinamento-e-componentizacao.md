@@ -408,3 +408,14 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
 - **Isolamento de credenciais:** `MP_ENVIRONMENT=production` preservado, nenhum secret de Sandbox/Homologação presente em `bfqidoduceusbqlnrsol`, e `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` nativos apontando exclusivamente para `bfqidoduceusbqlnrsol`.
 - **Edge Functions em Produção:** `admin-delete-client` (`v1`, `ACTIVE`, `verify_jwt: true`) adicionada sem impacto em `payment-gateway` (`v10`), `payment-webhook` (`v5`) e `checkout` (`v4`).
 - **Validação & Release (`v1.6.0-admin-clientes-entidades-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
+
+### 9.6 Adendo `v1.6.1-atualizacao-cadastral-prod`: Fluxo Unificado de Atualização Cadastral (PF/PJ) e Link nas Fichas Admin
+- **Link de Atualização Cadastral nas fichas do Superadmin (`/admin/clientes/:id` e `/admin/entidades/:id`):**
+  - Adicionado em `AdminClienteDetailPage.tsx` e `AdminEntidadeDetailPage.tsx`, logo abaixo do bloco **Link de Apadrinhamento**, um bloco dedicado intitulado **Link de Atualização Cadastral** com botão **Copiar Link** (`Copiado!`).
+  - Formato dinâmico da URL: `${origin}/atualizacao-cadastral?telefone=<digitos>` (com fallback para `?email=<email>` quando não houver telefone cadastrado, ou `/atualizacao-cadastral`).
+- **Fluxo unificado de `/atualizacao-cadastral` (`AtualizacaoCadastral.tsx`) + RPC `public.resolve_cadastral_login_email`:**
+  - Migração idempotente `20261124160000_resolve_cadastral_login_email_rpc.sql` aplicada em Homologação e Produção (`bfqidoduceusbqlnrsol`, zero transferência de dados — `usuarios`: `11 → 11`, `auth.users`: `9 → 9`, `waitlist`: `9 → 9`), criando `public.resolve_cadastral_login_email(p_cnpj, p_telefone)` (`SECURITY DEFINER`, `GRANT EXECUTE TO anon, authenticated`), que retorna estritamente `{ email, tipo_pessoa, has_auth_account }`.
+  - Alternância clara na entrada entre **Pessoa Física (E-mail + Senha)** e **Entidade / PJ (CNPJ + Senha)**, com pré-seleção automática para PJ quando `?telefone=` pertence a uma entidade e pré-preenchimento opcional de e-mail sem nunca bloquear usuários fora da `waitlist`.
+  - **PF:** autentica diretamente via `signInWithPassword({ email, password })` e carrega/persiste dados diretamente em `public.usuarios` (com `waitlist` apenas como complemento opcional).
+  - **PJ:** resolve o e-mail exato do Supabase Auth via `resolve_cadastral_login_email({ p_cnpj })` antes de autenticar; para contas legadas sem senha no Auth (`has_auth_account = false`), orienta e disponibiliza envio de link de definição/redefinição de senha (`resetPasswordForEmail`).
+- **Validação & Release (`v1.6.1-atualizacao-cadastral-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
