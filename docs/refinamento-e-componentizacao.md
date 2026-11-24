@@ -361,3 +361,50 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
 - **Isolamento de ambientes:** Produção (`bfqidoduceusbqlnrsol` / `ubtservicos.vercel.app`) mantém `MP_ENVIRONMENT=production` e credenciais reais exclusivas, sem qualquer secret ou dado de Sandbox/Homologação (`xqujubbqcfqxkfczbidq`).
 - **Edge Functions em Produção:** `payment-gateway` (`v10`, `ACTIVE`, `verify_jwt: true`) e `payment-webhook` (`v5`, `ACTIVE`, `verify_jwt: false`).
 - **Validação & Release (`v1.5.0-mototaxi-pagamentos-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
+
+
+---
+
+## 9. Reestruturação Cadastral de Clientes e Entidades (PJ) no Superadmin, Bloqueio, Exclusão com Senha e Histórico Auditável (`v1.6.0-admin-clientes-entidades-prod`)
+
+> **Status:** HOMOLOGADO E PROMOVIDO PARA PRODUÇÃO  
+> **Tag de Release:** `v1.6.0-admin-clientes-entidades-prod`  
+> **Ambientes:** Produção ([ubtservicos.vercel.app](https://ubtservicos.vercel.app) / `bfqidoduceusbqlnrsol`) e Homologação ([ubt-homologacao.vercel.app](https://ubt-homologacao.vercel.app) / `xqujubbqcfqxkfczbidq`)  
+> **Data de Promoção:** 24 de Novembro de 2026  
+
+### 9.1 Migração Idempotente e Edge Function de Exclusão Segura (Homologação & Produção)
+
+| Artefato | Responsabilidade Principal |
+| :--- | :--- |
+| `20261124140000_admin_clientes_bloqueio_e_auditoria.sql` | Adiciona colunas de controle de bloqueio em `public.usuarios` (`is_blocked`, `blocked_until`, `block_duration_label`, `blocked_reason`, `blocked_by`, `blocked_at`), índice parcial `idx_usuarios_is_blocked`, cria a RPC `SECURITY DEFINER` `public.admin_bloquear_desbloquear_cliente(p_user_id, p_action, p_duration, p_reason)` com gravação automática em `public.admin_audit_logs`, concede `EXECUTE` a `authenticated` e executa reload de schema/config no PostgREST. |
+| `supabase/functions/admin-delete-client/index.ts` | Edge Function (`verify_jwt: true`) que autentica o chamador, confirma permissão de `admin`/`super_admin`, valida a senha atual do Superadmin via Supabase Auth (`signInWithPassword` com `SUPABASE_ANON_KEY`), grava trilha completa de auditoria em `public.admin_audit_logs` e remove definitivamente o cadastro (`public.usuarios`, `public.profiles` e `auth.users` via `service_role`), impedindo autoexclusão administrativa. |
+
+### 9.2 Listagens 100% Cadastrais, Paleta Preto & Cinza, Ordenação (`Order by`) e Congelamento Horizontal (`sticky`)
+- **Remoção de dados financeiros:** as telas `/admin/clientes` (`AdminClientesPage.tsx`), `/admin/clientes/:id` (`AdminClienteDetailPage.tsx`), `/admin/entidades` (`AdminEntidadesPage.tsx`) e `/admin/entidades/:id` (`AdminEntidadeDetailPage.tsx`) passaram a operar com foco 100% cadastral, sem exibição de saldos, extratos ou valores monetários.
+- **Identidade visual neutra preto e cinza:** adotada paleta de alto contraste (`#09090B` / `bg-zinc-950`, `#121215` / `bg-zinc-900`, bordas `border-zinc-800`, textos `text-zinc-100` / `text-zinc-400`), reservando cores de acento exclusivamente para semântica funcional (esmeralda para ativo/sucesso, vermelho para bloqueio/exclusão e âmbar para alertas/incompleto).
+- **Ordenação clicável em todos os cabeçalhos (`Order by`):** todos os cabeçalhos de coluna de `/admin/clientes` e `/admin/entidades` alternam ordenação crescente/decrescente com indicador visual (`ArrowUpDown`, `ArrowUp`, `ArrowDown`).
+- **Congelamento horizontal (`sticky`) das duas primeiras colunas:**
+  - `/admin/clientes`: **1ª coluna (`Nome`)** fixa em `sticky left-0` (`240px`) e **2ª coluna (`Slug`)** fixa em `sticky left-[240px]` (`170px`).
+  - `/admin/entidades`: **1ª coluna (`Entidade / Razão Social`)** fixa em `sticky left-0` (`260px`) e **2ª coluna (`CNPJ`)** fixa em `sticky left-[260px]` (`175px`), seguidas por `Slug`, `Responsável Legal`, `Contato`, `Cadastro`, `Entidade desde`, `Status` e `Ações`.
+  - Ambas as tabelas usam `overflow-x-auto`, `border-separate border-spacing-0`, fundos sólidos opacos (`bg-zinc-950` no `<thead>`, `bg-zinc-900` / `group-hover:bg-zinc-800` no `<tbody>`, e tom sólido escuro avermelhado para linhas bloqueadas), `z-30` / `z-20` e divisor direito `border-r border-zinc-800` na 2ª coluna fixa.
+- **Filtro de Chave PIX em 3 estados e datas de entrada:**
+  - Seletor unificado `Chave PIX: Todos` / `Com chave PIX` / `Sem chave PIX` em ambas as telas.
+  - Colunas dedicadas **`Cliente desde`** (`/admin/clientes`) e **`Entidade desde`** (`/admin/entidades`) formatadas em `dd/MM/yyyy` e ordenáveis.
+
+### 9.3 Páginas Cadastrais Dedicadas (`/admin/clientes/:id` e `/admin/entidades/:id`)
+- Substituíram os antigos modais de visualização rápida por páginas completas com breadcrumb, ações administrativas no cabeçalho e edição inline assistida.
+- **Separação explícita entre `Slug UBT` e `Link de Apadrinhamento`:** cada ficha exibe em blocos independentes o identificador **Slug UBT** (editável inline + cópia rápida) e o **Link de Apadrinhamento / Convite** completo (com botão de cópia dedicado), eliminando ambiguidades operacionais.
+- **`/admin/entidades/:id` (`AdminEntidadeDetailPage.tsx`):** organizada em 6 seções cadastrais — *Dados da Pessoa Jurídica* (com Slug e Link de Apadrinhamento separados), *Responsável Legal*, *Contato & Localização*, *Membros / Apadrinhados Vinculados*, *Situação Cadastral PIX & Mercado Pago* (indicadores `Sim`/`Não` + `AdminPixQuickEditor`) e *Status de Acesso / Bloqueio*.
+
+### 9.4 As 5 Ações Administrativas Padronizadas (`AdminClienteActionsModals.tsx`)
+1. **Visualizar:** navega diretamente para `/admin/clientes/:id` ou `/admin/entidades/:id`.
+2. **Histórico (`ClientHistoryModal`):** consulta `public.admin_audit_logs` do registro e apresenta linha do tempo amigável (cadastro, alterações, bloqueios, desbloqueios e ações administrativas com responsável e data/hora).
+3. **Bloquear / Desbloquear (`BlockClientModal`):** acionamento visual com botão em borda avermelhada (`border-red-500 text-red-400`), suportando durações **`24 horas`**, **`1 semana`**, **`1 mês`** e **`Tempo indefinido`** via RPC `admin_bloquear_desbloquear_cliente`, com enforcement ativo de sessão (`AuthContext.tsx` / `ProtectedRoute.tsx`) que desconecta e exibe motivo/prazo ao usuário bloqueado.
+4. **WhatsApp (`WhatsAppClientModal`):** oferece **5 templates** prontos (adaptados para PF em Clientes e PJ em Entidades) com preenchimento automático do link dinâmico de atualização cadastral (`${origin}/atualizacao-cadastral?telefone=<digitos>`).
+5. **Deletar (`DeleteClientAlertModal`):** exibe *Alert de Prevenção de Erros* com resumo dos dados do alvo (PF ou PJ: Razão Social, CNPJ, E-mail e Slug) e exige confirmação da **senha atual do Superadmin**, validada server-side pela Edge Function `admin-delete-client`.
+
+### 9.5 Isolamento de Produção (`bfqidoduceusbqlnrsol`) e Validação (`v1.6.0-admin-clientes-entidades-prod`)
+- **Zero transferência de dados:** aplicação exclusiva de DDL/RPC em `bfqidoduceusbqlnrsol` comprovada por contagem idêntica pré e pós-migração (`public.usuarios`: `12 → 12`, `auth.users`: `10 → 10`, `public.admin_audit_logs`: `11 → 11`, Superadmin intacto).
+- **Isolamento de credenciais:** `MP_ENVIRONMENT=production` preservado, nenhum secret de Sandbox/Homologação presente em `bfqidoduceusbqlnrsol`, e `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` nativos apontando exclusivamente para `bfqidoduceusbqlnrsol`.
+- **Edge Functions em Produção:** `admin-delete-client` (`v1`, `ACTIVE`, `verify_jwt: true`) adicionada sem impacto em `payment-gateway` (`v10`), `payment-webhook` (`v5`) e `checkout` (`v4`).
+- **Validação & Release (`v1.6.0-admin-clientes-entidades-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
