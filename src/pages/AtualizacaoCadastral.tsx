@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Loader2,
+  Search,
   AlertCircle,
   Check,
   Lock,
@@ -468,8 +469,12 @@ export default function AtualizacaoCadastral() {
           ? window.location.origin
           : "https://ubtservicos.vercel.app";
       const targetEmail = (recoveryEmail || authEmail || "").trim().toLowerCase();
-      const redirectTo = targetEmail
-        ? `${origin}/atualizacao-cadastral?email=${encodeURIComponent(targetEmail)}`
+      const params = new URLSearchParams();
+      if (targetEmail) params.set("email", targetEmail);
+      if (hintPhone) params.set("telefone", hintPhone);
+      const qs = params.toString();
+      const redirectTo = qs
+        ? `${origin}/atualizacao-cadastral?${qs}`
         : `${origin}/atualizacao-cadastral`;
 
       const { error } = await supabase.auth.signInWithOAuth({
