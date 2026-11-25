@@ -588,11 +588,12 @@ async function handleGetCheckoutConfig(req: Request, body: Record<string, any>):
       "A conta OAuth do Seller não possui Public Key para tokenizar o cartão.",
     );
   }
+  const platformPublicKey = (Deno.env.get("MP_PUBLIC_KEY") || Deno.env.get("MERCADOPAGO_PUBLIC_KEY") || "").trim() || null;
   return json(req, {
     success: true,
     environment,
     payment_route: route.mode,
-    public_key: route.checkoutPublicKey,
+    public_key: route.checkoutPublicKey || platformPublicKey,
     fallback_reason: route.fallbackReason,
     fee_settings: {
       taxa_pix_pct: feeSettings.taxaPixPct,
@@ -887,14 +888,73 @@ async function finalizeSplitRecord(input: {
   return !error;
 }
 
+const collectorEmailCache = new Map<string, string>();
+
+async function resolveCollectorEmail(authToken: string): Promise<string> {
+  const cacheKey = authToken.slice(-16);
+  const cached = collectorEmailCache.get(cacheKey);
+  if (cached) return cached;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch("https://api.mercadopago.com/users/me", {
+      headers: { Authorization: `Bearer ${authToken}`, Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (res.ok) {
+      const me = await res.json().catch(() => ({}));
+      const email = String(me?.email || "").trim().toLowerCase();
+      if (email) {
+        collectorEmailCache.set(cacheKey, email);
+        return email;
+      }
+    }
+  } catch {
+    // non-blocking
+  } finally {
+    clearTimeout(timeout);
+  }
+  return "ubt.servicos@gmail.com";
+}
+
+function translateMercadoPagoError(data: Record<string, any>): string {
+  const rawMessage = String(data?.message || data?.error || "")
+    .replace(/rendernull\b/gi, "render")
+    .replace(/null\s*$/i, "")
+    .trim();
+  const causeDescriptions = Array.isArray(data?.cause)
+    ? data.cause.map((c: any) => String(c?.description || "")).join(" ")
+    : "";
+  const combined = `${rawMessage} ${causeDescriptions}`.toLowerCase();
+
+  if (combined.includes("without key enabled for qr render")) {
+    return "Chave PIX ainda não está ativada para QR Code na conta Mercado Pago recebedora. Ative a chave PIX (CNPJ 68.394.558/0001-32) no app Mercado Pago e tente novamente.";
+  }
+  if (combined.includes("payer and collector cannot be the same") || combined.includes("cannot pay to yourself")) {
+    return "O pagador e o recebedor não podem usar a mesma conta Mercado Pago. Tente novamente com um e-mail diferente.";
+  }
+  if (combined.includes("invalid payer email") || combined.includes("payer.email")) {
+    return "E-mail do pagador inválido para processamento no Mercado Pago.";
+  }
+  if (combined.includes("transaction_amount") || combined.includes("invalid amount")) {
+    return "Valor da cobrança inválido para processamento no Mercado Pago.";
+  }
+  return rawMessage || "Pagamento rejeitado pelo Mercado Pago.";
+}
+
 function mpErrorDetails(data: Record<string, any>): Array<{ code?: string | number; description: string }> {
   if (Array.isArray(data?.cause)) {
     return data.cause.slice(0, 10).map((cause: any) => ({
       code: cause?.code,
-      description: String(cause?.description || "Erro não detalhado").slice(0, 500),
+      description: String(cause?.description || "Erro não detalhado")
+        .replace(/rendernull\b/gi, "render")
+        .replace(/null\s*$/i, "")
+        .trim()
+        .slice(0, 500),
     }));
   }
-  return [{ code: data?.error, description: String(data?.message || data?.error || "Pagamento rejeitado").slice(0, 500) }];
+  return [{ code: data?.error, description: translateMercadoPagoError(data).slice(0, 500) }];
 }
 
 function allowedRedirectUri(requested: unknown): string {
@@ -1452,25 +1512,27 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     effectiveTomadorId = ride.tomador_id;
 
     if (providerInitiatedMototaxiPix) {
-      const [{ data: payerAuth, error: payerAuthError }, { data: payerProfile }] = await Promise.all([
+      const [{ data: payerAuth }, { data: payerProfile }] = await Promise.all([
         adminClient().auth.admin.getUserById(ride.tomador_id),
-        adminClient().from("usuarios").select("nome").eq("id", ride.tomador_id).maybeSingle(),
+        adminClient().from("usuarios").select("nome, email, cpf").eq("id", ride.tomador_id).maybeSingle(),
       ]);
-      if (payerAuthError || !payerAuth.user?.email) {
-        if (environment === "production") {
-          throw new HttpError(409, "payer_identity_missing", "O Tomador não possui e-mail válido para o pagamento.");
-        }
-      }
 
-      const payerName = String(payerProfile?.nome || payerAuth.user?.user_metadata?.full_name || "").trim();
-      const [payerFirstName = "", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
-      const payerCpf = String(payerAuth.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+      const resolvedEmail = String(
+        payerAuth?.user?.email ||
+        payerProfile?.email ||
+        body.payer_email ||
+        `tomador+${ride.tomador_id.slice(0, 8)}@ubtservicos.com.br`
+      ).trim().toLowerCase();
+
+      const payerName = String(payerProfile?.nome || payerAuth?.user?.user_metadata?.full_name || "Passageiro UBT").trim();
+      const [payerFirstName = "Passageiro", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
+      const payerCpf = String(payerProfile?.cpf || payerAuth?.user?.user_metadata?.cpf || "").replace(/\D/g, "");
       payerSource = {
         ...body,
-        payer_email: payerAuth.user?.email || body.payer_email,
-        payer_first_name: payerFirstName || undefined,
-        payer_last_name: payerLastParts.join(" ") || undefined,
-        payer_identification: payerCpf ? { type: "CPF", number: payerCpf } : undefined,
+        payer_email: resolvedEmail,
+        payer_first_name: payerFirstName || "Passageiro",
+        payer_last_name: payerLastParts.join(" ") || "UBT",
+        payer_identification: payerCpf.length === 11 ? { type: "CPF", number: payerCpf } : undefined,
       };
     }
   } else {
@@ -1482,9 +1544,16 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   const clientMetadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
   const metadataJson = JSON.stringify(clientMetadata);
   if (metadataJson.length > 4000) throw new HttpError(400, "metadata_too_large", "metadata excede 4 KB.");
-  const payerEmail = resolvePayerEmail(payerSource, environment);
-  const payer = sanitizePayer(payerSource, payerEmail);
   const route = await resolvePaymentRoute(providerId, environment);
+  let payerEmail = resolvePayerEmail(payerSource, environment);
+  if (environment === "production") {
+    const collectorEmail = await resolveCollectorEmail(route.authToken);
+    if (collectorEmail && payerEmail.toLowerCase() === collectorEmail.toLowerCase()) {
+      const safeTag = (effectiveTomadorId || customerId || "ubt").replace(/[^a-z0-9]/gi, "").slice(0, 8) || "ubt";
+      payerEmail = `tomador+${safeTag}@ubtservicos.com.br`;
+    }
+  }
+  const payer = sanitizePayer(payerSource, payerEmail);
 
   let effectivePayer: Record<string, unknown> = payer;
   let resolvedMpCustomerId: string | null = null;
@@ -1604,7 +1673,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       status_detail: mpResult.data?.status_detail || null,
       message: mpResult.outcomeUnknown
         ? "Não foi possível confirmar o resultado. Consulte pela mesma payment_attempt_id antes de tentar novamente."
-        : String(mpResult.data?.message || mpResult.data?.error || "Pagamento rejeitado pelo Mercado Pago."),
+        : translateMercadoPagoError(mpResult.data),
       details: mpErrorDetails(mpResult.data),
       gateway_status: mpResult.httpStatus,
       transaction_id: transactionId,
@@ -1743,6 +1812,122 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }, 200);
 }
 
+async function handleCheckMototaxiPixStatus(
+  req: Request,
+  body: Record<string, any>,
+  userId: string,
+): Promise<Response> {
+  const environment = paymentEnvironment();
+  const serviceId = assertUuid(body.service_id ?? body.serviceId ?? body.ride_id, "service_id");
+
+  const { data: ride, error: rideErr } = await adminClient()
+    .from("mototaxi_corridas")
+    .select("id, tomador_id, prestador_id, status, final_price, estimated_price, pix_payment_id, pix_transaction_id, pix_charge_status")
+    .eq("id", serviceId)
+    .maybeSingle();
+
+  if (rideErr) throw new HttpError(503, "ride_lookup_failed", "Erro ao consultar corrida.");
+  if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
+
+  // Check caller authorization (tomador, prestador, or legacy email match)
+  let authorized = ride.tomador_id === userId || ride.prestador_id === userId;
+  if (!authorized) {
+    const { data: callerAuth } = await adminClient().auth.admin.getUserById(userId);
+    const callerEmail = String(callerAuth?.user?.email || "").trim().toLowerCase();
+    if (callerEmail) {
+      const { data: callerUsuarios } = await adminClient()
+        .from("usuarios")
+        .select("id, role")
+        .ilike("email", callerEmail);
+      const ids = (callerUsuarios || []).map((u: any) => u.id);
+      const isAdminRole = (callerUsuarios || []).some((u: any) =>
+        ["admin", "superadmin", "super_admin"].includes(String(u.role || "").toLowerCase())
+      );
+      authorized = isAdminRole || ids.includes(ride.tomador_id) || ids.includes(ride.prestador_id);
+    }
+  }
+  if (!authorized) {
+    throw new HttpError(403, "forbidden", "Você não tem permissão para consultar o pagamento desta corrida.");
+  }
+
+  if (ride.status === "paid") {
+    return json(req, { success: true, status: "approved", paid: true, ride_status: "paid" }, 200);
+  }
+
+  const paymentId = String(ride.pix_payment_id || body.payment_id || "").trim();
+  if (!paymentId) {
+    return json(req, { success: true, status: ride.pix_charge_status || "pending", paid: false, ride_status: ride.status }, 200);
+  }
+
+  const route = await resolvePaymentRoute(ride.prestador_id || userId, environment);
+  const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+    headers: {
+      Authorization: `Bearer ${route.authToken}`,
+      Accept: "application/json",
+    },
+  });
+  const mpData = await mpRes.json().catch(() => ({}));
+  if (!mpRes.ok) {
+    throw new HttpError(502, "mp_status_lookup_failed", translateMercadoPagoError(mpData));
+  }
+
+  const mpStatus = String(mpData?.status || "pending").toLowerCase();
+  const mpDetail = String(mpData?.status_detail || "");
+
+  if (mpStatus === "approved") {
+    const nowIso = mpData?.date_approved || new Date().toISOString();
+    const txId = String(ride.pix_transaction_id || mpData?.external_reference || "");
+    if (txId) {
+      await adminClient()
+        .from("pagamentos_split")
+        .update({
+          status: "approved",
+          gateway_status: "approved",
+          gateway_status_detail: mpDetail || "accredited",
+          updated_at: nowIso,
+        })
+        .eq("transaction_id", txId)
+        .eq("status", "pending");
+    }
+
+    await adminClient()
+      .from("mototaxi_corridas")
+      .update({
+        status: "paid",
+        final_price: Number(ride.final_price ?? ride.estimated_price ?? 0),
+        payment_method: "pix",
+        pix_charge_status: "approved",
+        updated_at: nowIso,
+      })
+      .eq("id", ride.id);
+
+    await logAuditEvent("pix_status_verified_approved", "approved", {
+      service_id: ride.id,
+      payment_id: paymentId,
+      transaction_id: txId || null,
+      verified_by: userId,
+    });
+
+    return json(req, { success: true, status: "approved", status_detail: mpDetail, paid: true, ride_status: "paid" }, 200);
+  }
+
+  // Sync non-approved status if changed (e.g. cancelled/expired/rejected)
+  if (mpStatus && mpStatus !== ride.pix_charge_status) {
+    await adminClient()
+      .from("mototaxi_corridas")
+      .update({ pix_charge_status: mpStatus, updated_at: new Date().toISOString() })
+      .eq("id", ride.id);
+  }
+
+  return json(req, {
+    success: true,
+    status: mpStatus,
+    status_detail: mpDetail,
+    paid: false,
+    ride_status: ride.status,
+  }, 200);
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(req) });
@@ -1784,6 +1969,9 @@ serve(async (req: Request): Promise<Response> => {
     }
     if (["delete_saved_card", "wallet_delete_card"].includes(action)) {
       return await handleDeleteSavedCard(req, body, userId);
+    }
+    if (["check_mototaxi_pix_status", "verify_pix_payment"].includes(action)) {
+      return await handleCheckMototaxiPixStatus(req, body, userId);
     }
     if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge"].includes(action)) {
       return await handlePayment(req, body, userId);

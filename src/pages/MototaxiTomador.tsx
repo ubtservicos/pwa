@@ -839,6 +839,8 @@ const CompletedScreen = ({
   const [method, setMethod] = useState<PaymentMethodOption | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [pixCopiaCola, setPixCopiaCola] = useState<string>("");
+  const [pixQrBase64, setPixQrBase64] = useState<string>("");
+  const [checkingPix, setCheckingPix] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
@@ -863,6 +865,7 @@ const CompletedScreen = ({
   const applyRidePaymentState = useCallback((dbRide: any) => {
     if (!dbRide) return;
     if (dbRide.pix_copy_paste) setPixCopiaCola(String(dbRide.pix_copy_paste));
+    if (dbRide.pix_qr_code_base64) setPixQrBase64(String(dbRide.pix_qr_code_base64));
     if (dbRide.status === "paid") transitionToPaid();
   }, [transitionToPaid]);
 
@@ -878,15 +881,42 @@ const CompletedScreen = ({
       if (document.hidden) return;
       const { data } = await supabase
         .from("mototaxi_corridas")
-        .select("status, pix_copy_paste")
+        .select("status, pix_copy_paste, pix_qr_code_base64")
         .eq("id", rideId)
         .maybeSingle();
       applyRidePaymentState(data);
     };
     void syncPayment();
-    const timer = window.setInterval(syncPayment, 5000);
+    const timer = window.setInterval(syncPayment, 4000);
     return () => window.clearInterval(timer);
   }, [rideId, applyRidePaymentState]);
+
+  const handleVerifyPixPayment = async () => {
+    if (!rideId || checkingPix) return;
+    setCheckingPix(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "check_mototaxi_pix_status",
+          service_id: rideId,
+        },
+      });
+      if (error) {
+        toast.error("Não foi possível consultar o pagamento agora. Tente novamente em instantes.");
+        return;
+      }
+      if (data?.paid || data?.status === "approved") {
+        toast.success("Pagamento PIX confirmado!");
+        transitionToPaid();
+      } else {
+        toast.info("Pagamento ainda aguardando confirmação do banco. Aguarde alguns segundos e tente novamente.");
+      }
+    } catch {
+      toast.error("Erro ao verificar pagamento PIX.");
+    } finally {
+      setCheckingPix(false);
+    }
+  };
 
   useEffect(() => () => {
     if (paidTimerRef.current) clearTimeout(paidTimerRef.current);
@@ -1070,6 +1100,17 @@ const CompletedScreen = ({
 
           {pixCopiaCola ? (
             <div className="w-full space-y-3">
+              {pixQrBase64 && (
+                <div className="flex justify-center">
+                  <div className="bg-white p-3 rounded-2xl shadow-lg">
+                    <img
+                      src={pixQrBase64.startsWith("data:image/") ? pixQrBase64 : `data:image/png;base64,${pixQrBase64}`}
+                      alt="QR Code Pix da corrida"
+                      className="w-[180px] h-[180px] object-contain"
+                    />
+                  </div>
+                </div>
+              )}
               <div className="relative">
                 <textarea
                   readOnly
@@ -1087,6 +1128,14 @@ const CompletedScreen = ({
               >
                 {copiedPix ? <Check size={16} className="text-white" /> : <Copy size={16} />}
                 {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
+              </button>
+              <button
+                type="button"
+                disabled={checkingPix}
+                onClick={() => void handleVerifyPixPayment()}
+                className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-sans text-[12px] font-semibold disabled:opacity-60 transition-all"
+              >
+                {checkingPix ? "Verificando no Mercado Pago..." : "Já paguei · Verificar pagamento"}
               </button>
               <p className="text-[12px] text-center text-[#F5A623]">A confirmação acontece automaticamente após o pagamento.</p>
             </div>

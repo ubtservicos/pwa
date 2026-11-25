@@ -102,6 +102,7 @@ const PrestadorMototaxiActive = () => {
   const [pixChargeStatus, setPixChargeStatus] = useState<string | null>(null);
   const [pixChargeExpiresAt, setPixChargeExpiresAt] = useState<string | null>(null);
   const [isPixLoading, setIsPixLoading] = useState<boolean>(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState<boolean>(false);
   const [pixError, setPixError] = useState<string | null>(null);
   const paidNavigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoPixTriggeredRef = useRef<string | null>(null);
@@ -414,17 +415,20 @@ const PrestadorMototaxiActive = () => {
       });
 
       if (error || !data || data.success === false || data.error) {
-        let errorPayload = data as { message?: string; error?: string; details?: { code?: string; message?: string } } | null;
+        let errorPayload = data as { message?: string; error?: string; details?: any } | null;
         const errorResponse = (error as { context?: Response } | null)?.context;
         if (!errorPayload && errorResponse instanceof Response) {
           errorPayload = await errorResponse.clone().json().catch(() => null);
         }
-        const databaseReason = errorPayload?.details?.message || errorPayload?.details?.code;
-        const message = [
-          errorPayload?.message || errorPayload?.error || error?.message,
-          databaseReason,
-        ].filter(Boolean).join(" — ");
-        throw new Error(message || "Não foi possível gerar a cobrança Pix.");
+        const rawDetails = errorPayload?.details;
+        const detailText = Array.isArray(rawDetails)
+          ? rawDetails.map((d: any) => d?.description || d?.message).filter(Boolean).join(" · ")
+          : (rawDetails?.message || rawDetails?.code || "");
+        const primaryMsg = String(errorPayload?.message || errorPayload?.error || error?.message || "")
+          .replace(/rendernull\b/gi, "render")
+          .trim();
+        const message = primaryMsg || detailText || "Não foi possível gerar a cobrança Pix.";
+        throw new Error(message);
       }
 
       const copyPaste = String(data?.pix?.qr_code || "").trim();
@@ -518,10 +522,37 @@ const PrestadorMototaxiActive = () => {
     navigate("/app/prestador/home");
   };
 
+  const verifyPixPaymentNow = useCallback(async () => {
+    if (!ride?.id || isCheckingPayment) return;
+    setIsCheckingPayment(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "check_mototaxi_pix_status",
+          service_id: ride.id,
+        },
+      });
+      if (error) {
+        console.warn("[PrestadorMototaxiActive] Erro ao verificar pagamento PIX:", error);
+        return;
+      }
+      if (data?.paid || data?.status === "approved") {
+        transitionToPaid(ride.id);
+      } else if (data?.status && ["rejected", "cancelled", "expired"].includes(String(data.status).toLowerCase())) {
+        setPixChargeStatus(String(data.status));
+        setPixError("A cobrança PIX expirou ou foi cancelada. Gere um novo QR Code.");
+      }
+    } catch (err) {
+      console.warn("[PrestadorMototaxiActive] Exceção ao verificar PIX:", err);
+    } finally {
+      setIsCheckingPayment(false);
+    }
+  }, [ride?.id, isCheckingPayment, transitionToPaid]);
+
   /* ---------------- COMPLETED ---------------- */
   if (phase === "completed") {
-    const youReceive = (ride.price || 0) * 0.9;
     const split = calcSplit(ride.price || 0);
+    const youReceive = split.prestador;
     const formatPct = (pct: number) => `${pct.toFixed(2).replace(".", ",")}%`;
     return (
       <div
@@ -596,6 +627,14 @@ const PrestadorMototaxiActive = () => {
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                   Aguardando confirmação automática do Mercado Pago...
                 </div>
+                <button
+                  type="button"
+                  disabled={isCheckingPayment}
+                  onClick={() => void verifyPixPaymentNow()}
+                  className="mt-3 px-4 py-2 rounded-xl bg-[#0DB87E]/15 hover:bg-[#0DB87E]/25 border border-[#0DB87E]/40 text-[#0DB87E] font-sans text-[12px] font-semibold disabled:opacity-60 transition-all"
+                >
+                  {isCheckingPayment ? "Consultando Mercado Pago..." : "Verificar pagamento agora"}
+                </button>
               </div>
             )}
 

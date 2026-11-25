@@ -37,7 +37,7 @@ describe("Mototaxi provider-created Pix contract", () => {
     expect(migration).toContain("pix_copy_paste text");
     expect(migration).toContain("pix_payment_id text");
     expect(gateway).toContain("pix_copy_paste: pixCopyPaste");
-    expect(passenger).toContain('.select("status, pix_copy_paste")');
+    expect(passenger).toContain('.select("status, pix_copy_paste, pix_qr_code_base64")');
     expect(provider).not.toContain('event: \'pix_qr_ready\'');
   });
 
