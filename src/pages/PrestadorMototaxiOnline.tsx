@@ -87,7 +87,7 @@ const ChamadoModal = ({
     return null;
   }
 
-  const youReceive = chamado.price * 0.82;
+  const youReceive = chamado.price * 0.90;
 
   return (
     <div
@@ -175,6 +175,7 @@ export default function PrestadorMototaxiOnline() {
   const [updatingGps, setUpdatingGps] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
+  const rejectedRideIdsRef = useRef<Set<string>>(new Set());
 
   // Redirecionamento se não tem cadastro KYC
   useEffect(() => {
@@ -231,15 +232,15 @@ export default function PrestadorMototaxiOnline() {
 
         const { data: corridasConcluidas } = await supabase
           .from("mototaxi_corridas")
-          .select("estimated_price, final_price, total_amount")
+          .select("estimated_price, final_price")
           .eq("prestador_id", user.uid)
-          .eq("status", "finished")
+          .in("status", ["completed", "paid"])
           .gte("created_at", startOfDay.toISOString());
 
         if (corridasConcluidas && corridasConcluidas.length > 0) {
           setCorridasHoje(corridasConcluidas.length);
           const total = corridasConcluidas.reduce((acc, c) => {
-            const val = Number(c.final_price || c.total_amount || c.estimated_price || 0) * 0.82;
+            const val = Number(c.final_price || c.estimated_price || 0) * 0.90;
             return acc + val;
           }, 0);
           setGanhosHoje(total);
@@ -274,47 +275,44 @@ export default function PrestadorMototaxiOnline() {
     };
   }, [user.uid, isOnline]);
 
-  // Sincroniza sessão online no Supabase quando isOnline ou myLocation mudam
-  const syncSessionOnline = async (onlineState: boolean) => {
-    if (!user.uid) return;
+  // Sincroniza sessão online no Supabase com verificação explícita de erro
+  const syncSessionOnline = async (onlineState: boolean): Promise<{ ok: boolean; error?: string }> => {
+    if (!user.uid) return { ok: false, error: "Sessão expirada. Faça login novamente." };
     const coords = myLocation || UBATUBA;
 
     try {
-      const { data: existingSession } = await supabase
+      const { error: sessErr } = await supabase
         .from("mototaxi_sessoes")
-        .select("id")
-        .eq("prestador_id", user.uid)
-        .maybeSingle();
-
-      if (existingSession) {
-        await supabase
-          .from("mototaxi_sessoes")
-          .update({
-            is_online: onlineState,
-            lat: coords.lat,
-            lng: coords.lng,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", existingSession.id);
-      } else {
-        await supabase
-          .from("mototaxi_sessoes")
-          .insert({
+        .upsert(
+          {
             prestador_id: user.uid,
             is_online: onlineState,
             lat: coords.lat,
             lng: coords.lng,
-            updated_at: new Date().toISOString()
-          });
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "prestador_id" }
+        );
+
+      if (sessErr) {
+        console.error("Erro ao sincronizar mototaxi_sessoes:", sessErr);
+        return { ok: false, error: sessErr.message || "Falha ao gravar status online no servidor." };
       }
 
       // Também sincroniza na tabela prestador_mototaxi
-      await supabase
+      const { error: motoErr } = await supabase
         .from("prestador_mototaxi")
         .update({ is_online: onlineState, updated_at: new Date().toISOString() })
         .eq("user_id", user.uid);
-    } catch (err) {
+
+      if (motoErr) {
+        console.warn("Aviso ao sincronizar prestador_mototaxi.is_online:", motoErr);
+      }
+
+      return { ok: true };
+    } catch (err: any) {
       console.error("Erro ao sincronizar sessão operacional:", err);
+      return { ok: false, error: err?.message || "Erro de rede ao atualizar status online." };
     }
   };
 
@@ -322,7 +320,13 @@ export default function PrestadorMototaxiOnline() {
   const toggleOnline = async () => {
     const nextStatus = !isOnline;
     setIsOnline(nextStatus);
-    await syncSessionOnline(nextStatus);
+    const res = await syncSessionOnline(nextStatus);
+
+    if (!res.ok) {
+      setIsOnline(!nextStatus);
+      toast.error(res.error || "Não foi possível alterar seu status online.");
+      return;
+    }
 
     if (nextStatus) {
       toast.success("Você está ONLINE no radar de Ubatuba!");
@@ -336,14 +340,21 @@ export default function PrestadorMototaxiOnline() {
 
   // Alterar Modalidade de Trabalho
   const handleSelectModalidade = async (mod: Modalidade) => {
+    const prevMod = modalidade;
     setModalidade(mod);
     if (!user.uid) return;
 
     try {
-      await supabase
+      const { error } = await supabase
         .from("prestador_mototaxi")
         .update({ modalidade: mod, updated_at: new Date().toISOString() })
         .eq("user_id", user.uid);
+
+      if (error) {
+        setModalidade(prevMod);
+        toast.error(`Erro ao atualizar modalidade: ${error.message}`);
+        return;
+      }
 
       await supabase.auth.updateUser({
         data: { modalidade_moto: mod }
@@ -352,8 +363,10 @@ export default function PrestadorMototaxiOnline() {
       toast.success(`Modalidade atualizada: ${
         mod === "carona_entrega" ? "Carona & Entrega" : mod === "so_entrega" ? "Só Entrega" : "Só Carona"
       }`);
-    } catch (err) {
+    } catch (err: any) {
+      setModalidade(prevMod);
       console.error("Erro ao atualizar modalidade:", err);
+      toast.error(err?.message || "Erro ao atualizar modalidade.");
     }
   };
 
@@ -452,7 +465,62 @@ export default function PrestadorMototaxiOnline() {
     };
   }, [isOnline, modalidade]);
 
-  // Aceitar Corrida
+  // Polling de segurança (4s) para garantir recebimento de chamados em redes 4G/5G
+  useEffect(() => {
+    if (!user.uid || !isOnline) return;
+    let cancelled = false;
+
+    const pollPendingRides = async () => {
+      if (cancelled || (typeof document !== "undefined" && document.hidden)) return;
+      try {
+        const { data: pendingRides, error } = await supabase
+          .from("mototaxi_corridas")
+          .select("*")
+          .in("status", ["searching", "pending", "buscando", "solicitado"])
+          .is("prestador_id", null)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (error || cancelled) return;
+        const list = pendingRides || [];
+        setFilaCount(list.length);
+
+        if (chamado || list.length === 0) return;
+
+        const matching = list.find((c: any) => {
+          if (!c?.id || rejectedRideIdsRef.current.has(c.id)) return false;
+          const isRecent = c.created_at
+            ? Date.now() - new Date(c.created_at).getTime() <= 10 * 60 * 1000
+            : true;
+          if (!isRecent) return false;
+          return (
+            modalidade === "carona_entrega" ||
+            (modalidade === "so_carona" && c.type === "carona") ||
+            (modalidade === "so_entrega" && c.type === "entrega")
+          );
+        });
+
+        if (matching) {
+          const parsed = parseChamadoData(matching);
+          if (parsed) {
+            setChamado(parsed);
+            playChamadoSound();
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso no polling de chamados:", err);
+      }
+    };
+
+    void pollPendingRides();
+    const timer = window.setInterval(pollPendingRides, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [user.uid, isOnline, modalidade, chamado]);
+
+  // Aceitar Corrida (atômico: somente se ainda estiver searching e sem prestador)
   const acceptCorrida = async () => {
     if (!chamado) return;
     let currentUid = user.uid;
@@ -470,11 +538,18 @@ export default function PrestadorMototaxiOnline() {
           accepted_at: new Date().toISOString()
         })
         .eq("id", chamado.id)
+        .in("status", ["searching", "pending", "buscando", "solicitado"])
+        .is("prestador_id", null)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
-        toast.error("Outro motorista pode ter aceitado o chamado primeiro.");
+      if (error) {
+        toast.error(`Erro ao aceitar corrida: ${error.message}`);
+        return;
+      }
+
+      if (!data) {
+        toast.error("Outro motorista já aceitou ou o pedido foi cancelado.");
         setChamado(null);
         return;
       }
@@ -482,9 +557,9 @@ export default function PrestadorMototaxiOnline() {
       sessionStorage.setItem("ubt_active_ride", JSON.stringify({ ...chamado, prestador_id: currentUid }));
       setChamado(null);
       navigate("/app/prestador/mototaxi/active");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Exceção ao aceitar corrida:", e);
-      toast.error("Erro ao aceitar corrida! Tente novamente.");
+      toast.error(e?.message || "Erro ao aceitar corrida! Tente novamente.");
       setChamado(null);
     }
   };
@@ -812,7 +887,10 @@ export default function PrestadorMototaxiOnline() {
         <ChamadoModal
           chamado={chamado}
           onAccept={acceptCorrida}
-          onReject={() => setChamado(null)}
+          onReject={() => {
+            rejectedRideIdsRef.current.add(chamado.id);
+            setChamado(null);
+          }}
         />
       )}
     </div>

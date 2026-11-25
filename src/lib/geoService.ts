@@ -1,9 +1,131 @@
 import { supabase } from './supabase';
 import { GOOGLE_GEOCODING_ENABLED, GOOGLE_MAPS_API_KEY, UBATUBA_BOUNDS, UBATUBA_CENTER } from './googleMapsConfig';
 
-// Circuit-breaker em memória caso a Geocoding API retorne REQUEST_DENIED/indisponibilidade
+// Circuit-breaker em memória caso a Geocoding/Places API retorne REQUEST_DENIED/indisponibilidade
 let googleGeocoderDisabled = !GOOGLE_GEOCODING_ENABLED;
+let googlePlacesRestDisabled = false;
 const reverseGeocodeCache = new Map<string, string>();
+
+const isInsideUbatubaBounds = (lat: number, lng: number): boolean =>
+  lat >= UBATUBA_BOUNDS.south &&
+  lat <= UBATUBA_BOUNDS.north &&
+  lng >= UBATUBA_BOUNDS.west &&
+  lng <= UBATUBA_BOUNDS.east;
+
+const fetchWithTimeout = async (url: string, init: RequestInit = {}, timeoutMs = 4000): Promise<Response> => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+};
+
+// Fallback gratuito #1: Photon (Komoot / OpenStreetMap) com foco em Ubatuba-SP
+const searchPhotonUbatuba = async (query: string): Promise<AutocompleteSuggestion[]> => {
+  if (typeof fetch !== "function") return [];
+  try {
+    const cleanQ = query.trim();
+    const hasCity = /ubatuba/i.test(cleanQ);
+    const qParam = hasCity ? cleanQ : `${cleanQ}, Ubatuba`;
+    const bbox = `${UBATUBA_BOUNDS.west},${UBATUBA_BOUNDS.south},${UBATUBA_BOUNDS.east},${UBATUBA_BOUNDS.north}`;
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(qParam)}&lat=${UBATUBA_CENTER.lat}&lon=${UBATUBA_CENTER.lng}&bbox=${bbox}&limit=6`;
+
+    const res = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 3800);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const features: any[] = Array.isArray(data?.features) ? data.features : [];
+
+    const seen = new Set<string>();
+    const results: AutocompleteSuggestion[] = [];
+
+    for (const f of features) {
+      const coords = f?.geometry?.coordinates;
+      const props = f?.properties || {};
+      if (!Array.isArray(coords) || coords.length < 2) continue;
+      const lng = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInsideUbatubaBounds(lat, lng)) continue;
+
+      const street = props.street || props.name || "";
+      const house = props.housenumber ? `, ${props.housenumber}` : "";
+      const mainText = street ? `${street}${house}` : props.district || props.locality || "Ubatuba";
+      const district = props.district || props.suburb || props.locality || "";
+      const city = props.city || props.county || "Ubatuba";
+      const secondaryParts = [district && district !== mainText ? district : "", `${city} - SP`].filter(Boolean);
+      const secondaryText = secondaryParts.join(", ");
+      const label = [mainText, secondaryText].filter(Boolean).join(", ");
+      const dedupeKey = normalizeAddress(label);
+      if (!label || seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      results.push({
+        placeId: `photon:${props.osm_type || "W"}${props.osm_id || results.length}:${lat.toFixed(5)},${lng.toFixed(5)}`,
+        label,
+        mainText,
+        secondaryText,
+        lat,
+        lng,
+      });
+    }
+    return results;
+  } catch (err) {
+    console.warn("Aviso Photon autocomplete:", err);
+    return [];
+  }
+};
+
+// Fallback gratuito #2: OpenStreetMap Nominatim com viewbox restrito a Ubatuba-SP
+const searchNominatimUbatuba = async (query: string): Promise<AutocompleteSuggestion[]> => {
+  if (typeof fetch !== "function") return [];
+  try {
+    const cleanQ = query.trim();
+    const hasCity = /ubatuba/i.test(cleanQ);
+    const qParam = hasCity ? cleanQ : `${cleanQ}, Ubatuba, SP, Brasil`;
+    const viewbox = `${UBATUBA_BOUNDS.west},${UBATUBA_BOUNDS.north},${UBATUBA_BOUNDS.east},${UBATUBA_BOUNDS.south}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(qParam)}&viewbox=${viewbox}&bounded=1&addressdetails=1&limit=6&accept-language=pt-BR`;
+
+    const res = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 4200);
+    if (!res.ok) return [];
+    const items: any[] = await res.json();
+    if (!Array.isArray(items)) return [];
+
+    const seen = new Set<string>();
+    const results: AutocompleteSuggestion[] = [];
+
+    for (const item of items) {
+      const lat = Number(item.lat);
+      const lng = Number(item.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInsideUbatubaBounds(lat, lng)) continue;
+
+      const addr = item.address || {};
+      const road = addr.road || addr.pedestrian || addr.residential || item.name || "";
+      const house = addr.house_number ? `, ${addr.house_number}` : "";
+      const mainText = road ? `${road}${house}` : String(item.display_name || "").split(",")[0].trim();
+      const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.village || "";
+      const city = addr.city || addr.town || addr.municipality || "Ubatuba";
+      const secondaryText = [suburb && suburb !== mainText ? suburb : "", `${city} - SP`].filter(Boolean).join(", ");
+      const label = [mainText, secondaryText].filter(Boolean).join(", ");
+      const dedupeKey = normalizeAddress(label);
+      if (!label || seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      results.push({
+        placeId: `nom:${item.place_id || results.length}:${lat.toFixed(5)},${lng.toFixed(5)}`,
+        label,
+        mainText,
+        secondaryText,
+        lat,
+        lng,
+      });
+    }
+    return results;
+  } catch (err) {
+    console.warn("Aviso Nominatim autocomplete:", err);
+    return [];
+  }
+};
 
 const UBATUBA_FALLBACK_BAIRROS: Array<{ nome: string; lat: number; lng: number }> = [
   { nome: "Centro", lat: -23.4336, lng: -45.0838 },
@@ -247,7 +369,7 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
       }
     }
 
-    // 4. Fallback por bairro conhecido em Ubatuba ou Google Maps Geocoding (se ativado)
+    // 4. Fallback por Google Maps Geocoding (se ativado) -> Photon/Nominatim Ubatuba -> Bairro conhecido
     if (GOOGLE_KEY && !googleGeocoderDisabled) {
       const coords = await geocodeGoogle(address);
       if (coords) {
@@ -256,6 +378,20 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
         logMetric('fallback_usage', address, normalized, 'google', elapsed);
         return { lat: coords.lat, lng: coords.lng, label: address };
       }
+    }
+
+    const photonRes = await searchPhotonUbatuba(address);
+    if (photonRes.length > 0 && photonRes[0].lat != null && photonRes[0].lng != null) {
+      const top = photonRes[0];
+      await saveToPersistentCache(top.label, normalized, top.lat, top.lng, 'photon', 0.92);
+      return { lat: top.lat, lng: top.lng, label: top.label };
+    }
+
+    const nomRes = await searchNominatimUbatuba(address);
+    if (nomRes.length > 0 && nomRes[0].lat != null && nomRes[0].lng != null) {
+      const top = nomRes[0];
+      await saveToPersistentCache(top.label, normalized, top.lat, top.lng, 'nominatim', 0.9);
+      return { lat: top.lat, lng: top.lng, label: top.label };
     }
 
     const bairroFallback = findUbatubaBairroCoords(address);
@@ -459,8 +595,8 @@ export const searchAddressesWithSessionToken = async (
     }
   }
 
-  // 2. Fallback Places API (New) via REST API v1
-  if (GOOGLE_KEY) {
+  // 2. Fallback Places API (New) via REST API v1 (com circuit-breaker em erro 403/400)
+  if (GOOGLE_KEY && !googlePlacesRestDisabled) {
     try {
       const body: any = {
         input: query,
@@ -478,34 +614,92 @@ export const searchAddressesWithSessionToken = async (
         body.sessionToken = sessionToken;
       }
 
-      const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      const res = await fetchWithTimeout('https://places.googleapis.com/v1/places:autocomplete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': GOOGLE_KEY,
         },
         body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (data && data.suggestions && data.suggestions.length > 0) {
-        return data.suggestions
-          .filter((s: any) => s.placePrediction)
-          .map((s: any) => {
-            const p = s.placePrediction;
-            const label = p.text?.text || p.structuredFormat?.mainText?.text || '';
-            const mainText = p.structuredFormat?.mainText?.text || label;
-            const secondaryText = p.structuredFormat?.secondaryText?.text || 'Ubatuba, SP';
-            return {
-              placeId: p.placeId,
-              label,
-              mainText,
-              secondaryText,
-            };
-          });
+      }, 3000);
+      if (res.status === 401 || res.status === 403) {
+        googlePlacesRestDisabled = true;
+      } else if (res.ok) {
+        const data = await res.json();
+        if (data && data.suggestions && data.suggestions.length > 0) {
+          return data.suggestions
+            .filter((s: any) => s.placePrediction)
+            .map((s: any) => {
+              const p = s.placePrediction;
+              const label = p.text?.text || p.structuredFormat?.mainText?.text || '';
+              const mainText = p.structuredFormat?.mainText?.text || label;
+              const secondaryText = p.structuredFormat?.secondaryText?.text || 'Ubatuba, SP';
+              return {
+                placeId: p.placeId,
+                label,
+                mainText,
+                secondaryText,
+              };
+            });
+        }
       }
     } catch (err) {
       console.warn('Erro REST v1 places:autocomplete:', err);
     }
+  }
+
+  // 3. Fallback Gratuito #1: Photon Komoot (OSM com bbox Ubatuba-SP — rápido e sem API Key)
+  const photonResults = await searchPhotonUbatuba(query);
+  if (photonResults.length > 0) {
+    return photonResults;
+  }
+
+  // 4. Fallback Gratuito #2: Nominatim OpenStreetMap (viewbox Ubatuba-SP)
+  const nominatimResults = await searchNominatimUbatuba(query);
+  if (nominatimResults.length > 0) {
+    return nominatimResults;
+  }
+
+  // 5. Fallback Local: tabela ceps_ubatuba (Supabase)
+  try {
+    const cleanQuery = query.split(',')[0].trim();
+    if (cleanQuery.length >= 2) {
+      const { data: dbItems } = await supabase
+        .from('ceps_ubatuba')
+        .select('*')
+        .ilike('logradouro', `%${cleanQuery}%`)
+        .limit(6);
+
+      if (dbItems && dbItems.length > 0) {
+        return dbItems.map((item: any, idx: number) => ({
+          placeId: `cep:${item.cep || idx}`,
+          label: `${item.logradouro}, ${item.bairro}, Ubatuba - SP`,
+          mainText: item.logradouro,
+          secondaryText: `${item.bairro}, Ubatuba - SP · CEP ${item.cep}`,
+          lat: item.lat ? Number(item.lat) : UBATUBA_CENTER.lat,
+          lng: item.lng ? Number(item.lng) : UBATUBA_CENTER.lng,
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn('Aviso fallback ceps_ubatuba:', err);
+  }
+
+  // 6. Fallback Offline: Bairros e Praias conhecidos de Ubatuba
+  const norm = normalizeAddress(query);
+  const matchingBairros = UBATUBA_FALLBACK_BAIRROS.filter((b) => {
+    const bn = normalizeAddress(b.nome);
+    return bn.includes(norm) || norm.includes(bn);
+  });
+  if (matchingBairros.length > 0) {
+    return matchingBairros.map((b) => ({
+      placeId: `bairro:${normalizeAddress(b.nome)}`,
+      label: `${b.nome}, Ubatuba - SP`,
+      mainText: b.nome,
+      secondaryText: 'Ubatuba - SP',
+      lat: b.lat,
+      lng: b.lng,
+    }));
   }
 
   return [];
@@ -517,6 +711,7 @@ export const getPlaceDetails = async (
   sessionToken?: any
 ): Promise<{ lat: number; lng: number; formattedAddress: string } | null> => {
   if (!placeId) return null;
+  if (/^(photon|nom|cep|bairro):/i.test(placeId)) return null;
 
   // 1. Google Maps Places API (New) via JS SDK com Place.fetchFields
   if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.Place) {
@@ -707,11 +902,44 @@ export const getRouteInfo = async (
     }
   }
 
-  // 2. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
-  const latDiff = Math.abs(from.lat - to.lat) * 111;
-  const lngDiff = Math.abs(from.lng - to.lng) * 111 * Math.cos((from.lat * Math.PI) / 180);
-  const approxDistance = +Math.sqrt(latDiff * latDiff + lngDiff * lngDiff).toFixed(2);
-  const approxDuration = Math.ceil((approxDistance / 30) * 60);
+  // 2. Fallback Gratuito: OSRM (OpenStreetMap Routing Machine - distância viária real)
+  if (typeof fetch === "function") {
+    try {
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+      const res = await fetchWithTimeout(osrmUrl, { headers: { Accept: "application/json" } }, 4000);
+      if (res.ok) {
+        const data = await res.json();
+        const route = data?.routes?.[0];
+        if (route && typeof route.distance === "number") {
+          const distanceKm = +(route.distance / 1000).toFixed(2);
+          const durationMin = Math.ceil((route.duration || 0) / 60) || Math.max(3, Math.round(distanceKm * 2.5));
+          const coords: [number, number][] = Array.isArray(route.geometry?.coordinates)
+            ? route.geometry.coordinates.map((pt: [number, number]) => [pt[1], pt[0]])
+            : [[from.lat, from.lng], [to.lat, to.lng]];
+          return {
+            distanceKm: Math.max(0.5, distanceKm),
+            durationMin: Math.max(2, durationMin),
+            polyline: coords,
+          };
+        }
+      }
+    } catch {
+      // Silencioso: segue para fallback Haversine × fator viário 1.3
+    }
+  }
+
+  // 3. Fallback Matemático Haversine × Fator Viário 1.3
+  const R = 6371;
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((from.lat * Math.PI) / 180) *
+      Math.cos((to.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  const straightKm = 2 * R * Math.asin(Math.sqrt(a));
+  const approxDistance = +(straightKm * 1.3).toFixed(2);
+  const approxDuration = Math.ceil((approxDistance / 28) * 60);
 
   return {
     distanceKm: Math.max(0.5, approxDistance),

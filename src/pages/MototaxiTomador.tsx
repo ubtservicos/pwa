@@ -34,7 +34,7 @@ import {
 } from "@/utils/ride";
 import { fetchMototaxiPricingConfig } from "@/services/MototaxiPricingService";
 import { useRide, type RideType } from "@/contexts/RideContext";
-import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, reverseGeocode, type AutocompleteSuggestion } from "@/lib/geoService";
+import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, reverseGeocode, geocodeAddress, getRouteInfo, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -68,113 +68,260 @@ const Sheet = ({ children, className = "" }: { children: React.ReactNode; classN
 );
 
 /* -------------------- IDLE Sheet -------------------- */
+const appendTypedNumberIfMissing = (typed: string, finalAddress: string): string => {
+  const userNumberMatch =
+    typed.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || typed.match(/(\d+)/);
+  const userTypedNumber = userNumberMatch ? userNumberMatch[1] : null;
+  if (!userTypedNumber || finalAddress.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
+    return finalAddress;
+  }
+  const parts = finalAddress.split(",");
+  if (parts.length > 1) {
+    parts[0] = `${parts[0].trim()}, ${userTypedNumber}`;
+    return parts.join(", ");
+  }
+  return `${finalAddress}, ${userTypedNumber}`;
+};
+
 const IdleSheet = ({
   type, setType,
-  origin, setOriginAddress, recenter,
+  origin, setOrigin, recenter,
   destination, setDestination,
+  distanceKm, durationMin,
   pricingConfig,
+  confirming,
   onConfirm,
 }: {
   type: RideType | null;
   setType: (t: RideType) => void;
   origin: { lat: number; lng: number; address: string } | null;
-  setOriginAddress: (s: string) => void;
+  setOrigin: (o: { lat: number; lng: number; address: string }) => void;
   recenter: () => void;
   destination: { lat: number; lng: number; address: string } | null;
-  setDestination: (d: { lat: number; lng: number; address: string }) => void;
+  setDestination: (d: { lat: number; lng: number; address: string } | null) => void;
+  distanceKm: number;
+  durationMin: number;
   pricingConfig: MototaxiPricingConfig;
-  onConfirm: () => void;
+  confirming: boolean;
+  onConfirm: (overrideDest?: { lat: number; lng: number; address: string }) => void | Promise<void>;
 }) => {
-  const distanceKm = useMemo(() => {
-    if (!origin || !destination) return 0;
-    // simple haversine
-    const R = 6371;
-    const dLat = ((destination.lat - origin.lat) * Math.PI) / 180;
-    const dLng = ((destination.lng - origin.lng) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((origin.lat * Math.PI) / 180) *
-        Math.cos((destination.lat * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return +(2 * R * Math.asin(Math.sqrt(a))).toFixed(1);
-  }, [origin, destination]);
-
   const quote = useMemo(
-    () => (distanceKm > 0 ? calculateMototaxiQuote(distanceKm, pricingConfig) : null),
-    [distanceKm, pricingConfig],
+    () => (origin && destination && distanceKm > 0 ? calculateMototaxiQuote(distanceKm, pricingConfig) : null),
+    [origin, destination, distanceKm, pricingConfig],
   );
   const price = quote ? quote.precoFinal : 0;
-  const durationMin = Math.max(3, Math.round(distanceKm * 3));
 
-  const canConfirm = !!type && !!origin && !!destination;
+  // Origin autocomplete state
+  const [originQuery, setOriginQuery] = useState(origin?.address || "");
+  const [originResults, setOriginResults] = useState<AutocompleteSuggestion[]>([]);
+  const [searchingOrigin, setSearchingOrigin] = useState(false);
+  const [originFocused, setOriginFocused] = useState(false);
+  const originSessionTokenRef = useRef<any>(null);
 
+  // Destination autocomplete state
   const [destQuery, setDestQuery] = useState(destination?.address || "");
   const [destResults, setDestResults] = useState<AutocompleteSuggestion[]>([]);
   const [searchingDest, setSearchingDest] = useState(false);
+  const [destFocused, setDestFocused] = useState(false);
+  const [resolvingManualDest, setResolvingManualDest] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const destSessionTokenRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (origin?.address && !originFocused) {
+      setOriginQuery(origin.address);
+    }
+  }, [origin?.address, originFocused]);
+
+  useEffect(() => {
+    if (destination?.address && !destFocused) {
+      setDestQuery(destination.address);
+    }
+  }, [destination?.address, destFocused]);
+
+  const initOriginSessionToken = () => {
+    originSessionTokenRef.current = createAutocompleteSessionToken();
+  };
 
   const initDestSessionToken = () => {
     destSessionTokenRef.current = createAutocompleteSessionToken();
   };
 
   useEffect(() => {
+    initOriginSessionToken();
     initDestSessionToken();
   }, []);
 
+  // Origin search debounce
   useEffect(() => {
-    // If the input matches the confirmed destination, we don't search again
-    if (destination && destQuery === destination.address) {
+    if (!originFocused) {
+      setOriginResults([]);
+      return;
+    }
+    const trimmed = originQuery.trim();
+    if (origin && trimmed === origin.address.trim()) {
+      setOriginResults([]);
+      return;
+    }
+    if (trimmed.length < 3) {
+      setOriginResults([]);
+      setSearchingOrigin(false);
+      return;
+    }
+    if (!originSessionTokenRef.current) initOriginSessionToken();
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setSearchingOrigin(true);
+      searchAddressesWithSessionToken(trimmed, originSessionTokenRef.current)
+        .then((res) => {
+          if (!cancelled) setOriginResults(res);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchingOrigin(false);
+        });
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [originQuery, origin, originFocused]);
+
+  // Destination search debounce
+  useEffect(() => {
+    const trimmed = destQuery.trim();
+    if (destination && trimmed === destination.address.trim()) {
       setDestResults([]);
       return;
     }
-    if (destQuery.length < 2) {
+    if (trimmed.length < 3) {
       setDestResults([]);
+      setSearchingDest(false);
       return;
     }
-    if (!destSessionTokenRef.current) {
-      initDestSessionToken();
-    }
+    if (!destSessionTokenRef.current) initDestSessionToken();
+    let cancelled = false;
     const timer = setTimeout(() => {
       setSearchingDest(true);
-      searchAddressesWithSessionToken(destQuery, destSessionTokenRef.current).then((res) => {
-        setDestResults(res);
-        setSearchingDest(false);
-      });
-    }, 300);
-    return () => clearTimeout(timer);
+      searchAddressesWithSessionToken(trimmed, destSessionTokenRef.current)
+        .then((res) => {
+          if (!cancelled) setDestResults(res);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchingDest(false);
+        });
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [destQuery, destination]);
 
-  const handleSelectDest = async (r: AutocompleteSuggestion) => {
-    setSearchingDest(true);
-    const token = destSessionTokenRef.current;
-    const details = await getPlaceDetails(r.placeId, token);
-    initDestSessionToken();
+  const handleSelectOrigin = async (r: AutocompleteSuggestion) => {
+    setLocalError(null);
+    setSearchingOrigin(true);
+    let lat = r.lat;
+    let lng = r.lng;
+    let resolvedLabel = r.label;
 
-    const userNumberMatch = destQuery.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || destQuery.match(/(\d+)/);
-    const userTypedNumber = userNumberMatch ? userNumberMatch[1] : null;
-
-    let finalAddress = details?.formattedAddress || r.label;
-    if (userTypedNumber && !finalAddress.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
-      const parts = finalAddress.split(',');
-      if (parts.length > 1) {
-        parts[0] = `${parts[0].trim()}, ${userTypedNumber}`;
-        finalAddress = parts.join(', ');
-      } else {
-        finalAddress = `${finalAddress}, ${userTypedNumber}`;
+    if (lat == null || lng == null) {
+      const details = await getPlaceDetails(r.placeId, originSessionTokenRef.current);
+      initOriginSessionToken();
+      if (details) {
+        lat = details.lat;
+        lng = details.lng;
+        resolvedLabel = details.formattedAddress || r.label;
       }
     }
 
-    const lat = details?.lat ?? UBATUBA_FALLBACK.lat;
-    const lng = details?.lng ?? UBATUBA_FALLBACK.lng;
+    const finalAddress = appendTypedNumberIfMissing(originQuery, resolvedLabel);
+    setOrigin({
+      lat: lat ?? UBATUBA_FALLBACK.lat,
+      lng: lng ?? UBATUBA_FALLBACK.lng,
+      address: finalAddress,
+    });
+    setOriginQuery(finalAddress);
+    setOriginResults([]);
+    setOriginFocused(false);
+    setSearchingOrigin(false);
+  };
 
-    setDestination({ lat, lng, address: finalAddress });
+  const handleSelectDest = async (r: AutocompleteSuggestion) => {
+    setLocalError(null);
+    setSearchingDest(true);
+    let lat = r.lat;
+    let lng = r.lng;
+    let resolvedLabel = r.label;
+
+    if (lat == null || lng == null) {
+      const details = await getPlaceDetails(r.placeId, destSessionTokenRef.current);
+      initDestSessionToken();
+      if (details) {
+        lat = details.lat;
+        lng = details.lng;
+        resolvedLabel = details.formattedAddress || r.label;
+      }
+    }
+
+    const finalAddress = appendTypedNumberIfMissing(destQuery, resolvedLabel);
+    setDestination({
+      lat: lat ?? UBATUBA_FALLBACK.lat,
+      lng: lng ?? UBATUBA_FALLBACK.lng,
+      address: finalAddress,
+    });
     setDestQuery(finalAddress);
     setDestResults([]);
+    setDestFocused(false);
     setSearchingDest(false);
   };
 
+  const canConfirm = !!type && !!origin && (!!destination || destQuery.trim().length >= 3);
+
+  const handleConfirmClick = async () => {
+    setLocalError(null);
+    if (!type) {
+      setLocalError("Selecione Carona ou Entrega.");
+      return;
+    }
+    if (!origin) {
+      setLocalError("Aguarde a localização de origem ou digite o endereço em 'De onde?'.");
+      return;
+    }
+
+    // Se o usuário já selecionou um destino com coordenadas, confirma direto
+    if (destination && destQuery.trim() === destination.address.trim()) {
+      await onConfirm();
+      return;
+    }
+
+    // Caso o usuário tenha digitado manualmente e clicado em "Confirmar pedido", geocodifica automaticamente
+    const typedDest = destQuery.trim();
+    if (typedDest.length < 3) {
+      setLocalError("Digite o endereço de destino em 'Para onde?'.");
+      return;
+    }
+
+    setResolvingManualDest(true);
+    try {
+      const geo = await geocodeAddress(typedDest);
+      if (!geo) {
+        const msg = "Não encontramos esse endereço em Ubatuba. Selecione uma sugestão da lista ou adicione o bairro.";
+        setLocalError(msg);
+        toast.error(msg);
+        return;
+      }
+      const finalAddress = appendTypedNumberIfMissing(typedDest, geo.label || typedDest);
+      const resolvedDest = { lat: geo.lat, lng: geo.lng, address: finalAddress };
+      setDestination(resolvedDest);
+      setDestQuery(finalAddress);
+      setDestResults([]);
+      await onConfirm(resolvedDest);
+    } finally {
+      setResolvingManualDest(false);
+    }
+  };
+
   return (
-    <Sheet>
+    <Sheet className="overflow-visible">
       {/* Type selector */}
       <div className="flex gap-2.5">
         {([
@@ -203,7 +350,7 @@ const IdleSheet = ({
       </div>
 
       {/* Origem */}
-      <div className="mt-4">
+      <div className="mt-4 relative z-40">
         <label className="font-sans text-[12px]" style={{ color: "rgba(255,255,255,0.45)" }}>
           De onde?
         </label>
@@ -218,19 +365,51 @@ const IdleSheet = ({
         >
           <Navigation size={16} style={{ color: "#0DB87E" }} />
           <input
-            value={origin?.address || ""}
-            onChange={(e) => setOriginAddress(e.target.value)}
-            placeholder="Sua localização"
+            value={originQuery}
+            onFocus={() => setOriginFocused(true)}
+            onBlur={() => setTimeout(() => setOriginFocused(false), 180)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setOriginQuery(v);
+              if (origin) setOrigin({ ...origin, address: v });
+            }}
+            placeholder="Sua localização ou rua em Ubatuba..."
             className="flex-1 bg-transparent outline-none font-sans text-[15px] text-white placeholder:text-white/30"
           />
           <button type="button" onClick={recenter} aria-label="Recentralizar">
             <Crosshair size={18} style={{ color: "rgba(255,255,255,0.55)" }} />
           </button>
         </div>
+
+        {originResults.length > 0 && (
+          <div
+            className="mt-1.5 rounded-xl bg-[#121215] border border-zinc-800 shadow-2xl z-50 relative"
+            style={{ maxHeight: 190, overflowY: "auto" }}
+          >
+            {originResults.map((r, i) => (
+              <button
+                key={r.placeId || `${r.label}-${i}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelectOrigin(r)}
+                className="w-full text-left px-3.5 py-2.5 border-b border-zinc-800/80 last:border-none hover:bg-zinc-800/70 active:bg-zinc-800 transition-colors flex items-start gap-2.5"
+              >
+                <Navigation size={14} className="text-[#00FF66] shrink-0 mt-1" />
+                <div className="min-w-0">
+                  <div className="font-sans text-[13px] font-semibold text-zinc-50 truncate">{r.mainText || r.label}</div>
+                  {r.secondaryText && <div className="font-sans text-[11px] text-zinc-400 truncate">{r.secondaryText}</div>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        {searchingOrigin && (
+          <div className="mt-1.5 text-[11px] text-zinc-400 px-1">Buscando endereços em Ubatuba...</div>
+        )}
       </div>
 
       {/* Destino */}
-      <div className="mt-3">
+      <div className="mt-3 relative z-30">
         <label className="font-sans text-[12px]" style={{ color: "rgba(255,255,255,0.45)" }}>
           Para onde?
         </label>
@@ -243,49 +422,78 @@ const IdleSheet = ({
             padding: "0 12px",
           }}
         >
-          <MapPin size={16} style={{ color: "rgba(255,255,255,0.35)" }} />
+          <MapPin size={16} style={{ color: destination ? "#00FF66" : "rgba(255,255,255,0.35)" }} />
           <input
             value={destQuery}
-            onChange={(e) => setDestQuery(e.target.value)}
-            placeholder="Endereço, ponto de referência..."
+            onFocus={() => setDestFocused(true)}
+            onBlur={() => setTimeout(() => setDestFocused(false), 180)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDestQuery(v);
+              setLocalError(null);
+              if (destination && v !== destination.address) {
+                setDestination(null);
+              }
+            }}
+            placeholder="Rua, bairro ou praia em Ubatuba..."
             className="flex-1 bg-transparent outline-none font-sans text-[15px] text-white placeholder:text-white/30"
           />
+          {destQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setDestQuery("");
+                setDestination(null);
+                setDestResults([]);
+                setLocalError(null);
+              }}
+              aria-label="Limpar destino"
+              className="text-zinc-400 hover:text-white p-1"
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
-        
-        {/* Dropdown de resultados */}
+
+        {/* Dropdown de resultados (Dark Gamer / Bets, z-50 sem recorte) */}
         {destResults.length > 0 && (
           <div
-            className="mt-2 rounded-xl overflow-hidden"
-            style={{
-              background: "#18181B",
-              border: "1px solid #27272A",
-              maxHeight: 200,
-              overflowY: "auto",
-            }}
+            className="mt-1.5 rounded-xl bg-[#121215] border border-zinc-800 shadow-2xl z-50 relative"
+            style={{ maxHeight: 210, overflowY: "auto" }}
           >
             {destResults.map((r, i) => (
               <button
                 key={r.placeId || `${r.label}-${i}`}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelectDest(r)}
-                className="w-full text-left px-3 py-2.5 border-b border-white/5 last:border-none hover:bg-white/10"
+                className="w-full text-left px-3.5 py-2.5 border-b border-zinc-800/80 last:border-none hover:bg-zinc-800/70 active:bg-zinc-800 transition-colors flex items-start gap-2.5"
               >
-                <div className="font-sans text-[13px] font-semibold text-white/90">{r.mainText || r.label}</div>
-                {r.secondaryText && <div className="font-sans text-[11px] text-white/50">{r.secondaryText}</div>}
+                <MapPin size={14} className="text-[#00FF66] shrink-0 mt-1" />
+                <div className="min-w-0">
+                  <div className="font-sans text-[13px] font-semibold text-zinc-50 truncate">{r.mainText || r.label}</div>
+                  {r.secondaryText && <div className="font-sans text-[11px] text-zinc-400 truncate">{r.secondaryText}</div>}
+                </div>
               </button>
             ))}
           </div>
         )}
-        
+
         {searchingDest && (
-          <div className="mt-2 text-center text-[12px] text-white/50">
-            Buscando endereços...
+          <div className="mt-1.5 text-[11px] text-zinc-400 px-1">
+            Buscando endereços em Ubatuba...
           </div>
         )}
       </div>
 
+      {localError && (
+        <div className="mt-2.5 rounded-xl bg-red-500/10 border border-red-500/40 px-3 py-2 text-xs text-red-200">
+          {localError}
+        </div>
+      )}
+
       {/* Preview preço */}
-      {origin && destination && (
+      {origin && destination && quote && (
         <div
           className="mt-3.5 rounded-xl animate-in fade-in"
           style={{
@@ -295,31 +503,42 @@ const IdleSheet = ({
           }}
         >
           <div className="flex items-center justify-between">
-            <span className="font-sans text-[12px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-              Estimativa
-            </span>
-            <span className="font-display text-[20px] font-bold" style={{ color: "#0DB87E" }}>
+            <div className="flex items-center gap-2">
+              <span className="font-sans text-[12px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+                Estimativa
+              </span>
+              {quote.idaEVoltaAtivada && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30">
+                  Ida e Volta (2× km)
+                </span>
+              )}
+            </div>
+            <span className="font-display text-[20px] font-bold" style={{ color: "#00FF66" }}>
               {formatBRL(price)}
             </span>
           </div>
-          <p className="font-sans text-[12px] mt-0.5" style={{ color: "rgba(255,255,255,0.40)" }}>
-            {distanceKm}km · ~{durationMin} min
+          <p className="font-sans text-[12px] mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+            {distanceKm.toFixed(1)} km · ~{durationMin} min
           </p>
         </div>
       )}
 
       <button
         type="button"
-        disabled={!canConfirm}
-        onClick={onConfirm}
-        className="mt-4 w-full rounded-xl font-display font-semibold text-navy transition-opacity animate-pulse"
+        disabled={!canConfirm || confirming || resolvingManualDest}
+        onClick={handleConfirmClick}
+        className="mt-4 w-full rounded-xl font-display font-semibold text-navy transition-opacity"
         style={{
           height: 52,
           background: "#00FF66",
-          opacity: canConfirm ? 1 : 0.4,
+          opacity: canConfirm && !confirming && !resolvingManualDest ? 1 : 0.4,
         }}
       >
-        Confirmar pedido
+        {resolvingManualDest
+          ? "Localizando endereço..."
+          : confirming
+          ? "Solicitando mototáxi..."
+          : "Confirmar pedido"}
       </button>
     </Sheet>
   );
@@ -1049,6 +1268,7 @@ const MototaxiTomadorPage = () => {
   const [pricingConfig, setPricingConfig] = useState<MototaxiPricingConfig>(
     DEFAULT_MOTOTAXI_PRICING_CONFIG,
   );
+  const [confirmingOrder, setConfirmingOrder] = useState(false);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
 
   useEffect(() => {
@@ -1096,9 +1316,12 @@ const MototaxiTomadorPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Distance/duration when both points are set
+  // Distance/duration via road route (Google Routes -> OSRM -> Haversine × 1.3)
   useEffect(() => {
     if (!state.origin || !state.destination) return;
+    let active = true;
+
+    // Immediate Haversine × 1.3 estimate so quote appears without latency
     const R = 6371;
     const dLat = ((state.destination.lat - state.origin.lat) * Math.PI) / 180;
     const dLng = ((state.destination.lng - state.origin.lng) * Math.PI) / 180;
@@ -1107,14 +1330,29 @@ const MototaxiTomadorPage = () => {
       Math.cos((state.origin.lat * Math.PI) / 180) *
         Math.cos((state.destination.lat * Math.PI) / 180) *
         Math.sin(dLng / 2) ** 2;
-    const km = +(2 * R * Math.asin(Math.sqrt(a))).toFixed(1);
+    const fallbackKm = Math.max(0.5, +(2 * R * Math.asin(Math.sqrt(a)) * 1.3).toFixed(1));
     setState({
-      distanceKm: km,
-      durationMin: Math.max(3, Math.round(km * 3)),
-      estimatedPrice: calcPrice(km, pricingConfig),
+      distanceKm: fallbackKm,
+      durationMin: Math.max(3, Math.round(fallbackKm * 2.5)),
+      estimatedPrice: calcPrice(fallbackKm, pricingConfig),
     });
+
+    // Refine with real road route (OSRM / Google Routes)
+    void getRouteInfo(state.origin, state.destination).then((route) => {
+      if (!active || !route) return;
+      const km = +route.distanceKm.toFixed(1);
+      setState({
+        distanceKm: km,
+        durationMin: Math.max(3, route.durationMin),
+        estimatedPrice: calcPrice(km, pricingConfig),
+      });
+    });
+
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.origin, state.destination, pricingConfig]);
+  }, [state.origin?.lat, state.origin?.lng, state.destination?.lat, state.destination?.lng, pricingConfig]);
 
   // Buscar motoristas online em tempo real com polling de contingência e suporte a bfcache
   useEffect(() => {
@@ -1516,107 +1754,133 @@ const MototaxiTomadorPage = () => {
     };
   }, [state.status, state.rideId]);
 
-  const handleConfirm = async () => {
-    if (!state.origin || !state.destination) return;
+  const handleConfirm = async (overrideDest?: { lat: number; lng: number; address: string }) => {
+    const effectiveDest = overrideDest || state.destination;
+    if (!state.origin || !effectiveDest) return;
+    setConfirmingOrder(true);
     const startTime = Date.now();
 
-    let tomadorId = user.uid;
-    if (!tomadorId) {
-      const { data: authData } = await supabase.auth.getUser();
-      tomadorId = authData?.user?.id || "";
-    }
-
-    if (!tomadorId) {
-      toast.error("Por favor, faça login para solicitar a corrida.");
-      return;
-    }
-
-    // Validar Geofence de Origem e Destino (Aviso informativo para permitir testes)
-    const originGeo = validateGeofence(state.origin.address, { lat: state.origin.lat, lng: state.origin.lng });
-    const destGeo = validateGeofence(state.destination.address, { lat: state.destination.lat, lng: state.destination.lng });
-
-    if (!originGeo.inside && !destGeo.inside) {
-      console.warn("[Geofence] Chamada iniciada fora do perímetro padrão de Ubatuba:", { origin: state.origin, destination: state.destination });
-    }
-
-    const newRide = {
-      tomador_id: tomadorId,
-      status: 'searching',
-      type: state.type || 'carona',
-      origin: {
-        lat: state.origin.lat,
-        lng: state.origin.lng,
-        address: state.origin.address
-      },
-      destination: {
-        lat: state.destination.lat,
-        lng: state.destination.lng,
-        address: state.destination.address
-      },
-      distance_km: state.distanceKm,
-      duration_min: state.durationMin,
-      estimated_price: state.estimatedPrice,
-      payment_method: null
-    };
-
-    console.log('[AUDIT MototaxiTomador] Enviando INSERT em mototaxi_corridas:', newRide);
-
-    const { data, error } = await supabase
-      .from('mototaxi_corridas')
-      .insert(newRide)
-      .select()
-      .single();
-
-    const duration = Date.now() - startTime;
-
-    console.log('[AUDIT MototaxiTomador] Resposta do Supabase INSERT:', {
-      success: !error,
-      data,
-      error,
-      insertedId: data?.id,
-      status: data?.status
-    });
-
-    if (error) {
-      console.error('[AUDIT MototaxiTomador] Erro fatal no INSERT de corrida:', error);
-      logSystem("ERROR", "MOTOTAXI", "ride_requested", "failed", duration, error.message, error.code, { type: state.type });
-      alert(`Erro ao solicitar mototáxi: ${error.message || 'Falha no banco de dados'}`);
-      return;
-    }
-
-    // Broadcast de contingência instantâneo para prestadores online
     try {
-      const broadcastChan = supabase
-        .channel('mototaxi_chamados_broadcast')
-        .on('broadcast', { event: 'new_chamado' }, () => {})
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            broadcastChan.send({
-              type: 'broadcast',
-              event: 'new_chamado',
-              payload: {
-                id: data.id,
-                type: data.type || state.type,
-                origin: data.origin,
-                destination: data.destination,
-                distance_km: data.distance_km,
-                duration_min: data.duration_min,
-                estimated_price: data.estimated_price,
-              }
-            });
-          }
-        });
-    } catch (e) {
-      console.warn('Erro ao enviar broadcast do chamado:', e);
+      let tomadorId = user.uid;
+      if (!tomadorId) {
+        const { data: authData } = await supabase.auth.getUser();
+        tomadorId = authData?.user?.id || "";
+      }
+
+      if (!tomadorId) {
+        toast.error("Por favor, faça login para solicitar a corrida.");
+        return;
+      }
+
+      // Calcular rota e preço finais se overrideDest foi passado ou se estimatedPrice ainda não foi calculado
+      let finalDistanceKm = state.distanceKm;
+      let finalDurationMin = state.durationMin;
+      let finalEstimatedPrice = state.estimatedPrice;
+
+      if (overrideDest || !finalDistanceKm || !finalEstimatedPrice) {
+        const route = await getRouteInfo(state.origin, effectiveDest);
+        if (route) {
+          finalDistanceKm = +route.distanceKm.toFixed(1);
+          finalDurationMin = Math.max(3, route.durationMin);
+          finalEstimatedPrice = calcPrice(finalDistanceKm, pricingConfig);
+          setState({
+            destination: effectiveDest,
+            distanceKm: finalDistanceKm,
+            durationMin: finalDurationMin,
+            estimatedPrice: finalEstimatedPrice,
+          });
+        }
+      }
+
+      // Validar Geofence de Origem e Destino (Aviso informativo para permitir testes)
+      const originGeo = validateGeofence(state.origin.address, { lat: state.origin.lat, lng: state.origin.lng });
+      const destGeo = validateGeofence(effectiveDest.address, { lat: effectiveDest.lat, lng: effectiveDest.lng });
+
+      if (!originGeo.inside && !destGeo.inside) {
+        console.warn("[Geofence] Chamada iniciada fora do perímetro padrão de Ubatuba:", { origin: state.origin, destination: effectiveDest });
+      }
+
+      const newRide = {
+        tomador_id: tomadorId,
+        status: 'searching',
+        type: state.type || 'carona',
+        origin: {
+          lat: state.origin.lat,
+          lng: state.origin.lng,
+          address: state.origin.address
+        },
+        destination: {
+          lat: effectiveDest.lat,
+          lng: effectiveDest.lng,
+          address: effectiveDest.address
+        },
+        distance_km: finalDistanceKm,
+        duration_min: finalDurationMin,
+        estimated_price: finalEstimatedPrice,
+        payment_method: null
+      };
+
+      console.log('[AUDIT MototaxiTomador] Enviando INSERT em mototaxi_corridas:', newRide);
+
+      const { data, error } = await supabase
+        .from('mototaxi_corridas')
+        .insert(newRide)
+        .select()
+        .single();
+
+      const duration = Date.now() - startTime;
+
+      console.log('[AUDIT MototaxiTomador] Resposta do Supabase INSERT:', {
+        success: !error,
+        data,
+        error,
+        insertedId: data?.id,
+        status: data?.status
+      });
+
+      if (error) {
+        console.error('[AUDIT MototaxiTomador] Erro fatal no INSERT de corrida:', error);
+        logSystem("ERROR", "MOTOTAXI", "ride_requested", "failed", duration, error.message, error.code, { type: state.type });
+        toast.error(`Erro ao solicitar mototáxi: ${error.message || 'Falha no banco de dados'}`);
+        return;
+      }
+
+      // Broadcast de contingência instantâneo para prestadores online
+      try {
+        const broadcastChan = supabase
+          .channel('mototaxi_chamados_broadcast')
+          .on('broadcast', { event: 'new_chamado' }, () => {})
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              broadcastChan.send({
+                type: 'broadcast',
+                event: 'new_chamado',
+                payload: {
+                  id: data.id,
+                  type: data.type || state.type,
+                  origin: data.origin,
+                  destination: data.destination,
+                  distance_km: data.distance_km,
+                  duration_min: data.duration_min,
+                  estimated_price: data.estimated_price,
+                }
+              });
+            }
+          });
+      } catch (e) {
+        console.warn('Erro ao enviar broadcast do chamado:', e);
+      }
+
+      trackEvent("ride_requested", "operational", { vertical: "mototaxi", type: state.type, price: finalEstimatedPrice, distance_km: finalDistanceKm });
+      logSystem("INFO", "MOTOTAXI", "ride_requested", "success", duration, undefined, undefined, { type: state.type, price: finalEstimatedPrice });
+
+      setState({
+        status: 'searching',
+        rideId: data.id
+      });
+    } finally {
+      setConfirmingOrder(false);
     }
-
-    trackEvent("ride_requested", "operational", { vertical: "mototaxi", type: state.type, price: state.estimatedPrice, distance_km: state.distanceKm });
-    logSystem("INFO", "MOTOTAXI", "ride_requested", "success", duration, undefined, undefined, { type: state.type, price: state.estimatedPrice });
-
-    setState({
-      status: 'searching',
-      rideId: data.id
-    });
   };
 
   const handleCancel = async () => {
@@ -1745,21 +2009,26 @@ const MototaxiTomadorPage = () => {
           type={state.type}
           setType={(t) => setState({ type: t })}
           origin={state.origin}
-          setOriginAddress={(s) =>
-            state.origin && setState({ origin: { ...state.origin, address: s } })
-          }
+          setOrigin={(o) => {
+            setCenter({ lat: o.lat, lng: o.lng });
+            setState({ origin: o });
+          }}
           recenter={() => {
             if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition((pos) => {
+              navigator.geolocation.getCurrentPosition(async (pos) => {
                 const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
                 setCenter(c);
-                setState({ origin: { ...c, address: state.origin?.address || "Sua localização atual" } });
+                const addr = await reverseGeocode(c.lat, c.lng);
+                setState({ origin: { ...c, address: addr || "Sua localização atual" } });
               });
             }
           }}
           destination={state.destination}
           setDestination={(d) => setState({ destination: d })}
+          distanceKm={state.distanceKm}
+          durationMin={state.durationMin}
           pricingConfig={pricingConfig}
+          confirming={confirmingOrder}
           onConfirm={handleConfirm}
         />
       )}
