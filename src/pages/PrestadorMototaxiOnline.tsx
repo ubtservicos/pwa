@@ -548,15 +548,18 @@ export default function PrestadorMototaxiOnline() {
         return;
       }
 
-      if (!data) {
+      if (!data || !data.id || data.prestador_id !== currentUid) {
         toast.error("Outro motorista já aceitou ou o pedido foi cancelado.");
         setChamado(null);
         return;
       }
 
-      sessionStorage.setItem("ubt_active_ride", JSON.stringify({ ...chamado, prestador_id: currentUid }));
+      sessionStorage.setItem(
+        "ubt_active_ride",
+        JSON.stringify({ ...chamado, id: data.id, prestador_id: currentUid, status: data.status })
+      );
       setChamado(null);
-      navigate("/app/prestador/mototaxi/active");
+      navigate(`/app/prestador/mototaxi/active/${data.id}`);
     } catch (e: any) {
       console.error("Exceção ao aceitar corrida:", e);
       toast.error(e?.message || "Erro ao aceitar corrida! Tente novamente.");

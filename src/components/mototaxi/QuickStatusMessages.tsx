@@ -54,7 +54,9 @@ export const QuickStatusMessages: React.FC<QuickStatusMessagesProps> = ({
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (typeof endRef.current?.scrollIntoView === "function") {
+      endRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }, [messages.length]);
 
   return (

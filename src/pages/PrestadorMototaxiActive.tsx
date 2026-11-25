@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Navigation, MapPin, CheckCircle2, Star, MessageSquare,
   User as UserIcon, Building2, Users, Gift, Heart,
@@ -85,10 +85,13 @@ const Sheet = ({ children }: { children: React.ReactNode }) => (
 
 const PrestadorMototaxiActive = () => {
   const navigate = useNavigate();
+  const { id: routeRideId } = useParams<{ id?: string }>();
   const user = useCurrentUser();
   const [phase, setPhase] = useState<Phase>("arriving");
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number }>(UBATUBA);
   const [ride, setRide] = useState<ActiveRide | null>(null);
+  const [loadingRide, setLoadingRide] = useState<boolean>(true);
+  const [rideLoadError, setRideLoadError] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
@@ -130,9 +133,11 @@ const PrestadorMototaxiActive = () => {
     }
   };
 
-  // Carregar dados da corrida do banco
-  useEffect(() => {
-    const loadRideFromDb = async (rideId: string) => {
+  // Carregar dados da corrida do banco (ou recuperar corrida ativa do prestador)
+  const loadActiveRide = useCallback(async () => {
+    setLoadingRide(true);
+    setRideLoadError(null);
+    const loadRideFromDb = async (rideId: string): Promise<boolean> => {
       try {
         const { data, error } = await supabase
           .from('mototaxi_corridas')
@@ -141,20 +146,28 @@ const PrestadorMototaxiActive = () => {
           .maybeSingle();
 
         if (error) {
-          console.warn("[PrestadorMototaxiActive] Aviso ao carregar corrida (possível timeout/504):", error.message);
-          return;
+          console.warn("[PrestadorMototaxiActive] Aviso ao carregar corrida:", error.message);
+          setRideLoadError("Não foi possível carregar os detalhes da corrida agora.");
+          return false;
         }
 
         if (data) {
-          const originObj = typeof data.origin === 'string' ? JSON.parse(data.origin) : data.origin;
-          const destObj = typeof data.destination === 'string' ? JSON.parse(data.destination) : data.destination;
+          const safeParse = (raw: any) => {
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+              try { return JSON.parse(raw); } catch { return { address: raw }; }
+            }
+            return raw;
+          };
+          const originObj = safeParse(data.origin);
+          const destObj = safeParse(data.destination);
           setRide({
             id: data.id,
-            type: data.type,
+            type: data.type === 'entrega' ? 'entrega' : 'carona',
             origin: originObj?.address || 'Origem',
             destination: destObj?.address || 'Destino',
             distanceKm: Number(data.distance_km || 0),
-            durationMin: data.duration_min || 0,
+            durationMin: Number(data.duration_min || 5),
             price: Number(data.final_price || data.estimated_price || 0),
             originCoords: { lat: Number(originObj?.lat || UBATUBA.lat), lng: Number(originObj?.lng || UBATUBA.lng) },
             destinationCoords: { lat: Number(destObj?.lat || UBATUBA.lat), lng: Number(destObj?.lng || UBATUBA.lng) },
@@ -167,9 +180,7 @@ const PrestadorMototaxiActive = () => {
             startTime: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
             created_at: data.created_at,
           });
-          if (data.payment_method) {
-            setPaymentMethodSelected(data.payment_method);
-          }
+          if (data.payment_method) setPaymentMethodSelected(data.payment_method);
           if (data.pix_copy_paste) setPixCopiaColaCode(data.pix_copy_paste);
           if (data.pix_qr_code_base64) setPixQrBase64(data.pix_qr_code_base64);
           if (data.pix_charge_status) setPixChargeStatus(data.pix_charge_status);
@@ -181,41 +192,76 @@ const PrestadorMototaxiActive = () => {
           } else if (data.status === 'paid') {
             setPhase("completed");
             setIsPaymentConfirmed(true);
+          } else {
+            setPhase("arriving");
           }
+          return true;
         }
+        return false;
       } catch (err: any) {
-        console.warn("[PrestadorMototaxiActive] Falha de rede ao consultar corrida (resiliente):", err?.message || err);
+        console.warn("[PrestadorMototaxiActive] Falha de rede ao consultar corrida:", err?.message || err);
+        setRideLoadError("Falha de conexão ao buscar a corrida.");
+        return false;
       }
     };
 
-    const stored = sessionStorage.getItem("ubt_active_ride");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.id) {
-          setRide((prev) => prev || {
-            ...parsed,
-            startTime: parsed?.startTime || (parsed?.created_at ? new Date(parsed.created_at).getTime() : Date.now()),
-          });
-          loadRideFromDb(parsed.id);
+    try {
+      if (routeRideId) {
+        const ok = await loadRideFromDb(routeRideId);
+        if (ok) {
+          setLoadingRide(false);
+          return;
         }
-      } catch { /* noop */ }
-    } else {
-      // fallback
-      setRide({
-        id: "ride-001",
-        type: "carona",
-        origin: "Rua das Toninhas, 120",
-        destination: "Praia Grande, Quiosque 8",
-        distanceKm: 3.4,
-        durationMin: 11,
-        price: 12.5,
-        originCoords: ORIGIN,
-        destinationCoords: DESTINATION,
-        startTime: Date.now(),
-      });
+      }
+
+      const stored = sessionStorage.getItem("ubt_active_ride");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id) {
+            setRide((prev) => prev || {
+              ...parsed,
+              price: Number(parsed.price || parsed.final_price || parsed.estimated_price || 0),
+              distanceKm: Number(parsed.distanceKm || parsed.distance_km || 0),
+              durationMin: Number(parsed.durationMin || parsed.duration_min || 5),
+              startTime: parsed?.startTime || (parsed?.created_at ? new Date(parsed.created_at).getTime() : Date.now()),
+            });
+            await loadRideFromDb(parsed.id);
+            setLoadingRide(false);
+            return;
+          }
+        } catch { /* noop */ }
+      }
+
+      // Fallback: buscar última corrida ativa deste prestador diretamente no banco
+      if (user.uid) {
+        const { data: activeRow } = await supabase
+          .from('mototaxi_corridas')
+          .select('id')
+          .eq('prestador_id', user.uid)
+          .in('status', ['accepted', 'arriving', 'in_progress', 'completed'])
+          .order('accepted_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeRow?.id) {
+          await loadRideFromDb(activeRow.id);
+          setLoadingRide(false);
+          return;
+        }
+      }
+
+      if (!user.isLoading) {
+        setRideLoadError("Nenhuma corrida ativa encontrada para sua conta.");
+      }
+    } finally {
+      setLoadingRide(false);
     }
-  }, []);
+  }, [routeRideId, user.uid, user.isLoading]);
+
+  useEffect(() => {
+    void loadActiveRide();
+  }, [loadActiveRide]);
 
   // GPS watch
   useEffect(() => {
@@ -487,7 +533,73 @@ const PrestadorMototaxiActive = () => {
     generatePixCharge,
   ]);
 
-  if (!ride) return null;
+  const verifyPixPaymentNow = useCallback(async () => {
+    if (!ride?.id || isCheckingPayment) return;
+    setIsCheckingPayment(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("payment-gateway", {
+        body: {
+          action: "check_mototaxi_pix_status",
+          service_id: ride.id,
+        },
+      });
+      if (error) {
+        console.warn("[PrestadorMototaxiActive] Erro ao verificar pagamento PIX:", error);
+        return;
+      }
+      if (data?.paid || data?.status === "approved") {
+        transitionToPaid(ride.id);
+      } else if (data?.status && ["rejected", "cancelled", "expired"].includes(String(data.status).toLowerCase())) {
+        setPixChargeStatus(String(data.status));
+        setPixError("A cobrança PIX expirou ou foi cancelada. Gere um novo QR Code.");
+      }
+    } catch (err) {
+      console.warn("[PrestadorMototaxiActive] Exceção ao verificar PIX:", err);
+    } finally {
+      setIsCheckingPayment(false);
+    }
+  }, [ride?.id, isCheckingPayment, transitionToPaid]);
+
+  if (!ride) {
+    return (
+      <div className="min-h-[100svh] bg-[#09090B] text-zinc-100 flex items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-sm rounded-2xl bg-[#121215] border border-zinc-800 p-6 text-center shadow-2xl space-y-4">
+          {loadingRide ? (
+            <>
+              <div className="w-12 h-12 mx-auto rounded-full border-2 border-[#00E676] border-t-transparent animate-spin" />
+              <div>
+                <h2 className="text-base font-bold text-white">Carregando corrida...</h2>
+                <p className="text-xs text-zinc-400 mt-1">Sincronizando dados da corrida aceita.</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-base font-bold text-white">Corrida não encontrada</h2>
+              <p className="text-xs text-zinc-400">
+                {rideLoadError || "Não foi possível carregar os dados desta corrida."}
+              </p>
+              <div className="flex flex-col gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void loadActiveRide()}
+                  className="w-full py-3 rounded-xl bg-[#00E676] text-black font-bold text-sm cursor-pointer"
+                >
+                  Tentar novamente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/app/prestador/mototaxi/online")}
+                  className="w-full py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 font-semibold text-sm cursor-pointer"
+                >
+                  Voltar para Online
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const startRide = async () => {
     try {
@@ -521,33 +633,6 @@ const PrestadorMototaxiActive = () => {
     sessionStorage.removeItem("ubt_active_ride");
     navigate("/app/prestador/home");
   };
-
-  const verifyPixPaymentNow = useCallback(async () => {
-    if (!ride?.id || isCheckingPayment) return;
-    setIsCheckingPayment(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("payment-gateway", {
-        body: {
-          action: "check_mototaxi_pix_status",
-          service_id: ride.id,
-        },
-      });
-      if (error) {
-        console.warn("[PrestadorMototaxiActive] Erro ao verificar pagamento PIX:", error);
-        return;
-      }
-      if (data?.paid || data?.status === "approved") {
-        transitionToPaid(ride.id);
-      } else if (data?.status && ["rejected", "cancelled", "expired"].includes(String(data.status).toLowerCase())) {
-        setPixChargeStatus(String(data.status));
-        setPixError("A cobrança PIX expirou ou foi cancelada. Gere um novo QR Code.");
-      }
-    } catch (err) {
-      console.warn("[PrestadorMototaxiActive] Exceção ao verificar PIX:", err);
-    } finally {
-      setIsCheckingPayment(false);
-    }
-  }, [ride?.id, isCheckingPayment, transitionToPaid]);
 
   /* ---------------- COMPLETED ---------------- */
   if (phase === "completed") {

@@ -41,6 +41,7 @@ import SouFundadorPage from "./pages/SouFundadorPage.tsx";
 import AtualizacaoCadastral from "./pages/AtualizacaoCadastral.tsx";
 import AppHome from "./pages/AppHome.tsx";
 import MototaxiTomador from "./pages/MototaxiTomador.tsx";
+import MototaxiErrorBoundary from "./components/mototaxi/MototaxiErrorBoundary.tsx";
 import PrestadorHome from "./pages/PrestadorHome.tsx";
 import PrestadorMototaxiOnboarding from "./pages/PrestadorMototaxiOnboarding.tsx";
 import PrestadorKycPending from "./pages/PrestadorKycPending.tsx";
@@ -193,14 +194,15 @@ const App = () => (
               <Route element={<LgpdGuard />}>
                 <Route path="/app/pendente" element={<PendingApprovalPage />} />
                 <Route path="/app/home" element={<AppHome />} />
-                <Route path="/app/mototaxi" element={<MototaxiTomador />} />
+                <Route path="/app/mototaxi" element={<MototaxiErrorBoundary fallbackPath="/app/home" fallbackLabel="Voltar para o Início"><MototaxiTomador /></MototaxiErrorBoundary>} />
                 <Route path="/app/prestador/home" element={<PrestadorHome />} />
-                <Route path="/app/prestador/mototaxi/onboarding" element={<PrestadorMototaxiOnboarding />} />
-                <Route path="/app/prestador/mototaxi/config" element={<PrestadorMototaxiOnboarding />} />
+                <Route path="/app/prestador/mototaxi/onboarding" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/home" fallbackLabel="Voltar para Home"><PrestadorMototaxiOnboarding /></MototaxiErrorBoundary>} />
+                <Route path="/app/prestador/mototaxi/config" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/home" fallbackLabel="Voltar para Home"><PrestadorMototaxiOnboarding /></MototaxiErrorBoundary>} />
                 <Route path="/app/prestador/mototaxi/kyc-pending" element={<PrestadorKycPending />} />
-                <Route path="/app/prestador/mototaxi/online" element={<PrestadorMototaxiOnline />} />
-                <Route path="/app/prestador/mototaxi/active" element={<PrestadorMototaxiActive />} />
-                <Route path="/app/prestador/mototaxi/avaliacao/:id" element={<PrestadorMototaxiActive />} />
+                <Route path="/app/prestador/mototaxi/online" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/home" fallbackLabel="Voltar para Home"><PrestadorMototaxiOnline /></MototaxiErrorBoundary>} />
+                <Route path="/app/prestador/mototaxi/active" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
+                <Route path="/app/prestador/mototaxi/active/:id" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
+                <Route path="/app/prestador/mototaxi/avaliacao/:id" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
                 <Route path="/app/ambulantes" element={<AmbulantesDiscoveryPage />} />
                 <Route path="/app/ambulantes/categoria/:slug" element={<AmbulantesCategoriaAmbulantesPage />} />
                 <Route path="/app/ambulantes/carrinho" element={<AmbulanteCarrinhoPage />} />

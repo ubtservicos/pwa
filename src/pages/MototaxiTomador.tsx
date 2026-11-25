@@ -1551,7 +1551,7 @@ const MototaxiTomadorPage = () => {
     return () => { active = false; };
   }, [user.uid, state.rideId, state.status, setState]);
 
-  // Escuta atualizações da corrida em tempo real com polling contínuo de 2s e suporte a bfcache
+  // Escuta atualizações da corrida em tempo real com polling de segurança de 3s e suporte a bfcache
   useEffect(() => {
     if (!state.rideId || state.status === "rating") return;
 
@@ -1559,53 +1559,87 @@ const MototaxiTomadorPage = () => {
 
     const applyDbRideTransition = async (dbRide: any) => {
       if (!dbRide) return;
-      if (dbRide.status === "accepted") {
-        let prestadorInfo = null;
-        if (dbRide.prestador_id) {
-          const { data: userData } = await supabase
-            .from("usuarios")
-            .select("nome")
-            .eq("id", dbRide.prestador_id)
-            .single();
+      const normalizedStatus = String(dbRide.status || "").toLowerCase();
 
-          const { data: sessData } = await supabase
-            .from("mototaxi_sessoes")
-            .select("lat, lng")
-            .eq("prestador_id", dbRide.prestador_id)
-            .single();
+      if (["accepted", "arriving", "en_route", "arrived"].includes(normalizedStatus) || (normalizedStatus !== "searching" && normalizedStatus !== "cancelled" && dbRide.prestador_id && state.status === "searching")) {
+        const driverId = dbRide.prestador_id || state.prestadorInfo?.id;
+        let prestadorInfo = state.prestadorInfo;
+        let prestadorLocation = state.prestadorLocation;
 
-          prestadorInfo = {
-            id: dbRide.prestador_id,
-            name: userData?.nome || "Motorista UBT",
-            photo: "",
-            plate: "MTX-" + dbRide.prestador_id.slice(0, 4).toUpperCase(),
-            rating: 4.8,
-          };
+        if (driverId && (!prestadorInfo || prestadorInfo.id !== driverId)) {
+          try {
+            const [{ data: userData }, { data: sessData }, { data: motoData }] = await Promise.all([
+              supabase.from("usuarios").select("nome").eq("id", driverId).maybeSingle(),
+              supabase.from("mototaxi_sessoes").select("lat, lng").eq("prestador_id", driverId).maybeSingle(),
+              supabase.from("prestador_mototaxi").select("plate").eq("user_id", driverId).maybeSingle(),
+            ]);
 
+            prestadorInfo = {
+              id: driverId,
+              name: userData?.nome || "Motorista UBT",
+              photo: "",
+              plate: motoData?.plate || ("MTX-" + driverId.slice(0, 4).toUpperCase()),
+              rating: 4.9,
+            };
+            prestadorLocation = sessData
+              ? { lat: Number(sessData.lat), lng: Number(sessData.lng) }
+              : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null);
+          } catch {
+            prestadorInfo = {
+              id: driverId,
+              name: "Motorista UBT",
+              photo: "",
+              plate: "MTX-" + driverId.slice(0, 4).toUpperCase(),
+              rating: 4.9,
+            };
+          }
+        }
+
+        if (normalizedStatus === "in_progress") {
+          setState({ status: "in_progress", prestadorInfo, prestadorLocation });
+        } else if (normalizedStatus === "completed") {
+          setState({
+            status: "completed",
+            finalPrice: Number(dbRide.final_price || dbRide.estimated_price || state.estimatedPrice),
+            prestadorInfo,
+            prestadorLocation,
+          });
+        } else if (normalizedStatus === "paid") {
+          setState({
+            status: "rating",
+            finalPrice: Number(dbRide.final_price || dbRide.estimated_price || state.estimatedPrice),
+            paymentMethod: dbRide.payment_method === "card" ? "card" : "pix",
+            prestadorInfo,
+          });
+        } else {
           setState({
             status: "accepted",
             acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
-            prestadorInfo,
-            prestadorLocation: sessData
-              ? { lat: Number(sessData.lat), lng: Number(sessData.lng) }
-              : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null),
+            prestadorInfo: prestadorInfo || {
+              id: driverId || "driver",
+              name: "Motorista UBT",
+              photo: "",
+              plate: "UBT",
+              rating: 4.9,
+            },
+            prestadorLocation,
           });
         }
-      } else if (dbRide.status === "in_progress") {
+      } else if (normalizedStatus === "in_progress") {
         setState({ status: "in_progress" });
-      } else if (dbRide.status === "completed") {
+      } else if (normalizedStatus === "completed") {
         setState({
           status: "completed",
-          finalPrice: dbRide.final_price || dbRide.estimated_price,
+          finalPrice: Number(dbRide.final_price || dbRide.estimated_price || state.estimatedPrice),
         });
-      } else if (dbRide.status === "paid") {
+      } else if (normalizedStatus === "paid") {
         setState({
           status: "rating",
-          finalPrice: dbRide.final_price || dbRide.estimated_price,
+          finalPrice: Number(dbRide.final_price || dbRide.estimated_price || state.estimatedPrice),
           paymentMethod: dbRide.payment_method === "card" ? "card" : "pix",
         });
-      } else if (dbRide.status === "cancelled") {
-        alert("A corrida foi cancelada.");
+      } else if (normalizedStatus === "cancelled") {
+        toast.info("A corrida foi cancelada.");
         resetRide();
       }
     };
@@ -1616,15 +1650,15 @@ const MototaxiTomadorPage = () => {
         .from("mototaxi_corridas")
         .select("*")
         .eq("id", state.rideId)
-        .single();
+        .maybeSingle();
 
       if (dbRide && !error) {
         await applyDbRideTransition(dbRide);
       }
     };
 
-    syncCurrentStatus();
-    const pollInterval = setInterval(syncCurrentStatus, 2000);
+    void syncCurrentStatus();
+    const pollInterval = setInterval(syncCurrentStatus, 3000);
 
     const setupStatusChannel = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -1848,6 +1882,14 @@ const MototaxiTomadorPage = () => {
       if (!originGeo.inside && !destGeo.inside) {
         console.warn("[Geofence] Chamada iniciada fora do perímetro padrão de Ubatuba:", { origin: state.origin, destination: effectiveDest });
       }
+
+      // Cancela eventuais pedidos "searching" antigos/órfãos deste mesmo Tomador antes de criar o novo
+      await supabase
+        .from("mototaxi_corridas")
+        .update({ status: "cancelled" })
+        .eq("tomador_id", tomadorId)
+        .eq("status", "searching")
+        .is("prestador_id", null);
 
       const newRide = {
         tomador_id: tomadorId,
