@@ -35,7 +35,7 @@ export default function AdminKycListPage() {
       // 3. Fetch usuarios for candidate data
       const { data: dbUsers } = await supabase
         .from("usuarios")
-        .select("id, nome, role, status, created_at");
+        .select("id, nome, email, telefone, role, status, created_at");
       const usuariosMap = new Map((dbUsers || []).map((u) => [u.id, u]));
 
       // 4. Map Mototaxi candidates directly from prestador_mototaxi
@@ -43,15 +43,17 @@ export default function AdminKycListPage() {
         const profile = profilesMap.get(moto.user_id);
         const usuario = usuariosMap.get(moto.user_id);
         const candidateName = usuario?.nome || profile?.name || "Candidato Mototaxi";
+        const candidateContact =
+          usuario?.email ||
+          (usuario?.telefone ? `Tel: ${usuario.telefone}` : null) ||
+          (profile?.phone ? `Tel: ${profile.phone}` : `${candidateName.toLowerCase().replace(/\s+/g, ".")}@ubt.app`);
 
         return {
           id: moto.user_id,
           name: candidateName,
           role: usuario?.role || profile?.role || "prestador",
-          email: profile?.phone
-            ? `Tel: ${profile.phone}`
-            : `${candidateName.toLowerCase().replace(/\s+/g, ".")}@ubt.app`,
-          createdAt: moto.created_at || moto.updated_at || profile?.created_at || new Date().toISOString(),
+          email: candidateContact,
+          createdAt: moto.created_at || moto.updated_at || usuario?.created_at || profile?.created_at || new Date().toISOString(),
           kycStatus: "pending",
           category: "Mototaxi",
           plate: moto.plate,

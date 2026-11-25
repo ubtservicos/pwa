@@ -10,6 +10,7 @@ import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 
 import { maskCPF } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const maskPlate = (v: string) =>
   v
@@ -151,6 +152,8 @@ const PrestadorMototaxiOnboarding = () => {
   const canStepModo = !!modalidade;
 
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -164,16 +167,31 @@ const PrestadorMototaxiOnboarding = () => {
       }
 
       try {
-        const { data: motoRecord } = await supabase
-          .from("prestador_mototaxi")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: rpcProfile, error: rpcErr } = await supabase.rpc("get_my_mototaxi_profile");
+        let motoRecord: any = null;
+        let usuarioRecord: any = null;
+
+        if (!rpcErr && rpcProfile && (rpcProfile as any).ok) {
+          motoRecord = (rpcProfile as any).mototaxi || null;
+          usuarioRecord = (rpcProfile as any).usuario || null;
+        } else {
+          const { data: fallbackMoto } = await supabase
+            .from("prestador_mototaxi")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          motoRecord = fallbackMoto;
+        }
+
+        if (usuarioRecord?.cpf && !motoRecord?.cpf) {
+          setCpf(maskCPF(usuarioRecord.cpf));
+        }
 
         if (motoRecord) {
           setExistingKyc(motoRecord);
           if (motoRecord.cpf) setCpf(maskCPF(motoRecord.cpf));
           if (motoRecord.plate) setPlate(maskPlate(motoRecord.plate));
+          if (motoRecord.brand_model) setBrandModel(motoRecord.brand_model);
           if (motoRecord.gender) setSex(motoRecord.gender === "feminino" ? "F" : "M");
           if (motoRecord.modalidade) setModalidade(motoRecord.modalidade);
         }
@@ -207,75 +225,130 @@ const PrestadorMototaxiOnboarding = () => {
   };
 
   const submit = async () => {
+    setFormError(null);
+    setSuccessMessage(null);
+
+    // Validação explícita antes de salvar (sem bloqueio silencioso)
+    const cpfDigits = cpf.replace(/\D/g, "");
+    if (cpfDigits.length !== 11 || !sex) {
+      const missing: string[] = [];
+      if (cpfDigits.length !== 11) missing.push("CPF válido (11 dígitos)");
+      if (!sex) missing.push("Sexo");
+      const msg = `Preencha os campos obrigatórios na aba Pessoal antes de salvar: ${missing.join(" e ")}.`;
+      setFormError(msg);
+      toast.error(msg);
+      setActiveTab("Pessoal");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const plateClean = plate.replace(/[^A-Za-z0-9]/g, "");
+    if (plateClean.length < 7 || brandModel.trim().length < 3) {
+      const missing: string[] = [];
+      if (plateClean.length < 7) missing.push("Placa da moto");
+      if (brandModel.trim().length < 3) missing.push("Modelo, Cor e Ano da moto");
+      const msg = `Preencha os campos obrigatórios na aba Dados Veículo antes de salvar: ${missing.join(" e ")}.`;
+      setFormError(msg);
+      toast.error(msg);
+      setActiveTab("Dados Veículo");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    if (!modalidade) {
+      const msg = "Selecione como você quer trabalhar na aba Modo antes de salvar.";
+      setFormError(msg);
+      toast.error(msg);
+      setActiveTab("Modo");
+      return;
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-
-      if (user) {
-        // 1. Upload files to Storage if new ones provided
-        const [
-          cnhFrenteUrl,
-          cnhVersoUrl,
-          selfieUrl,
-          crlvUrl,
-          motoPhotoUrl,
-        ] = await Promise.all([
-          cnhFront ? uploadDoc(cnhFront, "cnh_frente", user.id) : Promise.resolve(existingKyc?.cnh_frente_url || null),
-          cnhBack ? uploadDoc(cnhBack, "cnh_verso", user.id) : Promise.resolve(existingKyc?.cnh_verso_url || null),
-          selfie ? uploadDoc(selfie, "selfie", user.id) : Promise.resolve(existingKyc?.selfie_url || null),
-          crlvFile ? uploadDoc(crlvFile, "crlv", user.id) : Promise.resolve(existingKyc?.crlv_url || null),
-          motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(existingKyc?.moto_photo_url || null),
-        ]);
-
-        // 2. Update Auth metadata
-        await supabase.auth.updateUser({
-          data: {
-            cpf: cpf,
-            sexo: sex,
-            placa_moto: plate,
-            modelo_moto: brandModel,
-            modalidade_moto: modalidade,
-          }
-        });
-
-        // 3. Persist to prestador_mototaxi table with storage URLs
-        const genderMapped = sex === "F" ? "feminino" : "masculino";
-        const { error: upsertErr } = await supabase.from("prestador_mototaxi").upsert({
-          user_id: user.id,
-          cpf: cpf,
-          plate: plate,
-          gender: genderMapped,
-          modalidade: modalidade,
-          kyc_status: existingKyc?.kyc_status === "approved" ? "approved" : "pending",
-          is_online: false,
-          cnh_frente_url: cnhFrenteUrl,
-          cnh_verso_url: cnhVersoUrl,
-          cnh_photo_url: cnhFrenteUrl,
-          crlv_url: crlvUrl,
-          moto_photo_url: motoPhotoUrl,
-          selfie_url: selfieUrl,
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id" });
-
-        if (upsertErr) {
-          console.error("Erro no upsert de prestador_mototaxi:", upsertErr);
-          throw upsertErr;
-        }
-
-        // 4. Mark under_review in usuarios if pending
-        if (existingKyc?.kyc_status !== "approved") {
-          await supabase.from("usuarios").update({
-            under_review: true
-          }).eq("id", user.id);
-        }
+      if (!user) {
+        const msg = "Sessão expirada. Faça login novamente para salvar suas configurações.";
+        setFormError(msg);
+        toast.error(msg);
+        setLoading(false);
+        return;
       }
 
-      setLoading(false);
-      navigate("/app/prestador/mototaxi/kyc-pending");
-    } catch (err) {
+      // 1. Upload files to Storage if new ones provided
+      const [
+        cnhFrenteUrl,
+        cnhVersoUrl,
+        selfieUrl,
+        crlvUrl,
+        motoPhotoUrl,
+      ] = await Promise.all([
+        cnhFront ? uploadDoc(cnhFront, "cnh_frente", user.id) : Promise.resolve(existingKyc?.cnh_frente_url || null),
+        cnhBack ? uploadDoc(cnhBack, "cnh_verso", user.id) : Promise.resolve(existingKyc?.cnh_verso_url || null),
+        selfie ? uploadDoc(selfie, "selfie", user.id) : Promise.resolve(existingKyc?.selfie_url || null),
+        crlvFile ? uploadDoc(crlvFile, "crlv", user.id) : Promise.resolve(existingKyc?.crlv_url || null),
+        motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(existingKyc?.moto_photo_url || null),
+      ]);
+
+      // 2. Update Auth metadata (non-blocking if metadata fails)
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            cpf,
+            sexo: sex,
+            placa_moto: plate,
+            modelo_moto: brandModel.trim(),
+            modalidade_moto: modalidade,
+          },
+        });
+      } catch (metaErr) {
+        console.warn("Aviso ao atualizar user_metadata:", metaErr);
+      }
+
+      // 3. Persist via SECURITY DEFINER RPC (handles standard + legacy accounts and KYC queue)
+      const genderMapped = sex === "F" ? "feminino" : "masculino";
+      const { data: rpcData, error: rpcError } = await supabase.rpc("submit_mototaxi_kyc", {
+        p_cpf: cpf,
+        p_plate: plate,
+        p_brand_model: brandModel.trim(),
+        p_gender: genderMapped,
+        p_modalidade: modalidade,
+        p_cnh_frente_url: cnhFrenteUrl,
+        p_cnh_verso_url: cnhVersoUrl,
+        p_selfie_url: selfieUrl,
+        p_crlv_url: crlvUrl,
+        p_moto_photo_url: motoPhotoUrl,
+      });
+
+      if (rpcError) {
+        throw new Error(rpcError.message || "Falha ao gravar cadastro de Mototaxista no servidor.");
+      }
+
+      const payload = rpcData as any;
+      if (!payload || payload.ok === false) {
+        throw new Error(payload?.error || "Não foi possível salvar seu cadastro de Mototaxista.");
+      }
+
+      if (payload.record) {
+        setExistingKyc(payload.record);
+      }
+
+      const okMsg =
+        payload.kyc_status === "approved"
+          ? "Configurações de Mototaxista atualizadas com sucesso!"
+          : "Configurações salvas! Seu cadastro foi enviado para análise de KYC pela equipe UBT.";
+
+      setSuccessMessage(okMsg);
+      toast.success(okMsg);
+      setActiveTab("Status KYC");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err: any) {
       console.error("Erro ao salvar onboarding mototaxi:", err);
+      const errMsg = err?.message || "Erro inesperado ao salvar configurações. Tente novamente.";
+      setFormError(errMsg);
+      toast.error(errMsg);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
       setLoading(false);
-      navigate("/app/prestador/mototaxi/kyc-pending");
     }
   };
 
@@ -386,6 +459,22 @@ const PrestadorMototaxiOnboarding = () => {
       </div>
 
       <div className="mt-4">
+        {formError && (
+          <div className="mb-4 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 flex items-start gap-3">
+            <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-xs sm:text-sm font-medium text-red-200 leading-relaxed">
+              {formError}
+            </p>
+          </div>
+        )}
+        {successMessage && (
+          <div className="mb-4 rounded-2xl border border-[#00FF66]/40 bg-[#00FF66]/10 p-4 flex items-start gap-3">
+            <CheckCircle2 size={18} className="text-[#00FF66] shrink-0 mt-0.5" />
+            <p className="text-xs sm:text-sm font-medium text-[#00FF66] leading-relaxed">
+              {successMessage}
+            </p>
+          </div>
+        )}
         {activeTab === "Status KYC" && (
           <div className="space-y-4">
             {/* Status Card Geral */}
@@ -404,9 +493,13 @@ const PrestadorMototaxiOnboarding = () => {
                   <span className="px-3 py-1 rounded-full text-[12px] font-black bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1.5">
                     <AlertCircle size={14} /> Documentação Rejeitada
                   </span>
-                ) : (
+                ) : existingKyc?.kyc_status === "pending" ? (
                   <span className="px-3 py-1 rounded-full text-[12px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1.5">
                     <Clock size={14} /> Em Análise pela Equipe
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-[12px] font-black bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-1.5">
+                    <Info size={14} /> Cadastro Não Enviado
                   </span>
                 )}
               </div>
@@ -417,7 +510,11 @@ const PrestadorMototaxiOnboarding = () => {
               <p className="text-[13px] text-zinc-400 mt-1">
                 {existingKyc?.kyc_status === "approved"
                   ? "Sua documentação está regularizada e você está habilitado para receber chamados de corrida e entrega."
-                  : "Seus documentos estão em processo de validação pela equipe de operações da UBT."}
+                  : existingKyc?.kyc_status === "pending"
+                  ? "Seus dados e documentos foram enviados e estão em análise pela equipe de operações da UBT."
+                  : existingKyc?.kyc_status === "rejected"
+                  ? "Seu cadastro precisa de ajustes. Revise seus dados/documentos e clique em Salvar Configurações."
+                  : "Preencha seus dados pessoais, dados do veículo e modo de trabalho e clique em Salvar Configurações para entrar na fila de aprovação KYC."}
               </p>
             </div>
 
@@ -739,9 +836,9 @@ const PrestadorMototaxiOnboarding = () => {
                   <PrimaryButtonLight
                     onClick={submit}
                     loading={loading}
-                    disabled={!canStepPessoal || !canStepDadosVeiculo || !canStepModo}
+                    disabled={loading}
                   >
-                    Salvar Configurações
+                    {loading ? "Salvando..." : "Salvar Configurações"}
                   </PrimaryButtonLight>
                 </div>
               </div>

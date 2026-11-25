@@ -21,17 +21,36 @@ export const useCurrentUser = (): RealUser => {
         return;
       }
       try {
-        const { data: dbUser } = await supabase
-          .from("usuarios")
-          .select("role, nome, status, under_review")
-          .eq("id", authUser.id)
-          .maybeSingle();
+        let dbUser: any = null;
+        let mototaxiData: any = null;
+        let resolvedUid: string = authUser.id;
 
-        const { data: mototaxiData } = await supabase
-          .from("prestador_mototaxi")
-          .select("kyc_status, modalidade, plate, cpf, gender")
-          .eq("user_id", authUser.id)
-          .maybeSingle();
+        // 1. Prefer SECURITY DEFINER RPC that supports both standard and legacy accounts (auth.uid != usuarios.id)
+        const { data: rpcProfile, error: rpcErr } = await supabase.rpc("get_my_mototaxi_profile");
+        if (!rpcErr && rpcProfile && (rpcProfile as any).ok) {
+          const payload = rpcProfile as any;
+          dbUser = payload.usuario || null;
+          mototaxiData = payload.mototaxi || null;
+          if (payload.usuario_id) {
+            resolvedUid = payload.usuario_id;
+          }
+        } else {
+          // Fallback to direct queries
+          const { data: uData } = await supabase
+            .from("usuarios")
+            .select("id, role, nome, status, under_review")
+            .eq("id", authUser.id)
+            .maybeSingle();
+          dbUser = uData;
+          if (uData?.id) resolvedUid = uData.id;
+
+          const { data: mData } = await supabase
+            .from("prestador_mototaxi")
+            .select("kyc_status, modalidade, plate, cpf, gender")
+            .eq("user_id", resolvedUid)
+            .maybeSingle();
+          mototaxiData = mData;
+        }
 
         if (!active) return;
 
@@ -41,8 +60,8 @@ export const useCurrentUser = (): RealUser => {
         if (savedStatuses) {
           try {
             const parsed = JSON.parse(savedStatuses);
-            if (parsed[authUser.id]) {
-              userStatus = parsed[authUser.id];
+            if (parsed[resolvedUid] || parsed[authUser.id]) {
+              userStatus = parsed[resolvedUid] || parsed[authUser.id];
             }
           } catch (e) {
             console.error(e);
@@ -58,14 +77,14 @@ export const useCurrentUser = (): RealUser => {
         }
 
         setUser({
-          uid: authUser.id,
+          uid: resolvedUid,
           name: dbUser?.nome || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || "Usuário",
           email: authUser.email,
           role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
           kycStatus: resolvedKycStatus,
           modalidade: mototaxiData?.modalidade || null,
           plate: mototaxiData?.plate || null,
-          cpf: mototaxiData?.cpf || authUser.user_metadata?.cpf || null,
+          cpf: mototaxiData?.cpf || dbUser?.cpf || authUser.user_metadata?.cpf || null,
           sexo: mototaxiData?.gender || authUser.user_metadata?.sexo || null,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
