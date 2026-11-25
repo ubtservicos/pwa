@@ -471,3 +471,39 @@ Na **Fase 3**, o motor financeiro e o webhook de liquidação consultarão `publ
 - **Produção (`bfqidoduceusbqlnrsol`):** contagens idênticas antes e depois das migrações (`public.usuarios`: `11 → 11`, `auth.users`: `10 → 10`, `public.waitlist`: `9 → 9`, `usuarios_sem_slug: 0`), mantendo isolamento total de secrets/credenciais.
 - **Validação & Release (`v1.7.0-fundador-unificado-lgpd-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `241/241` testes PASS) e `npm run build` OK.
 - **Hotfix `v1.7.1-fix-cpf-input-prod`:** destravados os campos **CPF** (PF) e **CNPJ** (PJ) em `src/pages/AtualizacaoCadastral.tsx` quando ainda não preenchidos no banco (`!hasInitialCpf` / `!hasInitialCnpj`), mantendo proteção `readOnly` apenas para documentos já salvos (editáveis via *"Editar dados pessoais"*) e garantindo envio explícito de `cpf`/`cnpj` em `save_my_cadastral_profile`.
+
+
+---
+
+## 11. Tarifas & Preço Dinâmico de Mototaxistas, Regra de Ida e Volta e Redesign Dark Gamer/Bets (`v1.8.0-mototaxi-tarifas-ida-volta-prod`)
+
+> **Status:** HOMOLOGADO E PROMOVIDO PARA PRODUÇÃO  
+> **Tag de Release:** `v1.8.0-mototaxi-tarifas-ida-volta-prod`  
+> **Ambientes:** Produção ([ubtservicos.vercel.app](https://ubtservicos.vercel.app) / `bfqidoduceusbqlnrsol`) e Homologação ([ubt-homologacao.vercel.app](https://ubt-homologacao.vercel.app) / `xqujubbqcfqxkfczbidq`)  
+> **Data de Promoção:** 25 de Novembro de 2026  
+
+### 11.1 Migração Idempotente Aplicada (Homologação & Produção — Apenas DDL/RPC + Seed `'default'`)
+
+| Arquivo de Migração | Responsabilidade Principal |
+| :--- | :--- |
+| `20261124200000_mototaxi_tarifas_e_preco_dinamico.sql` | Cria a tabela `public.mototaxi_pricing_config` com seed idempotente `'default'` (`taxa_unica = 4.00`, `valor_por_km = 2.50`, `km_gatilho_ida_volta = 8.00`, `fator_demanda = 1.00`, `fator_horario = 1.00`, `fator_clima = 1.00`), habilita RLS (leitura pública para cotação; escrita restrita a admins), cria a RPC `SECURITY DEFINER` `public.admin_update_mototaxi_pricing_config(...)` (`GRANT EXECUTE TO authenticated`) com gravação automática em `public.admin_audit_logs` e executa reload de schema/config no PostgREST. |
+
+### 11.2 Movimentação para Mototaxistas e Redesign Dark Gamer / Bets
+- **Menu lateral e roteamento (`AdminLayout.tsx` + `App.tsx`):**
+  - Removido **Preço Dinâmico** da seção **Financeiro** e movido como **Tarifas & Preço Dinâmico** dentro de **Mototaxistas** (logo abaixo de `Dashboard`).
+  - Rota oficial: `/admin/mototaxistas/preco-dinamico`, mantendo `/admin/preco` com `<Navigate to="/admin/mototaxistas/preco-dinamico" replace />`.
+- **Redesign Dark Gamer / Bets (`AdminPrecoPage.tsx`):**
+  - Eliminados 100% dos cards brancos (`#fff`); adotados fundo `#09090B`, cards `#121215` / `bg-zinc-950` com `border-zinc-800`, textos `text-zinc-50` / `text-zinc-300` e destaques/CTA em **verde esmeralda neon** (`#00E676` / `#10B981`).
+  - Organizada em: **Fórmula Canônica ao Vivo**, **Bloco 1 (Taxa Única R$, Valor/km R$ e Gatilho de Ida e Volta km)**, **Bloco 2 (Multiplicadores Demanda, Horário e Clima)**, **Bloco 3 (Simulador Interativo em Tempo Real com slider `1–30 km`, atalhos rápidos e badge `SOMENTE IDA` vs. `IDA E VOLTA ATIVADA`)** e CTA **Salvar Configuração de Tarifas**.
+
+### 11.3 Fórmula Canônica no Motor de Cotação (`ride.ts` + `MototaxiPricingService.ts` + `MototaxiTomador.tsx`)
+- `calculateMototaxiQuote(distanceKm, config)` e `calcPrice(distanceKm, config)` em `src/utils/ride.ts` implementam a fórmula canônica conectada às tarifas reais carregadas via `fetchMototaxiPricingConfig()` (`src/services/MototaxiPricingService.ts`):
+  - Quando `km_gatilho_ida_volta > 0` e `distancia_km >= km_gatilho_ida_volta`, o sistema dobra automaticamente a distância cobrada (`km_cobrados = distancia_km * 2`) para cobrir o retorno vazio do mototaxista; caso contrário, `km_cobrados = distancia_km`.
+  - `preco_base = taxa_unica + (valor_por_km * km_cobrados)`
+  - `preco_final = preco_base * fator_demanda * fator_horario * fator_clima`
+  - `repasse_mototaxista = preco_final * 0.90` (90% líquidos garantidos ao mototaxista) e `taxa_plataforma = preco_final * 0.10`.
+- Cobertura de testes ampliada em `src/test/MototaxiJourney.test.ts` (3 novos testes cobrindo Ida e Volta `2× km`, multiplicadores dinâmicos e desativação com gatilho `0`).
+
+### 11.4 Comprovação de Zero Transferência de Dados e Validação (`v1.8.0-mototaxi-tarifas-ida-volta-prod`)
+- **Produção (`bfqidoduceusbqlnrsol`):** contagens preservadas integralmente antes e depois da migração (`public.usuarios`: `13 → 13`, `auth.users`: `10 → 10`, `public.waitlist`: `9 → 9`, `public.admin_audit_logs`: `13 → 13`), configuração `'default'` criada e isolamento total de credenciais mantido.
+- **Validação & Release (`v1.8.0-mototaxi-tarifas-ida-volta-prod`):** `npx tsc --noEmit` (`0` erros), `npm test -- --run` (`21/21` arquivos, `244/244` testes PASS) e `npm run build` OK.
