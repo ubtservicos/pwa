@@ -10,10 +10,50 @@ import SectionHeader from "@/components/settings/SectionHeader";
 import BottomSheet from "@/components/settings/BottomSheet";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
-import { maskCPF, maskPhone, maskCardNumber, maskExpiry, maskCNPJ } from "@/utils/masks";
+import {
+  maskCPF,
+  maskPhone,
+  maskCardNumber,
+  maskExpiry,
+  maskCNPJ,
+  maskEVP,
+  isValidCPF,
+  isValidCNPJ,
+  isValidEmail,
+  isValidPixPhone,
+  isValidEVP,
+} from "@/utils/masks";
 
-type PixKey = { id: string; tipo: "CPF" | "E-mail" | "Telefone" | "CNPJ"; valor: string };
+type PixKeyLabel = "CPF" | "CNPJ" | "E-mail" | "Telefone" | "Chave Aleatória (EVP)";
+type PixKey = { id: string; tipo: PixKeyLabel; valor: string };
 type Card = { id: string; bandeira: string; final: string; vence: string };
+
+function mapDbPixTipoToLabel(raw?: string | null): PixKeyLabel {
+  const t = String(raw || "cpf").toLowerCase().trim();
+  if (t === "aleatoria" || t === "aleatória" || t === "evp" || t === "random" || t === "chave_aleatoria") {
+    return "Chave Aleatória (EVP)";
+  }
+  if (t === "cnpj") return "CNPJ";
+  if (t === "email" || t === "e-mail") return "E-mail";
+  if (t === "telefone" || t === "celular" || t === "phone") return "Telefone";
+  return "CPF";
+}
+
+function mapPixLabelToDbTipo(label: PixKeyLabel): string {
+  switch (label) {
+    case "Chave Aleatória (EVP)":
+      return "aleatoria";
+    case "E-mail":
+      return "email";
+    case "Telefone":
+      return "telefone";
+    case "CNPJ":
+      return "cnpj";
+    case "CPF":
+    default:
+      return "cpf";
+  }
+}
 
 interface MpAccountData {
   status: string;
@@ -32,8 +72,10 @@ const ConfigFinanceiroPage = () => {
   const [cards, setCards] = useState<Card[]>([]);
 
   const [showPixModal, setShowPixModal] = useState(false);
-  const [pixTipo, setPixTipo] = useState<"CPF" | "E-mail" | "Telefone" | "CNPJ">("CPF");
+  const [pixTipo, setPixTipo] = useState<PixKeyLabel>("CPF");
   const [pixValor, setPixValor] = useState("");
+  const [pixError, setPixError] = useState("");
+  const [savingPix, setSavingPix] = useState(false);
 
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
@@ -81,20 +123,30 @@ const ConfigFinanceiroPage = () => {
     const loadFinancialData = async () => {
       setLoadingMp(true);
       try {
-        // 0. Sincroniza chave PIX oficial de public.usuarios
-        const { data: uPix } = await supabase
-          .from("usuarios")
-          .select("chave_pix, tipo_chave_pix")
-          .eq("id", user.uid)
-          .maybeSingle();
-        if (uPix?.chave_pix) {
-          const tipoRaw = String(uPix.tipo_chave_pix || "cpf").toLowerCase();
-          const mappedTipo: PixKey["tipo"] =
-            tipoRaw === "cnpj" ? "CNPJ" : tipoRaw === "email" ? "E-mail" : tipoRaw === "telefone" ? "Telefone" : "CPF";
+        // 0. Sincroniza chave PIX oficial de public.usuarios (suporta contas legadas via get_my_cadastral_profile)
+        let uPix: { chave_pix?: string | null; tipo_chave_pix?: string | null } | null = null;
+        try {
+          const { data: rpcProf, error: rpcProfErr } = await supabase.rpc("get_my_cadastral_profile");
+          if (!rpcProfErr && rpcProf && typeof rpcProf === "object") {
+            uPix = rpcProf as { chave_pix?: string | null; tipo_chave_pix?: string | null };
+          }
+        } catch {
+          // Fallback direto abaixo
+        }
+        if (!uPix) {
+          const { data: directPix } = await supabase
+            .from("usuarios")
+            .select("chave_pix, tipo_chave_pix")
+            .eq("id", user.uid)
+            .maybeSingle();
+          uPix = directPix;
+        }
+        if (uPix?.chave_pix && String(uPix.chave_pix).trim()) {
+          const mappedTipo = mapDbPixTipoToLabel(uPix.tipo_chave_pix);
+          const dbValor = String(uPix.chave_pix).trim();
           setPixKeys((prev) => {
-            const hasSame = prev.some((k) => k.valor === uPix.chave_pix);
-            if (hasSame) return prev;
-            const merged = [{ id: "db-pix", tipo: mappedTipo, valor: uPix.chave_pix }, ...prev];
+            const withoutOldDb = prev.filter((k) => k.id !== "db-pix" && k.valor !== dbValor);
+            const merged: PixKey[] = [{ id: "db-pix", tipo: mappedTipo, valor: dbValor }, ...withoutOldDb];
             localStorage.setItem("ubt_pix_keys_user", JSON.stringify(merged));
             return merged;
           });
@@ -315,14 +367,45 @@ const ConfigFinanceiroPage = () => {
   };
 
   const handleAddPix = async () => {
-    if (!pixValor.trim()) return;
-    const tipoNormalized =
-      pixTipo === "E-mail" ? "email" : pixTipo === "Telefone" ? "telefone" : pixTipo.toLowerCase();
-    if (user?.uid) {
-      try {
+    setPixError("");
+    const trimmed = pixValor.trim();
+    if (!trimmed) {
+      setPixError("Informe a chave PIX antes de salvar.");
+      return;
+    }
+
+    if (pixTipo === "CPF" && !isValidCPF(trimmed)) {
+      setPixError("CPF inválido. Confira os 11 dígitos.");
+      return;
+    }
+    if (pixTipo === "CNPJ" && !isValidCNPJ(trimmed)) {
+      setPixError("CNPJ inválido. Confira os 14 dígitos.");
+      return;
+    }
+    if (pixTipo === "E-mail" && !isValidEmail(trimmed)) {
+      setPixError("E-mail inválido. Informe um endereço válido.");
+      return;
+    }
+    if (pixTipo === "Telefone" && !isValidPixPhone(trimmed)) {
+      setPixError("Telefone inválido. Informe DDD + número (10 ou 11 dígitos).");
+      return;
+    }
+    if (pixTipo === "Chave Aleatória (EVP)" && !isValidEVP(trimmed)) {
+      setPixError(
+        "Chave Aleatória (EVP) inválida. Informe o código padrão BACEN (UUID de 36 caracteres ou 32 caracteres hexadecimais).",
+      );
+      return;
+    }
+
+    const tipoNormalized = mapPixLabelToDbTipo(pixTipo);
+    const valueToSave = pixTipo === "Chave Aleatória (EVP)" ? trimmed.toLowerCase() : trimmed;
+
+    setSavingPix(true);
+    try {
+      if (user?.uid) {
         const { data, error } = await supabase.rpc("salvar_chave_pix_usuario", {
           p_user_id: user.uid,
-          p_chave_pix: pixValor.trim(),
+          p_chave_pix: valueToSave,
           p_tipo_chave_pix: tipoNormalized,
         });
         if (error) throw error;
@@ -330,20 +413,26 @@ const ConfigFinanceiroPage = () => {
         if (liberados > 0) {
           showToast(`Chave PIX salva e ${liberados} repasse(s) liberado(s)!`);
         } else {
-          showToast("Chave PIX salva com sucesso!");
+          showToast("Chave PIX salva com sucesso! ✓");
         }
-      } catch (err: any) {
-        showToast("Erro ao salvar chave PIX: " + (err?.message || err));
-        return;
+      } else {
+        showToast("Chave adicionada!");
       }
-    } else {
-      showToast("Chave adicionada!");
+
+      const withoutOldDb = pixKeys.filter((k) => k.id !== "db-pix" && k.valor !== valueToSave);
+      const newKeys: PixKey[] = [{ id: "db-pix", tipo: pixTipo, valor: valueToSave }, ...withoutOldDb];
+      setPixKeys(newKeys);
+      localStorage.setItem("ubt_pix_keys_user", JSON.stringify(newKeys));
+      setPixValor("");
+      setPixError("");
+      setShowPixModal(false);
+    } catch (err: any) {
+      const msg = err?.message || "Erro ao salvar chave PIX.";
+      setPixError(msg);
+      showToast("Erro ao salvar chave PIX: " + msg);
+    } finally {
+      setSavingPix(false);
     }
-    const newKeys = [...pixKeys, { id: String(Date.now()), tipo: pixTipo, valor: pixValor.trim() }];
-    setPixKeys(newKeys);
-    localStorage.setItem("ubt_pix_keys_user", JSON.stringify(newKeys));
-    setPixValor("");
-    setShowPixModal(false);
   };
 
   const handleAddCard = () => {
@@ -831,115 +920,119 @@ const ConfigFinanceiroPage = () => {
         )}
       </div>
 
-      <BottomSheet open={showPixModal} onClose={() => setShowPixModal(false)}>
-        <h2 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: t.text, margin: 0 }}>
-          Nova Chave Pix
-        </h2>
-        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-          {(["CPF", "E-mail", "Telefone"] as const).map((tipo) => (
-            <button
-              key={tipo}
-              type="button"
-              onClick={() => {
-                setPixTipo(tipo);
-                setPixValor("");
+      <BottomSheet
+        open={showPixModal}
+        onClose={() => {
+          setShowPixModal(false);
+          setPixError("");
+        }}
+      >
+        <div className="bg-[#09090B] text-zinc-50 rounded-2xl p-4 -m-2 border border-zinc-800">
+          <h2 className="font-display text-lg font-extrabold text-zinc-50 m-0">
+            Nova Chave PIX
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1 mb-0">
+            Escolha o tipo de chave para receber seus repasses automaticamente.
+          </p>
+
+          <div className="flex gap-2 mt-4 flex-wrap">
+            {(["CPF", "CNPJ", "E-mail", "Telefone", "Chave Aleatória (EVP)"] as const).map((tipo) => {
+              const selected = pixTipo === tipo;
+              return (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => {
+                    setPixTipo(tipo);
+                    setPixValor("");
+                    setPixError("");
+                  }}
+                  className={`rounded-full px-3.5 py-2 text-xs font-semibold border transition-all cursor-pointer ${
+                    selected
+                      ? "bg-[#00E676] text-zinc-950 border-[#00E676] font-bold shadow-[0_0_14px_rgba(0,230,118,0.25)]"
+                      : "bg-[#121215] text-zinc-300 border-zinc-800 hover:border-zinc-600"
+                  }`}
+                >
+                  {tipo}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">
+              {pixTipo}
+            </label>
+            <input
+              type={pixTipo === "E-mail" ? "email" : "text"}
+              value={pixValor}
+              maxLength={
+                pixTipo === "CPF"
+                  ? 14
+                  : pixTipo === "CNPJ"
+                    ? 18
+                    : pixTipo === "Telefone"
+                      ? 15
+                      : pixTipo === "Chave Aleatória (EVP)"
+                        ? 36
+                        : 80
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                setPixError("");
+                if (pixTipo === "CPF") setPixValor(maskCPF(v));
+                else if (pixTipo === "CNPJ") setPixValor(maskCNPJ(v));
+                else if (pixTipo === "Telefone") setPixValor(maskPhone(v));
+                else if (pixTipo === "Chave Aleatória (EVP)") setPixValor(maskEVP(v));
+                else setPixValor(v.trim());
               }}
-              style={{
-                borderRadius: 999,
-                padding: "8px 20px",
-                background: pixTipo === tipo ? "#0DB87E" : t.border,
-                color: pixTipo === tipo ? "#FFF" : t.text,
-                border: "none",
-                fontFamily: "DM Sans",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              {tipo}
-            </button>
-          ))}
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <label
-            style={{
-              fontFamily: "DM Sans",
-              fontSize: 12,
-              fontWeight: 500,
-              color: t.subtle,
-              display: "block",
-              marginBottom: 6,
-            }}
+              placeholder={
+                pixTipo === "CPF"
+                  ? "000.000.000-00"
+                  : pixTipo === "CNPJ"
+                    ? "00.000.000/0000-00"
+                    : pixTipo === "Telefone"
+                      ? "(12) 99999-9999"
+                      : pixTipo === "Chave Aleatória (EVP)"
+                        ? "00000000-0000-0000-0000-000000000000"
+                        : "voce@exemplo.com"
+              }
+              className={`w-full bg-[#121215] border border-zinc-800 focus:border-[#00E676] rounded-xl px-3.5 py-3 text-zinc-50 text-sm outline-none placeholder:text-zinc-500 ${
+                pixTipo === "E-mail" ? "font-sans" : "font-mono"
+              }`}
+            />
+            {pixTipo === "Chave Aleatória (EVP)" && (
+              <p className="text-[11px] text-zinc-500 mt-1.5 mb-0">
+                Aceita o código EVP padrão BACEN (UUID de 36 caracteres ou 32 caracteres hexadecimais).
+              </p>
+            )}
+          </div>
+
+          {pixError && (
+            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/35 text-xs text-red-300">
+              {pixError}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={savingPix}
+            onClick={() => void handleAddPix()}
+            className="w-full py-3.5 rounded-xl bg-[#00E676] hover:bg-[#10B981] text-zinc-950 font-display font-extrabold text-sm uppercase tracking-wider mt-5 transition-colors cursor-pointer disabled:opacity-50"
           >
-            {pixTipo}
-          </label>
-          <input
-            type={pixTipo === "E-mail" ? "email" : "text"}
-            value={pixValor}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (pixTipo === "CPF") setPixValor(maskCPF(v));
-              else if (pixTipo === "Telefone") setPixValor(maskPhone(v));
-              else setPixValor(v);
+            {savingPix ? "Salvando..." : "Salvar Chave PIX"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowPixModal(false);
+              setPixError("");
             }}
-            placeholder={
-              pixTipo === "CPF"
-                ? "000.000.000-00"
-                : pixTipo === "Telefone"
-                  ? "(00) 00000-0000"
-                  : "voce@exemplo.com"
-            }
-            style={{
-              width: "100%",
-              background: t.inputBg,
-              border: `1px solid ${t.inputBdr}`,
-              borderRadius: 12,
-              padding: "12px 14px",
-              color: t.text,
-              fontFamily: "DM Sans",
-              fontSize: 15,
-              outline: "none",
-            }}
-          />
+            className="w-full py-3 rounded-xl bg-transparent border border-zinc-800 hover:bg-zinc-900 text-zinc-300 text-sm font-medium mt-2.5 transition-colors cursor-pointer"
+          >
+            Cancelar
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleAddPix}
-          style={{
-            width: "100%",
-            padding: "14px",
-            borderRadius: 12,
-            background: "#0DB87E",
-            color: "#FFF",
-            border: "none",
-            fontFamily: "DM Sans",
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: "pointer",
-            marginTop: 20,
-          }}
-        >
-          Salvar
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowPixModal(false)}
-          style={{
-            width: "100%",
-            padding: "14px",
-            borderRadius: 12,
-            background: "transparent",
-            color: t.text,
-            border: `1px solid ${t.border}`,
-            fontFamily: "DM Sans",
-            fontSize: 15,
-            fontWeight: 500,
-            cursor: "pointer",
-            marginTop: 12,
-          }}
-        >
-          Cancelar
-        </button>
       </BottomSheet>
 
       <BottomSheet open={showCardModal} onClose={() => setShowCardModal(false)}>

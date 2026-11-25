@@ -62,7 +62,9 @@ export const applyPixMask = (value: string, tipo?: string): string => {
       return maskCNPJ(value);
 
     case "aleatoria":
+    case "aleatória":
     case "evp":
+    case "random":
     case "chave_aleatoria":
       return maskEVP(value);
 
@@ -174,7 +176,11 @@ export const isValidCNPJ = (cnpj: string): boolean => {
 };
 
 export const isValidEVP = (evp: string): boolean => {
-  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(evp.trim());
+  const trimmed = (evp || "").trim();
+  const isUuid36 =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmed);
+  const isHex32 = /^[0-9a-fA-F]{32}$/.test(trimmed);
+  return isUuid36 || isHex32;
 };
 
 export const isValidEmail = (v: string) =>

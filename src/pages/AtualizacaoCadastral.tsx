@@ -35,6 +35,7 @@ import {
   isValidCPF,
   isValidCNPJ,
   isValidEmail,
+  isValidEVP,
   generateReferralSlug
 } from "@/utils/masks";
 import { trackEvent } from "@/services/AnalyticsService";
@@ -1092,6 +1093,10 @@ export default function AtualizacaoCadastral() {
       }
       if (tipoChavePix === "telefone" && cleanPix.length < 10) {
         setStep4Error("Chave Pix Telefone inválida.");
+        return;
+      }
+      if (tipoChavePix === "aleatoria" && !isValidEVP(trimmedPix)) {
+        setStep4Error("Chave Pix Aleatória (EVP) inválida. Informe o UUID de 36 caracteres ou 32 caracteres hexadecimais.");
         return;
       }
     }

@@ -79,10 +79,14 @@ describe("Pix Masks and Validation Suite", () => {
       expect(isValidCNPJ("11.222.333/0001-81")).toBe(true);
     });
 
-    it("validates EVP UUID correctly", () => {
+    it("validates EVP UUID correctly (36-char UUID and 32-char hex without hyphens)", () => {
       expect(isValidEVP("123e4567-e89b-12d3-a456-426614174000")).toBe(true);
+      expect(isValidEVP("  550e8400-e29b-41d4-a716-446655440000  ")).toBe(true);
+      expect(isValidEVP("550E8400E29B41D4A716446655440000")).toBe(true);
       expect(isValidEVP("123e4567-e89b-12d3-a456-42661417400")).toBe(false);
+      expect(isValidEVP("550e8400e29b41d4a71644665544000g")).toBe(false);
       expect(isValidEVP("not-a-uuid")).toBe(false);
+      expect(isValidEVP("")).toBe(false);
     });
 
     it("validates Pix phone numbers correctly", () => {
