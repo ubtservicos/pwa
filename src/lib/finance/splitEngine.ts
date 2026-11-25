@@ -79,18 +79,43 @@ export function calculateSplitAmounts(
   const padrinho_tomador_pct = config.padrinho_tomador_pct ?? (config.padrinho_pct ? config.padrinho_pct / 2 : 0.5);
   const padrinho_prestador_pct = config.padrinho_prestador_pct ?? (config.padrinho_pct ? config.padrinho_pct / 2 : 0.5);
 
-  const prestador_amount          = r(totalAmount * (prestador_pct          / 100));
-  const ubt_amount                = r(totalAmount * (ubt_pct                / 100));
-  const comunidade_amount         = r(totalAmount * (comunidade_pct         / 100));
-  const premio_trabalhador        = r(totalAmount * (premio_trabalhador_pct / 100));
-  const premio_consumidor         = r(totalAmount * (premio_consumidor_pct  / 100));
-  const padrinho_prestador_amount = r(totalAmount * (padrinho_prestador_pct / 100));
+  const totalCents = Math.max(0, Math.round(totalAmount * 100));
+  const buckets = [
+    { key: "prestador", pct: prestador_pct, priority: 0 },
+    { key: "ubt", pct: ubt_pct, priority: 1 },
+    { key: "padrinho_prestador", pct: padrinho_prestador_pct, priority: 2 },
+    { key: "padrinho_tomador", pct: padrinho_tomador_pct, priority: 3 },
+    { key: "comunidade", pct: comunidade_pct, priority: 4 },
+    { key: "premio_trabalhador", pct: premio_trabalhador_pct, priority: 5 },
+    { key: "premio_consumidor", pct: premio_consumidor_pct, priority: 6 },
+  ].map((b) => {
+    const exact = (totalCents * b.pct) / 100;
+    const floor = Math.floor(exact);
+    return { ...b, floor, remainder: exact - floor, cents: floor };
+  });
 
-  // Residual bucket: absorbs all floating-point drift
-  const sumBeforeResidual = r(
-    prestador_amount + ubt_amount + comunidade_amount + premio_trabalhador + premio_consumidor + padrinho_prestador_amount
-  );
-  const padrinho_tomador_amount = r(Math.max(0, totalAmount - sumBeforeResidual));
+  const allocatedCents = buckets.reduce((sum, b) => sum + b.floor, 0);
+  let remainingCents = totalCents - allocatedCents;
+
+  if (remainingCents > 0) {
+    const sorted = [...buckets].sort((a, b) => {
+      if (Math.abs(b.remainder - a.remainder) > 1e-9) return b.remainder - a.remainder;
+      return a.priority - b.priority;
+    });
+    for (let i = 0; i < sorted.length && remainingCents > 0; i++) {
+      sorted[i].cents += 1;
+      remainingCents -= 1;
+    }
+  }
+
+  const centsByKey = Object.fromEntries(buckets.map((b) => [b.key, b.cents])) as Record<string, number>;
+  const prestador_amount          = r(centsByKey.prestador / 100);
+  const ubt_amount                = r(centsByKey.ubt / 100);
+  const comunidade_amount         = r(centsByKey.comunidade / 100);
+  const premio_trabalhador        = r(centsByKey.premio_trabalhador / 100);
+  const premio_consumidor         = r(centsByKey.premio_consumidor / 100);
+  const padrinho_prestador_amount = r(centsByKey.padrinho_prestador / 100);
+  const padrinho_tomador_amount   = r(centsByKey.padrinho_tomador / 100);
 
   // application_fee sent to Mercado Pago = everything except the prestador's share
   const application_fee = r(totalAmount - prestador_amount);

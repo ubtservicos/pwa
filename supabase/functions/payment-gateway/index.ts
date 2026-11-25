@@ -223,21 +223,58 @@ function calculateSplitAmounts(
   feePct = 0,
   feeAmount = 0,
 ): SplitAmounts {
-  const prestadorAmount = roundMoney(baseAmount * config.prestador_pct / 100);
-  const ubtAmount = roundMoney(baseAmount * config.ubt_pct / 100);
-  const comunidadeAmount = roundMoney(baseAmount * config.comunidade_pct / 100);
-  const premioTrabalhador = roundMoney(baseAmount * config.premio_trabalhador_pct / 100);
-  const premioConsumidor = roundMoney(baseAmount * config.premio_consumidor_pct / 100);
-  const padrinhoPrestadorAmount = roundMoney(baseAmount * config.padrinho_prestador_pct / 100);
-  const allocated = roundMoney(
-    prestadorAmount + ubtAmount + comunidadeAmount + premioTrabalhador +
-      premioConsumidor + padrinhoPrestadorAmount,
-  );
-  const padrinhoTomadorAmount = roundMoney(baseAmount - allocated);
+  const totalPct =
+    config.prestador_pct +
+    config.ubt_pct +
+    config.comunidade_pct +
+    config.premio_trabalhador_pct +
+    config.premio_consumidor_pct +
+    config.padrinho_prestador_pct +
+    config.padrinho_tomador_pct;
 
-  if (padrinhoTomadorAmount < 0) {
+  if (!Number.isFinite(totalPct) || Math.round(totalPct * 100) > 10000) {
     throw new HttpError(500, "invalid_split_configuration", "A configuração de split ultrapassa 100%.");
   }
+
+  // Largest Remainder Method (Hamilton) em centavos inteiros:
+  // garante soma exata === baseAmount e zero buckets negativos mesmo em valores baixos (ex: R$ 1,35 / R$ 1,36).
+  const totalCents = Math.max(0, Math.round(baseAmount * 100));
+  const buckets = [
+    { key: "prestador", pct: config.prestador_pct, priority: 0 },
+    { key: "ubt", pct: config.ubt_pct, priority: 1 },
+    { key: "padrinho_prestador", pct: config.padrinho_prestador_pct, priority: 2 },
+    { key: "padrinho_tomador", pct: config.padrinho_tomador_pct, priority: 3 },
+    { key: "comunidade", pct: config.comunidade_pct, priority: 4 },
+    { key: "premio_trabalhador", pct: config.premio_trabalhador_pct, priority: 5 },
+    { key: "premio_consumidor", pct: config.premio_consumidor_pct, priority: 6 },
+  ].map((b) => {
+    const exact = (totalCents * b.pct) / 100;
+    const floor = Math.floor(exact);
+    return { ...b, floor, remainder: exact - floor, cents: floor };
+  });
+
+  const allocatedCents = buckets.reduce((sum, b) => sum + b.floor, 0);
+  let remainingCents = totalCents - allocatedCents;
+
+  if (remainingCents > 0) {
+    const sorted = [...buckets].sort((a, b) => {
+      if (Math.abs(b.remainder - a.remainder) > 1e-9) return b.remainder - a.remainder;
+      return a.priority - b.priority;
+    });
+    for (let i = 0; i < sorted.length && remainingCents > 0; i++) {
+      sorted[i].cents += 1;
+      remainingCents -= 1;
+    }
+  }
+
+  const centsByKey = Object.fromEntries(buckets.map((b) => [b.key, b.cents])) as Record<string, number>;
+  const prestadorAmount = roundMoney(centsByKey.prestador / 100);
+  const ubtAmount = roundMoney(centsByKey.ubt / 100);
+  const comunidadeAmount = roundMoney(centsByKey.comunidade / 100);
+  const premioTrabalhador = roundMoney(centsByKey.premio_trabalhador / 100);
+  const premioConsumidor = roundMoney(centsByKey.premio_consumidor / 100);
+  const padrinhoPrestadorAmount = roundMoney(centsByKey.padrinho_prestador / 100);
+  const padrinhoTomadorAmount = roundMoney(centsByKey.padrinho_tomador / 100);
 
   const totalAmount = roundMoney(baseAmount + feeAmount);
 
@@ -280,7 +317,7 @@ async function fetchSplitConfig(): Promise<{ config: SplitConfig; source: "datab
     padrinho_prestador_pct: Number(data.padrinho_prestador_pct),
   };
   const percentageTotal = Object.values(config).reduce((sum, value) => sum + value, 0);
-  if (!Object.values(config).every(Number.isFinite) || Math.abs(percentageTotal - 100) > 0.001) {
+  if (!Object.values(config).every(Number.isFinite) || Math.abs(Math.round(percentageTotal * 100) - 10000) > 1) {
     throw new HttpError(500, "invalid_split_configuration", "A configuração de split deve totalizar 100%.");
   }
   return { config, source: "database" };

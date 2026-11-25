@@ -107,6 +107,33 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
     });
   });
 
+  // ---- A2b: Micro/Low-value amounts (R$1.35 / R$1.36 — regression test for cent overflow) ----
+  describe("A2b · calculateSplitAmounts() with low amounts (R$1.35 & R$1.36)", () => {
+    for (const amount of [1.35, 1.36, 1.00, 0.50]) {
+      it(`closes exactly at 100% with zero negative buckets for R$${amount.toFixed(2)}`, () => {
+        const split = calculateSplitAmounts(amount);
+        const sum =
+          split.prestador_amount +
+          split.ubt_amount +
+          split.comunidade_amount +
+          split.premio_trabalhador +
+          split.premio_consumidor +
+          split.padrinho_prestador_amount +
+          split.padrinho_tomador_amount;
+
+        expect(Math.round(sum * 100)).toBe(Math.round(amount * 100));
+        expect(split.prestador_amount).toBeGreaterThanOrEqual(0);
+        expect(split.ubt_amount).toBeGreaterThanOrEqual(0);
+        expect(split.comunidade_amount).toBeGreaterThanOrEqual(0);
+        expect(split.premio_trabalhador).toBeGreaterThanOrEqual(0);
+        expect(split.premio_consumidor).toBeGreaterThanOrEqual(0);
+        expect(split.padrinho_prestador_amount).toBeGreaterThanOrEqual(0);
+        expect(split.padrinho_tomador_amount).toBeGreaterThanOrEqual(0);
+        expect(Math.round((split.prestador_amount + split.application_fee) * 100)).toBe(Math.round(amount * 100));
+      });
+    }
+  });
+
   // ---- A3: High-value transaction (R$1500.00) ----
   describe("A3 · calculateSplitAmounts() with large amount (R$1500.00)", () => {
     const split = calculateSplitAmounts(1500.00);
