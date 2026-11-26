@@ -88,6 +88,7 @@ const ConfigFinanceiroPage = () => {
   const [mpAccount, setMpAccount] = useState<MpAccountData | null>(null);
   const [loadingMp, setLoadingMp] = useState(true);
   const [isConnectingMp, setIsConnectingMp] = useState(false);
+  const [mpOAuthError, setMpOAuthError] = useState<string | null>(null);
 
   const [providerAssoc, setProviderAssoc] = useState<any[]>([]);
   const [allAssocs, setAllAssocs] = useState<any[]>([]);
@@ -168,12 +169,24 @@ const ConfigFinanceiroPage = () => {
           setMpAccount(null);
         }
 
-        // 2. Check for OAuth callback code in URL search params
+        // 2. Check for OAuth callback code or error in URL search params
         const searchParams = new URLSearchParams(window.location.search);
+        const oauthError = searchParams.get("error");
+        const oauthErrorDesc = searchParams.get("error_description");
         const code = searchParams.get("code");
         const state = searchParams.get("state");
 
-        if (code) {
+        if (oauthError) {
+          const friendlyErr =
+            oauthError === "access_denied"
+              ? "Autorização cancelada no Mercado Pago. Tente novamente usando sua conta pessoal/comercial."
+              : oauthErrorDesc
+                ? `Não foi possível conectar ao Mercado Pago: ${oauthErrorDesc}`
+                : "Não foi possível conectar ao Mercado Pago. Verifique se está logado na sua conta pessoal/comercial (não a conta administradora da UBT).";
+          setMpOAuthError(friendlyErr);
+          showToast(friendlyErr);
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (code) {
           await handleExchangeCode(code, state);
         }
 
@@ -255,7 +268,9 @@ const ConfigFinanceiroPage = () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (err: any) {
       console.error("[MercadoPago OAuth] Erro na troca de código MP:", err);
-      showToast("Erro ao vincular conta: " + (err.message || err));
+      const errMsg = "Erro ao vincular conta: " + (err.message || err);
+      setMpOAuthError(errMsg);
+      showToast(errMsg);
     } finally {
       setIsConnectingMp(false);
     }
@@ -533,7 +548,7 @@ const ConfigFinanceiroPage = () => {
                             textTransform: "uppercase",
                           }}
                         >
-                          Ativo (Homologação)
+                          {mpAccount.ambiente === "production" ? "Ativo (Produção)" : "Ativo (Homologação)"}
                         </span>
                       </div>
                       <p style={{ fontFamily: "DM Sans", fontSize: 12, color: t.subtle, margin: 0 }}>
@@ -615,8 +630,36 @@ const ConfigFinanceiroPage = () => {
                     <p style={{ fontFamily: "DM Sans", fontSize: 13, color: t.subtle, margin: 0, lineHeight: 1.4 }}>
                       Vincule sua conta do Mercado Pago para receber automaticamente o valor de 90% das corridas e serviços direto no seu saldo.
                     </p>
+                    <p
+                      style={{
+                        fontFamily: "DM Sans",
+                        fontSize: 11.5,
+                        color: "#FBBF24",
+                        margin: "8px 0 0 0",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      ⚠️ Conecte sua conta pessoal ou comercial do Mercado Pago (não pode ser a mesma conta administradora da UBT).
+                    </p>
                   </div>
                 </div>
+
+                {mpOAuthError && (
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      background: "rgba(232,64,64,0.10)",
+                      border: "1px solid rgba(232,64,64,0.35)",
+                      color: "#FCA5A5",
+                      fontFamily: "DM Sans",
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {mpOAuthError}
+                  </div>
+                )}
 
                 <button
                   type="button"

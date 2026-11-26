@@ -99,7 +99,11 @@ export default function AdminPixQuickEditor({
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: hasPix ? "#0DB87E" : "#F5A623" }}>
               {hasPix
-                ? `Chave PIX Ativa (${(tipoChavePix || tipo).toUpperCase()})`
+                ? `Chave PIX Ativa (${
+                    ["aleatoria", "aleatória", "evp", "random"].includes(String(tipoChavePix || tipo).toLowerCase())
+                      ? "ALEATÓRIA (EVP)"
+                      : (tipoChavePix || tipo).toUpperCase()
+                  })`
                 : "⚠️ Sem chave PIX"}
             </div>
             {hasPix ? (
@@ -137,7 +141,7 @@ export default function AdminPixQuickEditor({
           }}
         >
           <KeyRound size={12} />
-          <span>{editing ? "Fechar" : hasPix ? "Editar PIX" : "Cadastrar PIX"}</span>
+          <span>{editing ? "Fechar" : hasPix ? "Alterar / Atualizar PIX" : "Cadastrar PIX"}</span>
         </button>
       </div>
 

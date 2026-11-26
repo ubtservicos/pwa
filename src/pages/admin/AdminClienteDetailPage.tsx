@@ -69,6 +69,26 @@ const getBirthMonth = (id: string, dataNascimento?: string | null) => {
   return (sum % 12) + 1;
 };
 
+interface MpAccountInfo {
+  id: string;
+  mercado_pago_user_id: string | null;
+  connected_at: string | null;
+  ambiente: string | null;
+  token_expiration: string | null;
+}
+
+export function formatPixTypeLabel(rawType?: string | null): string {
+  const norm = String(rawType || "").toLowerCase().trim();
+  if (norm === "aleatoria" || norm === "aleatória" || norm === "evp" || norm === "random") {
+    return "ALEATÓRIA (EVP)";
+  }
+  if (norm === "cpf") return "CPF";
+  if (norm === "cnpj") return "CNPJ";
+  if (norm === "email" || norm === "e-mail") return "E-MAIL";
+  if (norm === "telefone" || norm === "phone" || norm === "celular") return "TELEFONE";
+  return norm ? norm.toUpperCase() : "NÃO INFORMADO";
+}
+
 export default function AdminClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -82,7 +102,7 @@ export default function AdminClienteDetailPage() {
   const [caminhao, setCaminhao] = useState<any | null>(null);
   const [associacaoNome, setAssociacaoNome] = useState<string | null>(null);
   const [padrinhoNome, setPadrinhoNome] = useState<string | null>(null);
-  const [mpConnected, setMpConnected] = useState<boolean>(false);
+  const [mpAccountInfo, setMpAccountInfo] = useState<MpAccountInfo | null>(null);
   const [apadrinhados, setApadrinhados] = useState<ApadrinhadoItem[]>([]);
   const [loadingApadrinhados, setLoadingApadrinhados] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -142,7 +162,13 @@ export default function AdminClienteDetailPage() {
           supabase.from("coco_caminhoes").select("plate, status_aprovacao").eq("prestador_id", id).maybeSingle(),
           supabase.from("provider_associations").select("association_id").eq("provider_id", id).maybeSingle(),
           supabase.from("associacao_membros").select("association_id").eq("prestador_id", id).maybeSingle(),
-          supabase.from("marketplace_accounts").select("id, status").eq("user_id", id).eq("status", "CONNECTED").limit(1),
+          supabase
+            .from("marketplace_accounts")
+            .select("id, status, mercado_pago_user_id, connected_at, ambiente, token_expiration")
+            .eq("user_id", id)
+            .eq("status", "CONNECTED")
+            .order("connected_at", { ascending: false })
+            .limit(1),
         ]);
 
         const profileData = profileRes.status === "fulfilled" ? profileRes.value.data : null;
@@ -204,11 +230,19 @@ export default function AdminClienteDetailPage() {
         setDiarista(diaristaData);
         setAssociacaoNome(assocName);
         setPadrinhoNome(padrinhoLabel);
-        setMpConnected(
-          Boolean(mpAccounts.length > 0) ||
-            Boolean(userData.possui_mercadopago) ||
-            Boolean(userData.metadata?.possui_mercado_pago) ||
-            Boolean(userData.metadata?.possui_conta_mercado_pago),
+        const activeMpRow = mpAccounts.find(
+          (row: any) => row?.status === "CONNECTED" && Boolean(String(row?.mercado_pago_user_id || "").trim()),
+        );
+        setMpAccountInfo(
+          activeMpRow
+            ? {
+                id: activeMpRow.id,
+                mercado_pago_user_id: activeMpRow.mercado_pago_user_id || null,
+                connected_at: activeMpRow.connected_at || null,
+                ambiente: activeMpRow.ambiente || null,
+                token_expiration: activeMpRow.token_expiration || null,
+              }
+            : null,
         );
 
         const initialRef =
@@ -350,14 +384,15 @@ export default function AdminClienteDetailPage() {
       chavePix,
       tipoChavePix,
       hasPix: Boolean(chavePix),
-      mpConnected,
+      mpConnected: Boolean(mpAccountInfo?.mercado_pago_user_id),
+      mpAccountInfo,
       isBlocked,
       blockedUntil,
       blockDurationLabel,
       blockedReason,
       isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
     };
-  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, mpConnected]);
+  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, mpAccountInfo]);
 
   const handleSaveReferralCode = async () => {
     if (!id) return;
@@ -783,50 +818,105 @@ export default function AdminClienteDetailPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
               <div
-                className="p-3.5 rounded-xl border bg-[#09090B]"
+                className="p-3.5 rounded-xl border bg-[#09090B] flex flex-col justify-between gap-2"
                 style={{
                   borderColor: client.hasPix ? "rgba(16,185,129,0.40)" : "rgba(245,158,11,0.40)",
                 }}
               >
-                <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
-                  Chave PIX Cadastrada
-                </div>
-                <div className="mt-1.5 flex items-center gap-2">
-                  {client.hasPix ? (
-                    <CheckCircle2 size={18} className="text-emerald-400" />
-                  ) : (
-                    <AlertCircle size={18} className="text-amber-400" />
-                  )}
-                  <span className={`text-base font-bold ${client.hasPix ? "text-emerald-400" : "text-amber-400"}`}>
-                    {client.hasPix ? "Sim" : "Não"}
-                  </span>
-                </div>
-                {client.hasPix && client.tipoChavePix && (
-                  <div className="text-[11px] text-zinc-400 mt-1">
-                    Tipo: <strong className="text-zinc-200 uppercase">{client.tipoChavePix}</strong>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
+                    Chave PIX Cadastrada
                   </div>
-                )}
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {client.hasPix ? (
+                      <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle size={18} className="text-amber-400 shrink-0" />
+                    )}
+                    <span className={`text-sm font-bold ${client.hasPix ? "text-emerald-400" : "text-amber-400"}`}>
+                      {client.hasPix ? "Cadastrada" : "Não cadastrada"}
+                    </span>
+                  </div>
+                  {client.hasPix && (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="text-[11px] text-zinc-400">
+                        Tipo:{" "}
+                        <strong className="text-zinc-200">{formatPixTypeLabel(client.tipoChavePix)}</strong>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-lg bg-[#121215] border border-zinc-800 px-2.5 py-1.5">
+                        <span className="font-mono text-xs text-zinc-100 break-all flex-1 select-all">
+                          {client.chavePix}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopy(client.chavePix, "pix-key", "Chave PIX copiada")}
+                          className="h-7 px-2.5 rounded-md bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-emerald-400 text-[11px] font-semibold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                          title="Copiar Chave PIX"
+                        >
+                          {copiedKey === "pix-key" ? <Check size={12} /> : <Copy size={12} />}
+                          <span>{copiedKey === "pix-key" ? "Copiado" : "Copiar"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div
                 className="p-3.5 rounded-xl border bg-[#09090B]"
                 style={{
-                  borderColor: client.mpConnected ? "rgba(16,185,129,0.40)" : "#27272A",
+                  borderColor: client.mpConnected ? "rgba(16,185,129,0.40)" : "rgba(245,158,11,0.35)",
                 }}
               >
                 <div className="text-[11px] uppercase tracking-wider text-zinc-400 font-semibold">
-                  Conta Mercado Pago
+                  Conta Mercado Pago (OAuth)
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   {client.mpConnected ? (
-                    <CheckCircle2 size={18} className="text-emerald-400" />
+                    <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
                   ) : (
-                    <AlertCircle size={18} className="text-zinc-500" />
+                    <AlertCircle size={18} className="text-amber-400 shrink-0" />
                   )}
-                  <span className={`text-base font-bold ${client.mpConnected ? "text-emerald-400" : "text-zinc-300"}`}>
-                    {client.mpConnected ? "Sim (Conectada)" : "Não conectada"}
+                  <span className={`text-sm font-bold ${client.mpConnected ? "text-emerald-400" : "text-amber-300"}`}>
+                    {client.mpConnected ? "Vinculada ao Mercado Pago" : "Não vinculada ao Mercado Pago"}
                   </span>
                 </div>
+                {client.mpConnected && client.mpAccountInfo ? (
+                  <div className="mt-2 space-y-1 text-[11px] text-zinc-400">
+                    <div>
+                      MP User ID:{" "}
+                      <strong className="font-mono text-zinc-200">{client.mpAccountInfo.mercado_pago_user_id}</strong>
+                    </div>
+                    {client.mpAccountInfo.connected_at && (
+                      <div>
+                        Conectada em:{" "}
+                        <strong className="text-zinc-300">
+                          {new Date(client.mpAccountInfo.connected_at).toLocaleDateString("pt-BR")}
+                        </strong>
+                      </div>
+                    )}
+                    <div>
+                      Status do token:{" "}
+                      <strong
+                        className={
+                          client.mpAccountInfo.token_expiration &&
+                          new Date(client.mpAccountInfo.token_expiration).getTime() <= Date.now()
+                            ? "text-amber-400"
+                            : "text-emerald-400"
+                        }
+                      >
+                        {client.mpAccountInfo.token_expiration &&
+                        new Date(client.mpAccountInfo.token_expiration).getTime() <= Date.now()
+                          ? "Expirado (reconectar)"
+                          : "Ativo"}
+                      </strong>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed m-0">
+                    Repasses via PIX da plataforma UBT até o usuário conectar a conta MP.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -836,8 +926,9 @@ export default function AdminClienteDetailPage() {
               </div>
               <AdminPixQuickEditor
                 userId={client.id}
-                initialPix={client.chavePix}
-                initialTipo={client.tipoChavePix}
+                chavePix={client.chavePix}
+                tipoChavePix={client.tipoChavePix}
+                onToast={(msg) => toast.show(msg)}
                 onSaved={(newPix, newTipo) => {
                   setDbUser((prev: any) =>
                     prev ? { ...prev, chave_pix: newPix, tipo_chave_pix: newTipo } : prev,

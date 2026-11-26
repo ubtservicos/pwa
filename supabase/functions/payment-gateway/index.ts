@@ -978,14 +978,42 @@ function allowedRedirectUri(requested: unknown): string {
   return candidate;
 }
 
+async function resolveCanonicalUsuarioId(authUid: string): Promise<string> {
+  try {
+    const { data: direct } = await adminClient()
+      .from("usuarios")
+      .select("id")
+      .eq("id", authUid)
+      .maybeSingle();
+    if (direct?.id) return direct.id;
+
+    const { data: authUser } = await adminClient().auth.admin.getUserById(authUid);
+    const email = String(authUser?.user?.email || "").trim().toLowerCase();
+    if (email) {
+      const { data: byEmail } = await adminClient()
+        .from("usuarios")
+        .select("id")
+        .ilike("email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (byEmail?.id) return byEmail.id;
+    }
+  } catch (err) {
+    console.warn("[payment-gateway] resolveCanonicalUsuarioId fallback:", err);
+  }
+  return authUid;
+}
+
 async function handleGetOAuthUrl(req: Request, body: Record<string, any>, userId: string): Promise<Response> {
   const clientId = (Deno.env.get("MERCADOPAGO_CLIENT_ID") || Deno.env.get("MP_CLIENT_ID") || "").trim();
   if (!clientId) throw new HttpError(500, "missing_client_id", "Client ID do Mercado Pago não configurado.");
 
   const redirectUri = allowedRedirectUri(body.redirect_uri);
+  const canonicalUserId = await resolveCanonicalUsuarioId(userId);
   const state = crypto.randomUUID();
   const { error } = await adminClient().from("marketplace_oauth_connections").insert({
-    user_id: userId,
+    user_id: canonicalUserId,
     state_reference: state,
     authorization_status: "started",
   });
@@ -1000,7 +1028,9 @@ async function handleGetOAuthUrl(req: Request, body: Record<string, any>, userId
   });
   return json(req, {
     success: true,
-    oauth_url: `https://auth.mercadopago.com/authorization?${params.toString()}`,
+    oauth_url: `https://auth.mercadopago.com.br/authorization?${params.toString()}`,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     state,
     environment: paymentEnvironment(),
   });
@@ -1017,10 +1047,11 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
   if (!code || code.length > 500) throw new HttpError(400, "invalid_oauth_code", "Authorization code inválido.");
   if (!UUID_RE.test(state)) throw new HttpError(400, "invalid_oauth_state", "OAuth state inválido.");
 
+  const canonicalUserId = await resolveCanonicalUsuarioId(userId);
   const { data: connection, error: stateError } = await adminClient()
     .from("marketplace_oauth_connections")
     .select("id, created_at")
-    .eq("user_id", userId)
+    .in("user_id", Array.from(new Set([canonicalUserId, userId])))
     .eq("state_reference", state)
     .eq("authorization_status", "started")
     .maybeSingle();
@@ -1048,7 +1079,13 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
       error_message: String(tokenData?.message || tokenData?.error_description || "OAuth rejected").slice(0, 1000),
       updated_at: new Date().toISOString(),
     }).eq("id", connection.id);
-    throw new HttpError(400, "oauth_token_exchange_failed", "Mercado Pago recusou a troca do código OAuth.", {
+    const rawOAuthErr = String(tokenData?.message || tokenData?.error_description || "").toLowerCase();
+    const friendlyMsg = rawOAuthErr.includes("redirect_uri")
+      ? "A URL de redirecionamento não corresponde à configurada no painel Mercado Pago Developers."
+      : rawOAuthErr.includes("invalid_grant") || rawOAuthErr.includes("code")
+        ? "O código de autorização expirou ou já foi utilizado. Clique em Conectar Mercado Pago novamente."
+        : "Mercado Pago recusou a vinculação da conta. Tente novamente com sua conta pessoal/comercial do Mercado Pago.";
+    throw new HttpError(400, "oauth_token_exchange_failed", friendlyMsg, {
       status: tokenResponse.status,
       error: tokenData?.error,
       message: tokenData?.message || tokenData?.error_description,
@@ -1087,7 +1124,7 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
     public_key: tokenData.public_key,
   };
   const { data: account, error: upsertError } = await adminClient().from("marketplace_accounts").upsert({
-    user_id: userId,
+    user_id: canonicalUserId,
     mercado_pago_user_id: oauthUserId,
     status: "CONNECTED",
     ambiente: environment,
