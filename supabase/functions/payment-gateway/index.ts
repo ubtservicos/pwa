@@ -1055,8 +1055,8 @@ async function handleExchangeOAuthCode(req: Request, body: Record<string, any>, 
     .eq("state_reference", state)
     .eq("authorization_status", "started")
     .maybeSingle();
-  if (stateError || !connection || Date.now() - new Date(connection.created_at).getTime() > 10 * 60 * 1000) {
-    throw new HttpError(400, "oauth_state_mismatch", "OAuth state ausente, expirado ou já utilizado.");
+  if (stateError || !connection || Date.now() - new Date(connection.created_at).getTime() > 60 * 60 * 1000) {
+    throw new HttpError(400, "oauth_state_mismatch", "OAuth state ausente, expirado ou já utilizado. Clique em Conectar Mercado Pago novamente.");
   }
 
   const tokenResponse = await fetch("https://api.mercadopago.com/oauth/token", {

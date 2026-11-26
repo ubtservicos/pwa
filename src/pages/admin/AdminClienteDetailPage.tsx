@@ -166,7 +166,7 @@ export default function AdminClienteDetailPage() {
             .from("marketplace_accounts")
             .select("id, status, mercado_pago_user_id, connected_at, ambiente, token_expiration")
             .eq("user_id", id)
-            .eq("status", "CONNECTED")
+            .in("status", ["CONNECTED", "connected", "ACTIVE", "active"])
             .order("connected_at", { ascending: false })
             .limit(1),
         ]);
@@ -231,7 +231,9 @@ export default function AdminClienteDetailPage() {
         setAssociacaoNome(assocName);
         setPadrinhoNome(padrinhoLabel);
         const activeMpRow = mpAccounts.find(
-          (row: any) => row?.status === "CONNECTED" && Boolean(String(row?.mercado_pago_user_id || "").trim()),
+          (row: any) =>
+            ["connected", "active"].includes(String(row?.status || "").toLowerCase()) &&
+            Boolean(String(row?.mercado_pago_user_id || "").trim()),
         );
         setMpAccountInfo(
           activeMpRow

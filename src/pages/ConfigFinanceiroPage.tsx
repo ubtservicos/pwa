@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Key, Trash2, Plus, Users, CreditCard, Shield, CheckCircle2, Unlink, ExternalLink, RefreshCw } from "lucide-react";
@@ -89,6 +89,7 @@ const ConfigFinanceiroPage = () => {
   const [loadingMp, setLoadingMp] = useState(true);
   const [isConnectingMp, setIsConnectingMp] = useState(false);
   const [mpOAuthError, setMpOAuthError] = useState<string | null>(null);
+  const oauthCodeHandledRef = useRef<string | null>(null);
 
   const [providerAssoc, setProviderAssoc] = useState<any[]>([]);
   const [allAssocs, setAllAssocs] = useState<any[]>([]);
@@ -186,7 +187,8 @@ const ConfigFinanceiroPage = () => {
           setMpOAuthError(friendlyErr);
           showToast(friendlyErr);
           window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (code) {
+        } else if (code && oauthCodeHandledRef.current !== code) {
+          oauthCodeHandledRef.current = code;
           await handleExchangeCode(code, state);
         }
 

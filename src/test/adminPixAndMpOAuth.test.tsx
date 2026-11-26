@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
+              in: vi.fn(() => ({
                 order: vi.fn(() => ({
                   limit: vi.fn(() => Promise.resolve({ data: mockMpRows, error: null })),
                 })),
