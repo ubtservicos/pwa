@@ -1470,7 +1470,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   if (serviceType === "mototaxi") {
     const { data: ride, error: rideError } = await adminClient()
       .from("mototaxi_corridas")
-      .select("id, tomador_id, prestador_id, status, estimated_price, final_price")
+      .select("id, tomador_id, prestador_id, status, estimated_price, final_price, pix_payment_id, pix_transaction_id, pix_copy_paste, pix_qr_code_base64, pix_charge_status, pix_charge_expires_at")
       .eq("id", serviceId)
       .maybeSingle();
     if (rideError) {
@@ -1489,11 +1489,68 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
       throw new HttpError(403, "passenger_not_assigned", "Somente o passageiro da corrida pode pagar esta corrida.");
     }
 
+    // Idempotency Guard 1: already paid -> return immediately without creating a duplicate charge
+    const { data: existingApproved } = await adminClient()
+      .from("pagamentos_split")
+      .select("id, transaction_id, gateway_payment_id, total_amount, base_amount, provider_amount")
+      .eq("service_type", "mototaxi")
+      .eq("service_id", serviceId)
+      .in("status", ["approved", "paid", "confirmed"])
+      .maybeSingle();
+
+    if (ride.status === "paid" || existingApproved) {
+      return json(req, {
+        success: true,
+        already_paid: true,
+        status: "approved",
+        payment_id: existingApproved?.gateway_payment_id || ride.pix_payment_id || null,
+        transaction_id: existingApproved?.transaction_id || ride.pix_transaction_id || null,
+        payment: {
+          id: existingApproved?.gateway_payment_id || ride.pix_payment_id || null,
+          status: "approved",
+          payment_method_id: "pix",
+          transaction_amount: Number(existingApproved?.total_amount ?? ride.final_price ?? ride.estimated_price ?? 0),
+        },
+      }, 200);
+    }
+
     if (ride.status !== "completed") {
       throw new HttpError(409, "ride_not_ready_for_payment", "A corrida precisa estar concluída antes do pagamento.");
     }
     if (!ride.tomador_id) {
       throw new HttpError(409, "ride_payer_missing", "A corrida não possui um Tomador vinculado.");
+    }
+
+    // Idempotency Guard 2: reuse active non-expired pending PIX charge for this ride
+    if (providerInitiatedMototaxiPix && ride.pix_payment_id && ride.pix_copy_paste) {
+      const chargeSt = String(ride.pix_charge_status || "pending").toLowerCase();
+      const notExpired = !ride.pix_charge_expires_at ||
+        new Date(ride.pix_charge_expires_at).getTime() > Date.now() + 30_000;
+      if (["pending", "in_process"].includes(chargeSt) && notExpired) {
+        return json(req, {
+          success: true,
+          idempotent_reuse: true,
+          payment_id: ride.pix_payment_id,
+          status: chargeSt,
+          transaction_id: ride.pix_transaction_id,
+          payment: {
+            id: ride.pix_payment_id,
+            status: chargeSt,
+            payment_method_id: "pix",
+            transaction_amount: roundMoney(
+              validateAmount(ride.final_price ?? ride.estimated_price) * (1 + appliedFeePct / 100),
+            ),
+          },
+          pix: {
+            payment_id: ride.pix_payment_id,
+            status: chargeSt,
+            external_reference: ride.pix_transaction_id,
+            qr_code: ride.pix_copy_paste,
+            qr_code_base64: ride.pix_qr_code_base64 ?? null,
+            date_of_expiration: ride.pix_charge_expires_at ?? null,
+          },
+        }, 200);
+      }
     }
 
     const canonicalAmount = validateAmount(ride.final_price ?? ride.estimated_price);
@@ -1661,6 +1718,17 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }, rejected ? JSON.stringify(mpErrorDetails(mpResult.data)) : undefined);
 
   if (rejected) {
+    // If Mercado Pago returned a definitive 4xx/5xx error without creating a payment ID,
+    // remove the uncommitted pre-reservation so failed attempts never pollute pagamentos_split
+    // (full error trace remains permanently in financial_audit_logs).
+    if (!mpResult.outcomeUnknown && !mpResult.data?.id) {
+      await adminClient()
+        .from("pagamentos_split")
+        .delete()
+        .eq("transaction_id", transactionId)
+        .is("gateway_payment_id", null);
+    }
+
     const status = mpResult.outcomeUnknown
       ? mpResult.httpStatus
       : mpResult.httpStatus >= 500
@@ -1877,18 +1945,30 @@ async function handleCheckMototaxiPixStatus(
   if (mpStatus === "approved") {
     const nowIso = mpData?.date_approved || new Date().toISOString();
     const txId = String(ride.pix_transaction_id || mpData?.external_reference || "");
-    if (txId) {
-      await adminClient()
-        .from("pagamentos_split")
-        .update({
-          status: "approved",
-          gateway_status: "approved",
-          gateway_status_detail: mpDetail || "accredited",
-          updated_at: nowIso,
-        })
-        .eq("transaction_id", txId)
-        .eq("status", "pending");
-    }
+
+    // Strictly promote ONLY the row matching this exact Mercado Pago payment ID
+    await adminClient()
+      .from("pagamentos_split")
+      .update({
+        status: "approved",
+        gateway_status: "approved",
+        gateway_status_detail: mpDetail || "accredited",
+        updated_at: nowIso,
+      })
+      .eq("gateway_payment_id", paymentId)
+      .eq("status", "pending");
+
+    // Cancel any other stale pending attempts for the same ride
+    await adminClient()
+      .from("pagamentos_split")
+      .update({
+        status: "cancelled",
+        updated_at: nowIso,
+      })
+      .eq("service_type", "mototaxi")
+      .eq("service_id", ride.id)
+      .eq("status", "pending")
+      .neq("gateway_payment_id", paymentId);
 
     await adminClient()
       .from("mototaxi_corridas")

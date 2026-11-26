@@ -32,15 +32,32 @@ export async function fetchUserPaymentHistory(): Promise<PaymentHistoryRow[]> {
   return (data || []) as PaymentHistoryRow[];
 }
 
+export function isSettledPaymentStatus(status?: string | null): boolean {
+  return ["approved", "paid", "confirmed"].includes(String(status || "").toLowerCase());
+}
+
+export function isExcludedPaymentStatus(status?: string | null): boolean {
+  return ["rejected", "failed", "cancelled", "expired", "voided"].includes(String(status || "").toLowerCase());
+}
+
 export function paymentToTransaction(row: PaymentHistoryRow): Transaction {
   const isProvider = row.participant_role === "prestador";
+  const normalizedStatus = String(row.payment_status || "").toLowerCase();
+  const mappedStatus: Transaction["status"] = isSettledPaymentStatus(normalizedStatus)
+    ? "confirmed"
+    : isExcludedPaymentStatus(normalizedStatus)
+      ? "cancelled"
+      : "pending";
+  const shortId = row.service_id ? `#${String(row.service_id).slice(0, 8).toUpperCase()}` : "";
+  const baseDesc = row.ride_type === "entrega" ? "Entrega Mototáxi UBT" : "Corrida Mototáxi UBT";
+
   return {
     id: row.payment_id,
     type: isProvider ? "entrada" : "saida",
     date: row.paid_at,
-    description: row.ride_type === "entrega" ? "Entrega Mototáxi UBT" : "Corrida Mototáxi UBT",
+    description: shortId ? `${baseDesc} · ${shortId}` : baseDesc,
     amount: Number(isProvider ? row.provider_amount : row.total_amount),
-    status: row.payment_status === "approved" || row.ride_status === "paid" ? "confirmed" : "pending",
+    status: mappedStatus,
     transactionId: row.transaction_id,
     serviceId: row.service_id,
     serviceType: row.service_type,

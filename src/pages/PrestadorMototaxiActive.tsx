@@ -109,6 +109,7 @@ const PrestadorMototaxiActive = () => {
   const [pixError, setPixError] = useState<string | null>(null);
   const paidNavigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoPixTriggeredRef = useRef<string | null>(null);
+  const pixInFlightRef = useRef<boolean>(false);
 
   useEffect(() => {
     fetchGatewayFeeSettings().then(setFeeSettings);
@@ -438,10 +439,11 @@ const PrestadorMototaxiActive = () => {
   const activePixValid = hasValidActivePixCharge(pixCopiaColaCode, pixChargeStatus, pixChargeExpiresAt);
 
   const generatePixCharge = useCallback(async (forceRetry = false) => {
-    if (!ride?.id || !user.uid || isPixLoading) return;
+    if (!ride?.id || !user.uid || isPixLoading || pixInFlightRef.current) return;
     if (!forceRetry && hasValidActivePixCharge(pixCopiaColaCode, pixChargeStatus, pixChargeExpiresAt)) {
       return;
     }
+    pixInFlightRef.current = true;
     setIsPixLoading(true);
     setPixError(null);
     const paymentAttemptId = crypto.randomUUID();
@@ -500,6 +502,7 @@ const PrestadorMototaxiActive = () => {
       setPixError(message);
       console.error("[PrestadorMototaxiActive] Falha ao gerar Pix:", error);
     } finally {
+      pixInFlightRef.current = false;
       setIsPixLoading(false);
     }
   }, [ride?.id, ride?.price, user.uid, isPixLoading, pixCopiaColaCode, pixChargeStatus, pixChargeExpiresAt, feeSettings]);

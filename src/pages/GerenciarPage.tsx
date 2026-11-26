@@ -33,7 +33,12 @@ import {
   Periodo,
 } from "@/utils/dateFilter";
 import { supabase } from "@/lib/supabase";
-import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
+import {
+  fetchUserPaymentHistory,
+  paymentToTransaction,
+  isSettledPaymentStatus,
+  isExcludedPaymentStatus,
+} from "@/services/PaymentHistoryService";
 import MercadoPagoOnboardingCard from "@/components/finance/MercadoPagoOnboardingCard";
 
 const GREEN = "#0DB87E";
@@ -306,45 +311,53 @@ const GerenciarPage = () => {
           });
         }
 
-        // Add settled mototaxi payments for both payer and provider.
-        const paidServiceIds = new Set(paymentHistory.map((payment) => payment.service_id));
-        paymentHistory.forEach((payment) => {
+        // Add settled/active mototaxi payments (exclude failed/rejected/cancelled/expired attempts)
+        const visiblePaymentHistory = paymentHistory.filter(
+          (payment) => !isExcludedPaymentStatus(payment.payment_status),
+        );
+        const paidServiceIds = new Set(visiblePaymentHistory.map((payment) => payment.service_id));
+        visiblePaymentHistory.forEach((payment) => {
           const transaction = paymentToTransaction(payment);
           list.push(transaction);
 
-          if (payment.participant_role === 'prestador') {
+          // Only emit Split ledger rows for confirmed/settled payments (never for pending or failed attempts)
+          if (payment.participant_role === 'prestador' && isSettledPaymentStatus(payment.payment_status)) {
             const splitDate = payment.paid_at;
+            const shortId = payment.service_id ? ` · #${String(payment.service_id).slice(0, 8).toUpperCase()}` : "";
             list.push(
-              { id: `${payment.payment_id}-split-comunidade`, type: 'split', date: splitDate, description: 'Split UBT - Comunidade', amount: Number(payment.entity_amount), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
-              { id: `${payment.payment_id}-split-trabalhador`, type: 'split', date: splitDate, description: 'Split UBT - Prêmio Trabalhador', amount: Number(payment.prize_worker_amount), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
-              { id: `${payment.payment_id}-split-tomador`, type: 'split', date: splitDate, description: 'Split UBT - Prêmio Tomador', amount: Number(payment.prize_consumer_amount), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
-              { id: `${payment.payment_id}-split-padrinho`, type: 'split', date: splitDate, description: 'Split UBT - Padrinhos', amount: Number(payment.godparent_amount), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1, transactionId: payment.transaction_id, serviceId: payment.service_id }
+              { id: `${payment.payment_id}-split-comunidade`, type: 'split', date: splitDate, description: `Split UBT - Comunidade${shortId}`, amount: Number(payment.entity_amount), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-trabalhador`, type: 'split', date: splitDate, description: `Split UBT - Prêmio Trabalhador${shortId}`, amount: Number(payment.prize_worker_amount), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-tomador`, type: 'split', date: splitDate, description: `Split UBT - Prêmio Tomador${shortId}`, amount: Number(payment.prize_consumer_amount), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 0.5, transactionId: payment.transaction_id, serviceId: payment.service_id },
+              { id: `${payment.payment_id}-split-padrinho`, type: 'split', date: splitDate, description: `Split UBT - Padrinhos${shortId}`, amount: Number(payment.godparent_amount), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1, transactionId: payment.transaction_id, serviceId: payment.service_id }
             );
           }
         });
 
-        // Keep unpaid/in-progress rides visible without duplicating ledger rows.
+        // Keep unpaid/in-progress rides visible without duplicating ledger rows or polluting with cancelled rides.
         if (rides && !errRides) {
-          rides.filter((r) => !paidServiceIds.has(r.id)).forEach(r => {
-            const statusMapped = r.status === 'completed' || r.status === 'paid' ? 'confirmed' : (r.status === 'cancelled' ? 'cancelled' : 'pending');
-            const price = Number(r.final_price || r.estimated_price);
+          rides
+            .filter((r) => !paidServiceIds.has(r.id) && r.status !== 'cancelled')
+            .forEach(r => {
+              const statusMapped = r.status === 'paid' ? 'confirmed' : 'pending';
+              const price = Number(r.final_price || r.estimated_price);
+              const shortId = r.id ? ` · #${String(r.id).slice(0, 8).toUpperCase()}` : "";
 
-            list.push({
-              id: r.id,
-              type: r.tomador_id === user.uid ? 'saida' : 'entrada',
-              date: r.created_at,
-              description: r.type === 'entrega' ? 'Entrega Mototáxi UBT' : 'Corrida Mototáxi UBT',
-              amount: price,
-              status: statusMapped,
-              serviceId: r.id,
-              serviceType: 'mototaxi',
-              origin: r.origin?.address,
-              destination: r.destination?.address,
-              paymentMethod: r.payment_method,
-              durationMin: r.duration_min,
-              distanceKm: Number(r.distance_km || 0)
+              list.push({
+                id: r.id,
+                type: r.tomador_id === user.uid ? 'saida' : 'entrada',
+                date: r.created_at,
+                description: `${r.type === 'entrega' ? 'Entrega Mototáxi UBT' : 'Corrida Mototáxi UBT'}${shortId}`,
+                amount: price,
+                status: statusMapped,
+                serviceId: r.id,
+                serviceType: 'mototaxi',
+                origin: r.origin?.address,
+                destination: r.destination?.address,
+                paymentMethod: r.payment_method,
+                durationMin: r.duration_min,
+                distanceKm: Number(r.distance_km || 0)
+              });
             });
-          });
         }
 
         setDbTransactions(list);
