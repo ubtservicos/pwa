@@ -37,6 +37,11 @@ import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
+import LegalDocumentModal from "@/components/legal/LegalDocumentModal";
+import type { LegalDocumentKey } from "@/content/legalDocuments";
+
+// Mantido como flag booleana para eventual reativação futura dos textos de Fundadores
+const SHOW_FOUNDER_HEADER = false;
 
 /* ==============================================================================
    CONSTANTES GEOGRÁFICAS E PERFIS DE ATUAÇÃO (PRESERVADAS PARA FLUXOS COMPLEMENTARES)
@@ -413,6 +418,7 @@ export default function FounderForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [submittedData, setSubmittedData] = useState<{ user: any; waitlistData: any } | null>(null);
+  const [activeLegalDoc, setActiveLegalDoc] = useState<LegalDocumentKey | null>(null);
 
   // Estados de Apadrinhamento (Referral)
   const [padrinhoId, setPadrinhoId] = useState<string | null>(null);
@@ -704,19 +710,21 @@ export default function FounderForm({
       {/* Glow Superior Neon */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-gradient-to-r from-transparent via-[#00FF66] to-transparent opacity-80 blur-sm pointer-events-none" />
 
-      {/* Cabeçalho do Formulário */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[10px] font-mono text-[#00FF66] uppercase tracking-wider mb-3">
-          <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" />
-          <span>ACESSO PIONEIRO • MEMBRO FUNDADOR</span>
+      {/* Cabeçalho de Fundadores oculto conforme reestruturação da Home / Saiba Mais */}
+      {SHOW_FOUNDER_HEADER && (
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[10px] font-mono text-[#00FF66] uppercase tracking-wider mb-3">
+            <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" />
+            <span>ACESSO PIONEIRO • MEMBRO FUNDADOR</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight">
+            Entrada de Fundadores
+          </h2>
+          <p className="text-xs sm:text-sm text-zinc-400 font-sans mt-2">
+            Cadastre-se para garantir seus benefícios exclusivos e prioridade no lançamento.
+          </p>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight">
-          Entrada de Fundadores
-        </h2>
-        <p className="text-xs sm:text-sm text-zinc-400 font-sans mt-2">
-          Cadastre-se para garantir seus benefícios exclusivos e prioridade no lançamento.
-        </p>
-      </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-6" noValidate>
         {/* BANNER DE INDICAÇÃO CONFIRMADA */}
@@ -733,7 +741,7 @@ export default function FounderForm({
               <div className="text-[11px] text-zinc-400 mt-0.5 truncate">
                 {padrinhoTipo === "associacao"
                   ? `Entidade Madrinha: ${padrinhoNome}`
-                  : "Membro Fundador Padrinho UBT"}
+                  : "Padrinho / Madrinha UBT"}
               </div>
             </div>
           </div>
@@ -1116,7 +1124,31 @@ export default function FounderForm({
               </div>
             </div>
             <div className="text-xs text-zinc-300 font-sans leading-relaxed flex-1">
-              Aceito os Termos de Uso e autorizo a coleta dos meus dados para validação pioneira da UBT em Ubatuba, conforme a LGPD.
+              Aceito os{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveLegalDoc("terms");
+                }}
+                className="text-[#00E676] underline hover:text-[#00FF66] bg-transparent border-0 p-0 cursor-pointer font-semibold"
+              >
+                Termos de Uso
+              </button>{" "}
+              e a{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveLegalDoc("privacy");
+                }}
+                className="text-[#00E676] underline hover:text-[#00FF66] bg-transparent border-0 p-0 cursor-pointer font-semibold"
+              >
+                Política de Privacidade
+              </button>{" "}
+              e autorizo o tratamento dos meus dados na plataforma UBT, conforme a LGPD.
             </div>
           </label>
           {errors.consentimento_lgpd && (
@@ -1181,7 +1213,7 @@ export default function FounderForm({
             {/* Badge de Status */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-[10px] font-mono text-[#00FF66] uppercase tracking-wider mb-2">
               <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-ping" />
-              <span>Alta Gestão UBT • Análise Pioneira</span>
+              <span>Plataforma UBT • Validação Cadastral</span>
             </div>
 
             {/* Título */}
@@ -1191,7 +1223,7 @@ export default function FounderForm({
 
             {/* Descrição */}
             <p className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed mb-4">
-              Sua solicitação de Membro Fundador foi registrada com sucesso e enviada para a fila de validação da <strong className="text-white">Alta Gestão da UBT</strong>. Em breve você receberá a confirmação de ativação do seu perfil pioneiro e o seu link oficial de apadrinhamento via WhatsApp.
+              Sua solicitação de cadastro foi registrada com sucesso e enviada para a fila de validação da <strong className="text-white">UBT Serviços</strong>. Em breve você receberá a confirmação de ativação da sua conta e o seu link oficial de apadrinhamento via WhatsApp.
             </p>
 
             {/* Box de Destaque Esmeralda de Apadrinhamento */}
@@ -1219,6 +1251,11 @@ export default function FounderForm({
           </div>
         </div>
       )}
+
+      <LegalDocumentModal
+        documentKey={activeLegalDoc}
+        onClose={() => setActiveLegalDoc(null)}
+      />
     </div>
   );
 }

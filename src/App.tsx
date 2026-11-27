@@ -33,6 +33,7 @@ import AmbulantesCatalogoPage from "./pages/AmbulantesCatalogoPage.tsx";
 import AmbulantesOnlinePage from "./pages/AmbulantesOnlinePage.tsx";
 import AmbulantesGerenciarPedidoPage from "./pages/AmbulantesGerenciarPedidoPage.tsx";
 import Index from "./pages/Index.tsx";
+import SaibaMaisPage from "./pages/SaibaMaisPage.tsx";
 import ConceptExperience from "./pages/ConceptExperience.tsx";
 import Login from "./pages/Login.tsx";
 import Cadastro from "./pages/Cadastro.tsx";
@@ -182,6 +183,7 @@ const App = () => (
           <AmbulantePedidoProvider>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/saiba-mais" element={<SaibaMaisPage />} />
               <Route path="/experience" element={<ConceptExperience />} />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Cadastro />} />
