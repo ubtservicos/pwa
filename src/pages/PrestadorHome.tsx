@@ -756,18 +756,72 @@ const PrestadorHome = () => {
               <ChevronRight size={18} color={isMototaxiPending ? "#F5A623" : theme.border} />
             </button>
           )}
-          {ambulantesEnabled && !hasAmbulante && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/ambulantes/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+          {!hasAmbulante && (
+            <button
+              type="button"
+              disabled={!ambulantesEnabled}
+              aria-disabled={!ambulantesEnabled}
+              onClick={() => {
+                if (ambulantesEnabled) handleServiceNavigate("/app/prestador/ambulantes/onboarding");
+              }}
+              className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left"
+              style={{
+                borderColor: theme.border,
+                opacity: ambulantesEnabled ? 1 : 0.45,
+                cursor: ambulantesEnabled ? "pointer" : "not-allowed",
+              }}
+            >
               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><ShoppingBag size={20} color={theme.muted} /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Ambulante</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar vendas</p></div>
-              <ChevronRight size={18} color={theme.border} />
+              <div className="ml-3 flex-1">
+                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Ambulante</h3>
+                <p className="font-sans text-[12px]" style={{ color: theme.muted }}>
+                  {ambulantesEnabled ? "Configurar vendas" : "Disponível em breve"}
+                </p>
+              </div>
+              {ambulantesEnabled ? (
+                <ChevronRight size={18} color={theme.border} />
+              ) : (
+                <span
+                  className="px-2 py-0.5 rounded-full font-sans text-[10px] font-semibold"
+                  style={{ background: "rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.65)" }}
+                >
+                  Em breve
+                </span>
+              )}
             </button>
           )}
-          {diaristasEnabled && !hasDiarista && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/diaristas/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
+          {!hasDiarista && (
+            <button
+              type="button"
+              disabled={!diaristasEnabled}
+              aria-disabled={!diaristasEnabled}
+              onClick={() => {
+                if (diaristasEnabled) handleServiceNavigate("/app/prestador/diaristas/onboarding");
+              }}
+              className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left"
+              style={{
+                borderColor: theme.border,
+                opacity: diaristasEnabled ? 1 : 0.45,
+                cursor: diaristasEnabled ? "pointer" : "not-allowed",
+              }}
+            >
               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Sparkles size={20} color={theme.muted} /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Diarista</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar agenda</p></div>
-              <ChevronRight size={18} color={theme.border} />
+              <div className="ml-3 flex-1">
+                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Diarista</h3>
+                <p className="font-sans text-[12px]" style={{ color: theme.muted }}>
+                  {diaristasEnabled ? "Configurar agenda" : "Disponível em breve"}
+                </p>
+              </div>
+              {diaristasEnabled ? (
+                <ChevronRight size={18} color={theme.border} />
+              ) : (
+                <span
+                  className="px-2 py-0.5 rounded-full font-sans text-[10px] font-semibold"
+                  style={{ background: "rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.65)" }}
+                >
+                  Em breve
+                </span>
+              )}
             </button>
           )}
 

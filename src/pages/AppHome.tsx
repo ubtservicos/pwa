@@ -39,7 +39,15 @@ const ALL_SERVICES: Array<ServiceItem & { vertical?: "mototaxi" | "ambulantes" |
 ];
 
 const getVisibleServices = (): ServiceItem[] =>
-  ALL_SERVICES.filter((s) => !s.vertical || isVerticalEnabled(s.vertical));
+  ALL_SERVICES.map((s) => {
+    const enabled = s.available && (!s.vertical || isVerticalEnabled(s.vertical));
+    return {
+      label: s.label,
+      Icon: s.Icon,
+      to: enabled ? s.to : undefined,
+      available: enabled,
+    };
+  });
 
 interface ActiveOrder {
   id: string;
@@ -340,6 +348,7 @@ const AppHome = () => {
               key={label}
               type="button"
               disabled={!available}
+              aria-disabled={!available}
               onClick={() => {
                 if (activeRule && activeRule.blockRequests) {
                   alert(`Solicitação de serviços bloqueada devido ao status: ${activeRule.label}`);

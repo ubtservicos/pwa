@@ -9,7 +9,10 @@ const ALL_LANDING_SERVICES: Array<{ label: string; img: string; vertical: Vertic
 
 export const Services = () => {
   const ref = useReveal<HTMLElement>();
-  const services = ALL_LANDING_SERVICES.filter((s) => isVerticalEnabled(s.vertical));
+  const services = ALL_LANDING_SERVICES.map((s) => ({
+    ...s,
+    available: isVerticalEnabled(s.vertical),
+  }));
   return (
     <section ref={ref} className="reveal bg-secondary py-16 px-6">
       <div className="max-w-[1100px] mx-auto md:max-w-[640px] lg:max-w-[1100px]">
@@ -24,15 +27,32 @@ export const Services = () => {
           {services.map((s) => (
             <article
               key={s.label}
-              className="relative h-[140px] rounded-2xl overflow-hidden shadow-card group"
+              aria-disabled={!s.available}
+              className={`relative h-[140px] rounded-2xl overflow-hidden shadow-card group ${
+                s.available ? "" : "opacity-55 cursor-not-allowed select-none"
+              }`}
             >
               <img
                 src={s.img}
                 alt={s.label}
                 loading="lazy"
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${
+                  s.available ? "group-hover:scale-105" : "grayscale-[45%]"
+                }`}
               />
               <div className="absolute inset-0 bg-card-overlay" />
+              {!s.available && (
+                <span
+                  className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full font-sans text-[10px] font-semibold"
+                  style={{
+                    background: "rgba(9,9,11,0.75)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    color: "rgba(255,255,255,0.85)",
+                  }}
+                >
+                  Em breve
+                </span>
+              )}
               <span className="absolute bottom-0 left-0 p-3 text-[13px] font-semibold text-white">
                 {s.label}
               </span>
