@@ -381,10 +381,16 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
 
   // Keep operational state server-authoritative for asynchronous methods (for
   // example Pix). The browser must never promote a service to paid itself.
-  if (split.service_type === "mototaxi") {
+  const rideTableByService: Record<string, string> = {
+    mototaxi: "mototaxi_corridas",
+    carro: "carro_corridas",
+  };
+  const targetRideTable = rideTableByService[String(split.service_type || "").toLowerCase()];
+
+  if (targetRideTable) {
     const rideFinalPrice = Number(split.base_amount ?? split.total_amount);
     const { error: rideError } = await supabaseAdmin
-      .from("mototaxi_corridas")
+      .from(targetRideTable)
       .update({
         status: "paid",
         final_price: rideFinalPrice,
@@ -393,7 +399,7 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
       })
       .eq("id", split.service_id);
     if (rideError) {
-      throw new Error(`mototaxi_corridas update failed for ${split.service_id}: ${rideError.message}`);
+      throw new Error(`${targetRideTable} update failed for ${split.service_id}: ${rideError.message}`);
     }
   } else if (split.service_type === "diarista") {
     const { error: requestError } = await supabaseAdmin

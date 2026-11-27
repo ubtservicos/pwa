@@ -3,7 +3,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type MpEnvironment = "sandbox" | "production";
 type PaymentRoute = "seller_oauth_split" | "platform_fallback";
-type ServiceType = "mototaxi" | "diarista" | "ambulante";
+type ServiceType = "mototaxi" | "carro" | "diarista" | "ambulante";
+type RideServiceType = "mototaxi" | "carro";
+
+const RIDE_TABLE_BY_SERVICE: Record<RideServiceType, "mototaxi_corridas" | "carro_corridas"> = {
+  mototaxi: "mototaxi_corridas",
+  carro: "carro_corridas",
+};
+
+function isRideServiceType(service: ServiceType): service is RideServiceType {
+  return service === "mototaxi" || service === "carro";
+}
 
 interface SplitConfig {
   prestador_pct: number;
@@ -423,6 +433,7 @@ function optionalUuid(value: unknown, field: string): string | null {
 function normalizeServiceType(value: unknown): ServiceType {
   const service = String(value || "").trim().toLowerCase();
   if (service === "mototaxi") return "mototaxi";
+  if (service === "carro" || service === "carros") return "carro";
   if (service === "diarista" || service === "services") return "diarista";
   if (service === "ambulante" || service === "delivery") return "ambulante";
   throw new HttpError(400, "invalid_service_type", "service_type não suportado.");
@@ -1471,9 +1482,19 @@ async function handleDeleteSavedCard(req: Request, body: Record<string, any>, us
 async function handlePayment(req: Request, body: Record<string, any>, customerId: string): Promise<Response> {
   const environment = paymentEnvironment();
   const action = String(body.action || "create_payment_intent").trim().toLowerCase();
-  const providerInitiatedMototaxiPix = action === "create_mototaxi_pix_charge";
+  const providerInitiatedRidePix = [
+    "create_mototaxi_pix_charge",
+    "create_carro_pix_charge",
+    "create_ride_pix_charge",
+  ].includes(action);
   const requestedAmount = validateAmount(body.transaction_amount ?? body.amount);
-  const serviceType = normalizeServiceType(body.service_type ?? body.serviceType);
+  const inferredServiceType = action === "create_carro_pix_charge"
+    ? (body.service_type ?? body.serviceType ?? "carro")
+    : action === "create_mototaxi_pix_charge"
+      ? (body.service_type ?? body.serviceType ?? "mototaxi")
+      : (body.service_type ?? body.serviceType);
+  const serviceType = normalizeServiceType(inferredServiceType);
+  const rideTable = isRideServiceType(serviceType) ? RIDE_TABLE_BY_SERVICE[serviceType] : null;
   const serviceId = assertUuid(body.service_id ?? body.serviceId, "service_id");
   const providerId = assertUuid(body.provider_id ?? body.providerId, "provider_id");
   const paymentAttempt = resolvePaymentAttemptId(body);
@@ -1481,7 +1502,13 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   const entityId = optionalUuid(body.entity_id ?? body.entityId, "entity_id");
   const godparentTomadorId = optionalUuid(body.godparent_tomador_id ?? body.godparentTomadorId ?? body.godparent_id, "godparent_tomador_id");
   const godparentPrestadorId = optionalUuid(body.godparent_prestador_id ?? body.godparentPrestadorId, "godparent_prestador_id");
-  const description = String(body.description || `Serviço UBT ${serviceType}`).trim().slice(0, 250);
+  const shortRideId = serviceId.slice(0, 8).toUpperCase();
+  const defaultDescription = serviceType === "carro"
+    ? `Corrida UBT Carros ${shortRideId}`
+    : serviceType === "mototaxi"
+      ? `Corrida UBT Mototáxi ${shortRideId}`
+      : `Serviço UBT ${serviceType}`;
+  const description = String(body.description || defaultDescription).trim().slice(0, 250);
   const paymentMethodId = String(body.payment_method_id || (body.card_token ? "master" : "pix")).trim().toLowerCase();
   const normalizedMethodCategory: "pix" | "card" = paymentMethodId === "pix" ? "pix" : "card";
   const cardToken = String(body.card_token || body.token || "").trim() || undefined;
@@ -1502,11 +1529,11 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   let feeAmount = 0;
   let amount = requestedAmount;
   let payerSource = body;
-  let effectiveTomadorId: string | null = providerInitiatedMototaxiPix ? null : customerId;
+  let effectiveTomadorId: string | null = providerInitiatedRidePix ? null : customerId;
 
-  if (serviceType === "mototaxi") {
+  if (rideTable) {
     const { data: ride, error: rideError } = await adminClient()
-      .from("mototaxi_corridas")
+      .from(rideTable)
       .select("id, tomador_id, prestador_id, status, estimated_price, final_price, pix_payment_id, pix_transaction_id, pix_copy_paste, pix_qr_code_base64, pix_charge_status, pix_charge_expires_at")
       .eq("id", serviceId)
       .maybeSingle();
@@ -1515,9 +1542,9 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     }
     if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
 
-    if (providerInitiatedMototaxiPix) {
-      if (serviceType !== "mototaxi" || paymentMethodId !== "pix") {
-        throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de Mototáxi.");
+    if (providerInitiatedRidePix) {
+      if (!isRideServiceType(serviceType) || paymentMethodId !== "pix") {
+        throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix de corrida.");
       }
       if (ride.prestador_id !== customerId || providerId !== customerId) {
         throw new HttpError(403, "provider_not_assigned", "Somente o prestador atribuído pode gerar esta cobrança Pix.");
@@ -1530,7 +1557,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     const { data: existingApproved } = await adminClient()
       .from("pagamentos_split")
       .select("id, transaction_id, gateway_payment_id, total_amount, base_amount, provider_amount, payment_method")
-      .eq("service_type", "mototaxi")
+      .eq("service_type", serviceType)
       .eq("service_id", serviceId)
       .in("status", ["approved", "paid", "confirmed", "captured"])
       .maybeSingle();
@@ -1560,7 +1587,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     }
 
     // Idempotency Guard 2: reuse active non-expired pending PIX charge for this ride
-    if (providerInitiatedMototaxiPix && ride.pix_payment_id && ride.pix_copy_paste) {
+    if (providerInitiatedRidePix && ride.pix_payment_id && ride.pix_copy_paste) {
       const chargeSt = String(ride.pix_charge_status || "pending").toLowerCase();
       const notExpired = !ride.pix_charge_expires_at ||
         new Date(ride.pix_charge_expires_at).getTime() > Date.now() + 30_000;
@@ -1606,7 +1633,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     amount = canonicalTotalAmount;
     effectiveTomadorId = ride.tomador_id;
 
-    if (providerInitiatedMototaxiPix) {
+    if (providerInitiatedRidePix) {
       const [{ data: payerAuth }, { data: payerProfile }] = await Promise.all([
         adminClient().auth.admin.getUserById(ride.tomador_id),
         adminClient().from("usuarios").select("nome, email, cpf").eq("id", ride.tomador_id).maybeSingle(),
@@ -1832,8 +1859,8 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     }
   }
 
-  if (serviceType === "mototaxi" && mpStatus === "approved") {
-    const { error } = await adminClient().from("mototaxi_corridas").update({
+  if (rideTable && mpStatus === "approved") {
+    const { error } = await adminClient().from(rideTable).update({
       status: "paid",
       final_price: baseAmount,
       payment_method: normalizedMethodCategory,
@@ -1853,14 +1880,14 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   const txData = mpResult.data?.point_of_interaction?.transaction_data;
-  if (providerInitiatedMototaxiPix) {
+  if (providerInitiatedRidePix && rideTable) {
     const pixCopyPaste = String(txData?.qr_code || "").trim();
     const pixQrCodeBase64 = String(txData?.qr_code_base64 || "").trim();
     if (!pixCopyPaste) {
       throw new HttpError(502, "pix_payload_missing", "O Mercado Pago não devolveu o código Pix da cobrança.");
     }
     const { error: chargePersistError } = await adminClient()
-      .from("mototaxi_corridas")
+      .from(rideTable)
       .update({
         payment_method: "pix",
         pix_payment_id: String(mpResult.data.id),
@@ -1940,16 +1967,23 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }, 200);
 }
 
-async function handleCheckMototaxiPixStatus(
+async function handleCheckRidePixStatus(
   req: Request,
   body: Record<string, any>,
   userId: string,
 ): Promise<Response> {
   const environment = paymentEnvironment();
+  const action = String(body.action || "").trim().toLowerCase();
+  const rawServiceType = body.service_type ?? body.serviceType ?? (action === "check_carro_pix_status" ? "carro" : "mototaxi");
+  const normalizedService = normalizeServiceType(rawServiceType);
+  if (!isRideServiceType(normalizedService)) {
+    throw new HttpError(400, "invalid_service_type", "Verificação de Pix suporta apenas mototaxi ou carro.");
+  }
+  const rideTable = RIDE_TABLE_BY_SERVICE[normalizedService];
   const serviceId = assertUuid(body.service_id ?? body.serviceId ?? body.ride_id, "service_id");
 
   const { data: ride, error: rideErr } = await adminClient()
-    .from("mototaxi_corridas")
+    .from(rideTable)
     .select("id, tomador_id, prestador_id, status, final_price, estimated_price, pix_payment_id, pix_transaction_id, pix_charge_status")
     .eq("id", serviceId)
     .maybeSingle();
@@ -2025,13 +2059,13 @@ async function handleCheckMototaxiPixStatus(
         status: "cancelled",
         updated_at: nowIso,
       })
-      .eq("service_type", "mototaxi")
+      .eq("service_type", normalizedService)
       .eq("service_id", ride.id)
       .eq("status", "pending")
       .neq("gateway_payment_id", paymentId);
 
     await adminClient()
-      .from("mototaxi_corridas")
+      .from(rideTable)
       .update({
         status: "paid",
         final_price: Number(ride.final_price ?? ride.estimated_price ?? 0),
@@ -2042,6 +2076,7 @@ async function handleCheckMototaxiPixStatus(
       .eq("id", ride.id);
 
     await logAuditEvent("pix_status_verified_approved", "approved", {
+      service_type: normalizedService,
       service_id: ride.id,
       payment_id: paymentId,
       transaction_id: txId || null,
@@ -2054,7 +2089,7 @@ async function handleCheckMototaxiPixStatus(
   // Sync non-approved status if changed (e.g. cancelled/expired/rejected)
   if (mpStatus && mpStatus !== ride.pix_charge_status) {
     await adminClient()
-      .from("mototaxi_corridas")
+      .from(rideTable)
       .update({ pix_charge_status: mpStatus, updated_at: new Date().toISOString() })
       .eq("id", ride.id);
   }
@@ -2110,10 +2145,10 @@ serve(async (req: Request): Promise<Response> => {
     if (["delete_saved_card", "wallet_delete_card"].includes(action)) {
       return await handleDeleteSavedCard(req, body, userId);
     }
-    if (["check_mototaxi_pix_status", "verify_pix_payment"].includes(action)) {
-      return await handleCheckMototaxiPixStatus(req, body, userId);
+    if (["check_mototaxi_pix_status", "check_carro_pix_status", "check_ride_pix_status", "verify_pix_payment"].includes(action)) {
+      return await handleCheckRidePixStatus(req, body, userId);
     }
-    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge"].includes(action)) {
+    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge", "create_carro_pix_charge", "create_ride_pix_charge"].includes(action)) {
       return await handlePayment(req, body, userId);
     }
     throw new HttpError(400, "unknown_action", `Ação não reconhecida: ${action}`);

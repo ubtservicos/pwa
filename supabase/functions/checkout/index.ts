@@ -57,7 +57,12 @@ serve(async (req: Request): Promise<Response> => {
     if (customerId !== authData.user.id) {
       return json(req, 403, { error: "customer_identity_mismatch" });
     }
-    if (serviceType !== "mototaxi" || !serviceId) {
+    const rideTableByService: Record<string, string> = {
+      mototaxi: "mototaxi_corridas",
+      carro: "carro_corridas",
+    };
+    const rideTable = rideTableByService[serviceType.toLowerCase()];
+    if (!rideTable || !serviceId) {
       return json(req, 410, {
         error: "legacy_checkout_disabled",
         message: "Use payment-gateway para criar pagamentos.",
@@ -65,7 +70,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const { data: ride, error: rideError } = await supabaseAdmin
-      .from("mototaxi_corridas")
+      .from(rideTable)
       .select("id, tomador_id, status, payment_method")
       .eq("id", serviceId)
       .maybeSingle();

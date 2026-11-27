@@ -102,7 +102,9 @@ describe("Mercado Pago routing contract", () => {
   });
 
   it("keeps asynchronous approvals server-authoritative", () => {
-    expect(webhook).toContain('.from("mototaxi_corridas")');
+    expect(webhook).toContain('mototaxi: "mototaxi_corridas"');
+    expect(webhook).toContain('carro: "carro_corridas"');
+    expect(webhook).toContain(".from(targetRideTable)");
     expect(webhook).toContain('status: "paid"');
     expect(mototaxiCheckout).not.toMatch(/\.from\(["']mototaxi_corridas["']\)[\s\S]{0,300}status:\s*["']paid["']/);
   });
