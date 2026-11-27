@@ -47,6 +47,7 @@ interface Campaign {
 
 const NICHES = [
   { id: "motoboy", label: "Mototaxistas & Entregadores", icon: "🛵", count: 142 },
+  { id: "carros", label: "Motoristas de Carros", icon: "🚗", count: 24 },
   { id: "diarista", label: "Diaristas & Limpeza", icon: "✨", count: 98 },
   { id: "tomadores", label: "Tomadores (Consumidores Gerais)", icon: "👥", count: 1240 },
   { id: "moradores", label: "Moradores Locais (Ubatuba)", icon: "🏠", count: 830 },

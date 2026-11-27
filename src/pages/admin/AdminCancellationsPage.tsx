@@ -105,6 +105,7 @@ export default function AdminCancellationsPage() {
         >
           <option value="all">Todas as Verticais</option>
           <option value="mototaxi">Mototáxi</option>
+          <option value="carro">Carros</option>
           <option value="diarista">Diaristas</option>
           <option value="ambulante">Ambulantes</option>
           <option value="coco">Reciclagem (Côco)</option>
@@ -155,7 +156,7 @@ export default function AdminCancellationsPage() {
                       {new Date(p.created_at).toLocaleString("pt-BR")}
                     </td>
                     <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, fontWeight: 500, textTransform: "capitalize" }}>
-                      {p.service_type}
+                      {p.service_type === "carro" ? "Carros" : p.service_type}
                     </td>
                     <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
                       #{p.cancelled_by.slice(0, 8)}...

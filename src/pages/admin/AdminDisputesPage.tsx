@@ -554,6 +554,7 @@ export default function AdminDisputesPage() {
             >
               <option value="all">Todas as Verticais</option>
               <option value="mototaxi">Mototáxi</option>
+              <option value="carro">Carros</option>
               <option value="diarista">Diaristas</option>
               <option value="ambulante">Ambulantes</option>
             </select>
@@ -612,7 +613,7 @@ export default function AdminDisputesPage() {
                         </span>
                       </td>
                       <td style={{ padding: "18px 24px", fontSize: 13, fontWeight: 500, textTransform: "capitalize", color: "var(--admin-subtle)" }}>
-                        {d.service_type || "Geral"}
+                        {d.service_type === "carro" ? "Carros" : d.service_type || "Geral"}
                       </td>
                       <td style={{ padding: "18px 24px", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, color: "var(--admin-subtle)" }}>
                         {d.reason}

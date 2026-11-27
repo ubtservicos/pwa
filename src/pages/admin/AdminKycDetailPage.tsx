@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Car,
   Check,
   X,
   FileText,
@@ -21,12 +22,15 @@ interface KycDocument {
   name: string;
   type: string;
   status: "valid" | "pending" | "missing";
+  optional?: boolean;
   previewUrl?: string | null;
   description: string;
 }
 
 export default function AdminKycDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const verticalParam = (searchParams.get("vertical") || "").toLowerCase();
   const navigate = useNavigate();
   const toast = useAdminToast();
 
@@ -34,6 +38,7 @@ export default function AdminKycDetailPage() {
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
   const [mototaxi, setMototaxi] = useState<any | null>(null);
+  const [carro, setCarro] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"docs" | "checklist">("docs");
 
@@ -81,10 +86,18 @@ export default function AdminKycDetailPage() {
         .eq("user_id", id)
         .maybeSingle();
 
+      // Buscar carro
+      const { data: carroData } = await supabase
+        .from("prestador_carro")
+        .select("*")
+        .eq("user_id", id)
+        .maybeSingle();
+
       setDbUser(userData);
       setDiarista(diaristaData);
       setCaminhao(caminhaoData);
       setMototaxi(motoData);
+      setCarro(carroData);
 
     } catch (err) {
       console.error("Erro ao carregar KYC do usuário:", err);
@@ -103,9 +116,13 @@ export default function AdminKycDetailPage() {
   // Determine user category
   const category = (() => {
     if (!dbUser) return "Geral";
+    if (verticalParam === "carro" && carro) return "Carros";
+    if (verticalParam === "mototaxi" && mototaxi) return "Mototaxi";
+    if (carro?.kyc_status === "pending" && mototaxi?.kyc_status !== "pending") return "Carros";
     const isColab = dbUser.role === "cocoecia-colaborador" || dbUser.role === "cocoecia-dirigentes" || dbUser.role === "cocoecia";
     if (isColab || caminhaoPlate) return "Reciclagem";
     if (diarista) return "Diarista";
+    if (carro && !mototaxi) return "Carros";
     if (mototaxi || dbUser.role === "prestador" || dbUser.under_review) return "Mototaxi";
     return "Geral";
   })();
@@ -118,6 +135,11 @@ export default function AdminKycDetailPage() {
           { id: "rg_cnh", label: "RG/CNH legível e dentro do prazo de validade" },
           { id: "residencia", label: "Comprovante de residência emitido nos últimos 90 dias" },
           { id: "selfie", label: "Selfie com documento em mãos bate com a foto de perfil" },
+        ];
+      case "Carros":
+        return [
+          { id: "cnh_b", label: "CNH categoria B (ou superior) legível e dentro do prazo de validade" },
+          { id: "crlv_carro", label: "CRLV do veículo regularizado e foto externa com placa visível" },
         ];
       case "Mototaxi":
         return [
@@ -140,7 +162,62 @@ export default function AdminKycDetailPage() {
   })();
 
   // Define docs based on category
-  const documents = (() => {
+  const documents: KycDocument[] = (() => {
+    if (category === "Carros") {
+      const cnhFrente = carro?.cnh_frente_url || null;
+      const cnhVerso = carro?.cnh_verso_url || null;
+      const crlv = carro?.crlv_url || null;
+      const fotoCarro = carro?.carro_photo_url || null;
+      const selfie = carro?.selfie_url || null;
+      const fotoInterna = carro?.carro_interno_photo_url || null;
+
+      return [
+        {
+          name: "CNH (Frente)",
+          type: "Documento Oficial",
+          status: cnhFrente ? "valid" : "missing",
+          previewUrl: cnhFrente,
+          description: "Frente da Carteira Nacional de Habilitação do motorista.",
+        },
+        {
+          name: "CNH (Verso)",
+          type: "Documento Oficial",
+          status: cnhVerso ? "valid" : "missing",
+          previewUrl: cnhVerso,
+          description: "Verso da CNH com QR Code e observações (EAR/categoria).",
+        },
+        {
+          name: "CRLV - Documento do Carro",
+          type: "Documento do Veículo",
+          status: crlv ? "valid" : "missing",
+          previewUrl: crlv,
+          description: "Certificado de Registro e Licenciamento do automóvel.",
+        },
+        {
+          name: "Foto Externa do Carro",
+          type: "Veículo",
+          status: fotoCarro ? "valid" : "missing",
+          previewUrl: fotoCarro,
+          description: "Foto nítida do carro com placa visível.",
+        },
+        {
+          name: "Selfie com Documento",
+          type: "Validação Facial",
+          status: selfie ? "valid" : "missing",
+          previewUrl: selfie,
+          description: "Foto do condutor segurando o documento de identificação.",
+        },
+        {
+          name: "Foto Interna do Carro (Opcional)",
+          type: "Informativo · Não impeditivo",
+          status: fotoInterna ? "valid" : "missing",
+          optional: true,
+          previewUrl: fotoInterna,
+          description: "Foto opcional do interior do veículo (não bloqueia aprovação).",
+        },
+      ];
+    }
+
     if (category === "Mototaxi") {
       const cnhFrente = mototaxi?.cnh_frente_url || mototaxi?.cnh_photo_url || null;
       const cnhVerso = mototaxi?.cnh_verso_url || null;
@@ -223,7 +300,7 @@ export default function AdminKycDetailPage() {
     return defaultDocs;
   })();
 
-  const hasMissingDocs = documents.some((doc) => doc.status === "missing");
+  const hasMissingDocs = documents.some((doc) => doc.status === "missing" && !doc.optional);
   const allChecked = !hasMissingDocs && checklistItems.every((item) => checkedItems[item.id] === true);
 
   const handleToggleCheck = (id: string) => {
@@ -244,9 +321,10 @@ export default function AdminKycDetailPage() {
         })
         .eq("id", dbUser.id);
 
-      // 2. Update prestador_mototaxi
+      // 2. Update vertical provider table (prestador_carro vs prestador_mototaxi)
+      const providerTable = category === "Carros" ? "prestador_carro" : "prestador_mototaxi";
       await supabase
-        .from("prestador_mototaxi")
+        .from(providerTable)
         .update({
           kyc_status: "approved",
           updated_at: new Date().toISOString(),
@@ -262,7 +340,19 @@ export default function AdminKycDetailPage() {
         })
         .eq("id", dbUser.id);
 
-      toast.show("KYC Aprovado com sucesso! Prestador credenciado e ativo.");
+      // 4. Notificação in-app (best effort)
+      try {
+        await supabase.from("notificacoes").insert({
+          user_id: dbUser.id,
+          title: `Cadastro ${category} aprovado!`,
+          message: `Seus documentos de ${category} foram aprovados. Você já pode atuar na plataforma.`,
+          type: "kyc_approved",
+        });
+      } catch {
+        // noop
+      }
+
+      toast.show(`KYC (${category}) aprovado com sucesso! Prestador credenciado e ativo.`);
       navigate("/admin/kyc-pendentes");
     } catch (e) {
       console.error("Erro ao aprovar KYC:", e);
@@ -281,9 +371,10 @@ export default function AdminKycDetailPage() {
         })
         .eq("id", dbUser.id);
 
-      // 2. Update prestador_mototaxi
+      // 2. Update vertical provider table
+      const providerTable = category === "Carros" ? "prestador_carro" : "prestador_mototaxi";
       await supabase
-        .from("prestador_mototaxi")
+        .from(providerTable)
         .update({
           kyc_status: "rejected",
           kyc_notes: rejectReason || "Dados incoerentes",
@@ -291,7 +382,19 @@ export default function AdminKycDetailPage() {
         })
         .eq("user_id", dbUser.id);
 
-      toast.show(`KYC Reprovado. Motivo registrado: ${rejectReason || "Dados incoerentes"}`);
+      // 3. Notificação in-app (best effort)
+      try {
+        await supabase.from("notificacoes").insert({
+          user_id: dbUser.id,
+          title: `KYC ${category} reprovado`,
+          message: `Motivo: ${rejectReason || "Dados incoerentes"}. Reenvie seus documentos pelo app.`,
+          type: "kyc_rejected",
+        });
+      } catch {
+        // noop
+      }
+
+      toast.show(`KYC (${category}) reprovado. Motivo registrado: ${rejectReason || "Dados incoerentes"}`);
       setShowRejectModal(false);
       navigate("/admin/kyc-pendentes");
     } catch (e) {
@@ -414,6 +517,79 @@ export default function AdminKycDetailPage() {
         </p>
       </div>
 
+      {/* Atributos Descritivos do Veículo — Carros (Informativos / Não Impeditivos) */}
+      {category === "Carros" && carro && (
+        <Card
+          style={{
+            padding: 20,
+            marginBottom: 24,
+            background: "#121215",
+            border: "1px solid rgba(34,211,238,0.28)",
+            borderRadius: 14,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#22D3EE" }}>
+              <Car size={18} /> Atributos Descritivos do Veículo (Carros)
+            </div>
+            <Pill bg="rgba(34,211,238,0.12)" color="#22D3EE" size="sm">
+              Informativos · Não Impeditivos
+            </Pill>
+          </div>
+          <p style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)", margin: "0 0 14px" }}>
+            Campos opcionais exibidos ao passageiro durante a solicitação da corrida. Ausência ou variação destes dados não bloqueia a aprovação do KYC.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+            {[
+              { label: "Modelo", value: carro.model || "Não informado" },
+              { label: "Placa", value: carro.plate || "Não informada" },
+              { label: "Modalidade", value: carro.modalidade || "ambos" },
+              { label: "Subtipo", value: carro.vehicle_subtype || "padrao" },
+              { label: "Cor", value: carro.cor || "Não informada" },
+              { label: "Ano", value: carro.ano ? String(carro.ano) : "Não informado" },
+              { label: "Portas", value: carro.portas ? `${carro.portas} portas` : "Não informado" },
+              {
+                label: "Ar-Condicionado",
+                value:
+                  carro.ar_condicionado === true
+                    ? "Sim"
+                    : carro.ar_condicionado === false
+                      ? "Não"
+                      : "Não informado",
+              },
+              { label: "Categoria CNH", value: carro.cnh_categoria || "Não informada" },
+              {
+                label: "Possui EAR",
+                value:
+                  carro.possui_ear === true
+                    ? "Sim"
+                    : carro.possui_ear === false
+                      ? "Não"
+                      : "Não informado",
+              },
+              { label: "Alvará Municipal", value: carro.alvara_municipal || "Não informado" },
+            ].map((attr) => (
+              <div
+                key={attr.label}
+                style={{
+                  background: "#09090B",
+                  border: "1px solid #27272A",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <div style={{ fontSize: 10, fontFamily: "DM Sans", textTransform: "uppercase", letterSpacing: 0.8, color: "#71717A" }}>
+                  {attr.label}
+                </div>
+                <div style={{ fontSize: 13, fontFamily: "DM Sans", fontWeight: 600, color: "#F4F4F5", marginTop: 3 }}>
+                  {attr.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Tabs */}
       <div style={{ display: "flex", gap: 24, borderBottom: "1px solid var(--admin-border)", marginBottom: 24 }}>
         <button
@@ -476,9 +652,15 @@ export default function AdminKycDetailPage() {
                     </div>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {doc.status === "missing" ? (
-                        <Pill bg="rgba(232,64,64,0.10)" color="#E84040" size="sm">
-                          Documento ausente
-                        </Pill>
+                        doc.optional ? (
+                          <Pill bg="rgba(148,163,184,0.12)" color="#94A3B8" size="sm">
+                            Opcional · Não enviado
+                          </Pill>
+                        ) : (
+                          <Pill bg="rgba(232,64,64,0.10)" color="#E84040" size="sm">
+                            Documento ausente
+                          </Pill>
+                        )
                       ) : (
                         <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
                           Enviado

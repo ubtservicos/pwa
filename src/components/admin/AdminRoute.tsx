@@ -8,11 +8,18 @@ interface AdminRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
   permission?: string;
+  associationCategory?: "mototaxi" | "carro";
 }
 
-export const AdminRoute = ({ children, allowedRoles, permission }: AdminRouteProps) => {
+export const AdminRoute = ({
+  children,
+  allowedRoles,
+  permission,
+  associationCategory,
+}: AdminRouteProps) => {
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [redirectPath, setRedirectPath] = useState<string>("/admin/login");
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -55,9 +62,33 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
           if (!role) {
             role = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
           }
-          
+
+          const isAssocRole = role === "associacao" || role === "associacao_lider";
+
           if (role === "super_admin" || role === "superadmin") {
             setIsAuthorized(true);
+          } else if (isAssocRole) {
+            let assocCat = "mototaxi";
+            if (typeof (supabase as any).rpc === "function") {
+              try {
+                const { data: scope } = await (supabase as any).rpc("get_my_association_scope");
+                if (scope && typeof scope === "object" && (scope as any).associacao_categoria) {
+                  assocCat = String((scope as any).associacao_categoria).toLowerCase().trim() || "mototaxi";
+                }
+              } catch {
+                // fallback to mototaxi
+              }
+            }
+            const assocHome = assocCat === "carro" ? "/admin/carros" : "/admin/mototaxistas/dashboard";
+            const roleAllowed = Boolean(allowedRoles && allowedRoles.includes(role));
+            const categoryAllowed = !associationCategory || associationCategory === assocCat;
+
+            if (roleAllowed && categoryAllowed) {
+              setIsAuthorized(true);
+            } else {
+              setIsAuthorized(false);
+              setRedirectPath(assocHome);
+            }
           } else if (permission) {
             const { data: hasPerm } = await supabase.rpc("has_permission", {
               p_user_id: user.id,
@@ -85,7 +116,7 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
       }
     };
     checkAdmin();
-  }, [allowedRoles, permission]);
+  }, [allowedRoles, permission, associationCategory]);
 
   if (loading) {
     return (
@@ -95,5 +126,5 @@ export const AdminRoute = ({ children, allowedRoles, permission }: AdminRoutePro
     );
   }
 
-  return isAuthorized ? <>{children}</> : <Navigate to="/admin/login" replace />;
+  return isAuthorized ? <>{children}</> : <Navigate to={redirectPath} replace />;
 };

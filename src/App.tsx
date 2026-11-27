@@ -93,6 +93,9 @@ import AdminDiaristasDashboardPage from "./pages/admin/AdminDiaristasDashboardPa
 import AdminDiaristasMateriaisPage from "./pages/admin/AdminDiaristasMateriaisPage.tsx";
 import AdminMototaxistasDashboardPage from "./pages/admin/AdminMototaxistasDashboardPage.tsx";
 import AdminMototaxiAssociacaoPage from "./pages/admin/AdminMototaxiAssociacaoPage.tsx";
+import AdminCarrosDashboardPage from "./pages/admin/AdminCarrosDashboardPage.tsx";
+import AdminCarrosPrecoPage from "./pages/admin/AdminCarrosPrecoPage.tsx";
+import AdminCarrosAssociacaoPage from "./pages/admin/AdminCarrosAssociacaoPage.tsx";
 import AdminAmbulantesDashboardPage from "./pages/admin/AdminAmbulantesDashboardPage.tsx";
 import AdminAmbulantesCardapiosPage from "./pages/admin/AdminAmbulantesCardapiosPage.tsx";
 import AdminAmbulantesProdutosPage from "./pages/admin/AdminAmbulantesProdutosPage.tsx";
@@ -141,8 +144,17 @@ import AssociacaoConfig from "./pages/associacao/AssociacaoConfig.tsx";
 import PendingApprovalPage from "./pages/PendingApprovalPage.tsx";
 
 
-const adminGuard = (el: React.ReactNode, allowedRoles?: string[], permission?: string) => (
-  <AdminRoute allowedRoles={allowedRoles} permission={permission}>
+const adminGuard = (
+  el: React.ReactNode,
+  allowedRoles?: string[],
+  permission?: string,
+  associationCategory?: "mototaxi" | "carro",
+) => (
+  <AdminRoute
+    allowedRoles={allowedRoles}
+    permission={permission}
+    associationCategory={associationCategory}
+  >
     <AdminLayout>{el}</AdminLayout>
   </AdminRoute>
 );
@@ -307,9 +319,14 @@ const App = () => (
               <Route path="/admin/diaristas" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/diaristas/dashboard" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/diaristas/materiais" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
-              <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin", "associacao", "associacao_lider"])} />
-              <Route path="/admin/mototaxistas/preco-dinamico" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/mototaxistas/associacao" element={adminGuard(<AdminMototaxiAssociacaoPage />, ["admin", "super_admin", "associacao", "associacao_lider"])} />
+              <Route path="/admin/mototaxistas" element={<Navigate to="/admin/mototaxistas/dashboard" replace />} />
+              <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin", "superadmin", "associacao", "associacao_lider"], undefined, "mototaxi")} />
+              <Route path="/admin/mototaxistas/preco-dinamico" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin", "superadmin"])} />
+              <Route path="/admin/mototaxistas/associacao" element={adminGuard(<AdminMototaxiAssociacaoPage />, ["admin", "super_admin", "superadmin", "associacao", "associacao_lider"], undefined, "mototaxi")} />
+              <Route path="/admin/carros" element={<VerticalRouteGuard vertical="carros" redirectTo="/admin">{adminGuard(<AdminCarrosDashboardPage />, ["operator", "admin", "super_admin", "superadmin", "associacao", "associacao_lider"], undefined, "carro")}</VerticalRouteGuard>} />
+              <Route path="/admin/carros/dashboard" element={<Navigate to="/admin/carros" replace />} />
+              <Route path="/admin/carros/preco-dinamico" element={<VerticalRouteGuard vertical="carros" redirectTo="/admin">{adminGuard(<AdminCarrosPrecoPage />, ["operator", "admin", "super_admin", "superadmin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/carros/associacao" element={<VerticalRouteGuard vertical="carros" redirectTo="/admin">{adminGuard(<AdminCarrosAssociacaoPage />, ["admin", "super_admin", "superadmin", "associacao", "associacao_lider"], undefined, "carro")}</VerticalRouteGuard>} />
               <Route path="/admin/ambulantes/dashboard" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/ambulantes/produtos" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/ambulantes/produtos/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />

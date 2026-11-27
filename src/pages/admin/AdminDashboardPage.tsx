@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Bike,
   Building2,
+  Car,
   CheckCircle2,
   Clock,
   DollarSign,
@@ -51,6 +52,7 @@ interface ExecutiveDashboardData {
   };
   operacao: {
     mototaxi: { requested: number; completed: number; avg_duration_min: number; cancelled: number };
+    carros?: { requested: number; completed: number; avg_duration_min: number; cancelled: number };
     diaristas: { agendamentos: number; concluidos: number; pendentes: number };
     ambulantes: { pedidos: number; entregues: number; pendentes: number };
     coco: { solicitacoes: number; coletas_concluidas: number; veiculos_ativos: number };
@@ -131,10 +133,40 @@ export default function AdminDashboardPage() {
   const loadDashboardData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const { data: rpcData, error } = await supabase.rpc("get_executive_dashboard_kpis");
+      const [{ data: rpcData, error }, carroRidesRes] = await Promise.all([
+        supabase.rpc("get_executive_dashboard_kpis"),
+        supabase.from("carro_corridas").select("status, duration_min"),
+      ]);
       if (error) throw error;
       if (rpcData) {
-        setData(rpcData as ExecutiveDashboardData);
+        const carroRows = carroRidesRes.data || [];
+        const completedCarros = carroRows.filter((r: any) =>
+          ["completed", "finished", "concluida", "paid"].includes(String(r.status || "").toLowerCase()),
+        );
+        const cancelledCarros = carroRows.filter((r: any) =>
+          ["cancelled", "canceled", "cancelada", "expired"].includes(String(r.status || "").toLowerCase()),
+        );
+        const durations = completedCarros
+          .map((r: any) => Number(r.duration_min || 0))
+          .filter((n: number) => n > 0);
+        const avgDuration =
+          durations.length > 0
+            ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length)
+            : 0;
+
+        const hydrated = {
+          ...(rpcData as ExecutiveDashboardData),
+          operacao: {
+            ...(rpcData as ExecutiveDashboardData).operacao,
+            carros: {
+              requested: carroRows.length,
+              completed: completedCarros.length,
+              avg_duration_min: avgDuration,
+              cancelled: cancelledCarros.length,
+            },
+          },
+        };
+        setData(hydrated);
         setLastRefreshedAt(new Date());
       }
     } catch (err: any) {
@@ -165,6 +197,7 @@ export default function AdminDashboardPage() {
     const channel = supabase
       .channel("executive_dashboard_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "mototaxi_corridas" }, () => loadDashboardData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "carro_corridas" }, () => loadDashboardData())
       .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => loadDashboardData())
       .on("postgres_changes", { event: "*", schema: "public", table: "diarista_agendamentos" }, () => loadDashboardData())
       .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () => loadDashboardData())
@@ -345,6 +378,20 @@ export default function AdminDashboardPage() {
               <div>Concluídas: <strong style={{ color: "#0DB87E" }}>{operacao.mototaxi.completed}</strong></div>
               <div>Tempo Médio: <strong>{operacao.mototaxi.avg_duration_min}m</strong></div>
               <div>Canceladas: <strong style={{ color: "#E84040" }}>{operacao.mototaxi.cancelled}</strong></div>
+            </div>
+          </Card>
+
+          {/* Carros */}
+          <Card onClick={() => navigate("/admin/carros")} style={{ padding: 20, border: "1px solid var(--admin-border)", cursor: "pointer" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Car size={18} color="#06B6D4" />
+              <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>Carros</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, fontFamily: "DM Sans" }}>
+              <div>Solicitadas: <strong>{operacao.carros?.requested ?? 0}</strong></div>
+              <div>Concluídas: <strong style={{ color: "#0DB87E" }}>{operacao.carros?.completed ?? 0}</strong></div>
+              <div>Tempo Médio: <strong>{operacao.carros?.avg_duration_min ?? 0}m</strong></div>
+              <div>Canceladas: <strong style={{ color: "#E84040" }}>{operacao.carros?.cancelled ?? 0}</strong></div>
             </div>
           </Card>
 

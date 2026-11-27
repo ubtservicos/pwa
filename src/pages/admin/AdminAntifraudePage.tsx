@@ -70,18 +70,22 @@ export default function AdminAntifraudePage() {
       
       let ridesMap = new Map<string, any>();
       if (rideIds.length > 0) {
-        const { data: ridesData } = await supabase
-          .from("mototaxi_corridas")
-          .select("id, tomador_id, prestador_id")
-          .in("id", rideIds);
-        
-        if (ridesData) {
-          ridesData.forEach(r => {
-            ridesMap.set(r.id, r);
-            if (r.tomador_id) userIds.add(r.tomador_id);
-            if (r.prestador_id) userIds.add(r.prestador_id);
-          });
-        }
+        const [{ data: ridesData }, { data: carRidesData }] = await Promise.all([
+          supabase
+            .from("mototaxi_corridas")
+            .select("id, tomador_id, prestador_id")
+            .in("id", rideIds),
+          supabase
+            .from("carro_corridas")
+            .select("id, tomador_id, prestador_id")
+            .in("id", rideIds),
+        ]);
+
+        [...(ridesData || []), ...(carRidesData || [])].forEach((r) => {
+          ridesMap.set(r.id, r);
+          if (r.tomador_id) userIds.add(r.tomador_id);
+          if (r.prestador_id) userIds.add(r.prestador_id);
+        });
       }
 
       flagList.forEach(f => {

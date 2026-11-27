@@ -46,6 +46,16 @@ const PaymentMethodBadge = ({ method }: { method: string }) => {
   );
 };
 
+const serviceTypeLabel = (serviceType?: string | null): string => {
+  const s = String(serviceType || "").toLowerCase().trim();
+  if (s === "carro") return "Carros";
+  if (s === "mototaxi") return "Mototáxi";
+  if (s === "diarista") return "Diaristas";
+  if (s === "ambulante") return "Ambulantes";
+  if (s === "coco") return "Côco & Cia";
+  return serviceType || "Geral";
+};
+
 const PAGE_SIZE = 10;
 
 export default function AdminPaymentsPage() {
@@ -112,6 +122,10 @@ export default function AdminPaymentsPage() {
           .filter((row) => (row.service_type || "mototaxi") === "mototaxi")
           .map((row) => row.service_id)
           .filter(Boolean);
+        const carroIds = data
+          .filter((row) => row.service_type === "carro")
+          .map((row) => row.service_id)
+          .filter(Boolean);
         const rideMethods = new Map<string, unknown>();
         if (mototaxiIds.length > 0) {
           const { data: rides, error: ridesError } = await supabase
@@ -122,6 +136,17 @@ export default function AdminPaymentsPage() {
             console.warn("Não foi possível enriquecer métodos das corridas:", ridesError.message);
           } else {
             (rides || []).forEach((ride) => rideMethods.set(String(ride.id), ride.payment_method));
+          }
+        }
+        if (carroIds.length > 0) {
+          const { data: carRides, error: carRidesError } = await supabase
+            .from("carro_corridas")
+            .select("id, payment_method")
+            .in("id", carroIds);
+          if (carRidesError) {
+            console.warn("Não foi possível enriquecer métodos das corridas de carro:", carRidesError.message);
+          } else {
+            (carRides || []).forEach((ride) => rideMethods.set(String(ride.id), ride.payment_method));
           }
         }
 
@@ -293,6 +318,7 @@ export default function AdminPaymentsPage() {
         >
           <option value="all">Todas as Verticais</option>
           <option value="mototaxi">Mototáxi</option>
+          <option value="carro">Carros</option>
           <option value="diarista">Diaristas</option>
           <option value="ambulante">Ambulantes</option>
         </select>
@@ -356,7 +382,15 @@ export default function AdminPaymentsPage() {
                       {new Date(p.created_at).toLocaleString("pt-BR")}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="capitalize font-medium text-zinc-200">{p.service_type}</span>
+                      <span
+                        className={`font-medium ${
+                          p.service_type === "carro"
+                            ? "text-cyan-400"
+                            : "text-zinc-200"
+                        }`}
+                      >
+                        {serviceTypeLabel(p.service_type)}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4">
                       <PaymentMethodBadge method={p.payment_method} />

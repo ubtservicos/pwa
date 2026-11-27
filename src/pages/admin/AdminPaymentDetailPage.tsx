@@ -121,10 +121,11 @@ export default function AdminPaymentDetailPage() {
       };
       setPayment(p);
 
-      // 2. Fetch service / ride if applicable
-      if (p.service_type === "mototaxi" && p.service_id) {
+      // 2. Fetch service / ride if applicable (Mototáxi ou Carros)
+      if ((p.service_type === "mototaxi" || p.service_type === "carro") && p.service_id) {
+        const rideTable = p.service_type === "carro" ? "carro_corridas" : "mototaxi_corridas";
         const { data: rideData } = await supabase
-          .from("mototaxi_corridas")
+          .from(rideTable)
           .select("id, tomador_id, prestador_id, type, distance_km, duration_min, origin, destination")
           .eq("id", p.service_id)
           .single();
@@ -155,7 +156,7 @@ export default function AdminPaymentDetailPage() {
               .from("provider_associations")
               .select("association_id")
               .eq("provider_id", rideData.prestador_id)
-              .eq("service_type", "mototaxi")
+              .eq("service_type", p.service_type)
               .single();
 
             if (provAssoc?.association_id) {
@@ -193,8 +194,8 @@ export default function AdminPaymentDetailPage() {
 📊 *Status:* ${payment.status === "approved" || payment.status === "captured" ? "✅ APROVADO / LIQUIDADO" : "⏳ PENDENTE"}
 
 👤 *Tomador (Cliente):* ${tomName}
-🛵 *Prestador (Motorista):* ${prestName}
-🏷️ *Serviço:* Mototáxi UBT
+${payment.service_type === "carro" ? "🚗" : "🛵"} *Prestador (Motorista):* ${prestName}
+🏷️ *Serviço:* ${payment.service_type === "carro" ? "Carros UBT" : "Mototáxi UBT"}
 
 💰 *VALOR BRUTO:* ${formatBR(payment.total_amount)}
 💵 *Taxa Plataforma Retida:* ${formatBR(appFee)}
@@ -316,7 +317,7 @@ _UBT - O Superapp do Trabalhador_`;
     {
       index: 5,
       name: "Associação",
-      targetId: payment.entity_id || "caixinha-mototaxista-sem-associação",
+      targetId: payment.entity_id || (payment.service_type === "carro" ? "caixinha-carro-sem-associação" : "caixinha-mototaxista-sem-associação"),
       pct: 0.5,
       amount: payment.entity_amount,
       status: isApproved ? "Creditado" : "Aguardando",
@@ -495,7 +496,13 @@ _UBT - O Superapp do Trabalhador_`;
               </span>
               <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
                 <span className="text-zinc-400 print:text-zinc-600">Modalidade:</span>
-                <span className="font-semibold text-white print:text-black capitalize">{payment.service_type}</span>
+                <span className="font-semibold text-white print:text-black">
+                  {payment.service_type === "carro"
+                    ? "Carros"
+                    : payment.service_type === "mototaxi"
+                      ? "Mototáxi"
+                      : payment.service_type}
+                </span>
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
                 <span className="text-zinc-400 print:text-zinc-600">Tipo de Corrida:</span>

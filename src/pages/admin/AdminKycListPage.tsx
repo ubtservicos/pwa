@@ -11,57 +11,73 @@ export default function AdminKycListPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [verticalFilter, setVerticalFilter] = useState<"all" | "mototaxi" | "carro">("all");
 
   const fetchPendingKycs = async () => {
     setLoading(true);
     try {
-      // 1. Fetch pending mototaxi records directly from SSOT
-      const { data: motoPendentes, error: errMoto } = await supabase
-        .from("prestador_mototaxi")
-        .select("*")
-        .eq("kyc_status", "pending")
-        .order("created_at", { ascending: false });
+      // 1. Fetch pending mototaxi & carros records directly from SSOT
+      const [motoRes, carroRes, profilesRes, usersRes] = await Promise.all([
+        supabase
+          .from("prestador_mototaxi")
+          .select("*")
+          .eq("kyc_status", "pending")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("prestador_carro")
+          .select("*")
+          .eq("kyc_status", "pending")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("id, name, phone, role, is_active, created_at"),
+        supabase
+          .from("usuarios")
+          .select("id, nome, email, telefone, role, status, created_at"),
+      ]);
 
-      if (errMoto) {
-        console.error("Erro ao buscar prestador_mototaxi:", errMoto);
+      if (motoRes.error) {
+        console.error("Erro ao buscar prestador_mototaxi:", motoRes.error);
+      }
+      if (carroRes.error) {
+        console.error("Erro ao buscar prestador_carro:", carroRes.error);
       }
 
-      // 2. Fetch profiles for candidate information
-      const { data: dbProfiles } = await supabase
-        .from("profiles")
-        .select("id, name, phone, role, is_active, created_at");
-      const profilesMap = new Map((dbProfiles || []).map((p) => [p.id, p]));
+      const profilesMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
+      const usuariosMap = new Map((usersRes.data || []).map((u: any) => [u.id, u]));
 
-      // 3. Fetch usuarios for candidate data
-      const { data: dbUsers } = await supabase
-        .from("usuarios")
-        .select("id, nome, email, telefone, role, status, created_at");
-      const usuariosMap = new Map((dbUsers || []).map((u) => [u.id, u]));
-
-      // 4. Map Mototaxi candidates directly from prestador_mototaxi
-      const mappedMototaxi = (motoPendentes || []).map((moto: any) => {
-        const profile = profilesMap.get(moto.user_id);
-        const usuario = usuariosMap.get(moto.user_id);
-        const candidateName = usuario?.nome || profile?.name || "Candidato Mototaxi";
+      const mapCandidate = (row: any, vertical: "mototaxi" | "carro") => {
+        const profile = profilesMap.get(row.user_id);
+        const usuario = usuariosMap.get(row.user_id);
+        const defaultName = vertical === "carro" ? "Candidato Carros" : "Candidato Mototaxi";
+        const candidateName = usuario?.nome || profile?.name || defaultName;
         const candidateContact =
           usuario?.email ||
           (usuario?.telefone ? `Tel: ${usuario.telefone}` : null) ||
           (profile?.phone ? `Tel: ${profile.phone}` : `${candidateName.toLowerCase().replace(/\s+/g, ".")}@ubt.app`);
 
         return {
-          id: moto.user_id,
+          id: row.user_id,
+          vertical,
           name: candidateName,
           role: usuario?.role || profile?.role || "prestador",
           email: candidateContact,
-          createdAt: moto.created_at || moto.updated_at || usuario?.created_at || profile?.created_at || new Date().toISOString(),
+          createdAt: row.created_at || row.updated_at || usuario?.created_at || profile?.created_at || new Date().toISOString(),
           kycStatus: "pending",
-          category: "Mototaxi",
-          plate: moto.plate,
-          cpf: moto.cpf,
+          category: vertical === "carro" ? "Carros" : "Mototaxi",
+          plate: row.plate,
+          model: row.model,
+          cpf: row.cpf,
         };
-      });
+      };
 
-      setUsers(mappedMototaxi);
+      const mappedMototaxi = (motoRes.data || []).map((moto: any) => mapCandidate(moto, "mototaxi"));
+      const mappedCarros = (carroRes.data || []).map((carro: any) => mapCandidate(carro, "carro"));
+      const combined = [...mappedCarros, ...mappedMototaxi].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      setUsers(combined);
     } catch (e) {
       console.error("Erro ao buscar KYCs pendentes:", e);
       toast.show("Erro ao carregar lista de KYCs.");
@@ -74,7 +90,9 @@ export default function AdminKycListPage() {
     fetchPendingKycs();
   }, []);
 
-  const setKyc = async (id: string, status: "approved" | "rejected") => {
+  const setKyc = async (id: string, vertical: "mototaxi" | "carro", status: "approved" | "rejected") => {
+    const targetTable = vertical === "carro" ? "prestador_carro" : "prestador_mototaxi";
+    const verticalLabel = vertical === "carro" ? "Carros" : "Mototáxi";
     try {
       if (status === "approved") {
         // 1. Update usuarios table to active prestador
@@ -87,9 +105,9 @@ export default function AdminKycListPage() {
           })
           .eq("id", id);
 
-        // 2. Update prestador_mototaxi table to approved
+        // 2. Update vertical provider table to approved
         await supabase
-          .from("prestador_mototaxi")
+          .from(targetTable)
           .update({
             kyc_status: "approved",
             updated_at: new Date().toISOString(),
@@ -105,7 +123,19 @@ export default function AdminKycListPage() {
           })
           .eq("id", id);
 
-        toast.show("KYC aprovado com sucesso! Prestador credenciado e ativo.");
+        // 4. Notificação in-app (best effort)
+        try {
+          await supabase.from("notificacoes").insert({
+            user_id: id,
+            title: `Cadastro ${verticalLabel} aprovado!`,
+            message: `Seus documentos de ${verticalLabel} foram validados. Você já pode ficar online e receber corridas.`,
+            type: "kyc_approved",
+          });
+        } catch {
+          // ignore optional notification error
+        }
+
+        toast.show(`KYC (${verticalLabel}) aprovado com sucesso! Prestador credenciado e ativo.`);
       } else {
         // 1. Update usuarios
         await supabase
@@ -115,26 +145,41 @@ export default function AdminKycListPage() {
           })
           .eq("id", id);
 
-        // 2. Update prestador_mototaxi
+        // 2. Update vertical provider table
         await supabase
-          .from("prestador_mototaxi")
+          .from(targetTable)
           .update({
             kyc_status: "rejected",
             updated_at: new Date().toISOString(),
           })
           .eq("user_id", id);
 
-        toast.show("KYC reprovado.");
+        try {
+          await supabase.from("notificacoes").insert({
+            user_id: id,
+            title: `Documentos ${verticalLabel} precisam de revisão`,
+            message: `Seu cadastro de ${verticalLabel} foi reprovado na verificação. Verifique seus documentos no aplicativo.`,
+            type: "kyc_rejected",
+          });
+        } catch {
+          // ignore optional notification error
+        }
+
+        toast.show(`KYC (${verticalLabel}) reprovado.`);
       }
 
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setUsers((prev) => prev.filter((u) => !(u.id === id && u.vertical === vertical)));
     } catch (e) {
       console.error("Erro ao atualizar KYC:", e);
       toast.show("Erro ao atualizar status do KYC.");
     }
   };
 
-  const filtered = users.filter(u => u.name.toLowerCase().includes(q.toLowerCase()));
+  const filtered = users.filter((u) => {
+    const matchName = u.name.toLowerCase().includes(q.toLowerCase());
+    const matchVertical = verticalFilter === "all" || u.vertical === verticalFilter;
+    return matchName && matchVertical;
+  });
 
   if (loading) {
     return (
@@ -179,26 +224,50 @@ export default function AdminKycListPage() {
           </p>
         </div>
 
-        {/* Search */}
-        <div style={{ position: "relative", width: 260 }}>
-          <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nome..."
+        {/* Search & Vertical Filter */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <select
+            aria-label="Filtrar categoria KYC"
+            value={verticalFilter}
+            onChange={(e) => setVerticalFilter(e.target.value as "all" | "mototaxi" | "carro")}
             style={{
-              width: "100%",
               height: 40,
               background: "var(--admin-bg)",
               border: "1px solid var(--admin-border)",
               borderRadius: 10,
-              padding: "0 14px 0 38px",
+              padding: "0 12px",
               fontFamily: "DM Sans",
-              fontSize: 14,
+              fontSize: 13,
               color: "var(--admin-text)",
               outline: "none",
+              cursor: "pointer",
             }}
-          />
+          >
+            <option value="all">Todas Categorias</option>
+            <option value="mototaxi">Mototaxi</option>
+            <option value="carro">Carros</option>
+          </select>
+
+          <div style={{ position: "relative", width: 260 }}>
+            <Search size={16} color="var(--admin-muted)" style={{ position: "absolute", left: 12, top: 12 }} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nome..."
+              style={{
+                width: "100%",
+                height: 40,
+                background: "var(--admin-bg)",
+                border: "1px solid var(--admin-border)",
+                borderRadius: 10,
+                padding: "0 14px 0 38px",
+                fontFamily: "DM Sans",
+                fontSize: 14,
+                color: "var(--admin-text)",
+                outline: "none",
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -234,8 +303,8 @@ export default function AdminKycListPage() {
               <tbody>
                 {filtered.map((u) => (
                   <tr
-                    key={u.id}
-                    onClick={() => navigate(`/admin/kyc/${u.id}`)}
+                    key={`${u.vertical}-${u.id}`}
+                    onClick={() => navigate(`/admin/kyc/${u.id}?vertical=${u.vertical}`)}
                     style={{ borderBottom: "1px solid var(--admin-border)", transition: "background 100ms", cursor: "pointer" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--admin-bg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
@@ -255,14 +324,18 @@ export default function AdminKycListPage() {
                       {new Date(u.createdAt).toLocaleDateString("pt-BR", { dateStyle: "long" })}
                     </td>
                     <td style={{ padding: "14px 20px" }}>
-                      <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
+                      <Pill
+                        bg={u.vertical === "carro" ? "rgba(6,182,212,0.14)" : "rgba(13,184,126,0.10)"}
+                        color={u.vertical === "carro" ? "#22D3EE" : "#0DB87E"}
+                        size="sm"
+                      >
                         {u.category}
                       </Pill>
                     </td>
                     <td style={{ padding: "14px 20px" }}>
                       <div style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => setKyc(u.id, "approved")}
+                          onClick={() => setKyc(u.id, u.vertical, "approved")}
                           style={{
                             background: "rgba(13,184,126,0.10)",
                             border: "1px solid rgba(13,184,126,0.25)",
@@ -278,7 +351,7 @@ export default function AdminKycListPage() {
                           Aprovar
                         </button>
                         <button
-                          onClick={() => setKyc(u.id, "rejected")}
+                          onClick={() => setKyc(u.id, u.vertical, "rejected")}
                           style={{
                             background: "rgba(232,64,64,0.08)",
                             border: "1px solid rgba(232,64,64,0.20)",

@@ -34,6 +34,7 @@ import {
   Truck,
   Send,
   Bike,
+  Car,
   ShoppingBag,
   Utensils
 } from "lucide-react";
@@ -76,9 +77,15 @@ export const DIARISTAS_NAV_ITEMS = [
 ];
 
 export const MOTOTAXI_NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin", "associacao", "associacao_lider"] },
-  { icon: Zap, label: "Tarifas & Preço Dinâmico", path: "/admin/mototaxistas/preco-dinamico", roles: ["operator", "admin", "super_admin"] },
-  { icon: Building2, label: "Associação", path: "/admin/mototaxistas/associacao", roles: ["admin", "super_admin", "associacao", "associacao_lider"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin", "superadmin", "associacao", "associacao_lider"] },
+  { icon: Zap, label: "Tarifas & Preço Dinâmico", path: "/admin/mototaxistas/preco-dinamico", roles: ["operator", "admin", "super_admin", "superadmin"] },
+  { icon: Building2, label: "Associação", path: "/admin/mototaxistas/associacao", roles: ["admin", "super_admin", "superadmin", "associacao", "associacao_lider"] },
+];
+
+export const CARROS_NAV_ITEMS = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/carros", roles: ["operator", "admin", "super_admin", "superadmin", "associacao", "associacao_lider"] },
+  { icon: Zap, label: "Tarifas & Preço Dinâmico", path: "/admin/carros/preco-dinamico", roles: ["operator", "admin", "super_admin", "superadmin"] },
+  { icon: Building2, label: "Associação", path: "/admin/carros/associacao", roles: ["admin", "super_admin", "superadmin", "associacao", "associacao_lider"] },
 ];
 
 export const AMBULANTES_NAV_ITEMS = [
@@ -119,7 +126,11 @@ export const NAV_ITEMS = [
 
 const sectionTitle = (path: string) => {
   if (path === "/admin") return "Dashboard";
-  const all = [...NAV_ITEMS, ...COCO_NAV_ITEMS, ...DIARISTAS_NAV_ITEMS, ...MOTOTAXI_NAV_ITEMS, ...AMBULANTES_NAV_ITEMS];
+  if (path.startsWith("/admin/carros")) {
+    const match = CARROS_NAV_ITEMS.find((n) => n.path === path);
+    return match ? `Carros › ${match.label}` : "Carros";
+  }
+  const all = [...NAV_ITEMS, ...COCO_NAV_ITEMS, ...DIARISTAS_NAV_ITEMS, ...MOTOTAXI_NAV_ITEMS, ...CARROS_NAV_ITEMS, ...AMBULANTES_NAV_ITEMS];
   return all.find((n) => n.path === path)?.label ?? "Painel";
 };
 
@@ -128,6 +139,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const { pathname } = useLocation();
   const [role, setRole] = useState<string>("cocoecia");
   const [adminName, setAdminName] = useState<string>("Gestor Côco & Cia");
+  const [assocCategory, setAssocCategory] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -178,6 +190,23 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
             resolvedRole = (user.user_metadata?.role as string) || (user.app_metadata?.role as string) || "tomador";
           }
 
+          if (resolvedRole === "associacao" || resolvedRole === "associacao_lider") {
+            let resolvedCat: string | null = null;
+            if (typeof (supabase as any).rpc === "function") {
+              try {
+                const { data: scope } = await (supabase as any).rpc("get_my_association_scope");
+                if (scope && typeof scope === "object" && (scope as any).associacao_categoria) {
+                  resolvedCat = String((scope as any).associacao_categoria).toLowerCase().trim();
+                }
+              } catch {
+                // fallback below
+              }
+            }
+            setAssocCategory(resolvedCat || "mototaxi");
+          } else {
+            setAssocCategory(null);
+          }
+
           setRole(resolvedRole);
           setAdminName(resolvedName);
         }
@@ -200,16 +229,23 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     .join("")
     .toUpperCase();
 
+  const isSuperOrAdmin =
+    role === "super_admin" || role === "superadmin" || role === "admin";
+  const isAssocRole = role === "associacao" || role === "associacao_lider";
+
   const filteredItems = NAV_ITEMS.filter((item) => {
     if (!item.roles) return true;
     if (role === "super_admin" || role === "superadmin") return true;
     return item.roles.includes(role);
   });
 
-  const cocoItems = COCO_NAV_ITEMS.filter((item) => {
-    if (!item.roles) return true;
-    return item.roles.includes(role);
-  });
+  const cocoItems =
+    isAssocRole && (assocCategory === "carro" || assocCategory === "mototaxi")
+      ? []
+      : COCO_NAV_ITEMS.filter((item) => {
+          if (!item.roles) return true;
+          return item.roles.includes(role);
+        });
 
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
@@ -219,11 +255,18 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
 
   const diaristasItems = isVerticalEnabled("diaristas")
-    ? DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    ? DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role))
     : [];
-  const mototaxiItems = MOTOTAXI_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const mototaxiItems =
+    isAssocRole && assocCategory !== "mototaxi"
+      ? []
+      : MOTOTAXI_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role));
+  const carrosItems =
+    !isVerticalEnabled("carros") || (isAssocRole && assocCategory !== "carro")
+      ? []
+      : CARROS_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role));
   const ambulantesItems = isVerticalEnabled("ambulantes")
-    ? AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    ? AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role))
     : [];
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
@@ -235,6 +278,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
       sistema: false,
       diaristas: false,
       mototaxi: false,
+      carros: false,
       ambulantes: false,
       coco: false
     };
@@ -246,11 +290,24 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     else if (sistemaItems.some(item => pathname === item.path)) initial.sistema = true;
     else if (diaristasItems.some(item => pathname === item.path || pathname.startsWith("/admin/diaristas"))) initial.diaristas = true;
     else if (mototaxiItems.some(item => pathname === item.path || pathname.startsWith("/admin/mototaxistas"))) initial.mototaxi = true;
+    else if (carrosItems.some(item => pathname === item.path || pathname.startsWith("/admin/carros"))) initial.carros = true;
     else if (ambulantesItems.some(item => pathname === item.path || pathname.startsWith("/admin/ambulantes"))) initial.ambulantes = true;
     else if (cocoItems.some(item => pathname === item.path || pathname.startsWith("/admin/coco"))) initial.coco = true;
     else initial.painel = true;
     return initial;
   });
+
+  useEffect(() => {
+    if (pathname.startsWith("/admin/carros")) {
+      setExpanded((prev) => ({ ...prev, carros: true }));
+    } else if (pathname.startsWith("/admin/mototaxistas")) {
+      setExpanded((prev) => ({ ...prev, mototaxi: true }));
+    } else if (isAssocRole && assocCategory === "carro") {
+      setExpanded((prev) => ({ ...prev, carros: true }));
+    } else if (isAssocRole && assocCategory === "mototaxi") {
+      setExpanded((prev) => ({ ...prev, mototaxi: true }));
+    }
+  }, [pathname, isAssocRole, assocCategory]);
 
   const toggleCategory = (id: string) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -376,6 +433,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
         {renderCategory("sistema", "Sistema & Config", Settings, sistemaItems)}
         {renderCategory("diaristas", "Diaristas", Sparkles, diaristasItems)}
         {renderCategory("mototaxi", "Mototaxistas", Bike, mototaxiItems)}
+        {renderCategory("carros", "Carros", Car, carrosItems)}
         {renderCategory("ambulantes", "Ambulantes", ShoppingBag, ambulantesItems)}
         {renderCategory("coco", "Côco & Cia", Recycle, cocoItems)}
       </nav>

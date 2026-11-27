@@ -47,6 +47,7 @@ interface RideRecord {
   antifraud_flags?: string[];
   trajectory_polyline?: string;
   created_at: string;
+  _vertical?: "mototaxi" | "carro";
 }
 
 export default function AdminOperacoesPage() {
@@ -156,46 +157,51 @@ export default function AdminOperacoesPage() {
       })
       .subscribe();
 
-    // Realtime Ghost Ride and Risk updates on mototaxi_corridas
+    // Realtime Ghost Ride and Risk updates on mototaxi_corridas & carro_corridas
+    const handleRideRealtimeEvent = (vertical: "mototaxi" | "carro", payload: any) => {
+      const tagged = payload.new ? { ...payload.new, _vertical: vertical } : payload.new;
+      const vLabel = vertical === "carro" ? "Carros" : "Mototáxi";
+      if (payload.eventType === "INSERT" && tagged) {
+        setRecentRides((prev) => [tagged, ...prev.filter((r) => r.id !== tagged.id)].slice(0, 25));
+        const newLog: LiveLogItem = {
+          id: `${vertical}-${tagged.id}`,
+          timestamp: new Date().toISOString(),
+          source: "pedidos",
+          event: `Nova Corrida ${vLabel} #${tagged.id.slice(0, 8).toUpperCase()} criada (${tagged.status || "searching"}).`,
+          payload: tagged,
+        };
+        setLiveLogs((prev) => [newLog, ...prev.slice(0, 19)]);
+        toast.show(`Nova corrida ${vLabel} #${tagged.id.slice(0, 8).toUpperCase()} criada!`);
+      } else if (payload.eventType === "UPDATE" && tagged) {
+        setRecentRides((prev) => [tagged, ...prev.filter((r) => r.id !== tagged.id)].slice(0, 25));
+
+        if (tagged?.risk_level === "risk_high" || tagged?.risk_level === "risk_medium") {
+          setStats((prev) => ({ ...prev, highRiskRides: prev.highRiskRides + 1 }));
+          const newLog: LiveLogItem = {
+            id: `${vertical}-risk-${tagged.id}`,
+            timestamp: new Date().toISOString(),
+            source: "antifraude",
+            event: `⚠️ Alerta Ghost Ride (${vLabel}): Corrida #${tagged.id.slice(0, 8).toUpperCase()} classificada como ${tagged.risk_level === "risk_high" ? "Alto Risco" : "Médio Risco"}!`,
+            payload: {
+              flags: tagged.antifraud_flags,
+              speed: tagged.average_speed_kmh,
+              distance: tagged.real_distance_km,
+            },
+          };
+          setLiveLogs((prev) => [newLog, ...prev.slice(0, 19)]);
+          toast.show(`Alerta Ghost Ride (${vLabel}): risco ${tagged.risk_level === "risk_high" ? "Alto" : "Médio"}`);
+        }
+      }
+    };
+
     const channelCorridas = supabase
       .channel("realtime-corridas-risk-log")
-      .on("postgres_changes", { event: "*", schema: "public", table: "mototaxi_corridas" }, (payload: any) => {
-        if (payload.eventType === "INSERT") {
-          setRecentRides(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)].slice(0, 25));
-          const newLog: LiveLogItem = {
-            id: payload.new.id,
-            timestamp: new Date().toISOString(),
-            source: "pedidos",
-            event: `Nova Corrida #${payload.new.id.slice(0, 8).toUpperCase()} criada (${payload.new.status || "searching"}).`,
-            payload: payload.new
-          };
-          setLiveLogs(prev => [newLog, ...prev.slice(0, 19)]);
-          toast.show(`Nova corrida #${payload.new.id.slice(0, 8).toUpperCase()} criada!`);
-        } else if (payload.eventType === "UPDATE") {
-          // Atualiza lista local
-          setRecentRides(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)].slice(0, 25));
-          
-          // Incrementar contador de alertas se for alto/medio risco
-          if (payload.new?.risk_level === "risk_high" || payload.new?.risk_level === "risk_medium") {
-            setStats(prev => ({ ...prev, highRiskRides: prev.highRiskRides + 1 }));
-            
-            // Log no feed geral
-            const newLog: LiveLogItem = {
-              id: payload.new.id,
-              timestamp: new Date().toISOString(),
-              source: "antifraude",
-              event: `⚠️ Alerta Ghost Ride: Corrida #${payload.new.id.slice(0,8).toUpperCase()} classificada como ${payload.new.risk_level === "risk_high" ? "Alto Risco" : "Médio Risco"}!`,
-              payload: {
-                flags: payload.new.antifraud_flags,
-                speed: payload.new.average_speed_kmh,
-                distance: payload.new.real_distance_km
-              }
-            };
-            setLiveLogs(prev => [newLog, ...prev.slice(0, 19)]);
-            toast.show(`Alerta Ghost Ride detectado: risco ${payload.new.risk_level === "risk_high" ? "Alto" : "Médio"}`);
-          }
-        }
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "mototaxi_corridas" }, (payload: any) =>
+        handleRideRealtimeEvent("mototaxi", payload),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "carro_corridas" }, (payload: any) =>
+        handleRideRealtimeEvent("carro", payload),
+      )
       .subscribe();
 
     return () => {
@@ -216,27 +222,36 @@ export default function AdminOperacoesPage() {
         { count: camCount },
         { count: ambCount },
         { count: riskCount },
-        { data: ridesData }
+        { count: carroRiskCount },
+        { data: ridesData },
+        { data: carroRidesData }
       ] = await Promise.all([
         supabase.from("pedidos").select("*", { count: "exact", head: true }).in("status", ["pending", "confirmed", "accepted", "preparing"]),
         supabase.from("diarista_agendamentos").select("*", { count: "exact", head: true }).eq("status", "pending"),
         supabase.from("coco_caminhoes").select("*", { count: "exact", head: true }),
         supabase.from("ambulante_sessions").select("*", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("mototaxi_corridas").select("*", { count: "exact", head: true }).in("risk_level", ["risk_high", "risk_medium"]),
-        supabase.from("mototaxi_corridas").select("*").order("created_at", { ascending: false }).limit(25)
+        supabase.from("carro_corridas").select("*", { count: "exact", head: true }).in("risk_level", ["risk_high", "risk_medium"]),
+        supabase.from("mototaxi_corridas").select("*").order("created_at", { ascending: false }).limit(25),
+        supabase.from("carro_corridas").select("*").order("created_at", { ascending: false }).limit(25)
       ]);
+
+      const mergedRides: RideRecord[] = [
+        ...(ridesData || []).map((r: any) => ({ ...r, _vertical: "mototaxi" as const })),
+        ...(carroRidesData || []).map((r: any) => ({ ...r, _vertical: "carro" as const })),
+      ]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 25);
 
       setStats({
         activePedidos: pedCount || 0,
         activeAgendamentos: agCount || 0,
         activeCaminhoes: camCount || 0,
         activeAmbulantes: ambCount || 0,
-        highRiskRides: riskCount || 0
+        highRiskRides: (riskCount || 0) + (carroRiskCount || 0)
       });
 
-      if (ridesData) {
-        setRecentRides(ridesData);
-      }
+      setRecentRides(mergedRides);
 
       setLiveLogs([
         {
@@ -258,7 +273,7 @@ export default function AdminOperacoesPage() {
   const getSourceStyle = (source: LiveLogItem["source"]) => {
     switch (source) {
       case "pedidos":
-        return { color: "#2B6EE8", bg: "rgba(43,110,232,0.1)", label: "Pedidos / Mototáxi" };
+        return { color: "#2B6EE8", bg: "rgba(43,110,232,0.1)", label: "Pedidos / Mobilidade" };
       case "diaristas":
         return { color: "#9B59B6", bg: "rgba(155,89,182,0.1)", label: "Diaristas" };
       case "reciclagem":
@@ -433,9 +448,18 @@ export default function AdminOperacoesPage() {
                     return (
                       <tr key={r.id} style={{ borderBottom: "1px solid var(--admin-border)", background: isHigh ? "rgba(232,64,64,0.02)" : "transparent" }}>
                         <td style={{ padding: "16px 24px" }}>
-                          <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
-                            #{r.id.slice(0, 8).toUpperCase()}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                              #{r.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <Pill
+                              bg={r._vertical === "carro" ? "rgba(6,182,212,0.14)" : "rgba(43,110,232,0.12)"}
+                              color={r._vertical === "carro" ? "#22D3EE" : "#60A5FA"}
+                              size="sm"
+                            >
+                              {r._vertical === "carro" ? "Carros" : "Mototáxi"}
+                            </Pill>
+                          </div>
                           <span style={{ display: "block", fontSize: 11, color: "var(--admin-muted)", marginTop: 2 }}>
                             {new Date(r.created_at).toLocaleString("pt-BR")}
                           </span>

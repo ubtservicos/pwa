@@ -86,6 +86,9 @@ export default function AdminSorteioTrabPage() {
         const { data: caminhoes } = await supabase.from("coco_caminhoes").select("prestador_id");
         const caminhoesSet = new Set(caminhoes?.map(c => c.prestador_id) || []);
 
+        const { data: carrosPrestadores } = await supabase.from("prestador_carro").select("user_id");
+        const carrosSet = new Set(carrosPrestadores?.map(c => c.user_id) || []);
+
         const validStatuses = ["confirmed", "completed", "rating"];
         const confirmedPedidos = dbPedidos || [];
 
@@ -107,7 +110,8 @@ export default function AdminSorteioTrabPage() {
             if (isColab) categories.push("Reciclagem");
             if (isDiarista) categories.push("Diarista");
             if (caminhoesSet.has(u.id)) categories.push("Reciclagem");
-            if (u.role === "prestador" && !isColab && !isDiarista) categories.push("Mototaxi");
+            if (carrosSet.has(u.id)) categories.push("Carros");
+            if (u.role === "prestador" && !isColab && !isDiarista && !carrosSet.has(u.id)) categories.push("Mototaxi");
             if (categories.length === 0) categories.push("Geral");
 
             const completed = confirmedPedidos.filter(

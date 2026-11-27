@@ -73,6 +73,7 @@ export default function AdminClientesPage() {
   const [dbProfiles, setDbProfiles] = useState<any[]>([]);
   const [dbWaitlist, setDbWaitlist] = useState<any[]>([]);
   const [mototaxisMap, setMototaxisMap] = useState<Map<string, any>>(new Map());
+  const [carrosMap, setCarrosMap] = useState<Map<string, any>>(new Map());
   const [diaristasMap, setDiaristasMap] = useState<Map<string, any>>(new Map());
   const [caminhoesMap, setCaminhoesMap] = useState<Map<string, any>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -123,12 +124,14 @@ export default function AdminClientesPage() {
         const [
           profilesRes,
           motoRes,
+          carroRes,
           diaristasRes,
           caminhoesRes,
           waitlistRes,
         ] = await Promise.allSettled([
           supabase.from("profiles").select("*"),
           supabase.from("prestador_mototaxi").select("user_id, kyc_status, modalidade, plate, is_online"),
+          supabase.from("prestador_carro").select("user_id, kyc_status, modalidade, plate, model, is_online"),
           supabase.from("diarista_perfis").select("user_id, rating, total_servicos, is_online"),
           supabase.from("coco_caminhoes").select("prestador_id, plate, status_aprovacao, is_online"),
           supabase
@@ -145,6 +148,12 @@ export default function AdminClientesPage() {
           motoRes.value.data.forEach((m: any) => motoMap.set(m.user_id, m));
         }
         setMototaxisMap(motoMap);
+
+        const carMap = new Map<string, any>();
+        if (carroRes.status === "fulfilled" && carroRes.value.data) {
+          carroRes.value.data.forEach((c: any) => carMap.set(c.user_id, c));
+        }
+        setCarrosMap(carMap);
 
         const dMap = new Map<string, any>();
         if (diaristasRes.status === "fulfilled" && diaristasRes.value.data) {
@@ -212,12 +221,16 @@ export default function AdminClientesPage() {
       .map((u: any) => {
         const prof = profMap.get(u.id);
         const moto = mototaxisMap.get(u.id);
+        const carro = carrosMap.get(u.id);
         const diarista = diaristasMap.get(u.id);
         const caminhao = caminhoesMap.get(u.id);
 
         const services: string[] = [];
         if (moto && moto.kyc_status === "approved") {
           services.push(moto.modalidade === "entrega" ? "Entrega" : "Mototáxi");
+        }
+        if (carro && carro.kyc_status === "approved") {
+          services.push("Carros");
         }
         if (diarista) {
           services.push("Diarista");
@@ -307,7 +320,7 @@ export default function AdminClientesPage() {
           isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
         };
       });
-  }, [dbUsers, dbProfiles, mototaxisMap, diaristasMap, caminhoesMap, dbWaitlist]);
+  }, [dbUsers, dbProfiles, mototaxisMap, carrosMap, diaristasMap, caminhoesMap, dbWaitlist]);
 
   const filteredAndSorted = useMemo(() => {
     const ql = q.trim().toLowerCase();
@@ -567,6 +580,7 @@ export default function AdminClientesPage() {
           >
             <option value="all">Serviço: Todos</option>
             <option value="Mototáxi">Mototáxi</option>
+            <option value="Carros">Carros</option>
             <option value="Diarista">Diarista</option>
             <option value="Reciclagem">Reciclagem</option>
             <option value="Entrega">Entrega</option>
@@ -1193,6 +1207,7 @@ export default function AdminClientesPage() {
             >
               <option value="all">Serviço: Todos</option>
               <option value="Mototáxi">Mototáxi</option>
+              <option value="Carros">Carros</option>
               <option value="Diarista">Diarista</option>
               <option value="Reciclagem">Reciclagem</option>
               <option value="Entrega">Entrega</option>

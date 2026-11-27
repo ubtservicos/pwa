@@ -31,7 +31,7 @@ type ActiveTab = "geral" | "split" | "categories" | "entities";
 interface TransactionRow {
   id: string;
   date: string;
-  category: "Mototáxi" | "Diarista" | "Ambulante" | "Reciclagem" | "Geral";
+  category: "Mototáxi" | "Carros" | "Diarista" | "Ambulante" | "Reciclagem" | "Geral";
   type: "entrada" | "saida" | "split" | "doacao";
   description: string;
   amount: number;
@@ -219,6 +219,7 @@ export default function AdminFinanceiroPage() {
 
       let category: TransactionRow["category"] = "Geral";
       if (p.service_type === "mototaxi") category = "Mototáxi";
+      else if (p.service_type === "carro") category = "Carros";
       else if (p.service_type === "diarista") category = "Diarista";
       else if (p.service_type === "ambulante") category = "Ambulante";
       else if (p.service_type === "coco") category = "Reciclagem";
@@ -272,6 +273,7 @@ export default function AdminFinanceiroPage() {
 
       let category: TransactionRow["category"] = "Geral";
       if (disp.service_type === "mototaxi") category = "Mototáxi";
+      else if (disp.service_type === "carro") category = "Carros";
       else if (disp.service_type === "diarista") category = "Diarista";
       else if (disp.service_type === "ambulante") category = "Ambulante";
       else if (disp.service_type === "coco") category = "Reciclagem";
@@ -308,6 +310,7 @@ export default function AdminFinanceiroPage() {
     cancellations.forEach((can) => {
       let category: TransactionRow["category"] = "Geral";
       if (can.service_type === "mototaxi") category = "Mototáxi";
+      else if (can.service_type === "carro") category = "Carros";
       else if (can.service_type === "diarista") category = "Diarista";
       else if (can.service_type === "ambulante") category = "Ambulante";
       else if (can.service_type === "coco") category = "Reciclagem";
@@ -373,9 +376,10 @@ export default function AdminFinanceiroPage() {
 
   // Category breakdown calculations
   const categoryData = useMemo(() => {
-    const categories: TransactionRow["category"][] = ["Mototáxi", "Diarista", "Ambulante", "Reciclagem"];
-    const colors = {
+    const categories: TransactionRow["category"][] = ["Mototáxi", "Carros", "Diarista", "Ambulante", "Reciclagem"];
+    const colors: Record<string, string> = {
       "Mototáxi": "#2B6EE8",
+      "Carros": "#06B6D4",
       "Diarista": "#0DB87E",
       "Ambulante": "#F5A623",
       "Reciclagem": "#9B59B6"
@@ -1061,6 +1065,7 @@ export default function AdminFinanceiroPage() {
               >
                 <option value="all">Todas Categorias</option>
                 <option value="Mototáxi">Mototáxi</option>
+                <option value="Carros">Carros</option>
                 <option value="Diarista">Diarista</option>
                 <option value="Ambulante">Ambulante</option>
                 <option value="Reciclagem">Reciclagem</option>
@@ -1145,11 +1150,13 @@ export default function AdminFinanceiroPage() {
                       <Pill
                         bg={
                           t.category === "Mototáxi" ? "rgba(43,110,232,0.08)" :
+                          t.category === "Carros" ? "rgba(6,182,212,0.12)" :
                           t.category === "Diarista" ? "rgba(13,184,126,0.08)" :
                           t.category === "Ambulante" ? "rgba(245,166,35,0.08)" : "rgba(155, 89, 182, 0.08)"
                         }
                         color={
                           t.category === "Mototáxi" ? "#2B6EE8" :
+                          t.category === "Carros" ? "#06B6D4" :
                           t.category === "Diarista" ? "#0DB87E" :
                           t.category === "Ambulante" ? "#F5A623" : "#9B59B6"
                         }

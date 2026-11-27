@@ -122,7 +122,24 @@ export default function AdminLoginPage() {
       console.log("[Auth] 4. Role final identificada:", userRole);
 
       // 5. Bypass de RLS & Redirecionamento
-      if (userRole && COCO_ROLES.includes(userRole)) {
+      if (userRole === "associacao" || userRole === "associacao_lider") {
+        let assocCat = "mototaxi";
+        try {
+          const { data: scope } = await (supabase as any).rpc("get_my_association_scope");
+          if (scope && typeof scope === "object" && (scope as any).associacao_categoria) {
+            assocCat = String((scope as any).associacao_categoria).toLowerCase().trim() || "mototaxi";
+          }
+        } catch {
+          // fallback mototaxi
+        }
+        if (assocCat === "carro") {
+          navigate("/admin/carros");
+        } else if (assocCat === "coco" || assocCat === "reciclagem") {
+          navigate("/admin/coco");
+        } else {
+          navigate("/admin/mototaxistas/dashboard");
+        }
+      } else if (userRole && COCO_ROLES.includes(userRole)) {
         console.log("[Auth] 5. Redirecionando para rota Coco & Cia: /admin/coco");
         navigate("/admin/coco");
       } else if (userRole && (ADMIN_ROLES.includes(userRole) || userRole === "superadmin")) {

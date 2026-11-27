@@ -173,6 +173,7 @@ export default function AdminAnalyticsPage() {
           >
             <option value="all">Todas as Verticais</option>
             <option value="mototaxi">Mototáxi</option>
+            <option value="carro">Carros</option>
             <option value="ambulantes">Ambulantes</option>
             <option value="diaristas">Diaristas</option>
           </select>

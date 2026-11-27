@@ -26,6 +26,8 @@ import {
   History,
   CheckCircle2,
   AlertCircle,
+  Car,
+  Bike,
 } from "lucide-react";
 import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -98,6 +100,7 @@ export default function AdminClienteDetailPage() {
   const [dbProfile, setDbProfile] = useState<any | null>(null);
   const [dbWaitlist, setDbWaitlist] = useState<any | null>(null);
   const [mototaxi, setMototaxi] = useState<any | null>(null);
+  const [carro, setCarro] = useState<any | null>(null);
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
   const [associacaoNome, setAssociacaoNome] = useState<string | null>(null);
@@ -150,6 +153,7 @@ export default function AdminClienteDetailPage() {
         const [
           profileRes,
           motoRes,
+          carroRes,
           diaristaRes,
           caminhaoRes,
           provAssocRes,
@@ -157,7 +161,8 @@ export default function AdminClienteDetailPage() {
           mpAccountRes,
         ] = await Promise.allSettled([
           supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
-          supabase.from("prestador_mototaxi").select("kyc_status, modalidade, plate, is_online").eq("user_id", id).maybeSingle(),
+          supabase.from("prestador_mototaxi").select("kyc_status, modalidade, plate, model, is_online").eq("user_id", id).maybeSingle(),
+          supabase.from("prestador_carro").select("kyc_status, modalidade, plate, model, is_online, cor, ano, portas, ar_condicionado, cnh_categoria, possui_ear, alvara_municipal, vehicle_subtype").eq("user_id", id).maybeSingle(),
           supabase.from("diarista_perfis").select("rating, total_servicos").eq("user_id", id).maybeSingle(),
           supabase.from("coco_caminhoes").select("plate, status_aprovacao").eq("prestador_id", id).maybeSingle(),
           supabase.from("provider_associations").select("association_id").eq("provider_id", id).maybeSingle(),
@@ -173,6 +178,7 @@ export default function AdminClienteDetailPage() {
 
         const profileData = profileRes.status === "fulfilled" ? profileRes.value.data : null;
         const motoData = motoRes.status === "fulfilled" ? motoRes.value.data : null;
+        const carroData = carroRes.status === "fulfilled" ? carroRes.value.data : null;
         const diaristaData = diaristaRes.status === "fulfilled" ? diaristaRes.value.data : null;
         const caminhaoData = caminhaoRes.status === "fulfilled" ? caminhaoRes.value.data : null;
         const provAssoc = provAssocRes.status === "fulfilled" ? provAssocRes.value.data : null;
@@ -226,6 +232,7 @@ export default function AdminClienteDetailPage() {
         setDbProfile(profileData);
         setDbWaitlist(waitlistRow);
         setMototaxi(motoData);
+        setCarro(carroData);
         setCaminhao(caminhaoData);
         setDiarista(diaristaData);
         setAssociacaoNome(assocName);
@@ -293,16 +300,28 @@ export default function AdminClienteDetailPage() {
     if (mototaxi && mototaxi.kyc_status === "approved") {
       services.push(mototaxi.modalidade === "entrega" ? "Entrega" : "Mototáxi");
     }
+    if (carro && carro.kyc_status === "approved") {
+      services.push("Carros");
+    }
     if (diarista) services.push("Diarista");
     if (isColab || (caminhao && caminhao.status_aprovacao === "approved")) {
       services.push("Reciclagem");
     }
 
     let kycStatus: "approved" | "pending" | "rejected" | undefined;
-    if (mototaxi) kycStatus = mototaxi.kyc_status;
-    else if (caminhao) kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
-    else if (diarista) kycStatus = "approved";
-    else if (dbUser.role === "prestador" || isColab) kycStatus = "pending";
+    if (mototaxi?.kyc_status === "approved" || carro?.kyc_status === "approved") {
+      kycStatus = "approved";
+    } else if (mototaxi) {
+      kycStatus = mototaxi.kyc_status;
+    } else if (carro) {
+      kycStatus = carro.kyc_status;
+    } else if (caminhao) {
+      kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
+    } else if (diarista) {
+      kycStatus = "approved";
+    } else if (dbUser.role === "prestador" || isColab) {
+      kycStatus = "pending";
+    }
 
     const name = dbUser.nome || dbUser.razao_social || dbProfile?.name || "Sem nome";
     const email = dbUser.email || dbProfile?.email || "Não informado";
@@ -394,7 +413,7 @@ export default function AdminClienteDetailPage() {
       blockedReason,
       isBlockedActive: isUserBlockedActive({ isBlocked, blockedUntil }),
     };
-  }, [dbUser, dbProfile, dbWaitlist, mototaxi, diarista, caminhao, associacaoNome, padrinhoNome, mpAccountInfo]);
+  }, [dbUser, dbProfile, dbWaitlist, mototaxi, carro, diarista, caminhao, associacaoNome, padrinhoNome, mpAccountInfo]);
 
   const handleSaveReferralCode = async () => {
     if (!id) return;
@@ -779,6 +798,73 @@ export default function AdminClienteDetailPage() {
               ),
             )}
           </div>
+
+          {/* Perfis de Mobilidade Cadastrados (Mototáxi / Carros — convivência limpa) */}
+          {(mototaxi || carro) && (
+            <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2.5">
+              <div className="text-[11px] uppercase tracking-wider font-bold text-zinc-400">
+                Perfis de Mobilidade Cadastrados
+              </div>
+              <div className="grid grid-cols-1 gap-2.5">
+                {mototaxi && (
+                  <div className="p-3 rounded-xl bg-[#09090B] border border-zinc-800 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        <Bike size={14} /> Mototáxi
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-200">
+                          KYC: {mototaxi.kyc_status || "pending"}
+                        </span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${mototaxi.is_online ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-900 text-zinc-400"}`}>
+                          {mototaxi.is_online ? "Online" : "Offline"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-300 flex flex-wrap gap-x-3 gap-y-1">
+                      <span>Placa: <strong className="font-mono text-zinc-100">{mototaxi.plate || "—"}</strong></span>
+                      {mototaxi.model && <span>Modelo: <strong>{mototaxi.model}</strong></span>}
+                      <span>Modalidade: <strong className="capitalize">{mototaxi.modalidade || "ambos"}</strong></span>
+                    </div>
+                  </div>
+                )}
+
+                {carro && (
+                  <div className="p-3 rounded-xl bg-[#09090B] border border-cyan-500/30 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400">
+                        <Car size={14} /> Carros
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-200">
+                          KYC: {carro.kyc_status || "pending"}
+                        </span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${carro.is_online ? "bg-emerald-500/15 text-emerald-400" : "bg-zinc-900 text-zinc-400"}`}>
+                          {carro.is_online ? "Online" : "Offline"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-300 flex flex-wrap gap-x-3 gap-y-1">
+                      <span>Placa: <strong className="font-mono text-zinc-100">{carro.plate || "—"}</strong></span>
+                      <span>Modelo: <strong>{carro.model || "—"}</strong></span>
+                      <span>Modalidade: <strong className="capitalize">{carro.modalidade || "ambos"}</strong></span>
+                      {carro.cor && <span>Cor: <strong>{carro.cor}</strong></span>}
+                      {carro.ano && <span>Ano: <strong>{carro.ano}</strong></span>}
+                      {carro.portas && <span>Portas: <strong>{carro.portas}</strong></span>}
+                      {carro.ar_condicionado !== null && carro.ar_condicionado !== undefined && (
+                        <span>Ar: <strong>{carro.ar_condicionado ? "Sim" : "Não"}</strong></span>
+                      )}
+                      {carro.cnh_categoria && <span>CNH: <strong>{carro.cnh_categoria}</strong></span>}
+                      {carro.possui_ear !== null && carro.possui_ear !== undefined && (
+                        <span>EAR: <strong>{carro.possui_ear ? "Sim" : "Não"}</strong></span>
+                      )}
+                      {carro.alvara_municipal && <span>Alvará: <strong>{carro.alvara_municipal}</strong></span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Lista de Apadrinhados (somente dados cadastrais) */}
           <div className="mt-4 pt-4 border-t border-zinc-800">
