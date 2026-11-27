@@ -62,10 +62,28 @@ export default function AdminPaymentsPage() {
   const fetchPayments = async () => {
     try {
       setLoading(true);
+      const rpcRes = await (supabase as any).rpc("admin_list_financial_transactions");
+      if (!rpcRes.error && Array.isArray(rpcRes.data)) {
+        const mapped: PaymentRecord[] = (rpcRes.data as any[]).map((d) => ({
+          id: d.id,
+          transaction_id: d.transaction_id,
+          service_type: d.service_type || "mototaxi",
+          service_id: d.service_id,
+          total_amount: Number(d.total_amount || 0),
+          provider_amount: Number(d.provider_amount || 0),
+          ubt_amount: Number(d.ubt_amount || 0),
+          status: d.status,
+          payment_method: String(d.payment_method || "unknown"),
+          created_at: d.created_at,
+        }));
+        setPayments(mapped);
+        return;
+      }
+
       const [splitResult, transactionResult] = await Promise.all([
         supabase
           .from("pagamentos_split")
-          .select("id, transaction_id, service_type, service_id, total_amount, ubt_amount, provider_amount, status, created_at")
+          .select("id, transaction_id, service_type, service_id, total_amount, ubt_amount, provider_amount, status, payment_method, created_at")
           .order("created_at", { ascending: false }),
         supabase.from("payments").select("*"),
       ]);

@@ -33,11 +33,41 @@ export async function fetchUserPaymentHistory(): Promise<PaymentHistoryRow[]> {
 }
 
 export function isSettledPaymentStatus(status?: string | null): boolean {
-  return ["approved", "paid", "confirmed"].includes(String(status || "").toLowerCase());
+  return ["approved", "paid", "confirmed", "captured"].includes(String(status || "").toLowerCase());
 }
 
 export function isExcludedPaymentStatus(status?: string | null): boolean {
   return ["rejected", "failed", "cancelled", "expired", "voided"].includes(String(status || "").toLowerCase());
+}
+
+/**
+ * Deduplicates payment history rows by service_id:
+ * - Excludes failed/rejected/cancelled/expired attempts.
+ * - Never promotes a pending row to confirmed just because ride_status === 'paid'.
+ * - If a service_id already has a settled payment, hides all pending attempts for that same service_id.
+ */
+export function deduplicatePaymentHistory(rows: PaymentHistoryRow[]): PaymentHistoryRow[] {
+  const nonExcluded = rows.filter((row) => !isExcludedPaymentStatus(row.payment_status));
+  const settledServiceKeys = new Set<string>();
+  for (const row of nonExcluded) {
+    if (isSettledPaymentStatus(row.payment_status) && row.service_id) {
+      settledServiceKeys.add(`${row.service_type || "mototaxi"}:${row.service_id}`);
+    }
+  }
+
+  const seenIds = new Set<string>();
+  const result: PaymentHistoryRow[] = [];
+  for (const row of nonExcluded) {
+    const uniqueKey = row.payment_id || row.transaction_id;
+    if (uniqueKey && seenIds.has(uniqueKey)) continue;
+    const serviceKey = row.service_id ? `${row.service_type || "mototaxi"}:${row.service_id}` : "";
+    if (!isSettledPaymentStatus(row.payment_status) && serviceKey && settledServiceKeys.has(serviceKey)) {
+      continue;
+    }
+    if (uniqueKey) seenIds.add(uniqueKey);
+    result.push(row);
+  }
+  return result;
 }
 
 export function paymentToTransaction(row: PaymentHistoryRow): Transaction {

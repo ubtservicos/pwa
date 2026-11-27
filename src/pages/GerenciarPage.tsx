@@ -37,7 +37,7 @@ import {
   fetchUserPaymentHistory,
   paymentToTransaction,
   isSettledPaymentStatus,
-  isExcludedPaymentStatus,
+  deduplicatePaymentHistory,
 } from "@/services/PaymentHistoryService";
 import MercadoPagoOnboardingCard from "@/components/finance/MercadoPagoOnboardingCard";
 
@@ -311,10 +311,8 @@ const GerenciarPage = () => {
           });
         }
 
-        // Add settled/active mototaxi payments (exclude failed/rejected/cancelled/expired attempts)
-        const visiblePaymentHistory = paymentHistory.filter(
-          (payment) => !isExcludedPaymentStatus(payment.payment_status),
-        );
+        // Add settled/active mototaxi payments (exclude failed/rejected/cancelled/expired and superseded pending attempts)
+        const visiblePaymentHistory = deduplicatePaymentHistory(paymentHistory);
         const paidServiceIds = new Set(visiblePaymentHistory.map((payment) => payment.service_id));
         visiblePaymentHistory.forEach((payment) => {
           const transaction = paymentToTransaction(payment);

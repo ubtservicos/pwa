@@ -1529,13 +1529,14 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     // Idempotency Guard 1: already paid -> return immediately without creating a duplicate charge
     const { data: existingApproved } = await adminClient()
       .from("pagamentos_split")
-      .select("id, transaction_id, gateway_payment_id, total_amount, base_amount, provider_amount")
+      .select("id, transaction_id, gateway_payment_id, total_amount, base_amount, provider_amount, payment_method")
       .eq("service_type", "mototaxi")
       .eq("service_id", serviceId)
-      .in("status", ["approved", "paid", "confirmed"])
+      .in("status", ["approved", "paid", "confirmed", "captured"])
       .maybeSingle();
 
     if (ride.status === "paid" || existingApproved) {
+      const settledMethod = String(existingApproved?.payment_method || normalizedMethodCategory || "pix");
       return json(req, {
         success: true,
         already_paid: true,
@@ -1545,7 +1546,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
         payment: {
           id: existingApproved?.gateway_payment_id || ride.pix_payment_id || null,
           status: "approved",
-          payment_method_id: "pix",
+          payment_method_id: settledMethod,
           transaction_amount: Number(existingApproved?.total_amount ?? ride.final_price ?? ride.estimated_price ?? 0),
         },
       }, 200);
@@ -1810,11 +1811,33 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     }
   }
 
+  if (mpStatus === "approved") {
+    const cancelNowIso = new Date().toISOString();
+    // Cancel any prior pending attempts (e.g. an unpaid PIX charge when the user switches to Card)
+    // so only 1 settled record exists for this service_id.
+    const { error: cancelPendingErr } = await adminClient()
+      .from("pagamentos_split")
+      .update({
+        status: "cancelled",
+        gateway_status: "cancelled",
+        gateway_status_detail: normalizedMethodCategory === "card" ? "superseded_by_card_payment" : "superseded_by_approved_payment",
+        updated_at: cancelNowIso,
+      })
+      .eq("service_type", serviceType)
+      .eq("service_id", serviceId)
+      .eq("status", "pending")
+      .neq("transaction_id", transactionId);
+    if (cancelPendingErr) {
+      console.warn("[payment-gateway] failed to cancel superseded pending attempts:", cancelPendingErr.message);
+    }
+  }
+
   if (serviceType === "mototaxi" && mpStatus === "approved") {
     const { error } = await adminClient().from("mototaxi_corridas").update({
       status: "paid",
       final_price: baseAmount,
       payment_method: normalizedMethodCategory,
+      ...(normalizedMethodCategory === "pix" ? { pix_charge_status: "approved" } : { pix_charge_status: "cancelled" }),
       updated_at: new Date().toISOString(),
     }).eq("id", serviceId);
     if (error) console.error("[payment-gateway] ride status update failed", error.message);

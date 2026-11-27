@@ -31,13 +31,31 @@ type ActiveTab = "geral" | "split" | "categories" | "entities";
 interface TransactionRow {
   id: string;
   date: string;
-  category: "Mototáxi" | "Diarista" | "Ambulante" | "Reciclagem";
+  category: "Mototáxi" | "Diarista" | "Ambulante" | "Reciclagem" | "Geral";
   type: "entrada" | "saida" | "split" | "doacao";
   description: string;
   amount: number;
   status: "confirmed" | "pending" | "cancelled";
+  paymentMethod?: string;
+  providerAmount?: number;
+  ubtAmount?: number;
+  entityAmount?: number;
+  prizeWorkerAmount?: number;
+  prizeConsumerAmount?: number;
+  godparentTomadorAmount?: number;
+  godparentPrestadorAmount?: number;
+  serviceId?: string;
+  gatewayPaymentId?: string;
   recipient?: string;
 }
+
+const formatPaymentMethodLabel = (method?: string | null): string => {
+  const m = String(method || "").trim().toLowerCase();
+  if (m.includes("pix")) return "PIX";
+  if (["card", "cartao", "cartão", "credit", "debit", "visa", "master"].some((tok) => m.includes(tok))) return "Cartão";
+  if (["cash", "dinheiro", "por_fora"].some((tok) => m.includes(tok))) return "Dinheiro";
+  return "Outro";
+};
 
 // Fixed baseline volume of R$ 54,200.00 to show populated dashboard
 const BASELINE_VOLUME = 54200.00;
@@ -136,32 +154,42 @@ export default function AdminFinanceiroPage() {
       try {
         setLoading(true);
         const [
-          { data: payData },
-          { data: splitData },
+          rpcTxResult,
           { data: payoutData },
           { data: disputeData },
           { data: refundData },
           { data: cancelData }
         ] = await Promise.all([
-          supabase.from("payments").select("*"),
-          supabase.from("payment_splits").select("*"),
+          (supabase as any).rpc("admin_list_financial_transactions"),
           supabase.from("payouts").select("*"),
           supabase.from("disputes").select("*"),
           supabase.from("refunds").select("*"),
           supabase.from("cancellations").select("*")
         ]);
 
+        let realTransactions: any[] = [];
+        if (!rpcTxResult.error && Array.isArray(rpcTxResult.data)) {
+          realTransactions = rpcTxResult.data;
+        } else {
+          // Fallback directly to pagamentos_split if RPC is unavailable
+          const { data: fallbackSplits } = await supabase
+            .from("pagamentos_split")
+            .select("*")
+            .order("created_at", { ascending: false });
+          realTransactions = fallbackSplits || [];
+        }
+
         const duration = Date.now() - startTime;
 
-        if (payData) setPayments(payData);
-        if (splitData) setSplits(splitData);
+        setPayments(realTransactions);
+        setSplits(realTransactions);
         if (payoutData) setPayouts(payoutData);
         if (disputeData) setDisputes(disputeData);
         if (refundData) setRefunds(refundData);
         if (cancelData) setCancellations(cancelData);
 
         logSystem("INFO", "PAYMENTS", "fetch_financial_dashboard", "success", duration, undefined, undefined, {
-          paymentsCount: payData?.length || 0,
+          paymentsCount: realTransactions.length,
           payoutsCount: payoutData?.length || 0
         });
       } catch (err: any) {
@@ -179,26 +207,44 @@ export default function AdminFinanceiroPage() {
   const allTransactions = useMemo(() => {
     const txs: TransactionRow[] = [];
 
-    // Map payments
+    // Map real PIX & Card transactions from pagamentos_split / admin_list_financial_transactions
     payments.forEach((p) => {
-      const validStatus: TransactionRow["status"] = 
-        p.status === "captured" || p.status === "authorized" ? "confirmed" :
-        p.status === "pending" ? "pending" : "cancelled";
-      
+      const rawStatus = String(p.status || "").toLowerCase();
+      const validStatus: TransactionRow["status"] =
+        ["approved", "paid", "confirmed", "captured", "authorized"].includes(rawStatus)
+          ? "confirmed"
+          : ["pending", "in_process", "in_mediation"].includes(rawStatus)
+            ? "pending"
+            : "cancelled";
+
       let category: TransactionRow["category"] = "Geral";
       if (p.service_type === "mototaxi") category = "Mototáxi";
       else if (p.service_type === "diarista") category = "Diarista";
       else if (p.service_type === "ambulante") category = "Ambulante";
       else if (p.service_type === "coco") category = "Reciclagem";
 
+      const methodLabel = formatPaymentMethodLabel(p.payment_method);
+      const shortService = p.service_id ? ` · #${String(p.service_id).slice(0, 8).toUpperCase()}` : "";
+      const grossAmount = Number(p.total_amount ?? p.amount ?? 0);
+
       txs.push({
         id: p.id,
-        date: p.created_at || new Date().toISOString(),
+        date: p.created_at || p.updated_at || new Date().toISOString(),
         category,
         type: "entrada",
-        description: `Pagamento #${p.id.slice(0, 4)} via ${p.payment_method || "desconhecido"}`,
-        amount: Number(p.amount || 0),
-        status: validStatus
+        description: `${category}${shortService} via ${methodLabel}`,
+        amount: grossAmount,
+        status: validStatus,
+        paymentMethod: methodLabel,
+        providerAmount: Number(p.provider_amount ?? 0),
+        ubtAmount: Number(p.ubt_amount ?? 0),
+        entityAmount: Number(p.entity_amount ?? 0),
+        prizeWorkerAmount: Number(p.prize_worker_amount ?? 0),
+        prizeConsumerAmount: Number(p.prize_consumer_amount ?? 0),
+        godparentTomadorAmount: Number(p.godparent_tomador_amount ?? 0),
+        godparentPrestadorAmount: Number(p.godparent_prestador_amount ?? 0),
+        serviceId: p.service_id || undefined,
+        gatewayPaymentId: p.gateway_payment_id || undefined,
       });
     });
 
@@ -301,18 +347,16 @@ export default function AdminFinanceiroPage() {
     const totalPending = pendingPayments.reduce((acc, t) => acc + t.amount, 0);
     const totalTransactions = confirmedPayments.length + pendingPayments.length;
 
-    // Split breakdowns based on splits table
-    const releasedSplits = splits.filter(s => s.status === "released" || s.status === "approved" || s.status === "pending");
-    
-    const platformRevenue = releasedSplits.filter(s => s.recipient_role === "ubt").reduce((acc, s) => acc + Number(s.amount || 0), 0);
-    const prizeWorker = releasedSplits.filter(s => s.recipient_role === "prize_worker").reduce((acc, s) => acc + Number(s.amount || 0), 0);
-    const prizeConsumer = releasedSplits.filter(s => s.recipient_role === "prize_consumer").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    // Split breakdowns directly from settled pagamentos_split rows in the active period
+    const platformRevenue = confirmedPayments.reduce((acc, t) => acc + Number(t.ubtAmount || 0), 0);
+    const prizeWorker = confirmedPayments.reduce((acc, t) => acc + Number(t.prizeWorkerAmount || 0), 0);
+    const prizeConsumer = confirmedPayments.reduce((acc, t) => acc + Number(t.prizeConsumerAmount || 0), 0);
     const awardsAccumulated = prizeWorker + prizeConsumer;
 
-    const collectiveDonations = releasedSplits.filter(s => s.recipient_role === "comunidade").reduce((acc, s) => acc + Number(s.amount || 0), 0);
-    const providerVolume = releasedSplits.filter(s => s.recipient_role === "provider").reduce((acc, s) => acc + Number(s.amount || 0), 0);
-    const godparentTomador = releasedSplits.filter(s => s.recipient_role === "godparent_tomador" || s.recipient_role === "padrinho_tomador").reduce((acc, s) => acc + Number(s.amount || 0), 0);
-    const godparentPrestador = releasedSplits.filter(s => s.recipient_role === "godparent_prestador" || s.recipient_role === "padrinho_prestador").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const collectiveDonations = confirmedPayments.reduce((acc, t) => acc + Number(t.entityAmount || 0), 0);
+    const providerVolume = confirmedPayments.reduce((acc, t) => acc + Number(t.providerAmount || 0), 0);
+    const godparentTomador = confirmedPayments.reduce((acc, t) => acc + Number(t.godparentTomadorAmount || 0), 0);
+    const godparentPrestador = confirmedPayments.reduce((acc, t) => acc + Number(t.godparentPrestadorAmount || 0), 0);
 
     return {
       totalGmv,
@@ -325,7 +369,7 @@ export default function AdminFinanceiroPage() {
       godparentTomador,
       godparentPrestador
     };
-  }, [periodFilteredTransactions, splits]);
+  }, [periodFilteredTransactions]);
 
   // Category breakdown calculations
   const categoryData = useMemo(() => {
@@ -376,16 +420,21 @@ export default function AdminFinanceiroPage() {
 
   // Filters applied to the table display list
   const tableFilteredTransactions = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return periodFilteredTransactions.filter((t) => {
-      const matchesSearch = 
-        t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.category.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        !q ||
+        t.description.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q) ||
+        (t.serviceId && t.serviceId.toLowerCase().includes(q)) ||
+        (t.gatewayPaymentId && t.gatewayPaymentId.toLowerCase().includes(q)) ||
+        (t.paymentMethod && t.paymentMethod.toLowerCase().includes(q));
       
       const matchesCategory = filterCategory === "all" || t.category === filterCategory;
-      const matchesType = filterType === "all" || t.type === filterType;
+      const matchesStatus = filterType === "all" || t.status === filterType;
 
-      return matchesSearch && matchesCategory && matchesType;
+      return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [periodFilteredTransactions, searchQuery, filterCategory, filterType]);
 
@@ -1055,8 +1104,11 @@ export default function AdminFinanceiroPage() {
                   { label: "ID", align: "left" },
                   { label: "Data/Hora", align: "left" },
                   { label: "Categoria", align: "left" },
+                  { label: "Meio", align: "left" },
                   { label: "Descrição", align: "left" },
-                  { label: "Valor", align: "right" },
+                  { label: "Valor Bruto", align: "right" },
+                  { label: "Prestador", align: "right" },
+                  { label: "Taxa UBT", align: "right" },
                   { label: "Status", align: "left" }
                 ].map((h) => (
                   <th
@@ -1106,11 +1158,26 @@ export default function AdminFinanceiroPage() {
                         {t.category}
                       </Pill>
                     </td>
-                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "14px 20px" }}>
+                      <Pill
+                        bg={t.paymentMethod === "PIX" ? "rgba(13,184,126,0.12)" : t.paymentMethod === "Cartão" ? "rgba(155,89,182,0.12)" : "rgba(148,163,184,0.12)"}
+                        color={t.paymentMethod === "PIX" ? "#0DB87E" : t.paymentMethod === "Cartão" ? "#9B59B6" : "var(--admin-subtle)"}
+                        size="sm"
+                      >
+                        {t.paymentMethod || "Outro"}
+                      </Pill>
+                    </td>
+                    <td style={{ padding: "14px 20px", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-text)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {t.description}
                     </td>
                     <td style={{ padding: "14px 20px", textAlign: "right", fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: t.type === "saida" ? "#E84040" : "#0DB87E" }}>
                       {formatBR(t.amount)}
+                    </td>
+                    <td style={{ padding: "14px 20px", textAlign: "right", fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
+                      {t.providerAmount != null ? formatBR(t.providerAmount) : "—"}
+                    </td>
+                    <td style={{ padding: "14px 20px", textAlign: "right", fontFamily: "DM Sans", fontSize: 13, color: "#0DB87E", fontWeight: 600 }}>
+                      {t.ubtAmount != null ? formatBR(t.ubtAmount) : "—"}
                     </td>
                     <td style={{ padding: "14px 20px" }}>
                       <Pill bg={sp.bg} color={sp.color} size="sm">{sp.label}</Pill>
@@ -1121,7 +1188,7 @@ export default function AdminFinanceiroPage() {
               
               {pagedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
+                  <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--admin-muted)", fontFamily: "DM Sans" }}>
                     Nenhuma transação encontrada correspondente aos filtros.
                   </td>
                 </tr>

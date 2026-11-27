@@ -362,20 +362,22 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
       throw new Error(`pagamentos_split update failed for ${external_reference}: ${updateErr.message}`);
     }
 
-    // Cancel any other stale pending attempts for the same service so only 1 settled record exists
-    await supabaseAdmin
-      .from("pagamentos_split")
-      .update({
-        status: "cancelled",
-        updated_at: date_approved ?? new Date().toISOString(),
-      })
-      .eq("service_type", split.service_type)
-      .eq("service_id", split.service_id)
-      .eq("status", "pending")
-      .neq("id", split.id);
-
     console.log(`[payment-webhook] ✅ pagamentos_split ${split.id} updated to approved via MP payment ${mpId}.`);
   }
+
+  // Always cancel any other stale pending attempts for the same service (even if split was already approved synchronously by payment-gateway)
+  await supabaseAdmin
+    .from("pagamentos_split")
+    .update({
+      status: "cancelled",
+      gateway_status: "cancelled",
+      gateway_status_detail: "superseded_by_approved_payment",
+      updated_at: date_approved ?? new Date().toISOString(),
+    })
+    .eq("service_type", split.service_type)
+    .eq("service_id", split.service_id)
+    .eq("status", "pending")
+    .neq("id", split.id);
 
   // Keep operational state server-authoritative for asynchronous methods (for
   // example Pix). The browser must never promote a service to paid itself.

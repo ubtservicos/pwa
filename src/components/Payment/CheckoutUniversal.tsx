@@ -274,6 +274,7 @@ export default function CheckoutUniversal({
   const [saveNewCard, setSaveNewCard] = useState(true);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const inFlightRef = useRef(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [fieldsReady, setFieldsReady] = useState(false);
   const [pendingNotice, setPendingNotice] = useState<string | null>(null);
@@ -447,6 +448,8 @@ export default function CheckoutUniversal({
   };
 
   const handleSubmit = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsLoading(true);
     setError(null);
     setPendingNotice(null);
@@ -588,6 +591,7 @@ export default function CheckoutUniversal({
       setError(message);
       onError(message);
     } finally {
+      inFlightRef.current = false;
       setIsLoading(false);
     }
   };
