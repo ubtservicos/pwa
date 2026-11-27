@@ -20,7 +20,11 @@ import { useNavigate } from "react-router-dom";
 import { trackEvent } from "@/services/AnalyticsService";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { generateReferralSlug } from "@/utils/masks";
-import { isVerticalEnabled, type VerticalKey } from "@/config/verticalFlags";
+import {
+  isVerticalEnabled,
+  SHOW_PUBLIC_LOGIN_BUTTON,
+  type VerticalKey,
+} from "@/config/verticalFlags";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
 import FounderForm from "@/components/FounderForm";
@@ -116,7 +120,8 @@ const PROTAGONISTS: Array<{
   title: string;
   phrase: string;
   desc: string;
-  video: string;
+  video?: string;
+  image?: string;
   align: "left" | "right";
   vertical: VerticalKey;
 }> = [
@@ -129,11 +134,19 @@ const PROTAGONISTS: Array<{
     vertical: "mototaxi",
   },
   {
+    title: "Carros",
+    phrase: "Conforto e transparência em corridas urbanas por toda Ubatuba.",
+    desc: "Motoristas locais com veículo verificado, detalhes completos exibidos ao passageiro no momento do chamado e repasse justo de 90% por corrida.",
+    image: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=900",
+    align: "right",
+    vertical: "carros",
+  },
+  {
     title: "Diaristas",
     phrase: "Segurança de agendamentos e valorização do trabalho doméstico.",
     desc: "A contratação simples de profissionais diaristas locais garante flexibilidade de horários, pagamento rápido e apoio às associações.",
     video: "Cena03.mp4",
-    align: "right",
+    align: "left",
     vertical: "diaristas",
   },
   {
@@ -141,7 +154,7 @@ const PROTAGONISTS: Array<{
     phrase: "Inovação de vendas móveis na orla marítima.",
     desc: "A transação ágil de bebidas e lanches integrada diretamente na carteira digital da UBT, facilitando o atendimento de banhistas e turistas sem ruídos.",
     video: "Cena05.mp4",
-    align: "left",
+    align: "right",
     vertical: "ambulantes",
   },
   {
@@ -149,7 +162,7 @@ const PROTAGONISTS: Array<{
     phrase: "Cooperativa de catadores de recicláveis em Ubatuba",
     desc: "Moradores indicam onde deixaram seus resíduos recicláveis e catadores coletam. É a força da sustentabilidade da cidade. Obrigado!",
     video: "Cena06.mp4",
-    align: "right",
+    align: "left",
     vertical: "coco_cia",
   },
 ];
@@ -228,13 +241,15 @@ export default function SaibaMaisPage() {
             </a>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/85 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
-          >
-            Fazer Login
-          </button>
+          {SHOW_PUBLIC_LOGIN_BUTTON && (
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/85 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
+            >
+              Fazer Login
+            </button>
+          )}
 
           <button
             type="button"
@@ -306,16 +321,18 @@ export default function SaibaMaisPage() {
           >
             Cadastre-se
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              navigate("/login");
-            }}
-            className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white/90 font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
-          >
-            Fazer Login
-          </button>
+          {SHOW_PUBLIC_LOGIN_BUTTON && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/login");
+              }}
+              className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white/90 font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
+            >
+              Fazer Login
+            </button>
+          )}
         </div>
       )}
 
@@ -359,14 +376,16 @@ export default function SaibaMaisPage() {
               <span>CADASTRE-SE</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="h-14 px-6 rounded-2xl bg-white/5 hover:bg-white/10 text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer transition-all"
-            >
-              <LogIn className="w-4 h-4 text-[#00E676]" />
-              <span>FAZER LOGIN</span>
-            </button>
+            {SHOW_PUBLIC_LOGIN_BUTTON && (
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="h-14 px-6 rounded-2xl bg-white/5 hover:bg-white/10 text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <LogIn className="w-4 h-4 text-[#00E676]" />
+                <span>FAZER LOGIN</span>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -419,16 +438,27 @@ export default function SaibaMaisPage() {
                     item.align === "right" ? "lg:order-2" : "lg:order-1"
                   }`}
                 >
-                  <video
-                    src={`/videos/${item.video}`}
-                    loop
-                    muted
-                    autoPlay
-                    playsInline
-                    className={`w-full h-full object-cover transition-opacity duration-700 ${
-                      enabled ? "opacity-65 hover:opacity-85" : "opacity-40 grayscale-[35%]"
-                    }`}
-                  />
+                  {item.video ? (
+                    <video
+                      src={`/videos/${item.video}`}
+                      loop
+                      muted
+                      autoPlay
+                      playsInline
+                      className={`w-full h-full object-cover transition-opacity duration-700 ${
+                        enabled ? "opacity-65 hover:opacity-85" : "opacity-40 grayscale-[35%]"
+                      }`}
+                    />
+                  ) : (
+                    <img
+                      src={item.image || "/hero-2.0.png"}
+                      alt={item.title}
+                      loading="lazy"
+                      className={`w-full h-full object-cover transition-opacity duration-700 ${
+                        enabled ? "opacity-75 hover:opacity-90" : "opacity-40 grayscale-[35%]"
+                      }`}
+                    />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
                   {!enabled && (
                     <span className="absolute top-4 right-4 z-20 px-3 py-1 rounded-full bg-black/80 border border-white/20 text-xs font-mono font-semibold text-zinc-200">

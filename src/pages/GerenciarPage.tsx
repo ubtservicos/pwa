@@ -246,11 +246,17 @@ const GerenciarPage = () => {
           .select('*')
           .eq('diarista_id', user.uid);
 
-        // 3. Fetch mototaxi rides
-        const { data: rides, error: errRides } = await supabase
-          .from('mototaxi_corridas')
-          .select('*')
-          .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`);
+        // 3. Fetch mototaxi rides & carro rides
+        const [{ data: rides, error: errRides }, { data: carroRides, error: errCarroRides }] = await Promise.all([
+          supabase
+            .from('mototaxi_corridas')
+            .select('*')
+            .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`),
+          supabase
+            .from('carro_corridas')
+            .select('*')
+            .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`),
+        ]);
 
         // Ledger financeiro enriquecido por JOIN seguro no banco.
         const paymentHistory = await fetchUserPaymentHistory();
@@ -349,6 +355,32 @@ const GerenciarPage = () => {
                 status: statusMapped,
                 serviceId: r.id,
                 serviceType: 'mototaxi',
+                origin: r.origin?.address,
+                destination: r.destination?.address,
+                paymentMethod: r.payment_method,
+                durationMin: r.duration_min,
+                distanceKm: Number(r.distance_km || 0)
+              });
+            });
+        }
+
+        if (carroRides && !errCarroRides) {
+          carroRides
+            .filter((r) => !paidServiceIds.has(r.id) && r.status !== 'cancelled')
+            .forEach(r => {
+              const statusMapped = r.status === 'paid' ? 'confirmed' : 'pending';
+              const price = Number(r.final_price || r.estimated_price);
+              const shortId = r.id ? ` · #${String(r.id).slice(0, 8).toUpperCase()}` : "";
+
+              list.push({
+                id: r.id,
+                type: r.tomador_id === user.uid ? 'saida' : 'entrada',
+                date: r.created_at,
+                description: `${r.type === 'entrega' ? 'Entrega Carros UBT' : 'Corrida Carros UBT'}${shortId}`,
+                amount: price,
+                status: statusMapped,
+                serviceId: r.id,
+                serviceType: 'carro',
                 origin: r.origin?.address,
                 destination: r.destination?.address,
                 paymentMethod: r.payment_method,

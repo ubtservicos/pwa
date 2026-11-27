@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AdvancedMarker } from '@vis.gl/react-google-maps';
 import type { LatLngAddr, RideStatus } from '@/contexts/RideContext';
-import { TomadorMarker, MotoMarker, DestinoMarker } from '@/lib/mapIcons';
+import { TomadorMarker, MotoMarker, CarMarker, DestinoMarker } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
 import { UBTMap, GooglePolyline, MapFlyTo, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
@@ -12,6 +12,7 @@ interface Props {
   status: RideStatus;
   center: { lat: number; lng: number };
   onlineDrivers?: any[];
+  vehicleType?: 'mototaxi' | 'carro';
   height?: string;
 }
 
@@ -50,6 +51,7 @@ const MototaxiMap = ({
   status,
   center,
   onlineDrivers,
+  vehicleType = 'mototaxi',
   height = '100%',
 }: Props) => {
   const [polyline, setPolyline] = useState<[number, number][]>([]);
@@ -89,7 +91,7 @@ const MototaxiMap = ({
       )}
       {prestadorLocation && isValidLatLng(prestadorLocation.lat, prestadorLocation.lng) && (
         <AdvancedMarker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }}>
-          <MotoMarker isOnline={true} />
+          {vehicleType === 'carro' ? <CarMarker isOnline={true} /> : <MotoMarker isOnline={true} />}
         </AdvancedMarker>
       )}
       {onlineDrivers && onlineDrivers.map((d) => {
@@ -99,7 +101,7 @@ const MototaxiMap = ({
             key={d.id} 
             position={{ lat: Number(d.lat), lng: Number(d.lng) }} 
           >
-            <MotoMarker isOnline={true} />
+            {vehicleType === 'carro' ? <CarMarker isOnline={true} /> : <MotoMarker isOnline={true} />}
           </AdvancedMarker>
         );
       })}

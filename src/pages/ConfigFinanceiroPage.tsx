@@ -485,6 +485,7 @@ const ConfigFinanceiroPage = () => {
   const showPrestadorFinance =
     ["prestador", "cocoecia", "cocoecia-colaborador", "cocoecia-dirigentes", "admin"].includes(user.role) ||
     user.kycStatus === "approved" ||
+    user.carroKycStatus === "approved" ||
     (() => {
       try {
         return (
@@ -1315,6 +1316,7 @@ const ConfigFinanceiroPage = () => {
             }}
           >
             <option value="mototaxi">Mototáxi</option>
+            <option value="carro">Carros</option>
             <option value="diarista">Diarista</option>
             <option value="cocoecia">Coco&Cia</option>
             <option value="ambulante">Ambulante</option>

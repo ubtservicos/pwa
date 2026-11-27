@@ -3,6 +3,7 @@ import { isVerticalEnabled, type VerticalKey } from "@/config/verticalFlags";
 
 const ALL_LANDING_SERVICES: Array<{ label: string; img: string; vertical: VerticalKey }> = [
   { label: "Mototaxi", img: "/mototaxi_pop.png", vertical: "mototaxi" },
+  { label: "Carros", img: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600", vertical: "carros" },
   { label: "Ambulantes", img: "/ambulante_praia.png", vertical: "ambulantes" },
   { label: "Diaristas", img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400", vertical: "diaristas" },
 ];

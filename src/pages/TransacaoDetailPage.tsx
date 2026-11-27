@@ -160,9 +160,10 @@ const TransacaoDetailPage = () => {
         if (payment) {
           let transaction = paymentToTransaction(payment);
 
-          if (payment.service_type === "mototaxi") {
+          if (payment.service_type === "mototaxi" || payment.service_type === "carro") {
+            const rideTable = payment.service_type === "carro" ? "carro_corridas" : "mototaxi_corridas";
             const { data: ride, error: rideError } = await supabase
-              .from("mototaxi_corridas")
+              .from(rideTable)
               .select("origin, destination, accepted_at, created_at, updated_at")
               .eq("id", payment.service_id)
               .maybeSingle();
@@ -209,11 +210,17 @@ const TransacaoDetailPage = () => {
           .select('*')
           .eq('diarista_id', user.uid);
 
-        // 3. Fetch mototaxi rides
-        const { data: rides, error: errRides } = await supabase
-          .from('mototaxi_corridas')
-          .select('*')
-          .eq('prestador_id', user.uid);
+        // 3. Fetch mototaxi & carro rides
+        const [{ data: rides, error: errRides }, { data: carroRides, error: errCarroRides }] = await Promise.all([
+          supabase
+            .from('mototaxi_corridas')
+            .select('*')
+            .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`),
+          supabase
+            .from('carro_corridas')
+            .select('*')
+            .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`),
+        ]);
 
         const list: Transaction[] = [];
 
@@ -291,6 +298,40 @@ const TransacaoDetailPage = () => {
                 { id: `${r.id}-split-comunidade`, type: 'split', date: r.created_at, description: 'Split UBT - Comunidade', amount: +(price * 0.02).toFixed(2), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 2 },
                 { id: `${r.id}-split-trabalhador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Trabalhador', amount: +(price * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 1.5 },
                 { id: `${r.id}-split-tomador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Tomador', amount: +(price * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 1.5 },
+                { id: `${r.id}-split-padrinho`, type: 'split', date: r.created_at, description: 'Split UBT - Padrinho/Madrinha', amount: +(price * 0.01).toFixed(2), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1 }
+              );
+            }
+          });
+        }
+
+        // Add carro rides
+        if (carroRides && !errCarroRides) {
+          carroRides.forEach(r => {
+            const statusMapped = r.status === 'completed' || r.status === 'paid' ? 'confirmed' : (r.status === 'cancelled' ? 'cancelled' : 'pending');
+            const isCompleted = r.status === 'completed' || r.status === 'paid';
+            const price = Number(r.final_price || r.estimated_price);
+
+            list.push({
+              id: r.id,
+              type: r.tomador_id === user.uid ? 'saida' : 'entrada',
+              date: r.created_at,
+              description: r.type === 'entrega' ? 'Entrega Carros UBT' : 'Corrida Carros UBT',
+              amount: price,
+              status: statusMapped,
+              serviceId: r.id,
+              serviceType: 'carro',
+              origin: parseRideLocation(r.origin)?.address,
+              destination: parseRideLocation(r.destination)?.address,
+              paymentMethod: r.payment_method,
+              durationMin: r.duration_min,
+              distanceKm: Number(r.distance_km || 0),
+            });
+
+            if (isCompleted) {
+              list.push(
+                { id: `${r.id}-split-comunidade`, type: 'split', date: r.created_at, description: 'Split UBT - Comunidade', amount: +(price * 0.005).toFixed(2), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 0.5 },
+                { id: `${r.id}-split-trabalhador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Trabalhador', amount: +(price * 0.005).toFixed(2), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 0.5 },
+                { id: `${r.id}-split-tomador`, type: 'split', date: r.created_at, description: 'Split UBT - Prêmio Tomador', amount: +(price * 0.005).toFixed(2), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 0.5 },
                 { id: `${r.id}-split-padrinho`, type: 'split', date: r.created_at, description: 'Split UBT - Padrinho/Madrinha', amount: +(price * 0.01).toFixed(2), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1 }
               );
             }

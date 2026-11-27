@@ -10,6 +10,7 @@ interface RidePaymentSummaryProps {
   origin?: string;
   destination?: string;
   total: number;
+  serviceType?: "mototaxi" | "carro";
 }
 
 interface StoredLocation {
@@ -48,7 +49,7 @@ const formatElapsedTime = (minutes: number | null) => {
   return remaining ? `${hours}h ${remaining}min` : `${hours}h`;
 };
 
-export function RidePaymentSummary({ rideId, origin, destination, total }: RidePaymentSummaryProps) {
+export function RidePaymentSummary({ rideId, origin, destination, total, serviceType = "mototaxi" }: RidePaymentSummaryProps) {
   const [payment, setPayment] = useState<PaymentHistoryRow | null>(null);
   const [rideSnapshot, setRideSnapshot] = useState<RideReceiptSnapshot | null>(null);
   const [geocodedOrigin, setGeocodedOrigin] = useState<string | null>(null);
@@ -56,11 +57,12 @@ export function RidePaymentSummary({ rideId, origin, destination, total }: RideP
   useEffect(() => {
     if (!rideId) return;
     let active = true;
+    const rideTable = serviceType === "carro" ? "carro_corridas" : "mototaxi_corridas";
     const hydrateReceipt = async () => {
       const [historyResult, rideResult] = await Promise.allSettled([
         fetchUserPaymentHistory(),
         supabase
-          .from("mototaxi_corridas")
+          .from(rideTable)
           .select("origin, destination, created_at, accepted_at, updated_at")
           .eq("id", rideId)
           .maybeSingle(),
@@ -88,7 +90,7 @@ export function RidePaymentSummary({ rideId, origin, destination, total }: RideP
 
     void hydrateReceipt();
     return () => { active = false; };
-  }, [rideId]);
+  }, [rideId, serviceType]);
 
   const fallbackSplit = useMemo(() => calcSplit(total), [total]);
   const provider = payment ? Number(payment.provider_amount) : fallbackSplit.prestador;

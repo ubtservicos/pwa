@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AdvancedMarker } from '@vis.gl/react-google-maps';
-import { MotoMarker, TomadorMarker, DestinoMarker, AmbulanteMarker, ColetaMarker } from '@/lib/mapIcons';
+import { MotoMarker, CarMarker, TomadorMarker, DestinoMarker, AmbulanteMarker, ColetaMarker } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
 import { UBTMap, GooglePolyline, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
@@ -10,7 +10,7 @@ interface Props {
   destination?: { lat: number; lng: number } | null;
   routeFrom?: { lat: number; lng: number } | null;
   routeTo?: { lat: number; lng: number } | null;
-  providerType?: 'mototaxi' | 'ambulante' | 'coco';
+  providerType?: 'mototaxi' | 'carro' | 'ambulante' | 'coco';
   height?: string;
 }
 
@@ -80,6 +80,8 @@ const PrestadorMapLight = ({
             <AmbulanteMarker categoria="comida" />
           ) : providerType === 'coco' ? (
             <ColetaMarker material="misto" />
+          ) : providerType === 'carro' ? (
+            <CarMarker isOnline={true} />
           ) : (
             <MotoMarker isOnline={true} />
           )}

@@ -9,6 +9,12 @@ export interface MototaxiPricingConfig {
   fatorClima: number;
 }
 
+export interface CarroPricingConfig extends MototaxiPricingConfig {
+  subtypeMultipliers?: Record<string, number>;
+}
+
+export type MobilityPricingConfig = CarroPricingConfig;
+
 export const DEFAULT_MOTOTAXI_PRICING_CONFIG: MototaxiPricingConfig = {
   taxaUnica: 4.0,
   valorPorKm: 2.5,
@@ -16,6 +22,11 @@ export const DEFAULT_MOTOTAXI_PRICING_CONFIG: MototaxiPricingConfig = {
   fatorDemanda: 1.0,
   fatorHorario: 1.0,
   fatorClima: 1.0,
+};
+
+export const DEFAULT_CARRO_PRICING_CONFIG: CarroPricingConfig = {
+  ...DEFAULT_MOTOTAXI_PRICING_CONFIG,
+  subtypeMultipliers: { padrao: 1.0 },
 };
 
 export interface MototaxiQuoteBreakdown {
@@ -28,17 +39,24 @@ export interface MototaxiQuoteBreakdown {
   fatorDemanda: number;
   fatorHorario: number;
   fatorClima: number;
+  vehicleSubtype?: string;
+  fatorSubtipo?: number;
   multiplicadorTotal: number;
   precoBase: number;
   precoFinal: number;
   repasseMototaxista: number;
+  repassePrestador: number;
   taxaPlataforma: number;
 }
 
-export function calculateMototaxiQuote(
+export type MobilityQuoteBreakdown = MototaxiQuoteBreakdown;
+export type CarroQuoteBreakdown = MototaxiQuoteBreakdown;
+
+export function calculateMobilityQuote(
   distanceKm: number,
-  config?: Partial<MototaxiPricingConfig> | null,
-): MototaxiQuoteBreakdown {
+  config?: Partial<MobilityPricingConfig> | null,
+  vehicleSubtype = "padrao",
+): MobilityQuoteBreakdown {
   const distanciaKm = Math.max(0, Number.isFinite(distanceKm) ? distanceKm : 0);
   const taxaUnica = Math.max(0, Number(config?.taxaUnica ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.taxaUnica) || 0);
   const valorPorKm = Math.max(0, Number(config?.valorPorKm ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.valorPorKm) || 0);
@@ -59,13 +77,20 @@ export function calculateMototaxiQuote(
     Number(config?.fatorClima ?? DEFAULT_MOTOTAXI_PRICING_CONFIG.fatorClima) || 1.0,
   );
 
+  const normalizedSubtype = String(vehicleSubtype || "padrao").trim().toLowerCase() || "padrao";
+  const rawSubtypeMult = config?.subtypeMultipliers?.[normalizedSubtype];
+  const fatorSubtipo =
+    rawSubtypeMult !== undefined && Number.isFinite(Number(rawSubtypeMult)) && Number(rawSubtypeMult) > 0
+      ? Number(rawSubtypeMult)
+      : 1.0;
+
   const idaEVoltaAtivada = kmGatilhoIdaVolta > 0 && distanciaKm >= kmGatilhoIdaVolta;
   const kmCobrados = idaEVoltaAtivada ? +(distanciaKm * 2).toFixed(2) : +distanciaKm.toFixed(2);
   const precoBase = Math.round((taxaUnica + valorPorKm * kmCobrados) * 100) / 100;
-  const multiplicadorTotal = +(fatorDemanda * fatorHorario * fatorClima).toFixed(4);
+  const multiplicadorTotal = +(fatorDemanda * fatorHorario * fatorClima * fatorSubtipo).toFixed(4);
   const precoFinal = Math.round(precoBase * multiplicadorTotal * 100) / 100;
-  const repasseMototaxista = Math.round(precoFinal * 0.9 * 100) / 100;
-  const taxaPlataforma = Math.round((precoFinal - repasseMototaxista) * 100) / 100;
+  const repassePrestador = Math.round(precoFinal * 0.9 * 100) / 100;
+  const taxaPlataforma = Math.round((precoFinal - repassePrestador) * 100) / 100;
 
   return {
     distanciaKm,
@@ -77,12 +102,30 @@ export function calculateMototaxiQuote(
     fatorDemanda,
     fatorHorario,
     fatorClima,
+    vehicleSubtype: normalizedSubtype,
+    fatorSubtipo,
     multiplicadorTotal,
     precoBase,
     precoFinal,
-    repasseMototaxista,
+    repasseMototaxista: repassePrestador,
+    repassePrestador,
     taxaPlataforma,
   };
+}
+
+export function calculateMototaxiQuote(
+  distanceKm: number,
+  config?: Partial<MototaxiPricingConfig> | null,
+): MototaxiQuoteBreakdown {
+  return calculateMobilityQuote(distanceKm, config, "padrao");
+}
+
+export function calculateCarroQuote(
+  distanceKm: number,
+  config?: Partial<CarroPricingConfig> | null,
+  vehicleSubtype = "padrao",
+): CarroQuoteBreakdown {
+  return calculateMobilityQuote(distanceKm, config, vehicleSubtype);
 }
 
 export const calcPrice = (
@@ -90,6 +133,14 @@ export const calcPrice = (
   config?: Partial<MototaxiPricingConfig> | null,
 ): number => {
   return calculateMototaxiQuote(distanceKm, config).precoFinal;
+};
+
+export const calcCarroPrice = (
+  distanceKm: number,
+  config?: Partial<CarroPricingConfig> | null,
+  vehicleSubtype = "padrao",
+): number => {
+  return calculateCarroQuote(distanceKm, config, vehicleSubtype).precoFinal;
 };
 
 export const calcSplit = (total: number) => {

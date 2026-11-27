@@ -4,6 +4,7 @@ import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 import {
   MapPin,
   Bike,
+  Car,
   ShoppingBag,
   Sparkles,
   Scissors,
@@ -19,7 +20,7 @@ import { setCurrentUid, useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import InAppNotificationBell from "@/components/notifications/InAppNotificationBell";
-import { isVerticalEnabled } from "@/config/verticalFlags";
+import { isVerticalEnabled, type VerticalKey } from "@/config/verticalFlags";
 
 interface ServiceItem {
   label: string;
@@ -28,8 +29,9 @@ interface ServiceItem {
   available: boolean;
 }
 
-const ALL_SERVICES: Array<ServiceItem & { vertical?: "mototaxi" | "ambulantes" | "diaristas" | "coco_cia" }> = [
+const ALL_SERVICES: Array<ServiceItem & { vertical?: VerticalKey }> = [
   { label: "Mototaxi", Icon: Bike, to: "/app/mototaxi", available: true, vertical: "mototaxi" },
+  { label: "Carros", Icon: Car, to: "/app/carros", available: true, vertical: "carros" },
   { label: "Ambulantes", Icon: ShoppingBag, to: "/app/ambulantes", available: true, vertical: "ambulantes" },
   { label: "Diaristas", Icon: Sparkles, to: "/app/diaristas", available: true, vertical: "diaristas" },
   { label: "Côco & Cia", Icon: Recycle, to: "/app/coco", available: true, vertical: "coco_cia" },
@@ -97,19 +99,46 @@ const AppHome = () => {
       }
       try {
         setLoadingOrders(true);
-        const { data, error } = await supabase
-          .from("pedidos")
-          .select("id, modalidade, status, total, created_at, prestador_id, delivery_address")
-          .eq("tomador_id", user.uid)
-          .in("status", ["pending", "searching", "accepted", "in_progress", "preparing", "aguardando_confirmacao"])
-          .order("created_at", { ascending: false })
-          .limit(5);
+        const [pedidosRes, carrosRes] = await Promise.all([
+          supabase
+            .from("pedidos")
+            .select("id, modalidade, status, total, created_at, prestador_id, delivery_address")
+            .eq("tomador_id", user.uid)
+            .in("status", ["pending", "searching", "accepted", "in_progress", "preparing", "aguardando_confirmacao"])
+            .order("created_at", { ascending: false })
+            .limit(5),
+          supabase
+            .from("carro_corridas")
+            .select("id, status, estimated_price, final_price, created_at, prestador_id, destination, origin")
+            .eq("tomador_id", user.uid)
+            .in("status", ["searching", "accepted", "arriving", "in_progress", "completed"])
+            .order("created_at", { ascending: false })
+            .limit(5),
+        ]);
 
-        if (error) {
-          console.warn("Nenhum pedido ativo ou erro ao carregar pedidos:", error.message);
-          if (isMounted) setActiveOrders([]);
-        } else if (isMounted) {
-          setActiveOrders(data || []);
+        const merged: ActiveOrder[] = [];
+        if (!pedidosRes.error && Array.isArray(pedidosRes.data)) {
+          merged.push(...(pedidosRes.data as ActiveOrder[]));
+        }
+        if (!carrosRes.error && Array.isArray(carrosRes.data)) {
+          for (const ride of carrosRes.data as any[]) {
+            const destObj = typeof ride.destination === "string" ? (() => { try { return JSON.parse(ride.destination); } catch { return { address: ride.destination }; } })() : ride.destination;
+            const origObj = typeof ride.origin === "string" ? (() => { try { return JSON.parse(ride.origin); } catch { return { address: ride.origin }; } })() : ride.origin;
+            merged.push({
+              id: ride.id,
+              modalidade: "carros",
+              status: ride.status,
+              total: Number(ride.final_price || ride.estimated_price || 0),
+              created_at: ride.created_at,
+              prestador_id: ride.prestador_id,
+              delivery_address: destObj?.address || origObj?.address || undefined,
+            });
+          }
+        }
+        merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        if (isMounted) {
+          setActiveOrders(merged.slice(0, 5));
         }
       } catch (err) {
         console.error("Erro ao buscar pedidos ativos:", err);
@@ -487,6 +516,8 @@ const AppHome = () => {
               const modalidadeLabel =
                 order.modalidade === "mototaxi"
                   ? "Mototáxi"
+                  : order.modalidade === "carros" || order.modalidade === "carro"
+                  ? "Carros"
                   : order.modalidade === "diarista"
                   ? "Diarista"
                   : order.modalidade === "ambulante"
@@ -498,6 +529,8 @@ const AppHome = () => {
               const ModalidadeIcon =
                 order.modalidade === "mototaxi"
                   ? Bike
+                  : order.modalidade === "carros" || order.modalidade === "carro"
+                  ? Car
                   : order.modalidade === "diarista"
                   ? Sparkles
                   : order.modalidade === "coco"
@@ -568,7 +601,15 @@ const AppHome = () => {
                   </div>
 
                   <button
-                    onClick={() => navigate(order.modalidade ? `/app/${order.modalidade}` : "/app/home")}
+                    onClick={() =>
+                      navigate(
+                        order.modalidade === "carros" || order.modalidade === "carro"
+                          ? "/app/carros"
+                          : order.modalidade
+                            ? `/app/${order.modalidade}`
+                            : "/app/home",
+                      )
+                    }
                     style={{
                       width: "100%",
                       height: 36,

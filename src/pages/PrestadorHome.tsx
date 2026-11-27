@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, ChevronRight, Recycle, ShoppingBag, Sparkles, Wallet, MapPin, CheckCircle, AlertTriangle } from "lucide-react";
+import { Bike, Car, ChevronRight, Recycle, ShoppingBag, Sparkles, Wallet, MapPin, CheckCircle, AlertTriangle } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { isVerticalEnabled } from "@/config/verticalFlags";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 import MototaxiIncomingRideListener from "@/components/prestador/MototaxiIncomingRideListener";
+import CarroIncomingRideListener from "@/components/prestador/CarroIncomingRideListener";
 
 import { useTheme } from "@/hooks/useTheme";
 
@@ -115,6 +116,7 @@ const PrestadorHome = () => {
   // States for toggling services on the home page
   const [activeServices, setActiveServices] = useState<Record<string, boolean>>({
     mototaxi: false,
+    carro: false,
     ambulante: false,
     diarista: false,
     coco: false
@@ -122,12 +124,14 @@ const PrestadorHome = () => {
 
   const [registeredServices, setRegisteredServices] = useState<{
     mototaxi: boolean;
+    carro: boolean;
     ambulante: boolean;
     diarista: boolean;
     coco: boolean;
     loaded: boolean;
   }>({
     mototaxi: false,
+    carro: false,
     ambulante: false,
     diarista: false,
     coco: false,
@@ -136,6 +140,9 @@ const PrestadorHome = () => {
 
   const hasMototaxi = !!registeredServices.mototaxi;
   const isMototaxiPending = user.kycStatus === "pending";
+  const carrosEnabled = isVerticalEnabled("carros");
+  const hasCarro = carrosEnabled && !!registeredServices.carro;
+  const isCarroPending = user.carroKycStatus === "pending";
   const ambulantesEnabled = isVerticalEnabled("ambulantes");
   const diaristasEnabled = isVerticalEnabled("diaristas");
   const hasAmbulante = ambulantesEnabled && !!registeredServices.ambulante;
@@ -150,16 +157,20 @@ const PrestadorHome = () => {
 
     const fetchAllServiceStatuses = async () => {
       try {
-        // 1. Mototáxi, Ambulante, Diarista e Vínculo Administrativo Côco & Cia
+        // 1. Mototáxi, Carros, Ambulante, Diarista e Vínculo Administrativo Côco & Cia
         const [
           { data: motoData },
           { data: motoPerfil },
+          { data: carroData },
+          { data: carroPerfil },
           { data: ambData },
           { data: diaData },
           { data: cocoColab }
         ] = await Promise.all([
           supabase.from("mototaxi_sessoes").select("is_online").eq("prestador_id", user.uid).maybeSingle(),
           supabase.from("prestador_mototaxi").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
+          supabase.from("carro_sessoes").select("is_online").eq("prestador_id", user.uid).maybeSingle(),
+          supabase.from("prestador_carro").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
           supabase.from("ambulante_sessions").select("is_online").eq("id", user.uid).maybeSingle(),
           supabase.from("diarista_perfis").select("is_online").eq("user_id", user.uid).maybeSingle(),
           supabase
@@ -172,6 +183,7 @@ const PrestadorHome = () => {
         ]);
 
         const hasMoto = !!motoPerfil || !!motoData || user.role === "mototaxista" || user.role === "mototaxi" || user.kycStatus === "approved" || localStorage.getItem(`moto_session_${user.uid}`) === "1";
+        const hasCar = Boolean(carroPerfil?.kyc_status === "approved" || carroData || user.carroKycStatus === "approved");
         const hasAmb = !!ambData || user.role === "ambulante" || localStorage.getItem(`amb_session_${user.uid}`) === "1";
         const hasDia = !!diaData || user.role === "diarista" || localStorage.getItem(`diarista_perfil_${user.uid}`) === "1";
         // Botão Côco & Cia só aparece para usuários efetivamente cadastrados e ativos em coco_colaboradores
@@ -196,6 +208,7 @@ const PrestadorHome = () => {
 
         setRegisteredServices({
           mototaxi: hasMoto,
+          carro: hasCar,
           ambulante: hasAmb,
           diarista: hasDia,
           coco: hasCc,
@@ -205,6 +218,7 @@ const PrestadorHome = () => {
         setActiveServices((prev) => ({
           ...prev,
           mototaxi: !!motoData?.is_online,
+          carro: !!carroData?.is_online,
           ambulante: !!ambData?.is_online,
           diarista: !!diaData?.is_online,
         }));
@@ -214,7 +228,7 @@ const PrestadorHome = () => {
     };
 
     fetchAllServiceStatuses();
-  }, [user.uid, user.role, user.kycStatus]);
+  }, [user.uid, user.role, user.kycStatus, user.carroKycStatus]);
 
   useEffect(() => {
     const caminhaoId = localStorage.getItem("caminhaoId");
@@ -313,6 +327,17 @@ const PrestadorHome = () => {
             .from('mototaxi_sessoes')
             .insert({ prestador_id: user.uid, is_online: nextStatus, updated_at: new Date().toISOString() });
         }
+      } else if (key === 'carro') {
+        await supabase
+          .from('carro_sessoes')
+          .upsert(
+            { prestador_id: user.uid, is_online: nextStatus, updated_at: new Date().toISOString() },
+            { onConflict: 'prestador_id' }
+          );
+        await supabase
+          .from('prestador_carro')
+          .update({ is_online: nextStatus, updated_at: new Date().toISOString() })
+          .eq('user_id', user.uid);
       } else if (key === 'ambulante') {
         const { data: existing } = await supabase
           .from('ambulante_sessions')
@@ -398,6 +423,7 @@ const PrestadorHome = () => {
       style={{ background: theme.bg, padding: "24px", paddingBottom: "100px" }}
     >
       <MototaxiIncomingRideListener isOnline={activeServices.mototaxi} />
+      <CarroIncomingRideListener isOnline={activeServices.carro} />
       {activeRule && (
         <div
           style={{
@@ -546,6 +572,32 @@ const PrestadorHome = () => {
             </div>
           )}
 
+          {hasCarro && (
+            <div
+              className="flex items-center w-full rounded-[20px] p-4 text-left"
+              style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
+            >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(13,184,126,0.15)" }}>
+                <Car size={24} color="#0DB87E" />
+              </div>
+              <div className="ml-4 flex-1 cursor-pointer" onClick={() => handleServiceNavigate("/app/prestador/carros/online")}>
+                <h3 className="font-display text-[16px] font-bold" style={{ color: theme.text }}>Carros</h3>
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle, marginTop: 2 }}>Corridas e Entregas de Carro</p>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => toggleService(e, 'carro')}
+                className="w-[52px] h-[28px] rounded-full relative transition-colors"
+                style={{ background: activeServices.carro ? "#0DB87E" : theme.border }}
+              >
+                <span
+                  className="block w-6 h-6 bg-white rounded-full absolute top-[2px] transition-transform"
+                  style={{ transform: activeServices.carro ? "translateX(24px)" : "translateX(2px)", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }}
+                />
+              </button>
+            </div>
+          )}
+
           {registeredServices.ambulante && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
@@ -624,7 +676,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {registeredServices.loaded && !registeredServices.mototaxi && !registeredServices.ambulante && !registeredServices.diarista && !registeredServices.coco && (
+          {registeredServices.loaded && !registeredServices.mototaxi && !hasCarro && !registeredServices.ambulante && !registeredServices.diarista && !registeredServices.coco && (
             <div className="text-center py-6">
               <p className="font-sans text-[14px]" style={{ color: theme.muted }}>Você ainda não configurou nenhum serviço.</p>
             </div>
@@ -704,6 +756,14 @@ const PrestadorHome = () => {
               </div>
             )}
 
+            {/* Carros Placeholder */}
+            {activeServices.carro && (
+              <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
+                <Car size={28} className="mx-auto mb-2 opacity-50" style={{ color: theme.muted }} />
+                <p className="font-sans text-[13px]" style={{ color: theme.subtle }}>Aguardando chamados de Carros na sua região...</p>
+              </div>
+            )}
+
             {/* Diarista Placeholder */}
             {activeServices.diarista && (
               <div className="rounded-2xl p-4 shadow-sm text-center" style={{ background: theme.surface, border: `1px solid ${theme.border}` }}>
@@ -754,6 +814,33 @@ const PrestadorHome = () => {
                 )}
               </div>
               <ChevronRight size={18} color={isMototaxiPending ? "#F5A623" : theme.border} />
+            </button>
+          )}
+          {!hasCarro && carrosEnabled && (
+            <button
+              type="button"
+              onClick={() => handleServiceNavigate(isCarroPending ? "/app/prestador/carros/kyc-pending" : "/app/prestador/carros/onboarding")}
+              className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left transition-colors"
+              style={{ borderColor: isCarroPending ? "rgba(245,166,35,0.4)" : theme.border }}
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: isCarroPending ? "rgba(245,166,35,0.12)" : theme.bg }}
+              >
+                <Car size={20} color={isCarroPending ? "#F5A623" : theme.muted} />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Carros</h3>
+                {isCarroPending ? (
+                  <p className="font-sans text-[12px] font-medium flex items-center gap-1.5" style={{ color: "#F5A623" }}>
+                    <span>Em análise</span>
+                    <span style={{ fontSize: 10 }}>⏳</span>
+                  </p>
+                ) : (
+                  <p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar serviço</p>
+                )}
+              </div>
+              <ChevronRight size={18} color={isCarroPending ? "#F5A623" : theme.border} />
             </button>
           )}
           {!hasAmbulante && (

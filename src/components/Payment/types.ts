@@ -6,7 +6,7 @@
  */
 
 /** Tipos de serviço suportados pelo SuperApp */
-export type ServiceType = "mototaxi" | "delivery" | "freight" | "services";
+export type ServiceType = "mototaxi" | "carro" | "delivery" | "freight" | "services";
 
 /** Resultado de um pagamento aprovado devolvido pela Edge Function */
 export interface PaymentResult {

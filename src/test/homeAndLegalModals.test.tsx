@@ -35,6 +35,13 @@ vi.mock("@/services/LoggingService", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+      signInWithPassword: vi.fn().mockResolvedValue({ data: null, error: null }),
+    },
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -46,16 +53,19 @@ vi.mock("@/lib/supabase", () => ({
 
 import Index from "@/pages/Index";
 import SaibaMaisPage from "@/pages/SaibaMaisPage";
+import Login from "@/pages/Login";
 import PublicFooter from "@/components/landing/PublicFooter";
 
-describe("Nova Home (/), /saiba-mais, Remoção de Fundadores e Modais Legais (v1.8.15)", () => {
+describe("Nova Home (/), /saiba-mais, Ocultação Temporária de Login Público e Modais Legais (v1.8.15 / v1.9.1)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     navigateMock.mockReset();
     window.scrollTo = vi.fn();
   });
 
-  it("Nova Home (/) exibe CADASTRE-SE, FAZER LOGIN e SAIBA MAIS, oculta textos de Fundadores e renderiza o formulário #cadastro", () => {
+  it("Nova Home (/) exibe CADASTRE-SE e SAIBA MAIS, oculta FAZER LOGIN por padrão e renderiza #cadastro sem textos de Fundadores", () => {
+    expect(verticalFlags.SHOW_PUBLIC_LOGIN_BUTTON).toBe(false);
+
     render(
       <MemoryRouter initialEntries={["/"]}>
         <Index />
@@ -63,12 +73,14 @@ describe("Nova Home (/), /saiba-mais, Remoção de Fundadores e Modais Legais (v
     );
 
     const cadastroBtns = screen.getAllByRole("button", { name: /^CADASTRE-SE$/i });
-    const loginBtns = screen.getAllByRole("button", { name: /^FAZER LOGIN$/i });
     const saibaMaisBtns = screen.getAllByRole("button", { name: /^SAIBA MAIS$/i });
 
     expect(cadastroBtns.length).toBeGreaterThanOrEqual(2);
-    expect(loginBtns.length).toBeGreaterThanOrEqual(2);
     expect(saibaMaisBtns.length).toBeGreaterThanOrEqual(2);
+
+    // Botão público de login oculto temporariamente via SHOW_PUBLIC_LOGIN_BUTTON
+    expect(screen.queryByRole("button", { name: /FAZER LOGIN/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Entrar/i })).not.toBeInTheDocument();
 
     // Textos de fundadores devem estar completamente ausentes
     expect(screen.queryByText(/QUERO SER UM FUNDADOR/i)).not.toBeInTheDocument();
@@ -83,14 +95,11 @@ describe("Nova Home (/), /saiba-mais, Remoção de Fundadores e Modais Legais (v
     expect(document.getElementById("cadastro")).toBeTruthy();
     expect(screen.getAllByRole("img", { name: "UBT Serviços" }).length).toBeGreaterThanOrEqual(2);
 
-    fireEvent.click(loginBtns[loginBtns.length - 1]);
-    expect(navigateMock).toHaveBeenCalledWith("/login");
-
     fireEvent.click(saibaMaisBtns[saibaMaisBtns.length - 1]);
     expect(navigateMock).toHaveBeenCalledWith("/saiba-mais");
   });
 
-  it("/saiba-mais oculta Capítulo V (O Começo), renomeia seção para 'O Cadastro' e respeita flag 'Em breve' em Produção", () => {
+  it("/saiba-mais oculta FAZER LOGIN por padrão, exibe Carros ativo, oculta Capítulo V e respeita flag 'Em breve' em Produção", () => {
     vi.spyOn(verticalFlags, "isVerticalEnabled").mockImplementation(
       (v) => v !== "diaristas" && v !== "ambulantes",
     );
@@ -102,8 +111,12 @@ describe("Nova Home (/), /saiba-mais, Remoção de Fundadores e Modais Legais (v
     );
 
     expect(screen.getByText("Quem faz a cidade acontecer")).toBeInTheDocument();
+    expect(screen.getByText("Carros")).toBeInTheDocument();
     expect(screen.getByText("Todos ganham")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "O Cadastro" })).toBeInTheDocument();
+
+    // Botão público de login oculto por padrão em /saiba-mais
+    expect(screen.queryByRole("button", { name: /FAZER LOGIN/i })).not.toBeInTheDocument();
 
     // Capítulo V oculto + textos de Fundadores removidos
     expect(screen.queryByText(/Capítulo V/i)).not.toBeInTheDocument();
@@ -112,6 +125,18 @@ describe("Nova Home (/), /saiba-mais, Remoção de Fundadores e Modais Legais (v
 
     // Em Produção, Diaristas e Ambulantes exibem selo "Em breve"
     expect(screen.getAllByText("Em breve").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rota /login permanece 100% desobstruída e funcional para acesso direto", () => {
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Login />
+      </MemoryRouter>,
+    );
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/email|e-mail/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument();
   });
 
   it("PublicFooter abre os modais de Termos de Uso e Política de Privacidade e fecha por ESC ou botão Fechar", () => {

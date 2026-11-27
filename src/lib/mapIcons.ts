@@ -34,6 +34,12 @@ export const motoIcon = (isOnline = true) => ({
   scaledSize: { width: 38, height: 38 } as any,
 });
 
+// Carros Icon (Online/Offline)
+export const carIcon = (isOnline = true) => ({
+  url: createEmojiIconSvg('🚗', isOnline ? '#00E676' : '#71717A'),
+  scaledSize: { width: 38, height: 38 } as any,
+});
+
 // Ambulante Icon
 export const ambuIcon = (categoria = 'comida') => {
   const bg = categoria === 'esporte' ? '#F5A623' : categoria === 'bebida' ? '#2B6EE8' : categoria === 'acessorio' ? '#9B59B6' : '#0DB87E';

@@ -24,6 +24,7 @@ import IosInstallModal from "@/components/IosInstallModal";
 import FounderForm from "@/components/FounderForm";
 import UbtVectorLogo from "@/components/landing/UbtVectorLogo";
 import PublicFooter from "@/components/landing/PublicFooter";
+import { SHOW_PUBLIC_LOGIN_BUTTON } from "@/config/verticalFlags";
 
 export default function Index() {
   const { showInstallBtn, isStandalone, isIOS, install } = usePwaInstall();
@@ -116,13 +117,15 @@ export default function Index() {
             Saiba Mais
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/90 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
-          >
-            Fazer Login
-          </button>
+          {SHOW_PUBLIC_LOGIN_BUTTON && (
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/90 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
+            >
+              Fazer Login
+            </button>
+          )}
 
           <button
             type="button"
@@ -202,16 +205,18 @@ export default function Index() {
             Cadastre-se
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              navigate("/login");
-            }}
-            className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
-          >
-            Fazer Login
-          </button>
+          {SHOW_PUBLIC_LOGIN_BUTTON && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate("/login");
+              }}
+              className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
+            >
+              Fazer Login
+            </button>
+          )}
 
           <button
             type="button"
@@ -269,14 +274,16 @@ export default function Index() {
               <ArrowRight className="w-5 h-5" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/95 hover:text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-sm cursor-pointer"
-            >
-              <LogIn className="w-4 h-4 text-[#00E676]" />
-              <span>FAZER LOGIN</span>
-            </button>
+            {SHOW_PUBLIC_LOGIN_BUTTON && (
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/95 hover:text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-sm cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 text-[#00E676]" />
+                <span>FAZER LOGIN</span>
+              </button>
+            )}
 
             <button
               type="button"

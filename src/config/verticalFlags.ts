@@ -10,7 +10,16 @@
  *   VITE_ENABLE_AMBULANTES=true
  */
 
-export type VerticalKey = "mototaxi" | "diaristas" | "ambulantes" | "coco_cia";
+export type VerticalKey = "mototaxi" | "carros" | "diaristas" | "ambulantes" | "coco_cia";
+
+/**
+ * Controle temporário de exibição do botão público de login ("FAZER LOGIN" / "Entrar")
+ * nas páginas públicas (`/`, `/saiba-mais`, navbar pública).
+ * A rota `/login` (e `/admin/login`) permanece 100% desobstruída via link direto.
+ * Para reativar em 1 linha: definir `VITE_ENABLE_PUBLIC_LOGIN_BUTTON=true` na Vercel.
+ */
+export const SHOW_PUBLIC_LOGIN_BUTTON =
+  import.meta.env.VITE_ENABLE_PUBLIC_LOGIN_BUTTON === "true";
 
 export const PROD_SUPABASE_PROJECT_REF = "bfqidoduceusbqlnrsol";
 export const HOMOLOG_SUPABASE_PROJECT_REF = "xqujubbqcfqxkfczbidq";
@@ -83,6 +92,7 @@ export function isProductionEnv(ctx?: VerticalEnvContext): boolean {
 
 const OVERRIDE_ENV_MAP: Record<VerticalKey, string> = {
   mototaxi: "VITE_ENABLE_MOTOTAXI",
+  carros: "VITE_ENABLE_CARROS",
   diaristas: "VITE_ENABLE_DIARISTAS",
   ambulantes: "VITE_ENABLE_AMBULANTES",
   coco_cia: "VITE_ENABLE_COCO_CIA",
@@ -90,9 +100,9 @@ const OVERRIDE_ENV_MAP: Record<VerticalKey, string> = {
 
 /**
  * Indica se uma vertical está habilitada no ambiente atual.
- * - Produção: `diaristas` e `ambulantes` => `false`; demais => `true`.
+ * - Produção: `diaristas` e `ambulantes` => `false`; `mototaxi`, `carros` e `coco_cia` => `true`.
  * - Homologação / Dev: todas => `true`.
- * - Override opcional via `VITE_ENABLE_DIARISTAS=true` / `VITE_ENABLE_AMBULANTES=true`.
+ * - Override opcional via `VITE_ENABLE_CARROS`, `VITE_ENABLE_DIARISTAS`, `VITE_ENABLE_AMBULANTES`.
  */
 export function isVerticalEnabled(
   vertical: VerticalKey,
@@ -119,6 +129,7 @@ export function isVerticalEnabled(
 export function getVerticalFlags(ctx?: VerticalEnvContext): Record<VerticalKey, boolean> {
   return {
     mototaxi: isVerticalEnabled("mototaxi", ctx),
+    carros: isVerticalEnabled("carros", ctx),
     diaristas: isVerticalEnabled("diaristas", ctx),
     ambulantes: isVerticalEnabled("ambulantes", ctx),
     coco_cia: isVerticalEnabled("coco_cia", ctx),

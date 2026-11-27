@@ -29,6 +29,42 @@ export const MotoMarker = ({ isOnline = true }: { isOnline?: boolean }) => (
   </div>
 );
 
+export const CarMarker = ({ isOnline = true }: { isOnline?: boolean }) => (
+  <div
+    aria-label="Motorista de carro"
+    style={{
+      background: isOnline ? '#09090B' : '#27272A',
+      borderRadius: '50%',
+      width: '38px',
+      height: '38px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: `2.5px solid ${isOnline ? '#00E676' : '#71717A'}`,
+      boxShadow: isOnline
+        ? '0 0 12px rgba(0,230,118,0.45), 0 2px 8px rgba(0,0,0,0.55)'
+        : '0 2px 8px rgba(0,0,0,0.35)',
+      cursor: 'pointer',
+    }}
+  >
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={isOnline ? '#00E676' : '#A1A1AA'}
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+      <circle cx="7" cy="17" r="2" />
+      <path d="M9 17h6" />
+      <circle cx="17" cy="17" r="2" />
+    </svg>
+  </div>
+);
+
 export const DestinoMarker = () => (
   <div style={{
     background: '#FFFFFF',

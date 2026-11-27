@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, Info, ShoppingBag, Sparkles, Scissors, Waves, GraduationCap, Settings } from "lucide-react";
+import { Bike, Car, Info, ShoppingBag, Sparkles, Scissors, Waves, GraduationCap, Settings } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -25,15 +25,50 @@ const ConfigServicosPage = () => {
   const navigate = useNavigate();
   const { toast, showToast } = useSimpleToast();
   const [motoActive, setMotoActive] = useState(false);
+  const [carroActive, setCarroActive] = useState(false);
   const [showDesativar, setShowDesativar] = useState(false);
+  const [showDesativarCarro, setShowDesativarCarro] = useState(false);
 
   useEffect(() => {
     if (user.uid) {
       const isApproved = user.kycStatus === "approved";
       const isActive = user.mototaxiActive !== false;
       setMotoActive(isApproved && isActive);
+
+      const isCarroApproved = user.carroKycStatus === "approved";
+      const isCarroActive = user.carroActive !== false;
+      setCarroActive(isCarroApproved && isCarroActive);
     }
-  }, [user.uid, user.kycStatus, user.mototaxiActive]);
+  }, [user.uid, user.kycStatus, user.mototaxiActive, user.carroKycStatus, user.carroActive]);
+
+  const handleCarroToggle = async (v: boolean) => {
+    if (v && user.carroKycStatus !== "approved") {
+      navigate("/app/prestador/carros/onboarding");
+    } else if (!v) {
+      setShowDesativarCarro(true);
+    } else {
+      setCarroActive(true);
+      try {
+        await supabase.auth.updateUser({ data: { carro_active: true } });
+        showToast("Carros ativado ✓");
+      } catch (e) {
+        console.error(e);
+        showToast("Erro ao ativar Carros");
+      }
+    }
+  };
+
+  const handleDesativarCarro = async () => {
+    setCarroActive(false);
+    setShowDesativarCarro(false);
+    try {
+      await supabase.auth.updateUser({ data: { carro_active: false } });
+      showToast("Carros desativado ✓");
+    } catch (e) {
+      console.error(e);
+      showToast("Erro ao desativar Carros");
+    }
+  };
 
   const handleMotoToggle = async (v: boolean) => {
     if (v && user.kycStatus !== "approved") {
@@ -110,6 +145,34 @@ const ConfigServicosPage = () => {
             />
           )}
         </SettingsGroup>
+
+        {isVerticalEnabled("carros") && (
+          <SettingsGroup>
+            <SettingsToggle
+              icon={Car}
+              label="Carros"
+              subtitle={
+                carroActive
+                  ? "Ativo · KYC aprovado ✓"
+                  : user.carroKycStatus === "pending"
+                    ? "Documentação em análise"
+                    : "Toque para configurar"
+              }
+              value={carroActive}
+              onChange={handleCarroToggle}
+              isLast={!carroActive && user.carroKycStatus !== "pending"}
+            />
+            {(carroActive || user.carroKycStatus === "pending") && (
+              <SettingsRow
+                icon={Settings}
+                label="Configurar Carro e CNH"
+                subtitle="Editar placa, modelo, atributos e documentos"
+                onClick={() => navigate("/app/prestador/carros/onboarding")}
+                isLast={true}
+              />
+            )}
+          </SettingsGroup>
+        )}
 
         {isVerticalEnabled("ambulantes") && (
           <SettingsGroup>
@@ -227,6 +290,70 @@ const ConfigServicosPage = () => {
         <button
           type="button"
           onClick={() => setShowDesativar(false)}
+          style={{
+            marginTop: 12,
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "transparent",
+            color: t.text,
+            border: `1px solid ${t.border}`,
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Cancelar
+        </button>
+      </BottomSheet>
+
+      <BottomSheet open={showDesativarCarro} onClose={() => setShowDesativarCarro(false)}>
+        <h2
+          style={{
+            fontFamily: "Syne",
+            fontSize: 18,
+            fontWeight: 700,
+            color: t.text,
+            textAlign: "center",
+            margin: 0,
+          }}
+        >
+          Desativar Carros?
+        </h2>
+        <p
+          style={{
+            fontFamily: "DM Sans",
+            fontSize: 14,
+            color: t.subtle,
+            textAlign: "center",
+            marginTop: 6,
+          }}
+        >
+          Você não receberá mais novos chamados de Carros.
+        </p>
+        <button
+          type="button"
+          onClick={handleDesativarCarro}
+          style={{
+            marginTop: 28,
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "#E84040",
+            color: "#FFF",
+            border: "none",
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Desativar
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDesativarCarro(false)}
           style={{
             marginTop: 12,
             width: "100%",

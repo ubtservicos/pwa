@@ -79,7 +79,14 @@ export function paymentToTransaction(row: PaymentHistoryRow): Transaction {
       ? "cancelled"
       : "pending";
   const shortId = row.service_id ? `#${String(row.service_id).slice(0, 8).toUpperCase()}` : "";
-  const baseDesc = row.ride_type === "entrega" ? "Entrega Mototáxi UBT" : "Corrida Mototáxi UBT";
+  const isCarro = String(row.service_type || "").toLowerCase() === "carro";
+  const baseDesc = isCarro
+    ? row.ride_type === "entrega"
+      ? "Entrega Carros UBT"
+      : "Corrida Carros UBT"
+    : row.ride_type === "entrega"
+      ? "Entrega Mototáxi UBT"
+      : "Corrida Mototáxi UBT";
 
   return {
     id: row.payment_id,

@@ -157,6 +157,10 @@ export interface RealUser {
   cpf?: string;
   sexo?: "masculino" | "feminino" | string;
   kycStatus?: string;
+  carroKycStatus?: "approved" | "pending" | "none" | "rejected" | string;
+  carroPlate?: string | null;
+  carroModalidade?: "carona_entrega" | "so_entrega" | "so_carona" | null;
+  carroActive?: boolean;
   status?: string;
   mototaxiActive?: boolean;
   isLoading?: boolean;

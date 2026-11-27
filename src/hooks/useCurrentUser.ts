@@ -23,10 +23,16 @@ export const useCurrentUser = (): RealUser => {
       try {
         let dbUser: any = null;
         let mototaxiData: any = null;
+        let carroData: any = null;
         let resolvedUid: string = authUser.id;
 
-        // 1. Prefer SECURITY DEFINER RPC that supports both standard and legacy accounts (auth.uid != usuarios.id)
-        const { data: rpcProfile, error: rpcErr } = await supabase.rpc("get_my_mototaxi_profile");
+        // 1. Prefer SECURITY DEFINER RPCs that support both standard and legacy accounts (auth.uid != usuarios.id)
+        const [{ data: rpcProfile, error: rpcErr }, { data: carroRpcProfile, error: carroRpcErr }] =
+          await Promise.all([
+            supabase.rpc("get_my_mototaxi_profile"),
+            supabase.rpc("get_my_carro_profile"),
+          ]);
+
         if (!rpcErr && rpcProfile && (rpcProfile as any).ok) {
           const payload = rpcProfile as any;
           dbUser = payload.usuario || null;
@@ -52,6 +58,17 @@ export const useCurrentUser = (): RealUser => {
           mototaxiData = mData;
         }
 
+        if (!carroRpcErr && carroRpcProfile && typeof carroRpcProfile === "object") {
+          carroData = (carroRpcProfile as any).record ?? carroRpcProfile;
+        } else {
+          const { data: cData } = await supabase
+            .from("prestador_carro")
+            .select("kyc_status, modalidade, plate, cpf, gender")
+            .eq("user_id", resolvedUid)
+            .maybeSingle();
+          carroData = cData;
+        }
+
         if (!active) return;
 
         // Read status map from localStorage
@@ -68,13 +85,11 @@ export const useCurrentUser = (): RealUser => {
           }
         }
 
-        // Accurately resolve KYC status strictly from the SSOT (prestador_mototaxi)
-        let resolvedKycStatus: "approved" | "pending" | "none" | "rejected" = "none";
-        if (mototaxiData?.kyc_status) {
-          resolvedKycStatus = mototaxiData.kyc_status as any;
-        } else {
-          resolvedKycStatus = "none";
-        }
+        // Accurately resolve KYC status strictly from each vertical SSOT
+        const resolvedKycStatus: "approved" | "pending" | "none" | "rejected" =
+          mototaxiData?.kyc_status ? (mototaxiData.kyc_status as any) : "none";
+        const resolvedCarroKycStatus: "approved" | "pending" | "none" | "rejected" =
+          carroData?.kyc_status ? (carroData.kyc_status as any) : "none";
 
         setUser({
           uid: resolvedUid,
@@ -82,12 +97,16 @@ export const useCurrentUser = (): RealUser => {
           email: authUser.email,
           role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
           kycStatus: resolvedKycStatus,
+          carroKycStatus: resolvedCarroKycStatus,
           modalidade: mototaxiData?.modalidade || null,
           plate: mototaxiData?.plate || null,
-          cpf: mototaxiData?.cpf || dbUser?.cpf || authUser.user_metadata?.cpf || null,
-          sexo: mototaxiData?.gender || authUser.user_metadata?.sexo || null,
+          carroModalidade: carroData?.modalidade || null,
+          carroPlate: carroData?.plate || null,
+          cpf: mototaxiData?.cpf || carroData?.cpf || dbUser?.cpf || authUser.user_metadata?.cpf || null,
+          sexo: mototaxiData?.gender || carroData?.gender || authUser.user_metadata?.sexo || null,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
+          carroActive: authUser.user_metadata?.carro_active !== false,
           isLoading: false, // Carregamento concluído com sucesso
         });
       } catch (err) {

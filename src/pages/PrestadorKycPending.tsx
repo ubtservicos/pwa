@@ -17,29 +17,37 @@ export default function PrestadorKycPending() {
     setChecking(true);
     setStatusMessage(null);
     try {
-      // Check in prestador_mototaxi
-      const { data: motoData } = await supabase
-        .from("prestador_mototaxi")
-        .select("kyc_status")
-        .eq("user_id", user.uid)
-        .maybeSingle();
+      const [{ data: motoData }, { data: carroData }, { data: userData }] = await Promise.all([
+        supabase
+          .from("prestador_mototaxi")
+          .select("kyc_status")
+          .eq("user_id", user.uid)
+          .maybeSingle(),
+        supabase
+          .from("prestador_carro")
+          .select("kyc_status")
+          .eq("user_id", user.uid)
+          .maybeSingle(),
+        supabase
+          .from("usuarios")
+          .select("role, status, under_review")
+          .eq("id", user.uid)
+          .maybeSingle(),
+      ]);
 
-      // Check in usuarios
-      const { data: userData } = await supabase
-        .from("usuarios")
-        .select("role, status, under_review")
-        .eq("id", user.uid)
-        .maybeSingle();
-
+      const hasPending =
+        motoData?.kyc_status === "pending" || carroData?.kyc_status === "pending";
+      const hasRejected =
+        motoData?.kyc_status === "rejected" || carroData?.kyc_status === "rejected";
       const isApproved =
-        motoData?.kyc_status === "approved" ||
+        (!hasPending && (motoData?.kyc_status === "approved" || carroData?.kyc_status === "approved")) ||
         (userData?.role === "prestador" && !userData?.under_review && userData?.status === "active");
 
-      const hasNoPendingRecord = !motoData && !userData?.under_review;
+      const hasNoPendingRecord = !motoData && !carroData && !userData?.under_review;
 
       if (isApproved || hasNoPendingRecord) {
         navigate("/app/prestador/home", { replace: true });
-      } else if (motoData?.kyc_status === "rejected") {
+      } else if (hasRejected && !hasPending) {
         setStatusMessage("Cadastro não aprovado. Entre em contato com o suporte ou revise sua documentação.");
       } else {
         setStatusMessage("Cadastro ainda em fila de avaliação.");
