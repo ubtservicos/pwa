@@ -10,7 +10,9 @@ import {
   Trophy,
   ChevronDown,
   ChevronUp,
+  FileDown,
   Flag,
+  MessageCircle,
   User,
   Building2,
   LucideIcon,
@@ -27,6 +29,11 @@ import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { fetchUserPaymentHistory, paymentToTransaction } from "@/services/PaymentHistoryService";
 import { reverseGeocode } from "@/lib/geoService";
+import {
+  downloadReceiptPdf,
+  shareReceiptViaWhatsApp,
+  type ReceiptPdfData,
+} from "@/utils/receiptPdf";
 
 const GREEN = "#0DB87E";
 
@@ -440,6 +447,65 @@ const TransacaoDetailPage = () => {
     setReportText("");
   };
 
+  const buildReceiptData = (): ReceiptPdfData => ({
+    id: tx.id,
+    serviceId: tx.serviceId,
+    transactionId: tx.transactionId,
+    statusLabel: pill.label,
+    dateLabel: new Date(tx.date).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }),
+    timeLabel: formatTime(tx.date),
+    typeLabel: titleFor(tx),
+    description: tx.description,
+    paymentMethodLabel: tx.paymentMethod
+      ? tx.paymentMethod.toLowerCase().includes("pix")
+        ? "PIX"
+        : tx.paymentMethod.toLowerCase().includes("card") || tx.paymentMethod.toLowerCase().includes("cart")
+          ? "Cartão"
+          : tx.paymentMethod.toUpperCase()
+      : undefined,
+    durationLabel: tx.durationMin ? formatElapsedMinutes(tx.durationMin) : undefined,
+    origin: tx.origin,
+    destination: tx.destination,
+    amount: tx.amount,
+    isDebit: tx.type === "saida",
+    splits: splitDetail
+      ? SPLIT_META.map((m) => ({
+          label: m.label,
+          percent: m.key === "prestador" ? "90" : m.key === "ubt" ? "7,5" : "0,5",
+          amount: splitDetail[m.key],
+        }))
+      : undefined,
+  });
+
+  const handleDownloadPdf = () => {
+    try {
+      downloadReceiptPdf(buildReceiptData());
+      showToast("Comprovante PDF gerado com sucesso! ✓");
+    } catch (err) {
+      console.error("[TransacaoDetailPage] Erro ao gerar PDF:", err);
+      showToast("Não foi possível gerar o PDF do comprovante.");
+    }
+  };
+
+  const handleShareWhatsApp = async () => {
+    try {
+      const mode = await shareReceiptViaWhatsApp(buildReceiptData());
+      showToast(
+        mode === "shared"
+          ? "Comprovante PDF pronto para envio no WhatsApp!"
+          : "PDF baixado e resumo aberto no WhatsApp!",
+      );
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      console.error("[TransacaoDetailPage] Erro ao compartilhar no WhatsApp:", err);
+      showToast("Não foi possível compartilhar o comprovante agora.");
+    }
+  };
+
   return (
     <div
       style={{
@@ -634,11 +700,67 @@ const TransacaoDetailPage = () => {
         )}
       </div>
 
+      {/* Ações do Comprovante: Baixar PDF + Enviar por WhatsApp */}
+      <div
+        style={{
+          marginTop: 18,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "13px 12px",
+            borderRadius: 14,
+            background: "#121215",
+            border: "1px solid #27272A",
+            color: "#F4F4F5",
+            fontFamily: "DM Sans",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <FileDown size={16} color="#00E676" />
+          <span>Baixar Comprovante (PDF)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleShareWhatsApp()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "13px 12px",
+            borderRadius: 14,
+            background: "rgba(0, 230, 118, 0.14)",
+            border: "1px solid rgba(0, 230, 118, 0.4)",
+            color: "#00E676",
+            fontFamily: "DM Sans",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          <MessageCircle size={16} color="#00E676" />
+          <span>Enviar por WhatsApp</span>
+        </button>
+      </div>
+
       <button
         type="button"
         onClick={() => setShowReport(true)}
         style={{
-          marginTop: 24,
+          marginTop: 12,
           width: "100%",
           display: "flex",
           alignItems: "center",

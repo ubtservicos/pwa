@@ -21,15 +21,15 @@ const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
     const [focused, setFocused] = useState(false);
 
     const borderColor = error
-      ? "border-[hsl(var(--red))] bg-[hsl(var(--red)/0.04)]"
+      ? "border-[hsl(var(--red))] bg-[#121215]"
       : focused
-        ? "border-green bg-[hsl(var(--green)/0.06)]"
-        : "border-white/10 bg-white/[0.06]";
+        ? "border-[#00E676] ring-1 ring-[#00E676]/40 bg-[#121215]"
+        : "border-white/10 bg-[#121215]";
 
     const iconColor = error
       ? "text-[hsl(var(--red))]"
       : focused
-        ? "text-green"
+        ? "text-[#00E676]"
         : "text-white/35";
 
     return (
@@ -41,7 +41,7 @@ const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
           {label}
         </label>
         <div
-          className={`flex items-center gap-3 h-14 rounded-xl px-4 border transition-colors ${borderColor}`}
+          className={`flex items-center gap-3 h-14 rounded-xl px-4 border transition-colors focus-within:border-[#00E676] focus-within:ring-1 focus-within:ring-[#00E676]/40 ${borderColor}`}
         >
           <Icon size={20} className={`shrink-0 transition-colors ${iconColor}`} />
           <input
@@ -55,7 +55,7 @@ const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
               setFocused(false);
               onBlur?.(e);
             }}
-            className={`flex-1 min-w-0 bg-transparent outline-none font-sans text-[15px] text-white placeholder:text-white/30 ${className ?? ""}`}
+            className={`flex-1 min-w-0 bg-transparent text-white outline-none focus:outline-none focus:ring-0 font-sans text-[15px] placeholder:text-white/30 ${className ?? ""}`}
             {...rest}
           />
           {rightSlot}

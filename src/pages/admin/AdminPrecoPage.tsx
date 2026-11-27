@@ -10,6 +10,7 @@ import {
   Info,
   Loader2,
   MapPin,
+  Pencil,
   RefreshCw,
   Save,
   Zap,
@@ -200,24 +201,70 @@ export default function AdminPrecoPage() {
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#00E676]" : ""}`} />
               Recarregar
             </button>
+            <button
+              type="button"
+              disabled={saving || loading}
+              onClick={() => void handleSave()}
+              className="h-9 px-4 rounded-xl bg-[#00E676] hover:bg-[#00C853] text-zinc-950 text-xs font-extrabold inline-flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Salvar Tarifas
+            </button>
           </div>
         </div>
 
-        {/* Fórmula Dinâmica ao Vivo */}
+        {/* Fórmula Dinâmica ao Vivo — Pílulas Editáveis Inline */}
         <section className="p-5 sm:p-6 rounded-2xl bg-[#121215] border border-zinc-800 shadow-xl flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-zinc-400">
-            <Zap className="w-3.5 h-3.5 text-[#00E676]" />
-            <span>Fórmula Canônica Ativa</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-zinc-400">
+              <Zap className="w-3.5 h-3.5 text-[#00E676]" />
+              <span>Fórmula Canônica Ativa</span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+              <Pencil className="w-3 h-3 text-[#00E676]" />
+              Clique nos valores em verde para editar direto na fórmula
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 font-display text-sm sm:text-base font-bold text-zinc-100 leading-relaxed">
             <span>Preço = [</span>
-            <span className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[#00E676]">
-              {formatBRL(currentConfig.taxaUnica)}
-            </span>
+            <label
+              htmlFor="formula-taxa-unica"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-950 border border-emerald-500/40 focus-within:border-[#00E676] focus-within:ring-1 focus-within:ring-[#00E676]/40 font-mono text-[#00E676] transition-colors cursor-text"
+              title="Editar Taxa Única (R$)"
+            >
+              <span className="text-xs text-zinc-400">R$</span>
+              <input
+                id="formula-taxa-unica"
+                aria-label="Taxa Única na fórmula"
+                type="text"
+                inputMode="decimal"
+                value={taxaUnicaInput}
+                onChange={(e) => setTaxaUnicaInput(e.target.value)}
+                onBlur={() => setTaxaUnicaInput(formatDecimalBR(parseBRLInput(taxaUnicaInput)))}
+                className="w-16 bg-transparent font-mono text-sm sm:text-base font-bold text-[#00E676] outline-none focus:outline-none text-center"
+              />
+              <Pencil className="w-3 h-3 text-[#00E676]/60 shrink-0" />
+            </label>
             <span>+ (</span>
-            <span className="px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[#00E676]">
-              {formatBRL(currentConfig.valorPorKm)}/km
-            </span>
+            <label
+              htmlFor="formula-valor-km"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-950 border border-emerald-500/40 focus-within:border-[#00E676] focus-within:ring-1 focus-within:ring-[#00E676]/40 font-mono text-[#00E676] transition-colors cursor-text"
+              title="Editar Valor por km (R$)"
+            >
+              <span className="text-xs text-zinc-400">R$</span>
+              <input
+                id="formula-valor-km"
+                aria-label="Valor por km na fórmula"
+                type="text"
+                inputMode="decimal"
+                value={valorPorKmInput}
+                onChange={(e) => setValorPorKmInput(e.target.value)}
+                onBlur={() => setValorPorKmInput(formatDecimalBR(parseBRLInput(valorPorKmInput)))}
+                className="w-16 bg-transparent font-mono text-sm sm:text-base font-bold text-[#00E676] outline-none focus:outline-none text-center"
+              />
+              <span className="text-xs text-zinc-400">/km</span>
+              <Pencil className="w-3 h-3 text-[#00E676]/60 shrink-0" />
+            </label>
             <span>× Km Cobrados)] ×</span>
             <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 font-mono text-xs text-[#00E676]">
               Demanda {fatorDemanda.toFixed(1)}×
@@ -231,18 +278,35 @@ export default function AdminPrecoPage() {
               Clima {fatorClima.toFixed(1)}×
             </span>
           </div>
-          <div className="text-xs text-zinc-400 font-sans">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 font-sans">
+            <span>Gatilho Ida e Volta:</span>
+            <label
+              htmlFor="formula-km-gatilho"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-950 border border-zinc-700 focus-within:border-[#00E676] font-mono text-zinc-100 cursor-text"
+              title="Editar Gatilho de Ida e Volta (km)"
+            >
+              <input
+                id="formula-km-gatilho"
+                aria-label="Gatilho de Ida e Volta na fórmula"
+                type="text"
+                inputMode="decimal"
+                value={kmGatilhoInput}
+                onChange={(e) => setKmGatilhoInput(e.target.value)}
+                className="w-10 bg-transparent font-mono text-xs font-bold text-zinc-100 outline-none focus:outline-none text-center"
+              />
+              <span className="text-zinc-400">km</span>
+            </label>
             {currentConfig.kmGatilhoIdaVolta > 0 ? (
               <span>
-                Regra de retorno ativa:{" "}
-                <strong className="text-zinc-100">
-                  corridas a partir de {currentConfig.kmGatilhoIdaVolta} km cobram 2× a distância (Ida + Volta)
-                </strong>{" "}
-                · Repasse líquido garantido ao Mototaxista: <strong className="text-[#00E676]">90%</strong>.
+                — corridas a partir de{" "}
+                <strong className="text-zinc-100">{currentConfig.kmGatilhoIdaVolta} km</strong>{" "}
+                cobram 2× a distância (Ida + Volta) · Repasse líquido garantido ao Mototaxista:{" "}
+                <strong className="text-[#00E676]">90%</strong>.
               </span>
             ) : (
               <span>
-                Regra de Ida e Volta <strong className="text-amber-400">desativada</strong> (gatilho = 0 km) · Repasse líquido garantido ao Mototaxista: <strong className="text-[#00E676]">90%</strong>.
+                — regra <strong className="text-amber-400">desativada</strong> (0 km) · Repasse líquido garantido ao Mototaxista:{" "}
+                <strong className="text-[#00E676]">90%</strong>.
               </span>
             )}
           </div>
@@ -326,9 +390,8 @@ export default function AdminPrecoPage() {
               <div className="flex items-center rounded-xl bg-[#09090B] border border-zinc-800 focus-within:border-[#00E676] px-3.5 transition-colors">
                 <input
                   id="km-gatilho-input"
-                  type="number"
-                  min={0}
-                  step={0.5}
+                  type="text"
+                  inputMode="decimal"
                   value={kmGatilhoInput}
                   onChange={(e) => setKmGatilhoInput(e.target.value)}
                   placeholder="8"
