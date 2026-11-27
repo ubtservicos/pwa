@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
-import { isVerticalEnabled } from "@/config/verticalFlags";
+import { isAdminVerticalEnabled } from "@/config/verticalFlags";
 
 // Superadmin UBT e Alta Gestão Côco & Cia têm visão completa do menu Côco & Cia
 const COCO_ALTA_GESTAO_ROLES = [
@@ -254,7 +254,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
 
-  const diaristasItems = isVerticalEnabled("diaristas")
+  const diaristasItems = isAdminVerticalEnabled("diaristas")
     ? DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role))
     : [];
   const mototaxiItems =
@@ -262,10 +262,10 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
       ? []
       : MOTOTAXI_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role));
   const carrosItems =
-    !isVerticalEnabled("carros") || (isAssocRole && assocCategory !== "carro")
+    !isAdminVerticalEnabled("carros") || (isAssocRole && assocCategory !== "carro")
       ? []
       : CARROS_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role));
-  const ambulantesItems = isVerticalEnabled("ambulantes")
+  const ambulantesItems = isAdminVerticalEnabled("ambulantes")
     ? AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || isSuperOrAdmin || item.roles.includes(role))
     : [];
 

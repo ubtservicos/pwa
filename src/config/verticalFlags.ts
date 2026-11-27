@@ -126,6 +126,22 @@ export function isVerticalEnabled(
   return true;
 }
 
+/**
+ * Indica se uma vertical deve ficar acessível no Painel Administrativo (BackOffice).
+ * Diferente do app público (`isVerticalEnabled`), `diaristas` e `ambulantes` permanecem
+ * liberadas para o Admin/Superadmin tanto em Homologação quanto em Produção para gestão
+ * pré-lançamento, mantendo o app público em modo "Em breve" em Produção.
+ */
+export function isAdminVerticalEnabled(
+  vertical: VerticalKey,
+  ctx?: VerticalEnvContext,
+): boolean {
+  if (vertical === "diaristas" || vertical === "ambulantes") {
+    return true;
+  }
+  return isVerticalEnabled(vertical, ctx);
+}
+
 export function getVerticalFlags(ctx?: VerticalEnvContext): Record<VerticalKey, boolean> {
   return {
     mototaxi: isVerticalEnabled("mototaxi", ctx),

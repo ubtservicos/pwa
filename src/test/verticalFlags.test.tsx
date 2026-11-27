@@ -81,6 +81,9 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
     expect(verticalFlags.isVerticalEnabled("ambulantes", prodByHost)).toBe(false);
     expect(verticalFlags.isVerticalEnabled("mototaxi", prodByHost)).toBe(true);
     expect(verticalFlags.isVerticalEnabled("coco_cia", prodByHost)).toBe(true);
+    // No Painel Admin, diaristas e ambulantes permanecem liberadas mesmo em Produção
+    expect(verticalFlags.isAdminVerticalEnabled("diaristas", prodByHost)).toBe(true);
+    expect(verticalFlags.isAdminVerticalEnabled("ambulantes", prodByHost)).toBe(true);
 
     const prodByRef = {
       appEnv: "",
@@ -187,7 +190,7 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
     expect(navigateMock).toHaveBeenCalledWith("/app/diaristas");
   });
 
-  it("AdminLayout oculta Diaristas e Ambulantes em Produção e exibe ambos em Homologação", async () => {
+  it("AdminLayout exibe Diaristas e Ambulantes para Superadmin tanto em Produção quanto em Homologação", async () => {
     Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 1280 });
     const prodSpy = vi
       .spyOn(verticalFlags, "isVerticalEnabled")
@@ -203,9 +206,9 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Mototaxistas")).toBeInTheDocument();
+      expect(screen.getByText("Diaristas")).toBeInTheDocument();
+      expect(screen.getByText("Ambulantes")).toBeInTheDocument();
     });
-    expect(screen.queryByText("Diaristas")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ambulantes")).not.toBeInTheDocument();
     expect(screen.getByText("Côco & Cia")).toBeInTheDocument();
 
     unmount();
@@ -227,7 +230,7 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
     });
   });
 
-  it("VerticalRouteGuard redireciona rotas de Diaristas/Ambulantes em Produção e permite acesso em Homologação", () => {
+  it("VerticalRouteGuard continua redirecionando rotas públicas /app/diaristas e /app/ambulantes em Produção e permite acesso em Homologação", () => {
     const spy = vi
       .spyOn(verticalFlags, "isVerticalEnabled")
       .mockReturnValue(false);
@@ -244,6 +247,14 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
               </VerticalRouteGuard>
             }
           />
+          <Route
+            path="/app/ambulantes"
+            element={
+              <VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home">
+                <div>Tela Ambulantes</div>
+              </VerticalRouteGuard>
+            }
+          />
         </Routes>
       </MemoryRouter>,
     );
@@ -252,6 +263,27 @@ describe("Feature Flags de Verticais por Ambiente (v1.8.13 / v1.8.14)", () => {
     expect(screen.queryByText("Tela Diaristas")).not.toBeInTheDocument();
 
     unmount();
+
+    const { unmount: unmountAmb } = render(
+      <MemoryRouter initialEntries={["/app/ambulantes"]}>
+        <Routes>
+          <Route path="/app/home" element={<div>Home Redirecionada</div>} />
+          <Route
+            path="/app/ambulantes"
+            element={
+              <VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home">
+                <div>Tela Ambulantes</div>
+              </VerticalRouteGuard>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Home Redirecionada")).toBeInTheDocument();
+    expect(screen.queryByText("Tela Ambulantes")).not.toBeInTheDocument();
+
+    unmountAmb();
     spy.mockReturnValue(true);
 
     render(
