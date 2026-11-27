@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Bike,
+  Building2,
   Calendar,
   Activity,
   DollarSign,
@@ -31,6 +32,7 @@ export default function AdminMototaxistasDashboardPage() {
   const [condutoresDestaque, setCondutoresDestaque] = useState<{ id: string; name: string; rides: string; rating: string; status: string }[]>([]);
   const [chartBars, setChartBars] = useState<{ label: string; count: number; val: number }[]>([]);
   const [modalidades, setModalidades] = useState<{ corrida: number; entrega: number }>({ corrida: 0, entrega: 0 });
+  const [scopedAssociacaoNome, setScopedAssociacaoNome] = useState<string | null>(null);
 
   const periods: Period[] = ["Hoje", "Semana", "Mês", "Ano", "Customizar"];
 
@@ -55,6 +57,27 @@ export default function AdminMototaxistasDashboardPage() {
         startDate.setFullYear(now.getFullYear() - 1);
       } else {
         startDate = new Date(0); // All time
+      }
+
+      // 0. Check if caller has 'associacao' role to scope KPIs strictly to their association's drivers
+      let allowedDriverIds: Set<string> | null = null;
+      try {
+        const { data: assocOverview } = await (supabase as any).rpc(
+          "admin_get_mototaxi_associacao_overview",
+          { p_associacao_id: null },
+        );
+        if (assocOverview?.caller_role === "associacao") {
+          const ownAssoc = Array.isArray(assocOverview.associacoes) ? assocOverview.associacoes[0] : null;
+          setScopedAssociacaoNome(ownAssoc?.nome || "Minha Associação");
+          const ids = Array.isArray(assocOverview.motoristas)
+            ? assocOverview.motoristas.map((m: any) => String(m.id))
+            : [];
+          allowedDriverIds = new Set<string>(ids);
+        } else {
+          setScopedAssociacaoNome(null);
+        }
+      } catch {
+        setScopedAssociacaoNome(null);
       }
 
       // 1. Fetch Mototaxi Corridas
@@ -82,9 +105,15 @@ export default function AdminMototaxistasDashboardPage() {
 
       const profileMap = new Map((profiles || []).map(p => [p.id, p.name]));
 
-      const corridaList = corridas || [];
-      const prestadorList = prestadores || [];
-      const splitList = splits || [];
+      const corridaList = allowedDriverIds
+        ? (corridas || []).filter((c: any) => c.prestador_id && allowedDriverIds!.has(String(c.prestador_id)))
+        : (corridas || []);
+      const prestadorList = allowedDriverIds
+        ? (prestadores || []).filter((p: any) => p.user_id && allowedDriverIds!.has(String(p.user_id)))
+        : (prestadores || []);
+      const splitList = allowedDriverIds
+        ? (splits || []).filter((s: any) => s.provider_id && allowedDriverIds!.has(String(s.provider_id)))
+        : (splits || []);
 
       // Total Corridas
       const totalCorridas = corridaList.length || splitList.length;
@@ -193,11 +222,21 @@ export default function AdminMototaxistasDashboardPage() {
               <Bike size={22} />
             </div>
             <div>
-              <h1 className="font-display text-2xl md:text-3xl font-bold text-white tracking-tight">
-                Mototaxistas • Painel de Controle
-              </h1>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-display text-2xl md:text-3xl font-bold text-white tracking-tight">
+                  Mototaxistas • Painel de Controle
+                </h1>
+                {scopedAssociacaoNome && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-[#00E676] text-xs font-mono font-bold">
+                    <Building2 size={13} />
+                    Visão da Associação · {scopedAssociacaoNome}
+                  </span>
+                )}
+              </div>
               <p className="text-zinc-400 text-xs md:text-sm mt-0.5">
-                Monitoramento operacional de viagens e condutores conectado ao Supabase
+                {scopedAssociacaoNome
+                  ? `Indicadores e corridas filtrados exclusivamente para os mototaxistas de ${scopedAssociacaoNome}`
+                  : "Monitoramento operacional de viagens e condutores conectado ao Supabase"}
               </p>
             </div>
           </div>

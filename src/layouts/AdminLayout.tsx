@@ -75,8 +75,9 @@ export const DIARISTAS_NAV_ITEMS = [
 ];
 
 export const MOTOTAXI_NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin", "associacao", "associacao_lider"] },
   { icon: Zap, label: "Tarifas & Preço Dinâmico", path: "/admin/mototaxistas/preco-dinamico", roles: ["operator", "admin", "super_admin"] },
+  { icon: Building2, label: "Associação", path: "/admin/mototaxistas/associacao", roles: ["admin", "super_admin", "associacao", "associacao_lider"] },
 ];
 
 export const AMBULANTES_NAV_ITEMS = [

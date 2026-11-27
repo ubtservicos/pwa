@@ -86,6 +86,7 @@ import AdminDiaristasPage from "./pages/admin/AdminDiaristasPage.tsx";
 import AdminDiaristasDashboardPage from "./pages/admin/AdminDiaristasDashboardPage.tsx";
 import AdminDiaristasMateriaisPage from "./pages/admin/AdminDiaristasMateriaisPage.tsx";
 import AdminMototaxistasDashboardPage from "./pages/admin/AdminMototaxistasDashboardPage.tsx";
+import AdminMototaxiAssociacaoPage from "./pages/admin/AdminMototaxiAssociacaoPage.tsx";
 import AdminAmbulantesDashboardPage from "./pages/admin/AdminAmbulantesDashboardPage.tsx";
 import AdminAmbulantesCardapiosPage from "./pages/admin/AdminAmbulantesCardapiosPage.tsx";
 import AdminAmbulantesProdutosPage from "./pages/admin/AdminAmbulantesProdutosPage.tsx";
@@ -290,8 +291,9 @@ const App = () => (
               <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/diaristas/dashboard" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/diaristas/materiais" element={adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin", "associacao", "associacao_lider"])} />
               <Route path="/admin/mototaxistas/preco-dinamico" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/mototaxistas/associacao" element={adminGuard(<AdminMototaxiAssociacaoPage />, ["admin", "super_admin", "associacao", "associacao_lider"])} />
               <Route path="/admin/ambulantes/dashboard" element={adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/ambulantes/produtos" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/ambulantes/produtos/:categoriaSlug" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
