@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 
 // Superadmin UBT e Alta Gestão Côco & Cia têm visão completa do menu Côco & Cia
 const COCO_ALTA_GESTAO_ROLES = [
@@ -217,9 +218,13 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
 
-  const diaristasItems = DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const diaristasItems = isVerticalEnabled("diaristas")
+    ? DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    : [];
   const mototaxiItems = MOTOTAXI_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
-  const ambulantesItems = AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const ambulantesItems = isVerticalEnabled("ambulantes")
+    ? AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    : [];
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {

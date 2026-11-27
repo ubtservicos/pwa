@@ -1,13 +1,15 @@
 import { useReveal } from "@/hooks/useReveal";
+import { isVerticalEnabled, type VerticalKey } from "@/config/verticalFlags";
 
-const services = [
-  { label: "Mototaxi", img: "/mototaxi_pop.png" },
-  { label: "Ambulantes", img: "/ambulante_praia.png" },
-  { label: "Diaristas", img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400" },
+const ALL_LANDING_SERVICES: Array<{ label: string; img: string; vertical: VerticalKey }> = [
+  { label: "Mototaxi", img: "/mototaxi_pop.png", vertical: "mototaxi" },
+  { label: "Ambulantes", img: "/ambulante_praia.png", vertical: "ambulantes" },
+  { label: "Diaristas", img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=400", vertical: "diaristas" },
 ];
 
 export const Services = () => {
   const ref = useReveal<HTMLElement>();
+  const services = ALL_LANDING_SERVICES.filter((s) => isVerticalEnabled(s.vertical));
   return (
     <section ref={ref} className="reveal bg-secondary py-16 px-6">
       <div className="max-w-[1100px] mx-auto md:max-w-[640px] lg:max-w-[1100px]">

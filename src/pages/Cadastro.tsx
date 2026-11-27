@@ -19,6 +19,7 @@ import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
 import { isValidEmail, maskCPF, maskPhone, maskCNPJ } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 import { trackEvent } from "@/services/AnalyticsService";
 import { logSystem } from "@/services/LoggingService";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
@@ -311,7 +312,7 @@ const Cadastro = () => {
             {([
               { key: "tomador", label: "Morador / Turista" },
               { key: "mototaxista", label: "Mototaxista" },
-              { key: "ambulante", label: "Ambulante" },
+              ...(isVerticalEnabled("ambulantes") ? [{ key: "ambulante" as const, label: "Ambulante" }] : []),
               { key: "associacao", label: "Associação B2B" }
             ] as const).map(({ key, label }) => {
               const sel = perfil === key;

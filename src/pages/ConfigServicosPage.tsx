@@ -11,6 +11,7 @@ import BottomSheet from "@/components/settings/BottomSheet";
 import Toast from "@/components/auth/Toast";
 import { useSimpleToast } from "@/hooks/useToast2";
 import { supabase } from "@/lib/supabase";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 
 const FUTURE = [
   { key: "beleza", label: "Beleza", icon: Scissors },
@@ -110,41 +111,45 @@ const ConfigServicosPage = () => {
           )}
         </SettingsGroup>
 
-        <SettingsGroup>
-          <SettingsRow
-            icon={ShoppingBag}
-            label="Ambulantes"
-            subtitle="Documentação e alvará de praia"
-            onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
-          />
-          <SettingsRow
-            icon={ShoppingBag}
-            label="Cardápio & Estoque Diário"
-            subtitle="Definir quantidades do carrinho na praia"
-            onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
-            isLast
-          />
-        </SettingsGroup>
+        {isVerticalEnabled("ambulantes") && (
+          <SettingsGroup>
+            <SettingsRow
+              icon={ShoppingBag}
+              label="Ambulantes"
+              subtitle="Documentação e alvará de praia"
+              onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
+            />
+            <SettingsRow
+              icon={ShoppingBag}
+              label="Cardápio & Estoque Diário"
+              subtitle="Definir quantidades do carrinho na praia"
+              onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
+              isLast
+            />
+          </SettingsGroup>
+        )}
 
-        <SettingsGroup>
-          <SettingsRow
-            icon={Sparkles}
-            label="Diaristas"
-            subtitle="Agenda de serviços de limpeza"
-            onClick={() => {
-              const has = (() => { try { return localStorage.getItem(`diarista_perfil_${user.uid}`) === "1"; } catch { return false; } })();
-              navigate(has ? "/app/prestador/diaristas/agenda" : "/app/prestador/diaristas/onboarding");
-            }}
-            isLast={false}
-          />
-          <SettingsRow
-            icon={Settings}
-            label="Configurar Valores e Kit"
-            subtitle="Ajuste seus preços por m², produtos e disponibilidade"
-            onClick={() => navigate("/app/prestador/diaristas/onboarding")}
-            isLast={true}
-          />
-        </SettingsGroup>
+        {isVerticalEnabled("diaristas") && (
+          <SettingsGroup>
+            <SettingsRow
+              icon={Sparkles}
+              label="Diaristas"
+              subtitle="Agenda de serviços de limpeza"
+              onClick={() => {
+                const has = (() => { try { return localStorage.getItem(`diarista_perfil_${user.uid}`) === "1"; } catch { return false; } })();
+                navigate(has ? "/app/prestador/diaristas/agenda" : "/app/prestador/diaristas/onboarding");
+              }}
+              isLast={false}
+            />
+            <SettingsRow
+              icon={Settings}
+              label="Configurar Valores e Kit"
+              subtitle="Ajuste seus preços por m², produtos e disponibilidade"
+              onClick={() => navigate("/app/prestador/diaristas/onboarding")}
+              isLast={true}
+            />
+          </SettingsGroup>
+        )}
 
         {FUTURE.map(({ key, label, icon: Icon }) => (
           <div key={key} style={{ opacity: 0.5, pointerEvents: "none" }}>

@@ -19,6 +19,7 @@ import { setCurrentUid, useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import InAppNotificationBell from "@/components/notifications/InAppNotificationBell";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 
 interface ServiceItem {
   label: string;
@@ -27,15 +28,18 @@ interface ServiceItem {
   available: boolean;
 }
 
-const services: ServiceItem[] = [
-  { label: "Mototaxi", Icon: Bike, to: "/app/mototaxi", available: true },
-  { label: "Ambulantes", Icon: ShoppingBag, to: "/app/ambulantes", available: true },
-  { label: "Diaristas", Icon: Sparkles, to: "/app/diaristas", available: true },
-  { label: "Côco & Cia", Icon: Recycle, to: "/app/coco", available: true },
+const ALL_SERVICES: Array<ServiceItem & { vertical?: "mototaxi" | "ambulantes" | "diaristas" | "coco_cia" }> = [
+  { label: "Mototaxi", Icon: Bike, to: "/app/mototaxi", available: true, vertical: "mototaxi" },
+  { label: "Ambulantes", Icon: ShoppingBag, to: "/app/ambulantes", available: true, vertical: "ambulantes" },
+  { label: "Diaristas", Icon: Sparkles, to: "/app/diaristas", available: true, vertical: "diaristas" },
+  { label: "Côco & Cia", Icon: Recycle, to: "/app/coco", available: true, vertical: "coco_cia" },
   { label: "Beleza", Icon: Scissors, available: false },
   { label: "Praia", Icon: Waves, available: false },
   // { label: "Aulas", Icon: GraduationCap, available: false },
 ];
+
+const getVisibleServices = (): ServiceItem[] =>
+  ALL_SERVICES.filter((s) => !s.vertical || isVerticalEnabled(s.vertical));
 
 interface ActiveOrder {
   id: string;
@@ -50,6 +54,7 @@ interface ActiveOrder {
 const AppHome = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const services = getVisibleServices();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);

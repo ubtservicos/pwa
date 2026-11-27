@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { RideProvider } from "@/contexts/RideContext";
 import { AmbulantePedidoProvider } from "@/contexts/AmbulantePedidoContext";
+import VerticalRouteGuard from "@/components/VerticalRouteGuard";
 import GlobalBottomNav from "@/components/app/GlobalBottomNav";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 
@@ -205,29 +206,29 @@ const App = () => (
                 <Route path="/app/prestador/mototaxi/active" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
                 <Route path="/app/prestador/mototaxi/active/:id" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
                 <Route path="/app/prestador/mototaxi/avaliacao/:id" element={<MototaxiErrorBoundary fallbackPath="/app/prestador/mototaxi/online" fallbackLabel="Voltar para Online"><PrestadorMototaxiActive /></MototaxiErrorBoundary>} />
-                <Route path="/app/ambulantes" element={<AmbulantesDiscoveryPage />} />
-                <Route path="/app/ambulantes/categoria/:slug" element={<AmbulantesCategoriaAmbulantesPage />} />
-                <Route path="/app/ambulantes/carrinho" element={<AmbulanteCarrinhoPage />} />
-                <Route path="/app/ambulantes/pedido/:id" element={<AmbulantePedidoPage />} />
-                <Route path="/app/ambulantes/:sessionId" element={<AmbulanteCatalogPage />} />
-                <Route path="/app/prestador/ambulantes/onboarding" element={<AmbulantesOnboardingPage />} />
-                <Route path="/app/prestador/ambulantes/cardapio" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/cardapio/:categoriaSlug" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/cardapio/editar" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/cardapio/editar/:categoriaSlug" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/produtos" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/produtos/:categoriaSlug" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/catalogo" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/catalogo/:categoriaSlug" element={<AmbulantesCatalogoPage />} />
-                <Route path="/app/prestador/ambulantes/online" element={<AmbulantesOnlinePage />} />
-                <Route path="/app/prestador/ambulantes/pedido/:id" element={<AmbulantesGerenciarPedidoPage />} />
-                <Route path="/app/diaristas" element={<DiaristasBuscaPage />} />
-                <Route path="/app/diaristas/agendar/:prestadorId" element={<DiaristaAgendarPage />} />
-                <Route path="/app/diaristas/agendamento/:id" element={<DiaristaAgendamentoPage />} />
-                <Route path="/app/diaristas/:prestadorId" element={<DiaristaPerfilPage />} />
-                <Route path="/app/prestador/diaristas/onboarding" element={<DiaristaOnboardingPage />} />
-                <Route path="/app/prestador/diaristas/agenda" element={<DiaristaAgendaPage />} />
-                <Route path="/app/prestador/diaristas/servico/:id" element={<DiaristaGerenciarPage />} />
+                <Route path="/app/ambulantes" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesDiscoveryPage /></VerticalRouteGuard>} />
+                <Route path="/app/ambulantes/categoria/:slug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCategoriaAmbulantesPage /></VerticalRouteGuard>} />
+                <Route path="/app/ambulantes/carrinho" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulanteCarrinhoPage /></VerticalRouteGuard>} />
+                <Route path="/app/ambulantes/pedido/:id" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantePedidoPage /></VerticalRouteGuard>} />
+                <Route path="/app/ambulantes/:sessionId" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulanteCatalogPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/onboarding" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesOnboardingPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/cardapio" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/cardapio/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/cardapio/editar" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/cardapio/editar/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/produtos" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/produtos/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/catalogo" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/catalogo/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/online" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesOnlinePage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/pedido/:id" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesGerenciarPedidoPage /></VerticalRouteGuard>} />
+                <Route path="/app/diaristas" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristasBuscaPage /></VerticalRouteGuard>} />
+                <Route path="/app/diaristas/agendar/:prestadorId" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaAgendarPage /></VerticalRouteGuard>} />
+                <Route path="/app/diaristas/agendamento/:id" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaAgendamentoPage /></VerticalRouteGuard>} />
+                <Route path="/app/diaristas/:prestadorId" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaPerfilPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/diaristas/onboarding" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaOnboardingPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/diaristas/agenda" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaAgendaPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/diaristas/servico/:id" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/app/home"><DiaristaGerenciarPage /></VerticalRouteGuard>} />
                 <Route path="/app/config" element={<ConfigIndexPage />} />
                 <Route path="/app/config/perfil" element={<ConfigPerfilPage />} />
                 <Route path="/app/config/financeiro" element={<ConfigFinanceiroPage />} />
@@ -288,16 +289,16 @@ const App = () => (
               <Route path="/admin/coco/frota" element={adminGuard(<AdminCocoFrota />, ["operator", "admin", "super_admin", "superadmin", "cocoecia", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "superadmin", "cocoecia", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "superadmin", "cocoecia", "associacao", "associacao_lider", "cocoecia-dirigentes"])} />
-              <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/diaristas/dashboard" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/diaristas/materiais" element={adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/diaristas" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/diaristas/dashboard" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/diaristas/materiais" element={<VerticalRouteGuard vertical="diaristas" redirectTo="/admin">{adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin", "associacao", "associacao_lider"])} />
               <Route path="/admin/mototaxistas/preco-dinamico" element={adminGuard(<AdminPrecoPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/mototaxistas/associacao" element={adminGuard(<AdminMototaxiAssociacaoPage />, ["admin", "super_admin", "associacao", "associacao_lider"])} />
-              <Route path="/admin/ambulantes/dashboard" element={adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/ambulantes/produtos" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/ambulantes/produtos/:categoriaSlug" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
-              <Route path="/admin/ambulantes/cardapios" element={adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/dashboard" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/ambulantes/produtos" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/ambulantes/produtos/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
+              <Route path="/admin/ambulantes/cardapios" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/admin">{adminGuard(<AdminAmbulantesProdutosPage />, ["operator", "admin", "super_admin"])}</VerticalRouteGuard>} />
               <Route path="/admin/associacao/dashboard" element={adminGuard(<AssociacaoDashboard />, ["operator", "admin", "super_admin", "associacao", "associacao_lider"])} />
               <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["admin", "super_admin", "superadmin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />

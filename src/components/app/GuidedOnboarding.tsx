@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ArrowRight, Check, X, Shield, Smartphone, Bike, Sparkles, Recycle, ArrowUpFromLine } from "lucide-react";
 import { trackEvent } from "@/services/AnalyticsService";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 
 interface GuidedOnboardingProps {
   role: "cliente" | "prestador";
@@ -62,12 +63,14 @@ export default function GuidedOnboarding({ role, onClose }: GuidedOnboardingProp
           icon: Recycle,
           iconColor: "#10B981"
         },
-        {
-          title: "Diaristas Certificadas 🧹",
-          description: "Agende serviços de limpeza doméstica com profissionais locais. Selecione o tamanho da casa, data e agende com segurança.",
-          icon: Sparkles,
-          iconColor: "#F5A623"
-        },
+        ...(isVerticalEnabled("diaristas")
+          ? [{
+              title: "Diaristas Certificadas 🧹",
+              description: "Agende serviços de limpeza doméstica com profissionais locais. Selecione o tamanho da casa, data e agende com segurança.",
+              icon: Sparkles,
+              iconColor: "#F5A623"
+            }]
+          : []),
         {
           title: "Instale o UBT na Tela Inicial 📱",
           description: "Instale nosso aplicativo em seu smartphone para desfrutar de acesso ultra-rápido, consumo de dados reduzido e recursos offline.",

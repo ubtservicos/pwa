@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bike, ChevronRight, Recycle, ShoppingBag, Sparkles, Wallet, MapPin, CheckCircle, AlertTriangle } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
+import { isVerticalEnabled } from "@/config/verticalFlags";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import GuidedOnboarding from "@/components/app/GuidedOnboarding";
 import MototaxiIncomingRideListener from "@/components/prestador/MototaxiIncomingRideListener";
@@ -135,8 +136,10 @@ const PrestadorHome = () => {
 
   const hasMototaxi = !!registeredServices.mototaxi;
   const isMototaxiPending = user.kycStatus === "pending";
-  const hasAmbulante = !!registeredServices.ambulante;
-  const hasDiarista = !!registeredServices.diarista;
+  const ambulantesEnabled = isVerticalEnabled("ambulantes");
+  const diaristasEnabled = isVerticalEnabled("diaristas");
+  const hasAmbulante = ambulantesEnabled && !!registeredServices.ambulante;
+  const hasDiarista = diaristasEnabled && !!registeredServices.diarista;
   const hasCoco = !!registeredServices.coco;
 
   const [pedidosAmbulante, setPedidosAmbulante] = useState<any[]>([]);
@@ -753,14 +756,14 @@ const PrestadorHome = () => {
               <ChevronRight size={18} color={isMototaxiPending ? "#F5A623" : theme.border} />
             </button>
           )}
-          {!hasAmbulante && (
+          {ambulantesEnabled && !hasAmbulante && (
             <button type="button" onClick={() => handleServiceNavigate("/app/prestador/ambulantes/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><ShoppingBag size={20} color={theme.muted} /></div>
               <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Ambulante</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar vendas</p></div>
               <ChevronRight size={18} color={theme.border} />
             </button>
           )}
-          {!hasDiarista && (
+          {diaristasEnabled && !hasDiarista && (
             <button type="button" onClick={() => handleServiceNavigate("/app/prestador/diaristas/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Sparkles size={20} color={theme.muted} /></div>
               <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Diarista</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar agenda</p></div>
