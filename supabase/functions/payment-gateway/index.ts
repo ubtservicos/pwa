@@ -1485,6 +1485,7 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   const providerInitiatedRidePix = [
     "create_mototaxi_pix_charge",
     "create_carro_pix_charge",
+    "create_ambulante_pix_charge",
     "create_ride_pix_charge",
   ].includes(action);
   const requestedAmount = validateAmount(body.transaction_amount ?? body.amount);
@@ -1492,7 +1493,9 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     ? (body.service_type ?? body.serviceType ?? "carro")
     : action === "create_mototaxi_pix_charge"
       ? (body.service_type ?? body.serviceType ?? "mototaxi")
-      : (body.service_type ?? body.serviceType);
+      : action === "create_ambulante_pix_charge"
+        ? (body.service_type ?? body.serviceType ?? "ambulante")
+        : (body.service_type ?? body.serviceType);
   const serviceType = normalizeServiceType(inferredServiceType);
   const rideTable = isRideServiceType(serviceType) ? RIDE_TABLE_BY_SERVICE[serviceType] : null;
   const serviceId = assertUuid(body.service_id ?? body.serviceId, "service_id");
@@ -1507,7 +1510,9 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     ? `Corrida UBT Carros ${shortRideId}`
     : serviceType === "mototaxi"
       ? `Corrida UBT Mototáxi ${shortRideId}`
-      : `Serviço UBT ${serviceType}`;
+      : serviceType === "ambulante"
+        ? `Pedido UBT Ambulantes ${shortRideId}`
+        : `Serviço UBT ${serviceType}`;
   const description = String(body.description || defaultDescription).trim().slice(0, 250);
   const paymentMethodId = String(body.payment_method_id || (body.card_token ? "master" : "pix")).trim().toLowerCase();
   const normalizedMethodCategory: "pix" | "card" = paymentMethodId === "pix" ? "pix" : "card";
@@ -1653,6 +1658,135 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
         ...body,
         payer_email: resolvedEmail,
         payer_first_name: payerFirstName || "Passageiro",
+        payer_last_name: payerLastParts.join(" ") || "UBT",
+        payer_identification: payerCpf.length === 11 ? { type: "CPF", number: payerCpf } : undefined,
+      };
+    }
+  } else if (serviceType === "ambulante") {
+    const { data: pedido, error: pedidoError } = await adminClient()
+      .from("pedidos")
+      .select("id, tomador_id, prestador_id, status, subtotal, delivery_fee, total, modalidade, pix_payment_id, pix_transaction_id, pix_copy_paste, pix_qr_code_base64, pix_charge_status, pix_charge_expires_at")
+      .eq("id", serviceId)
+      .maybeSingle();
+    if (pedidoError) {
+      throw new HttpError(503, "order_lookup_failed", "Não foi possível validar o pedido antes da cobrança.");
+    }
+    if (!pedido) throw new HttpError(404, "order_not_found", "Pedido de ambulante não encontrado.");
+
+    if (providerInitiatedRidePix) {
+      if (paymentMethodId !== "pix") {
+        throw new HttpError(400, "invalid_provider_pix_charge", "A cobrança presencial aceita apenas Pix.");
+      }
+      if (pedido.prestador_id !== customerId || providerId !== customerId) {
+        throw new HttpError(403, "provider_not_assigned", "Somente o ambulante atribuído pode gerar esta cobrança Pix.");
+      }
+    } else if (pedido.tomador_id && pedido.tomador_id !== customerId) {
+      throw new HttpError(403, "customer_not_assigned", "Somente o cliente do pedido pode realizar este pagamento.");
+    }
+
+    // Idempotency Guard 1: already paid
+    const { data: existingApproved } = await adminClient()
+      .from("pagamentos_split")
+      .select("id, transaction_id, gateway_payment_id, total_amount, base_amount, provider_amount, payment_method")
+      .eq("service_type", "ambulante")
+      .eq("service_id", serviceId)
+      .in("status", ["approved", "paid", "confirmed", "captured"])
+      .maybeSingle();
+
+    if (pedido.status === "paid" || existingApproved) {
+      const settledMethod = String(existingApproved?.payment_method || normalizedMethodCategory || "pix");
+      return json(req, {
+        success: true,
+        already_paid: true,
+        status: "approved",
+        payment_id: existingApproved?.gateway_payment_id || pedido.pix_payment_id || null,
+        transaction_id: existingApproved?.transaction_id || pedido.pix_transaction_id || null,
+        payment: {
+          id: existingApproved?.gateway_payment_id || pedido.pix_payment_id || null,
+          status: "approved",
+          payment_method_id: settledMethod,
+          transaction_amount: Number(existingApproved?.total_amount ?? pedido.total ?? 0),
+        },
+      }, 200);
+    }
+
+    if (pedido.status === "cancelled") {
+      throw new HttpError(409, "order_cancelled", "Pedidos cancelados não podem ser pagos.");
+    }
+    if (!["completed", "ready"].includes(String(pedido.status || "").toLowerCase())) {
+      throw new HttpError(409, "order_not_ready_for_payment", "O pagamento de ambulantes é liberado somente ao final (pedido pronto ou concluído).");
+    }
+    if (!pedido.tomador_id) {
+      throw new HttpError(409, "order_payer_missing", "O pedido não possui um Tomador vinculado.");
+    }
+
+    // Idempotency Guard 2: reuse active non-expired pending PIX charge
+    if (providerInitiatedRidePix && pedido.pix_payment_id && pedido.pix_copy_paste) {
+      const chargeSt = String(pedido.pix_charge_status || "pending").toLowerCase();
+      const notExpired = !pedido.pix_charge_expires_at ||
+        new Date(pedido.pix_charge_expires_at).getTime() > Date.now() + 30_000;
+      if (["pending", "in_process"].includes(chargeSt) && notExpired) {
+        return json(req, {
+          success: true,
+          idempotent_reuse: true,
+          payment_id: pedido.pix_payment_id,
+          status: chargeSt,
+          transaction_id: pedido.pix_transaction_id,
+          payment: {
+            id: pedido.pix_payment_id,
+            status: chargeSt,
+            payment_method_id: "pix",
+            transaction_amount: roundMoney(
+              validateAmount(pedido.total) * (1 + appliedFeePct / 100),
+            ),
+          },
+          pix: {
+            payment_id: pedido.pix_payment_id,
+            status: chargeSt,
+            external_reference: pedido.pix_transaction_id,
+            qr_code: pedido.pix_copy_paste,
+            qr_code_base64: pedido.pix_qr_code_base64 ?? null,
+            date_of_expiration: pedido.pix_charge_expires_at ?? null,
+          },
+        }, 200);
+      }
+    }
+
+    const canonicalAmount = validateAmount(pedido.total);
+    const canonicalFeeAmount = roundMoney(canonicalAmount * (appliedFeePct / 100));
+    const canonicalTotalAmount = roundMoney(canonicalAmount + canonicalFeeAmount);
+
+    const matchesTotal = Math.abs(canonicalTotalAmount - requestedAmount) <= 0.05;
+    const matchesBase = Math.abs(canonicalAmount - requestedAmount) <= 0.02;
+    if (!matchesTotal && !matchesBase) {
+      throw new HttpError(409, "order_amount_mismatch", "O valor da cobrança diverge do total registrado no pedido.");
+    }
+
+    baseAmount = canonicalAmount;
+    feeAmount = canonicalFeeAmount;
+    amount = canonicalTotalAmount;
+    effectiveTomadorId = pedido.tomador_id;
+
+    if (providerInitiatedRidePix) {
+      const [{ data: payerAuth }, { data: payerProfile }] = await Promise.all([
+        adminClient().auth.admin.getUserById(pedido.tomador_id),
+        adminClient().from("usuarios").select("nome, email, cpf").eq("id", pedido.tomador_id).maybeSingle(),
+      ]);
+
+      const resolvedEmail = String(
+        payerAuth?.user?.email ||
+        payerProfile?.email ||
+        body.payer_email ||
+        `tomador+${pedido.tomador_id.slice(0, 8)}@ubtservicos.com.br`
+      ).trim().toLowerCase();
+
+      const payerName = String(payerProfile?.nome || payerAuth?.user?.user_metadata?.full_name || "Cliente UBT").trim();
+      const [payerFirstName = "Cliente", ...payerLastParts] = payerName.split(/\s+/).filter(Boolean);
+      const payerCpf = String(payerProfile?.cpf || payerAuth?.user?.user_metadata?.cpf || "").replace(/\D/g, "");
+      payerSource = {
+        ...body,
+        payer_email: resolvedEmail,
+        payer_first_name: payerFirstName || "Cliente",
         payer_last_name: payerLastParts.join(" ") || "UBT",
         payer_identification: payerCpf.length === 11 ? { type: "CPF", number: payerCpf } : undefined,
       };
@@ -1870,6 +2004,19 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
     if (error) console.error("[payment-gateway] ride status update failed", error.message);
   }
 
+  if (serviceType === "ambulante" && mpStatus === "approved") {
+    const paidNowIso = new Date().toISOString();
+    const { error } = await adminClient().from("pedidos").update({
+      status: "paid",
+      payment_status: "paid",
+      payment_method: normalizedMethodCategory,
+      ...(normalizedMethodCategory === "pix" ? { pix_charge_status: "approved" } : { pix_charge_status: "cancelled" }),
+      paid_at: paidNowIso,
+      updated_at: paidNowIso,
+    }).eq("id", serviceId);
+    if (error) console.error("[payment-gateway] pedidos status update failed", error.message);
+  }
+
   if (serviceType === "diarista" && mpStatus === "approved") {
     const { error } = await adminClient().from("services_requests").update({
       status: "paid",
@@ -1880,14 +2027,15 @@ async function handlePayment(req: Request, body: Record<string, any>, customerId
   }
 
   const txData = mpResult.data?.point_of_interaction?.transaction_data;
-  if (providerInitiatedRidePix && rideTable) {
+  const targetPixTable = rideTable || (serviceType === "ambulante" ? "pedidos" : null);
+  if (providerInitiatedRidePix && targetPixTable) {
     const pixCopyPaste = String(txData?.qr_code || "").trim();
     const pixQrCodeBase64 = String(txData?.qr_code_base64 || "").trim();
     if (!pixCopyPaste) {
       throw new HttpError(502, "pix_payload_missing", "O Mercado Pago não devolveu o código Pix da cobrança.");
     }
     const { error: chargePersistError } = await adminClient()
-      .from(rideTable)
+      .from(targetPixTable)
       .update({
         payment_method: "pix",
         pix_payment_id: String(mpResult.data.id),
@@ -1974,22 +2122,34 @@ async function handleCheckRidePixStatus(
 ): Promise<Response> {
   const environment = paymentEnvironment();
   const action = String(body.action || "").trim().toLowerCase();
-  const rawServiceType = body.service_type ?? body.serviceType ?? (action === "check_carro_pix_status" ? "carro" : "mototaxi");
+  const rawServiceType =
+    body.service_type ??
+    body.serviceType ??
+    (action === "check_carro_pix_status"
+      ? "carro"
+      : action === "check_ambulante_pix_status"
+        ? "ambulante"
+        : "mototaxi");
   const normalizedService = normalizeServiceType(rawServiceType);
-  if (!isRideServiceType(normalizedService)) {
-    throw new HttpError(400, "invalid_service_type", "Verificação de Pix suporta apenas mototaxi ou carro.");
+  const isAmbulante = normalizedService === "ambulante";
+  if (!isRideServiceType(normalizedService) && !isAmbulante) {
+    throw new HttpError(400, "invalid_service_type", "Verificação de Pix suporta apenas mototaxi, carro ou ambulante.");
   }
-  const rideTable = RIDE_TABLE_BY_SERVICE[normalizedService];
-  const serviceId = assertUuid(body.service_id ?? body.serviceId ?? body.ride_id, "service_id");
+  const rideTable = isAmbulante ? "pedidos" : RIDE_TABLE_BY_SERVICE[normalizedService];
+  const serviceId = assertUuid(body.service_id ?? body.serviceId ?? body.ride_id ?? body.pedido_id, "service_id");
+
+  const selectCols = isAmbulante
+    ? "id, tomador_id, prestador_id, status, total, pix_payment_id, pix_transaction_id, pix_charge_status"
+    : "id, tomador_id, prestador_id, status, final_price, estimated_price, pix_payment_id, pix_transaction_id, pix_charge_status";
 
   const { data: ride, error: rideErr } = await adminClient()
     .from(rideTable)
-    .select("id, tomador_id, prestador_id, status, final_price, estimated_price, pix_payment_id, pix_transaction_id, pix_charge_status")
+    .select(selectCols)
     .eq("id", serviceId)
     .maybeSingle();
 
-  if (rideErr) throw new HttpError(503, "ride_lookup_failed", "Erro ao consultar corrida.");
-  if (!ride) throw new HttpError(404, "ride_not_found", "Corrida não encontrada.");
+  if (rideErr) throw new HttpError(503, "ride_lookup_failed", isAmbulante ? "Erro ao consultar pedido." : "Erro ao consultar corrida.");
+  if (!ride) throw new HttpError(404, isAmbulante ? "order_not_found" : "ride_not_found", isAmbulante ? "Pedido não encontrado." : "Corrida não encontrada.");
 
   // Check caller authorization (tomador, prestador, or legacy email match)
   let authorized = ride.tomador_id === userId || ride.prestador_id === userId;
@@ -2064,16 +2224,30 @@ async function handleCheckRidePixStatus(
       .eq("status", "pending")
       .neq("gateway_payment_id", paymentId);
 
-    await adminClient()
-      .from(rideTable)
-      .update({
-        status: "paid",
-        final_price: Number(ride.final_price ?? ride.estimated_price ?? 0),
-        payment_method: "pix",
-        pix_charge_status: "approved",
-        updated_at: nowIso,
-      })
-      .eq("id", ride.id);
+    if (isAmbulante) {
+      await adminClient()
+        .from("pedidos")
+        .update({
+          status: "paid",
+          payment_status: "paid",
+          payment_method: "pix",
+          pix_charge_status: "approved",
+          paid_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq("id", ride.id);
+    } else {
+      await adminClient()
+        .from(rideTable)
+        .update({
+          status: "paid",
+          final_price: Number(ride.final_price ?? ride.estimated_price ?? 0),
+          payment_method: "pix",
+          pix_charge_status: "approved",
+          updated_at: nowIso,
+        })
+        .eq("id", ride.id);
+    }
 
     await logAuditEvent("pix_status_verified_approved", "approved", {
       service_type: normalizedService,
@@ -2145,10 +2319,10 @@ serve(async (req: Request): Promise<Response> => {
     if (["delete_saved_card", "wallet_delete_card"].includes(action)) {
       return await handleDeleteSavedCard(req, body, userId);
     }
-    if (["check_mototaxi_pix_status", "check_carro_pix_status", "check_ride_pix_status", "verify_pix_payment"].includes(action)) {
+    if (["check_mototaxi_pix_status", "check_carro_pix_status", "check_ambulante_pix_status", "check_ride_pix_status", "verify_pix_payment"].includes(action)) {
       return await handleCheckRidePixStatus(req, body, userId);
     }
-    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge", "create_carro_pix_charge", "create_ride_pix_charge"].includes(action)) {
+    if (["create_payment_intent", "checkout", "create_mototaxi_pix_charge", "create_carro_pix_charge", "create_ambulante_pix_charge", "create_ride_pix_charge"].includes(action)) {
       return await handlePayment(req, body, userId);
     }
     throw new HttpError(400, "unknown_action", `Ação não reconhecida: ${action}`);

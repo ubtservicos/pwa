@@ -401,6 +401,21 @@ async function orchestrateApprovedPayment(mpPayment: MercadoPagoPaymentDetail): 
     if (rideError) {
       throw new Error(`${targetRideTable} update failed for ${split.service_id}: ${rideError.message}`);
     }
+  } else if (String(split.service_type || "").toLowerCase() === "ambulante") {
+    const paidTimestamp = date_approved ?? new Date().toISOString();
+    const { error: orderError } = await supabaseAdmin
+      .from("pedidos")
+      .update({
+        status: "paid",
+        payment_status: "paid",
+        pix_charge_status: "approved",
+        paid_at: paidTimestamp,
+        updated_at: paidTimestamp,
+      })
+      .eq("id", split.service_id);
+    if (orderError) {
+      throw new Error(`pedidos update failed for ${split.service_id}: ${orderError.message}`);
+    }
   } else if (split.service_type === "diarista") {
     const { error: requestError } = await supabaseAdmin
       .from("services_requests")
