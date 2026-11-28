@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, Car, Info, ShoppingBag, Sparkles, Scissors, Waves, GraduationCap, Settings } from "lucide-react";
+import { Bike, Car, Info, ShoppingBag, Sparkles, Scissors, Waves, GraduationCap, Settings, Truck } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -28,6 +28,36 @@ const ConfigServicosPage = () => {
   const [carroActive, setCarroActive] = useState(false);
   const [showDesativar, setShowDesativar] = useState(false);
   const [showDesativarCarro, setShowDesativarCarro] = useState(false);
+  const [showFeeModal, setShowFeeModal] = useState(false);
+  const [deliveryFeeDraft, setDeliveryFeeDraft] = useState("0,00");
+  const [savingFee, setSavingFee] = useState(false);
+
+  useEffect(() => {
+    if (user.ambulanteDeliveryFee !== undefined) {
+      setDeliveryFeeDraft(Number(user.ambulanteDeliveryFee || 0).toFixed(2).replace(".", ","));
+    }
+  }, [user.ambulanteDeliveryFee]);
+
+  const handleSaveDeliveryFee = async () => {
+    const parsed = Number(deliveryFeeDraft.replace(",", ".").trim());
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      showToast("Informe uma taxa de entrega válida (0 ou maior).");
+      return;
+    }
+    setSavingFee(true);
+    try {
+      const { error } = await supabase.rpc("update_my_ambulante_delivery_fee", {
+        p_delivery_fee: Number(parsed.toFixed(2)),
+      });
+      if (error) throw error;
+      showToast("Taxa de entrega atualizada ✓");
+      setShowFeeModal(false);
+    } catch (e: any) {
+      showToast(e?.message || "Erro ao atualizar taxa de entrega.");
+    } finally {
+      setSavingFee(false);
+    }
+  };
 
   useEffect(() => {
     if (user.uid) {
@@ -179,9 +209,33 @@ const ConfigServicosPage = () => {
             <SettingsRow
               icon={ShoppingBag}
               label="Ambulantes"
-              subtitle="Documentação e alvará de praia"
-              onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
+              subtitle={
+                user.ambulanteKycStatus === "approved"
+                  ? "KYC aprovado · Documentação e selos"
+                  : user.ambulanteKycStatus === "pending"
+                    ? "Documentação em análise ⏳"
+                    : "Enviar KYC, alvará e selos de praia"
+              }
+              onClick={() =>
+                navigate(
+                  user.ambulanteKycStatus === "pending"
+                    ? "/app/prestador/ambulantes/kyc-pending"
+                    : "/app/prestador/ambulantes/onboarding",
+                )
+              }
             />
+            {user.ambulanteKycStatus === "approved" && (
+              <SettingsRow
+                icon={Truck}
+                label="Taxa de Entrega Individual"
+                subtitle={
+                  Number(user.ambulanteDeliveryFee || 0) <= 0
+                    ? "Entrega grátis (R$ 0,00) · Toque para editar"
+                    : `R$ ${Number(user.ambulanteDeliveryFee || 0).toFixed(2).replace(".", ",")} por entrega · Toque para editar`
+                }
+                onClick={() => setShowFeeModal(true)}
+              />
+            )}
             <SettingsRow
               icon={ShoppingBag}
               label="Cardápio & Estoque Diário"
@@ -305,6 +359,71 @@ const ConfigServicosPage = () => {
           }}
         >
           Cancelar
+        </button>
+      </BottomSheet>
+
+      <BottomSheet open={showFeeModal} onClose={() => setShowFeeModal(false)}>
+        <h2
+          style={{
+            fontFamily: "Syne",
+            fontSize: 18,
+            fontWeight: 700,
+            color: t.text,
+            textAlign: "center",
+            margin: 0,
+          }}
+        >
+          Taxa de Entrega (Ambulante)
+        </h2>
+        <p
+          style={{
+            fontFamily: "DM Sans",
+            fontSize: 13,
+            color: t.subtle,
+            textAlign: "center",
+            marginTop: 6,
+          }}
+        >
+          Defina quanto cobrar nas entregas. Retiradas no ponto são sempre R$ 0,00.
+        </p>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={deliveryFeeDraft}
+          onChange={(e) => setDeliveryFeeDraft(e.target.value)}
+          placeholder="0,00"
+          style={{
+            marginTop: 16,
+            width: "100%",
+            padding: "12px 14px",
+            borderRadius: 12,
+            background: t.bg,
+            border: `1px solid ${t.border}`,
+            color: t.text,
+            fontSize: 16,
+            fontWeight: 700,
+            textAlign: "center",
+          }}
+        />
+        <button
+          type="button"
+          disabled={savingFee}
+          onClick={handleSaveDeliveryFee}
+          style={{
+            marginTop: 18,
+            width: "100%",
+            padding: "14px",
+            borderRadius: 12,
+            background: "#0DB87E",
+            color: "#FFF",
+            border: "none",
+            fontFamily: "DM Sans",
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          {savingFee ? "Salvando..." : "Salvar Taxa de Entrega"}
         </button>
       </BottomSheet>
 

@@ -79,14 +79,18 @@ export function paymentToTransaction(row: PaymentHistoryRow): Transaction {
       ? "cancelled"
       : "pending";
   const shortId = row.service_id ? `#${String(row.service_id).slice(0, 8).toUpperCase()}` : "";
-  const isCarro = String(row.service_type || "").toLowerCase() === "carro";
-  const baseDesc = isCarro
-    ? row.ride_type === "entrega"
-      ? "Entrega Carros UBT"
-      : "Corrida Carros UBT"
-    : row.ride_type === "entrega"
-      ? "Entrega Mototáxi UBT"
-      : "Corrida Mototáxi UBT";
+  const normalizedServiceType = String(row.service_type || "").toLowerCase();
+  const isCarro = normalizedServiceType === "carro";
+  const isAmbulante = normalizedServiceType === "ambulante";
+  const baseDesc = isAmbulante
+    ? "Pedido Ambulantes UBT"
+    : isCarro
+      ? row.ride_type === "entrega"
+        ? "Entrega Carros UBT"
+        : "Corrida Carros UBT"
+      : row.ride_type === "entrega"
+        ? "Entrega Mototáxi UBT"
+        : "Corrida Mototáxi UBT";
 
   return {
     id: row.payment_id,
@@ -98,8 +102,10 @@ export function paymentToTransaction(row: PaymentHistoryRow): Transaction {
     transactionId: row.transaction_id,
     serviceId: row.service_id,
     serviceType: row.service_type,
-    origin: row.origin?.address || "Origem não informada",
-    destination: row.destination?.address || "Destino não informado",
+    origin: isAmbulante ? (row.origin?.address || undefined) : (row.origin?.address || "Origem não informada"),
+    destination: isAmbulante
+      ? (row.destination?.address || undefined)
+      : (row.destination?.address || "Destino não informado"),
     paymentMethod: row.payment_method || undefined,
     durationMin: row.duration_min || undefined,
     distanceKm: row.distance_km == null ? undefined : Number(row.distance_km),

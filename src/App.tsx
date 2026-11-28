@@ -239,6 +239,8 @@ const App = () => (
                 <Route path="/app/ambulantes/pedido/:id" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantePedidoPage /></VerticalRouteGuard>} />
                 <Route path="/app/ambulantes/:sessionId" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulanteCatalogPage /></VerticalRouteGuard>} />
                 <Route path="/app/prestador/ambulantes/onboarding" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesOnboardingPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/config" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesOnboardingPage /></VerticalRouteGuard>} />
+                <Route path="/app/prestador/ambulantes/kyc-pending" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><PrestadorKycPending /></VerticalRouteGuard>} />
                 <Route path="/app/prestador/ambulantes/cardapio" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
                 <Route path="/app/prestador/ambulantes/cardapio/:categoriaSlug" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />
                 <Route path="/app/prestador/ambulantes/cardapio/editar" element={<VerticalRouteGuard vertical="ambulantes" redirectTo="/app/home"><AmbulantesCatalogoPage /></VerticalRouteGuard>} />

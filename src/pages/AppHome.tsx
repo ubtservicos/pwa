@@ -99,14 +99,17 @@ const AppHome = () => {
       }
       try {
         setLoadingOrders(true);
+        const ambulantesActive = isVerticalEnabled("ambulantes");
         const [pedidosRes, carrosRes] = await Promise.all([
-          supabase
-            .from("pedidos")
-            .select("id, modalidade, status, total, created_at, prestador_id, delivery_address")
-            .eq("tomador_id", user.uid)
-            .in("status", ["pending", "searching", "accepted", "in_progress", "preparing", "aguardando_confirmacao"])
-            .order("created_at", { ascending: false })
-            .limit(5),
+          ambulantesActive
+            ? supabase
+                .from("pedidos")
+                .select("id, modalidade, status, total, created_at, prestador_id, delivery_address")
+                .eq("tomador_id", user.uid)
+                .in("status", ["pending", "confirmed", "preparing", "ready", "completed"])
+                .order("created_at", { ascending: false })
+                .limit(5)
+            : Promise.resolve({ data: [], error: null }),
           supabase
             .from("carro_corridas")
             .select("id, status, estimated_price, final_price, created_at, prestador_id, destination, origin")
@@ -118,7 +121,12 @@ const AppHome = () => {
 
         const merged: ActiveOrder[] = [];
         if (!pedidosRes.error && Array.isArray(pedidosRes.data)) {
-          merged.push(...(pedidosRes.data as ActiveOrder[]));
+          for (const ped of pedidosRes.data as ActiveOrder[]) {
+            merged.push({
+              ...ped,
+              modalidade: "ambulante",
+            });
+          }
         }
         if (!carrosRes.error && Array.isArray(carrosRes.data)) {
           for (const ride of carrosRes.data as any[]) {
@@ -605,9 +613,11 @@ const AppHome = () => {
                       navigate(
                         order.modalidade === "carros" || order.modalidade === "carro"
                           ? "/app/carros"
-                          : order.modalidade
-                            ? `/app/${order.modalidade}`
-                            : "/app/home",
+                          : order.modalidade === "ambulante"
+                            ? `/app/ambulantes/pedido/${order.id}`
+                            : order.modalidade
+                              ? `/app/${order.modalidade}`
+                              : "/app/home",
                       )
                     }
                     style={{

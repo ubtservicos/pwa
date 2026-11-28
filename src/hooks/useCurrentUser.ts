@@ -24,14 +24,22 @@ export const useCurrentUser = (): RealUser => {
         let dbUser: any = null;
         let mototaxiData: any = null;
         let carroData: any = null;
+        let ambulanteData: any = null;
         let resolvedUid: string = authUser.id;
 
         // 1. Prefer SECURITY DEFINER RPCs that support both standard and legacy accounts (auth.uid != usuarios.id)
-        const [{ data: rpcProfile, error: rpcErr }, { data: carroRpcProfile, error: carroRpcErr }] =
-          await Promise.all([
-            supabase.rpc("get_my_mototaxi_profile"),
-            supabase.rpc("get_my_carro_profile"),
-          ]);
+        const [
+          { data: rpcProfile, error: rpcErr },
+          { data: carroRpcProfile, error: carroRpcErr },
+          ambulanteRpcRes,
+        ] = await Promise.all([
+          supabase.rpc("get_my_mototaxi_profile"),
+          supabase.rpc("get_my_carro_profile"),
+          Promise.resolve(supabase.rpc("get_my_ambulante_profile")).catch(() => ({
+            data: null,
+            error: { message: "rpc_unavailable" },
+          })),
+        ]);
 
         if (!rpcErr && rpcProfile && (rpcProfile as any).ok) {
           const payload = rpcProfile as any;
@@ -69,6 +77,23 @@ export const useCurrentUser = (): RealUser => {
           carroData = cData;
         }
 
+        const ambRpcErr = (ambulanteRpcRes as any)?.error;
+        const ambRpcData = (ambulanteRpcRes as any)?.data;
+        if (!ambRpcErr && ambRpcData && typeof ambRpcData === "object") {
+          ambulanteData = (ambRpcData as any).record ?? ambRpcData;
+        } else {
+          try {
+            const { data: aData } = await supabase
+              .from("prestador_ambulante")
+              .select("kyc_status, delivery_fee, cpf")
+              .eq("user_id", resolvedUid)
+              .maybeSingle();
+            ambulanteData = aData;
+          } catch {
+            ambulanteData = null;
+          }
+        }
+
         if (!active) return;
 
         // Read status map from localStorage
@@ -90,6 +115,8 @@ export const useCurrentUser = (): RealUser => {
           mototaxiData?.kyc_status ? (mototaxiData.kyc_status as any) : "none";
         const resolvedCarroKycStatus: "approved" | "pending" | "none" | "rejected" =
           carroData?.kyc_status ? (carroData.kyc_status as any) : "none";
+        const resolvedAmbulanteKycStatus: "approved" | "pending" | "none" | "rejected" =
+          ambulanteData?.kyc_status ? (ambulanteData.kyc_status as any) : "none";
 
         setUser({
           uid: resolvedUid,
@@ -98,11 +125,14 @@ export const useCurrentUser = (): RealUser => {
           role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
           kycStatus: resolvedKycStatus,
           carroKycStatus: resolvedCarroKycStatus,
+          ambulanteKycStatus: resolvedAmbulanteKycStatus,
+          ambulanteDeliveryFee: Number(ambulanteData?.delivery_fee ?? 0) || 0,
+          ambulanteActive: resolvedAmbulanteKycStatus === "approved",
           modalidade: mototaxiData?.modalidade || null,
           plate: mototaxiData?.plate || null,
           carroModalidade: carroData?.modalidade || null,
           carroPlate: carroData?.plate || null,
-          cpf: mototaxiData?.cpf || carroData?.cpf || dbUser?.cpf || authUser.user_metadata?.cpf || null,
+          cpf: mototaxiData?.cpf || carroData?.cpf || ambulanteData?.cpf || dbUser?.cpf || authUser.user_metadata?.cpf || null,
           sexo: mototaxiData?.gender || carroData?.gender || authUser.user_metadata?.sexo || null,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,

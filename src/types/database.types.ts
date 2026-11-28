@@ -161,6 +161,9 @@ export interface RealUser {
   carroPlate?: string | null;
   carroModalidade?: "carona_entrega" | "so_entrega" | "so_carona" | null;
   carroActive?: boolean;
+  ambulanteKycStatus?: "approved" | "pending" | "none" | "rejected" | string;
+  ambulanteDeliveryFee?: number;
+  ambulanteActive?: boolean;
   status?: string;
   mototaxiActive?: boolean;
   isLoading?: boolean;
@@ -173,6 +176,7 @@ export interface CartItem {
   qty: number;
   precoUnit: number;
   subtotal: number;
+  maxStock?: number;
 }
 
 export type AmbulantePedidoStatus =

@@ -1,517 +1,409 @@
-import { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  MapPin,
-  SlidersHorizontal,
-  ShoppingBag,
-  Sparkles,
-  ChevronRight,
-  Package,
-  Layers,
-  ArrowUpDown,
-  Check
-} from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, MapPin, ShoppingBag, Star } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { CATEGORIAS_MACRO } from "./AmbulantesDiscoveryPage";
-import { haversineKm, formatDist } from "@/utils/geo";
-
-// Coordenadas padrão de fallback (Centro / Praia do Tenório - Ubatuba)
-const DEFAULT_UBATUBA_COORDS = { lat: -23.4332, lng: -45.0834 };
-
-interface ProdutoEstoqueResumo {
-  id: string;
-  nome: string;
-  preco: number;
-  quantidade: number;
-  imagemUrl?: string | null;
-}
+import { reverseGeocode } from "@/lib/geoService";
+import { UBATUBA_CENTER } from "@/lib/googleMapsConfig";
+import AmbulanteTrustBadges, {
+  formatDistanceLabel,
+  haversineDistanceKm,
+  isDeliveryModalidade,
+} from "@/components/ambulantes/AmbulanteTrustBadges";
 
 interface AmbulanteCardData {
-  id: string; // ID da sessão / prestador
+  sessionId: string;
+  prestadorId: string;
   nome: string;
-  modalidade: string;
-  address: string;
-  lat: number;
-  lng: number;
-  distanciaKm: number;
-  distanciaTexto: string;
-  isOnline: boolean;
-  menorPreco: number;
-  totalVariedade: number;
-  produtos: ProdutoEstoqueResumo[];
+  emoji: string;
+  rating: number;
+  lat: number | null;
+  lng: number | null;
+  distanceKm: number | null;
+  deliveryFee: number;
+  modalidades: string[];
+  praiaReferencia: string | null;
+  pontoReferencia: string | null;
+  tipoEstrutura: string | null;
+  estruturaPhotoUrl: string | null;
+  possuiAlvara: boolean;
+  possuiVigilanciaSanitaria: boolean;
+  itensDisponiveis: number;
+  previewItens: Array<{ nome: string; preco: number }>;
 }
 
-type TipoOrdenacao = "proximo" | "menor_preco" | "variedade";
-
-export default function AmbulantesCategoriaAmbulantesPage() {
-  const { slug } = useParams<{ slug: string }>();
+const AmbulantesCategoriaAmbulantesPage = () => {
   const navigate = useNavigate();
-
-  // Categoria ativa
-  const categoria = useMemo(() => {
-    if (!slug) return null;
-    return (
-      CATEGORIAS_MACRO.find((c) => c.slug.toLowerCase() === slug.toLowerCase()) ||
-      CATEGORIAS_MACRO.find((c) => c.nome.toLowerCase() === slug.toLowerCase()) ||
-      null
-    );
-  }, [slug]);
-
-  // Estados locais
-  const [loading, setLoading] = useState(true);
+  const { slug } = useParams<{ slug: string }>();
+  const [cat, setCat] = useState<{ id: string; nome: string; emoji: string; slug: string } | null>(null);
   const [ambulantes, setAmbulantes] = useState<AmbulanteCardData[]>([]);
-  const [ordenacao, setOrdenacao] = useState<TipoOrdenacao>("proximo");
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [userLocationName, setUserLocationName] = useState("Ubatuba, SP");
+  const [loading, setLoading] = useState(true);
+  const [locationLabel, setLocationLabel] = useState("Ubatuba, SP");
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>(UBATUBA_CENTER);
+  const [modalFilter, setModalFilter] = useState<"todos" | "entrega" | "retirada">("todos");
 
-  // 1. Geolocalização do Tomador
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setUserCoords(DEFAULT_UBATUBA_COORDS);
-      return;
+    let active = true;
+    const resolveCoords = async (lat: number, lng: number) => {
+      if (active) setUserCoords({ lat, lng });
+      try {
+        const label = await reverseGeocode(lat, lng);
+        if (active && label) setLocationLabel(label);
+      } catch {
+        // Keep Ubatuba fallback
+      }
+    };
+
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolveCoords(pos.coords.latitude, pos.coords.longitude),
+        () => resolveCoords(UBATUBA_CENTER.lat, UBATUBA_CENTER.lng),
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
+      );
+    } else {
+      resolveCoords(UBATUBA_CENTER.lat, UBATUBA_CENTER.lng);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setUserLocationName("Sua localização atual");
-      },
-      () => {
-        setUserCoords(DEFAULT_UBATUBA_COORDS);
-        setUserLocationName("Praia Grande, Ubatuba");
-      },
-      { timeout: 5000 }
-    );
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // 2. Consulta ao banco de dados real (estoque_ambulante)
   useEffect(() => {
-    if (!categoria) {
-      setLoading(false);
-      return;
-    }
-
-    async function carregarAmbulantes() {
+    const fetchAmbulantes = async () => {
+      if (!slug) return;
+      setLoading(true);
       try {
-        setLoading(true);
+        // 1. Category details
+        const { data: catData } = await supabase
+          .from("categorias_ambulante")
+          .select("*")
+          .eq("slug", slug)
+          .maybeSingle();
 
-        // Passo A: Buscar os produtos padrão ativos cadastrados nesta Categoria Macro
-        const { data: produtosPadrao, error: errProd } = await supabase
-          .from("produtos_padrao")
-          .select("id, nome_produto, preco_sugerido, imagem_url, categoria")
-          .eq("categoria", categoria.nome)
-          .eq("ativo", true);
-
-        if (errProd) throw errProd;
-
-        if (!produtosPadrao || produtosPadrao.length === 0) {
+        if (!catData) {
+          setCat(null);
           setAmbulantes([]);
-          setLoading(false);
           return;
         }
+        setCat(catData);
 
-        const produtosMap = new Map<string, { nome: string; precoSugerido: number; imagemUrl?: string }>();
-        const produtoIds: string[] = [];
-        produtosPadrao.forEach((p) => {
-          produtosMap.set(p.id, {
-            nome: p.nome_produto,
-            precoSugerido: Number(p.preco_sugerido) || 0,
-            imagemUrl: p.imagem_url,
-          });
-          produtoIds.push(p.id);
-        });
-
-        // Passo B: Buscar itens no estoque_ambulante que tenham quantidade > 0 e estejam disponíveis
-        const { data: estoqueRows, error: errEstoque } = await supabase
-          .from("estoque_ambulante")
-          .select("id, id_ambulante, id_produto_padrao, preco_venda, quantidade, disponivel")
-          .in("id_produto_padrao", produtoIds)
-          .gt("quantidade", 0)
-          .eq("disponivel", true);
-
-        if (errEstoque) throw errEstoque;
-
-        if (!estoqueRows || estoqueRows.length === 0) {
-          setAmbulantes([]);
-          setLoading(false);
-          return;
-        }
-
-        // Agrupar produtos por id_ambulante
-        const ambulanteEstoqueMap = new Map<string, ProdutoEstoqueResumo[]>();
-        estoqueRows.forEach((row) => {
-          const info = produtosMap.get(row.id_produto_padrao);
-          if (!info) return;
-
-          const precoFinal = Number(row.preco_venda) > 0 ? Number(row.preco_venda) : info.precoSugerido;
-          const item: ProdutoEstoqueResumo = {
-            id: row.id_produto_padrao,
-            nome: info.nome,
-            preco: precoFinal,
-            quantidade: Number(row.quantidade),
-            imagemUrl: info.imagemUrl,
-          };
-
-          const list = ambulanteEstoqueMap.get(row.id_ambulante) || [];
-          list.push(item);
-          ambulanteEstoqueMap.set(row.id_ambulante, list);
-        });
-
-        const distinctAmbulanteIds = Array.from(ambulanteEstoqueMap.keys());
-        if (distinctAmbulanteIds.length === 0) {
-          setAmbulantes([]);
-          setLoading(false);
-          return;
-        }
-
-        // Passo C: Buscar sessões e usuários cadastrados para esses ambulantes
-        const [{ data: sessionsData }, { data: usuariosData }] = await Promise.all([
+        // 2. Strict filter: ONLY online sessions AND KYC-approved prestador_ambulante
+        const [{ data: sessions }, { data: approvedProfiles }] = await Promise.all([
           supabase
             .from("ambulante_sessions")
-            .select("id, modalidade, address, lat, lng, is_online")
-            .in("id", distinctAmbulanteIds),
+            .select(
+              "id, is_online, categoria_slug, modalidades, lat, lng, delivery_fee, praia_referencia, ponto_referencia, usuarios(nome)",
+            )
+            .eq("is_online", true),
           supabase
-            .from("usuarios")
-            .select("id, nome, avatar_url")
-            .in("id", distinctAmbulanteIds),
+            .from("prestador_ambulante")
+            .select(
+              "user_id, nome_comercial, delivery_fee, modalidades, praia_referencia, ponto_referencia, tipo_estrutura, estrutura_photo_url, possui_alvara, possui_vigilancia_sanitaria, kyc_status",
+            )
+            .eq("kyc_status", "approved"),
         ]);
 
-        const sessionsMap = new Map<string, any>();
-        if (sessionsData) {
-          sessionsData.forEach((s) => sessionsMap.set(s.id, s));
+        const profileMap = new Map<string, any>();
+        (approvedProfiles || []).forEach((p: any) => profileMap.set(p.user_id, p));
+
+        const eligibleSessions = (sessions || []).filter((s: any) => profileMap.has(s.id));
+        if (eligibleSessions.length === 0) {
+          setAmbulantes([]);
+          return;
         }
 
-        const usuariosMap = new Map<string, any>();
-        if (usuariosData) {
-          usuariosData.forEach((u) => usuariosMap.set(u.id, u));
-        }
+        const eligibleIds = eligibleSessions.map((s: any) => s.id);
 
-        const clientLat = userCoords?.lat ?? DEFAULT_UBATUBA_COORDS.lat;
-        const clientLng = userCoords?.lng ?? DEFAULT_UBATUBA_COORDS.lng;
+        // 3. Stock > 0 and disponivel = true for eligible vendors
+        const [{ data: stockRows }, { data: ratingRows }] = await Promise.all([
+          supabase
+            .from("estoque_ambulante")
+            .select(
+              "prestador_id, preco_venda, quantidade, disponivel, produtos_padrao(nome, categoria_id)",
+            )
+            .in("prestador_id", eligibleIds)
+            .eq("disponivel", true)
+            .gt("quantidade", 0),
+          supabase
+            .from("ambulante_avaliacoes")
+            .select("avaliado_id, nota")
+            .in("avaliado_id", eligibleIds),
+        ]);
 
-        // Passo D: Montar os cards completos dos ambulantes com cálculo de distância
-        const cards: AmbulanteCardData[] = distinctAmbulanteIds.map((ambId) => {
-          const session = sessionsMap.get(ambId);
-          const usuario = usuariosMap.get(ambId);
-          const prods = ambulanteEstoqueMap.get(ambId) || [];
-
-          const lat = session?.lat || DEFAULT_UBATUBA_COORDS.lat;
-          const lng = session?.lng || DEFAULT_UBATUBA_COORDS.lng;
-          const distKm = haversineKm(clientLat, clientLng, lat, lng);
-
-          // Formatar distância amigável
-          const distanciaTexto =
-            distKm < 1 ? `${Math.round(distKm * 1000)}m de você` : `${distKm.toFixed(1)}km de você`;
-
-          const menorPreco = prods.reduce(
-            (min, p) => (p.preco < min ? p.preco : min),
-            prods[0]?.preco ?? 0
-          );
-
-          return {
-            id: ambId,
-            nome: usuario?.nome || "Ambulante Credenciado",
-            modalidade: session?.modalidade || "local_fixo",
-            address: session?.address || "Praia de Ubatuba",
-            lat,
-            lng,
-            distanciaKm: distKm,
-            distanciaTexto,
-            isOnline: session?.is_online !== false,
-            menorPreco,
-            totalVariedade: prods.length,
-            produtos: prods,
-          };
+        // Aggregate ratings
+        const ratingMap = new Map<string, { sum: number; count: number }>();
+        (ratingRows || []).forEach((r: any) => {
+          const cur = ratingMap.get(r.avaliado_id) || { sum: 0, count: 0 };
+          cur.sum += Number(r.nota || 0);
+          cur.count += 1;
+          ratingMap.set(r.avaliado_id, cur);
         });
 
-        setAmbulantes(cards);
-      } catch (err: any) {
-        console.error("Erro ao carregar ambulantes da categoria:", err);
-        setAmbulantes([]);
+        // Group active stock per vendor (matching category OR vendor's primary slug)
+        const stockByVendor = new Map<string, Array<{ nome: string; preco: number; matchesCat: boolean }>>();
+        (stockRows || []).forEach((row: any) => {
+          const pid = row.prestador_id;
+          if (!pid) return;
+          const matchesCat = row?.produtos_padrao?.categoria_id === catData.id;
+          if (!stockByVendor.has(pid)) stockByVendor.set(pid, []);
+          stockByVendor.get(pid)!.push({
+            nome: row?.produtos_padrao?.nome || "Produto",
+            preco: Number(row.preco_venda || 0),
+            matchesCat,
+          });
+        });
+
+        const list: AmbulanteCardData[] = [];
+        for (const sess of eligibleSessions as any[]) {
+          const prof = profileMap.get(sess.id);
+          const allVendorStock = stockByVendor.get(sess.id) || [];
+          const catStock = allVendorStock.filter((i) => i.matchesCat);
+          const effectiveStock =
+            catStock.length > 0
+              ? catStock
+              : sess.categoria_slug === slug
+                ? allVendorStock
+                : [];
+
+          // Must have at least 1 active product in stock
+          if (effectiveStock.length === 0) continue;
+
+          const lat = sess.lat !== null && sess.lat !== undefined ? Number(sess.lat) : null;
+          const lng = sess.lng !== null && sess.lng !== undefined ? Number(sess.lng) : null;
+          const dist = haversineDistanceKm(userCoords.lat, userCoords.lng, lat, lng);
+          const rInfo = ratingMap.get(sess.id);
+          const avgRating = rInfo && rInfo.count > 0 ? +(rInfo.sum / rInfo.count).toFixed(1) : 5.0;
+
+          const modalidadesRaw: string[] = Array.isArray(prof?.modalidades) && prof.modalidades.length > 0
+            ? prof.modalidades
+            : Array.isArray(sess.modalidades) && sess.modalidades.length > 0
+              ? sess.modalidades
+              : ["entrega", "retirada"];
+
+          const deliveryFee = Math.max(
+            0,
+            Number(sess.delivery_fee ?? prof?.delivery_fee ?? 0) || 0,
+          );
+
+          list.push({
+            sessionId: sess.id,
+            prestadorId: sess.id,
+            nome: prof?.nome_comercial || sess.usuarios?.nome || "Ambulante UBT",
+            emoji: catData.emoji || "🛍️",
+            rating: avgRating,
+            lat,
+            lng,
+            distanceKm: dist,
+            deliveryFee,
+            modalidades: modalidadesRaw,
+            praiaReferencia: sess.praia_referencia || prof?.praia_referencia || null,
+            pontoReferencia: sess.ponto_referencia || prof?.ponto_referencia || null,
+            tipoEstrutura: prof?.tipo_estrutura || null,
+            estruturaPhotoUrl: prof?.estrutura_photo_url || null,
+            possuiAlvara: Boolean(prof?.possui_alvara),
+            possuiVigilanciaSanitaria: Boolean(prof?.possui_vigilancia_sanitaria),
+            itensDisponiveis: effectiveStock.length,
+            previewItens: effectiveStock.slice(0, 3).map((i) => ({ nome: i.nome, preco: i.preco })),
+          });
+        }
+
+        // Sort by real distance when available
+        list.sort((a, b) => {
+          if (a.distanceKm === null && b.distanceKm === null) return 0;
+          if (a.distanceKm === null) return 1;
+          if (b.distanceKm === null) return -1;
+          return a.distanceKm - b.distanceKm;
+        });
+
+        setAmbulantes(list);
+      } catch (err) {
+        console.error("Erro ao buscar ambulantes da categoria:", err);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    carregarAmbulantes();
-  }, [categoria, userCoords]);
+    fetchAmbulantes();
+  }, [slug, userCoords.lat, userCoords.lng]);
 
-  // 3. Ordenação dinâmica
-  const ambulantesOrdenados = useMemo(() => {
-    const list = [...ambulantes];
-    if (ordenacao === "proximo") {
-      return list.sort((a, b) => a.distanciaKm - b.distanciaKm);
-    }
-    if (ordenacao === "menor_preco") {
-      return list.sort((a, b) => a.menorPreco - b.menorPreco);
-    }
-    if (ordenacao === "variedade") {
-      return list.sort((a, b) => b.totalVariedade - a.totalVariedade);
-    }
-    return list;
-  }, [ambulantes, ordenacao]);
-
-  if (!categoria) {
-    return (
-      <div className="min-h-screen bg-black text-white p-6 flex flex-col items-center justify-center text-center">
-        <p className="text-lg font-bold mb-2">Categoria não encontrada</p>
-        <p className="text-xs text-zinc-400 mb-6">A categoria informada não existe ou foi descontinuada.</p>
-        <button
-          onClick={() => navigate("/app/ambulantes")}
-          className="px-5 py-2.5 rounded-xl bg-[#00FF66] text-black font-black text-sm"
-        >
-          Voltar para Categorias
-        </button>
-      </div>
+  const filteredAmbulantes = useMemo(() => {
+    if (modalFilter === "todos") return ambulantes;
+    return ambulantes.filter((amb) =>
+      modalFilter === "entrega"
+        ? amb.modalidades.some((m) => isDeliveryModalidade(m))
+        : amb.modalidades.some((m) => !isDeliveryModalidade(m)),
     );
-  }
-
-  const getLabelOrdenacao = (tipo: TipoOrdenacao) => {
-    switch (tipo) {
-      case "proximo":
-        return "Mais Próximo";
-      case "menor_preco":
-        return "Menor Preço";
-      case "variedade":
-        return "Maior Variedade";
-    }
-  };
+  }, [ambulantes, modalFilter]);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans pb-28">
-      {/* ========================================================================= */}
-      {/* HEADER FIXO SUPERIOR COM BOTÃO DE FILTRO                                  */}
-      {/* ========================================================================= */}
-      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/app/ambulantes")}
-            className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer active:scale-95"
-            aria-label="Voltar para categorias"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl filter drop-shadow">{categoria.emoji}</span>
-            <div>
-              <h1 className="text-base font-black tracking-tight text-white line-clamp-1">
-                {categoria.nome}
-              </h1>
-              <p className="text-[11px] text-zinc-400 flex items-center gap-1">
-                <MapPin size={11} className="text-[#00FF66]" />
-                <span className="truncate max-w-[170px]">{userLocationName}</span>
-              </p>
-            </div>
-          </div>
-        </div>
+    <div
+      className="min-h-[100svh] overflow-y-auto"
+      style={{ background: "#0B1B3E", padding: 24, paddingBottom: 48 }}
+    >
+      {/* Header */}
+      <header className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/app/ambulantes")}
+          aria-label="Voltar"
+          className="flex items-center justify-center rounded-full border-none cursor-pointer shrink-0"
+          style={{ width: 40, height: 40, background: "rgba(255,255,255,0.08)", color: "#fff" }}
+        >
+          <ArrowLeft size={20} />
+        </button>
 
-        {/* Botão de Filtro / Ordenação */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowFilterModal(!showFilterModal)}
-            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition cursor-pointer active:scale-95 ${
-              showFilterModal
-                ? "bg-[#00FF66] text-black border-[#00FF66]"
-                : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700"
-            }`}
-            aria-label="Filtrar ambulantes"
-          >
-            <SlidersHorizontal size={14} className={showFilterModal ? "text-black" : "text-[#00FF66]"} />
-            <span className="hidden sm:inline">{getLabelOrdenacao(ordenacao)}</span>
-          </button>
-
-          {/* Dropdown de Ordenação */}
-          {showFilterModal && (
-            <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl p-2 z-50">
-              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 px-3 py-1.5">
-                Ordenar por
-              </p>
-              {(["proximo", "menor_preco", "variedade"] as TipoOrdenacao[]).map((tipo) => (
-                <button
-                  key={tipo}
-                  type="button"
-                  onClick={() => {
-                    setOrdenacao(tipo);
-                    setShowFilterModal(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition text-left cursor-pointer ${
-                    ordenacao === tipo
-                      ? "bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30"
-                      : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                  }`}
-                >
-                  <span>{getLabelOrdenacao(tipo)}</span>
-                  {ordenacao === tipo && <Check size={14} className="text-[#00FF66]" />}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display text-[18px] font-bold text-white truncate">
+            {cat ? `${cat.emoji} ${cat.nome}` : "Ambulantes"}
+          </h1>
+          <p className="font-sans text-[12px] text-white/60 flex items-center gap-1 truncate">
+            <MapPin size={11} color="#0DB87E" className="shrink-0" />
+            <span className="truncate">{locationLabel}</span>
+          </p>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
-        {/* ========================================================================= */}
-        {/* SUBHEADER: RESUMO DE RESULTADOS E CRITÉRIO ATIVO                         */}
-        {/* ========================================================================= */}
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-zinc-400">
-            {loading ? (
-              "Buscando estoque na areia..."
-            ) : (
-              <>
-                <strong className="text-white font-black">{ambulantesOrdenados.length}</strong>{" "}
-                {ambulantesOrdenados.length === 1 ? "ambulante encontrado" : "ambulantes encontrados"}
-              </>
-            )}
-          </p>
+      {/* Filter pills */}
+      <div className="mt-4 flex gap-2">
+        {(
+          [
+            { key: "todos", label: "Todos" },
+            { key: "entrega", label: "Com Entrega" },
+            { key: "retirada", label: "Retirada no Ponto" },
+          ] as const
+        ).map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setModalFilter(f.key)}
+            className="font-sans text-[12px] font-semibold rounded-full cursor-pointer transition-colors"
+            style={{
+              padding: "6px 14px",
+              background: modalFilter === f.key ? "#0DB87E" : "rgba(255,255,255,0.06)",
+              color: modalFilter === f.key ? "#fff" : "rgba(255,255,255,0.65)",
+              border: `1px solid ${modalFilter === f.key ? "#0DB87E" : "rgba(255,255,255,0.10)"}`,
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 bg-zinc-900 border border-zinc-800/80 px-2.5 py-1 rounded-full">
-            <ArrowUpDown size={11} className="text-[#00FF66]" />
-            <span>{getLabelOrdenacao(ordenacao)}</span>
-          </div>
+      {/* Vendor list */}
+      {loading ? (
+        <div className="mt-16 text-center text-white/50 font-sans text-[14px]">
+          Procurando ambulantes online verificados...
         </div>
-
-        {/* ========================================================================= */}
-        {/* LISTAGEM DOS CARDS DE AMBULANTES OU SKELETON                             */}
-        {/* ========================================================================= */}
-        {loading ? (
-          <div className="space-y-3.5">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="h-5 w-40 bg-zinc-800 rounded-lg" />
-                  <div className="h-5 w-24 bg-zinc-800 rounded-full" />
-                </div>
-                <div className="h-3 w-56 bg-zinc-800/70 rounded" />
-                <div className="flex gap-2 pt-2">
-                  <div className="h-6 w-20 bg-zinc-800 rounded-lg" />
-                  <div className="h-6 w-24 bg-zinc-800 rounded-lg" />
-                </div>
-                <div className="h-10 w-full bg-zinc-800 rounded-xl mt-3" />
-              </div>
-            ))}
-          </div>
-        ) : ambulantesOrdenados.length === 0 ? (
-          /* ========================================================================= */
-          /* EMPTY STATE GENEROSO (SEM AMBULANTES NO MOMENTO)                          */
-          /* ========================================================================= */
-          <div className="my-8 p-8 rounded-3xl bg-zinc-900/60 border border-dashed border-zinc-800 text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-3xl bg-zinc-800/80 border border-zinc-700/80 flex items-center justify-center text-3xl shadow-inner">
-              {categoria.emoji}
-            </div>
-            <div>
-              <h3 className="text-base font-black text-white">
-                Nenhum ambulante com estoque ativo de {categoria.nome}
-              </h3>
-              <p className="text-xs text-zinc-400 mt-2 max-w-sm mx-auto leading-relaxed">
-                Os ambulantes credenciados cadastram seus estoques conforme circulam pelas praias de Ubatuba. Volte em instantes ou veja outras categorias disponíveis agora.
-              </p>
-            </div>
-            <div className="pt-2">
+      ) : filteredAmbulantes.length === 0 ? (
+        <div className="mt-16 flex flex-col items-center text-center px-4">
+          <ShoppingBag size={44} color="rgba(255,255,255,0.25)" />
+          <p className="font-display text-[17px] font-bold text-white mt-3">
+            Nenhum ambulante online agora
+          </p>
+          <p className="font-sans text-[13px] mt-1.5" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Apenas ambulantes aprovados, online e com estoque disponível aparecem nesta lista.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5 flex flex-col gap-3">
+          {filteredAmbulantes.map((amb) => {
+            const distText = formatDistanceLabel(amb.distanceKm);
+            return (
               <button
+                key={amb.sessionId}
                 type="button"
-                onClick={() => navigate("/app/ambulantes")}
-                className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs transition border border-zinc-700 cursor-pointer active:scale-95"
+                onClick={() => navigate(`/app/ambulantes/${amb.sessionId}`)}
+                className="w-full text-left cursor-pointer transition-transform active:scale-[0.99]"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: 18,
+                  padding: 16,
+                }}
               >
-                Explorar outras categorias
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* ========================================================================= */
-          /* CARDS DOS AMBULANTES ATIVOS                                               */
-          /* ========================================================================= */
-          <div className="space-y-3.5">
-            {ambulantesOrdenados.map((amb, index) => (
-              <div
-                key={amb.id}
-                className="group relative rounded-2xl bg-zinc-900 border border-zinc-800/90 hover:border-[#00FF66]/50 p-4 transition-all duration-200 shadow-xl space-y-3"
-              >
-                {/* Topo do Card: Nome + Distância */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-[#00FF66]/10 border border-[#00FF66]/30 flex items-center justify-center text-lg font-black text-[#00FF66]">
-                      {amb.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-white group-hover:text-[#00FF66] transition-colors leading-tight">
-                        {amb.nome}
-                      </h4>
-                      <div className="flex items-center gap-1.5 mt-0.5 text-xs text-zinc-400">
-                        <MapPin size={12} className="text-zinc-500 shrink-0" />
-                        <span className="truncate max-w-[190px]">{amb.address}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Badge de Distância (Destaque para o mais próximo) */}
-                  <div
-                    className={`px-2.5 py-1 rounded-full text-xs font-black tracking-tight shrink-0 flex items-center gap-1 ${
-                      index === 0 && ordenacao === "proximo"
-                        ? "bg-[#00FF66] text-black shadow-[0_0_10px_rgba(0,255,102,0.35)]"
-                        : "bg-zinc-800 text-[#00FF66] border border-[#00FF66]/20"
-                    }`}
-                  >
-                    <span>📍</span>
-                    <span>{amb.distanciaTexto}</span>
-                  </div>
-                </div>
-
-                {/* Linha de Menor Preço e Variedade */}
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-800/60">
-                  <span className="text-zinc-400 font-medium">
-                    A partir de{" "}
-                    <strong className="text-[#00FF66] font-black text-sm">
-                      R$ {amb.menorPreco.toFixed(2).replace(".", ",")}
-                    </strong>
-                  </span>
-                  <span className="text-zinc-500 font-mono text-[11px]">
-                    {amb.totalVariedade} {amb.totalVariedade === 1 ? "item disponível" : "itens disponíveis"}
-                  </span>
-                </div>
-
-                {/* Prévia dos produtos em estoque (Chips com quantidade) */}
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {amb.produtos.slice(0, 4).map((p) => (
-                    <span
-                      key={p.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/70 border border-zinc-700/60 text-[11px] text-zinc-300"
+                <div className="flex items-start gap-3">
+                  {amb.estruturaPhotoUrl ? (
+                    <img
+                      src={amb.estruturaPhotoUrl}
+                      alt={amb.nome}
+                      className="w-12 h-12 rounded-2xl object-cover shrink-0 border border-white/15"
+                    />
+                  ) : (
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-[24px] shrink-0"
+                      style={{ background: "rgba(13,184,126,0.15)" }}
                     >
-                      <span className="truncate max-w-[120px]">{p.nome}</span>
-                      <strong className="text-[#00FF66] font-mono text-[10px]">
-                        {p.quantidade} un
-                      </strong>
-                    </span>
-                  ))}
-                  {amb.produtos.length > 4 && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-zinc-800/40 text-[10px] text-zinc-500 font-bold">
-                      +{amb.produtos.length - 4} mais
-                    </span>
+                      {amb.emoji}
+                    </div>
                   )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="font-display text-[16px] font-bold text-white truncate">
+                        {amb.nome}
+                      </h2>
+                      <span
+                        className="inline-flex items-center gap-1 font-sans text-[12px] font-bold shrink-0"
+                        style={{ color: "#F5A623" }}
+                      >
+                        <Star size={12} fill="#F5A623" color="#F5A623" />
+                        {amb.rating.toFixed(1)}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex items-center gap-2 text-[12px] font-sans text-white/60">
+                      <span className="inline-flex items-center gap-1 text-[#0DB87E] font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#0DB87E]" />
+                        Online
+                      </span>
+                      {distText && <span>• {distText}</span>}
+                      <span>
+                        • {amb.itensDisponiveis} {amb.itensDisponiveis === 1 ? "item" : "itens"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Botão de Ação "Ver Cardápio & Pedir" */}
-                <button
-                  type="button"
-                  onClick={() => navigate(`/app/ambulantes/${amb.id}`)}
-                  className="w-full mt-2 py-2.5 px-4 rounded-xl bg-[#00FF66] hover:bg-[#00e65c] text-black font-black text-xs transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.2)] active:scale-[0.99]"
-                >
-                  <ShoppingBag size={14} className="text-black" />
-                  <span>Ver Cardápio & Pedir</span>
-                  <ChevronRight size={14} className="text-black" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+                {/* Trust badges + location + delivery fee */}
+                <div className="mt-3">
+                  <AmbulanteTrustBadges
+                    compact
+                    info={{
+                      possuiAlvara: amb.possuiAlvara,
+                      possuiVigilanciaSanitaria: amb.possuiVigilanciaSanitaria,
+                      tipoEstrutura: amb.tipoEstrutura,
+                      praiaReferencia: amb.praiaReferencia,
+                      pontoReferencia: amb.pontoReferencia,
+                      deliveryFee: amb.deliveryFee,
+                      modalidades: amb.modalidades,
+                    }}
+                  />
+                </div>
+
+                {/* Preview of available items */}
+                {amb.previewItens.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-wrap gap-1.5">
+                    {amb.previewItens.map((item, idx) => (
+                      <span
+                        key={idx}
+                        className="font-sans text-[11px] rounded-lg px-2 py-1"
+                        style={{
+                          background: "rgba(255,255,255,0.05)",
+                          color: "rgba(255,255,255,0.78)",
+                        }}
+                      >
+                        {item.nome} · R$ {item.preco.toFixed(2).replace(".", ",")}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default AmbulantesCategoriaAmbulantesPage;

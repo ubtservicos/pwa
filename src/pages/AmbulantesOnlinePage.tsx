@@ -1,734 +1,647 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, MapPin, X } from "lucide-react";
-import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
-import BottomSheet from "@/components/settings/BottomSheet";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ClipboardList,
+  MapPin,
+  Package,
+  Power,
+  ShieldAlert,
+  Truck,
+  XCircle,
+  ChevronRight,
+  Clock,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { UBATUBA_CENTER } from "@/lib/googleMapsConfig";
+import {
+  formatDeliveryFeeLabel,
+  isDeliveryModalidade,
+} from "@/components/ambulantes/AmbulanteTrustBadges";
+import Toast from "@/components/auth/Toast";
+import { useSimpleToast } from "@/hooks/useToast2";
 
-function resolveImageUrl(url?: string | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-    return url;
-  }
-  const { data } = supabase.storage.from("catalogo-ambulantes").getPublicUrl(url);
-  return data?.publicUrl || url;
+interface AmbulanteProfile {
+  user_id: string;
+  nome_comercial: string;
+  kyc_status: string;
+  delivery_fee: number;
+  modalidades: string[];
+  praia_referencia?: string | null;
+  ponto_referencia?: string | null;
 }
 
-interface SessionProduto {
-  nome: string;
-  emoji: string;
-  preco: number;
-  quantidade?: number;
-  disponivel: boolean;
-  descricao?: string;
-  variosValores?: boolean;
-  foto?: string;
-}
-
-interface Pedido {
+interface ActivePedido {
   id: string;
-  itens: Array<{ prodId: string; nome: string; emoji: string; qty: number; precoUnit: number; subtotal: number }>;
+  status: "pending" | "confirmed" | "preparing" | "ready" | "completed";
+  modalidade: string;
+  subtotal: number;
+  delivery_fee: number;
   total: number;
-  modalidade: "delivery" | "local_fixo";
-  tomadorLocation?: { address: string };
-  status?: string;
-  createdAt?: number;
+  delivery_address?: string | null;
+  delivery_referencia?: string | null;
+  created_at: string;
+  pedido_itens?: Array<{ id: string; nome: string; emoji?: string | null; qty: number }>;
 }
 
-const FALLBACK_LOC = { lat: -23.432, lng: -45.083 };
+const ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready", "completed"] as const;
 
-const AmbulantesOnlinePage = () => {
+const STATUS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: "Novo Pedido", color: "#F5A623", bg: "rgba(245,166,35,0.16)" },
+  confirmed: { label: "Confirmado", color: "#0DB87E", bg: "rgba(13,184,126,0.16)" },
+  preparing: { label: "Em Preparo", color: "#38BDF8", bg: "rgba(56,189,248,0.16)" },
+  ready: { label: "Pronto", color: "#A78BFA", bg: "rgba(167,139,250,0.16)" },
+  completed: { label: "Aguardando Pgto", color: "#00FF66", bg: "rgba(0,255,102,0.16)" },
+};
+
+export default function AmbulantesOnlinePage() {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const { toast, showToast } = useSimpleToast();
 
+  const [profile, setProfile] = useState<AmbulanteProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
-  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number }>(FALLBACK_LOC);
-  const [produtos, setProdutos] = useState<Record<string, SessionProduto>>({});
-  const [modalidade, setModalidade] = useState<"delivery" | "local_fixo" | "both">("local_fixo");
-  const [endereco, setEndereco] = useState("Praia Grande, Ubatuba");
-  const [editEndereco, setEditEndereco] = useState(false);
-  const [activeOrder, setActiveOrder] = useState<Pedido | null>(null);
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [allOrders, setAllOrders] = useState<Pedido[]>([]);
-  const [showQueueModal, setShowQueueModal] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(120);
+  const [toggling, setToggling] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [activeOrders, setActiveOrders] = useState<ActivePedido[]>([]);
+  const [todayStats, setTodayStats] = useState<{ total: number; count: number }>({
+    total: 0,
+    count: 0,
+  });
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
+
+  // Quick delivery_fee edit
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeDraft, setFeeDraft] = useState("0,00");
+  const [savingFee, setSavingFee] = useState(false);
+
+  const fetchOrdersAndStats = useCallback(async () => {
+    if (!user.uid) return;
+    try {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const [{ data: activeRows }, { data: todayRows }] = await Promise.all([
+        supabase
+          .from("pedidos")
+          .select(
+            "id, status, modalidade, subtotal, delivery_fee, total, delivery_address, delivery_referencia, created_at, pedido_itens(id, nome, emoji, qty)",
+          )
+          .eq("prestador_id", user.uid)
+          .in("status", [...ACTIVE_STATUSES])
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pedidos")
+          .select("id, total, status, created_at")
+          .eq("prestador_id", user.uid)
+          .in("status", ["completed", "paid"])
+          .gte("created_at", startOfToday.toISOString()),
+      ]);
+
+      setActiveOrders((activeRows as unknown as ActivePedido[]) || []);
+
+      const listToday = todayRows || [];
+      const sumToday = listToday.reduce((acc: number, row: any) => acc + Number(row.total || 0), 0);
+      setTodayStats({
+        total: Number(sumToday.toFixed(2)),
+        count: listToday.length,
+      });
+    } catch (err) {
+      console.error("Erro ao carregar fila de pedidos do ambulante:", err);
+    }
+  }, [user.uid]);
 
   useEffect(() => {
     if (!user.uid) return;
+    let active = true;
 
-    const loadSessionAndProducts = async () => {
+    const init = async () => {
+      setLoading(true);
       try {
-        // 1. Carrega dados da sessão do prestador
-        const { data: sessionData, error: sessionErr } = await supabase
-          .from('ambulante_sessions')
-          .select('modalidade, is_online, address')
-          .eq('id', user.uid)
-          .maybeSingle();
+        const [rpcRes, sessRes] = await Promise.all([
+          Promise.resolve(supabase.rpc("get_my_ambulante_profile")).catch(() => ({
+            data: null,
+            error: { message: "rpc_err" },
+          })),
+          supabase
+            .from("ambulante_sessions")
+            .select("id, is_online, delivery_fee")
+            .eq("id", user.uid)
+            .maybeSingle(),
+        ]);
 
-        if (sessionErr) throw sessionErr;
+        if (!active) return;
 
-        if (sessionData) {
-          setModalidade((sessionData.modalidade as "delivery" | "local_fixo" | "both") || "local_fixo");
-          setIsOnline(!!sessionData.is_online);
-          if (sessionData.address) {
-            setEndereco(sessionData.address);
+        let prof: AmbulanteProfile | null = null;
+        const rpcData = (rpcRes as any)?.data;
+        if (rpcData && typeof rpcData === "object") {
+          const unwrapped = rpcData.record ?? rpcData;
+          if (unwrapped?.user_id || unwrapped?.kyc_status) {
+            prof = unwrapped as AmbulanteProfile;
           }
         }
-
-        // 2. Carrega produtos reais do estoque do ambulante (apenas itens com quantidade > 0)
-        const mapped: Record<string, SessionProduto> = {};
-
-        const { data: estoqueData, error: estoqueErr } = await supabase
-          .from('estoque_ambulante')
-          .select('id_produto_padrao, preco_venda, quantidade, disponivel, produtos_padrao(nome_produto, imagem_url, categoria, subcategoria, descricao)')
-          .eq('id_ambulante', user.uid)
-          .gt('quantidade', 0);
-
-        if (estoqueErr) {
-          console.warn("Aviso ao carregar estoque_ambulante:", estoqueErr);
+        if (!prof) {
+          const { data: directProf } = await supabase
+            .from("prestador_ambulante")
+            .select(
+              "user_id, nome_comercial, kyc_status, delivery_fee, modalidades, praia_referencia, ponto_referencia",
+            )
+            .eq("user_id", user.uid)
+            .maybeSingle();
+          if (directProf) prof = directProf as AmbulanteProfile;
         }
 
-        if (estoqueData && estoqueData.length > 0) {
-          estoqueData.forEach((item: any) => {
-            const prod = item.produtos_padrao;
-            if (prod && Number(item.quantidade) > 0) {
-              mapped[item.id_produto_padrao] = {
-                nome: prod.nome_produto,
-                emoji: "🍦",
-                preco: Number(item.preco_venda || 0),
-                quantidade: Number(item.quantidade),
-                disponivel: item.disponivel !== false,
-                descricao: prod.descricao || "",
-                foto: prod.imagem_url ? resolveImageUrl(prod.imagem_url) : undefined,
-                variosValores: false,
-              };
-            }
-          });
-        }
+        setProfile(prof);
+        const initialFee = Number(prof?.delivery_fee ?? sessRes.data?.delivery_fee ?? 0) || 0;
+        setFeeDraft(initialFee.toFixed(2).replace(".", ","));
+        setIsOnline(Boolean(sessRes.data?.is_online) && prof?.kyc_status === "approved");
 
-        // Sem produtos mockados ou fallback estático: exibe apenas o estoque real
-        setProdutos(mapped);
+        await fetchOrdersAndStats();
       } catch (err) {
-        console.error("Erro ao carregar sessão/produtos do Supabase:", err);
-        setProdutos({});
+        console.error("Erro ao inicializar painel online do ambulante:", err);
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
-    loadSessionAndProducts();
-  }, [user.uid]);
+    init();
+    return () => {
+      active = false;
+    };
+  }, [user.uid, fetchOrdersAndStats]);
 
-  const fetchOrders = async () => {
-    if (!user.uid) return;
-    try {
-      const { data, error } = await supabase
-        .from('pedidos')
-        .select(`
-          id,
-          total,
-          status,
-          modalidade,
-          delivery_address,
-          delivery_lat,
-          delivery_lng,
-          created_at,
-          pedido_itens (
-            produto_id,
-            nome,
-            emoji,
-            qty,
-            preco_unit,
-            subtotal
-          )
-        `)
-        .eq('prestador_id', user.uid)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (data) {
-        const ordersList: Pedido[] = data.map((o: any) => ({
-          id: o.id,
-          itens: (o.pedido_itens || []).map((i: any) => ({
-            prodId: i.produto_id || "unknown",
-            nome: i.nome,
-            emoji: i.emoji || "🍽️",
-            qty: i.qty,
-            precoUnit: Number(i.preco_unit),
-            subtotal: Number(i.subtotal)
-          })),
-          total: Number(o.total),
-          modalidade: o.modalidade as "delivery" | "local_fixo",
-          tomadorLocation: o.delivery_address ? { address: o.delivery_address } : undefined,
-          status: o.status,
-          createdAt: new Date(o.created_at).getTime()
-        }));
-
-        setAllOrders(ordersList);
-
-        const pending = ordersList.find((o) => o.status === "pending");
-        if (pending) {
-          setActiveOrder(prevActive => {
-            if (!prevActive || prevActive.status !== "pending") {
-              setShowOrderModal(true);
-              if (typeof navigator !== "undefined" && (navigator as any).userActivation?.hasBeenActive && "vibrate" in navigator) {
-                try {
-                  (navigator as Navigator).vibrate?.([200, 100, 200]);
-                } catch {}
-              }
-              return pending;
-            }
-            return prevActive;
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao buscar pedidos do Supabase:", err);
-    }
-  };
-
-  // Listen for incoming pending pedidos
+  // Realtime subscription on orders for this provider
   useEffect(() => {
-    if (!isOnline || !user.uid) {
-      setAllOrders([]);
-      return;
-    }
-
-    fetchOrders();
-
+    if (!user.uid) return;
     const channel = supabase
-      .channel(`prestador-pedidos-${user.uid}`)
+      .channel(`ambulante-online-orders-${user.uid}`)
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pedidos',
-          filter: `prestador_id=eq.${user.uid}`
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pedidos", filter: `prestador_id=eq.${user.uid}` },
         () => {
-          fetchOrders();
-        }
+          fetchOrdersAndStats();
+        },
       )
       .subscribe();
 
+    const poll = window.setInterval(fetchOrdersAndStats, 10000);
     return () => {
+      window.clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [isOnline, user.uid]);
+  }, [user.uid, fetchOrdersAndStats]);
 
-  // Countdown for modal
-  useEffect(() => {
-    if (!showOrderModal) return;
-    setSecondsLeft(120);
-    const t = window.setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [showOrderModal]);
+  const getCurrentCoords = (): Promise<{ lat: number; lng: number }> =>
+    new Promise((resolve) => {
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(UBATUBA_CENTER),
+          { enableHighAccuracy: false, timeout: 4500, maximumAge: 60000 },
+        );
+      } else {
+        resolve(UBATUBA_CENTER);
+      }
+    });
 
-  useEffect(() => {
-    if (showOrderModal && secondsLeft === 0) {
-      setShowOrderModal(false);
-      setActiveOrder(null);
-    }
-  }, [secondsLeft, showOrderModal]);
-
-  const updateEnderecoNoBanco = (novoEndereco: string) => {
-    setEndereco(novoEndereco);
-    supabase.from('ambulante_sessions')
-      .update({ address: novoEndereco })
-      .eq('id', user.uid)
-      .then(({ error }) => {
-        if (error) console.error("Erro ao atualizar endereço no Supabase:", error);
-      });
-  };
-
-  const goOnline = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setMyLocation(loc);
-          supabase.from('ambulante_sessions')
-            .update({ is_online: true, lat: loc.lat, lng: loc.lng })
-            .eq('id', user.uid)
-            .then(({ error }) => {
-              if (error) console.error("Erro ao atualizar online no Supabase:", error);
-            });
-        },
-        () => {
-          supabase.from('ambulante_sessions')
-            .update({ is_online: true })
-            .eq('id', user.uid)
-            .then(({ error }) => {
-              if (error) console.error("Erro ao atualizar online no Supabase:", error);
-            });
-        },
-        { timeout: 4000 }
-      );
-    } else {
-      supabase.from('ambulante_sessions')
-        .update({ is_online: true })
-        .eq('id', user.uid)
-        .then(({ error }) => {
-          if (error) console.error("Erro ao atualizar online no Supabase:", error);
-        });
-    }
-    setIsOnline(true);
-  };
-
-  const goOffline = () => {
-    setIsOnline(false);
-    supabase.from('ambulante_sessions')
-      .update({ is_online: false })
-      .eq('id', user.uid)
-      .then(({ error }) => {
-        if (error) console.error("Erro ao atualizar offline no Supabase:", error);
-      });
-  };
-
-  const toggleProdDisponivel = (prodId: string, value: boolean) => {
-    setProdutos((p) => ({ ...p, [prodId]: { ...p[prodId], disponivel: value } }));
+  const handleToggleOnline = async () => {
     if (!user.uid) return;
-    supabase.from('estoque_ambulante')
-      .update({ disponivel: value })
-      .eq('id_ambulante', user.uid)
-      .eq('id_produto_padrao', prodId)
-      .then(({ error }) => {
-        if (error) console.error("Erro ao atualizar disponibilidade no Supabase:", error);
-      });
+    if (!profile || profile.kyc_status !== "approved") {
+      showToast("Seu cadastro KYC de Ambulante precisa estar aprovado para ficar online.");
+      navigate(
+        profile?.kyc_status === "pending"
+          ? "/app/prestador/ambulantes/kyc-pending"
+          : "/app/prestador/ambulantes/onboarding",
+      );
+      return;
+    }
+
+    const nextOnline = !isOnline;
+    setToggling(true);
+    try {
+      const coords = nextOnline ? await getCurrentCoords() : null;
+      const payload: Record<string, any> = {
+        id: user.uid,
+        is_online: nextOnline,
+        delivery_fee: Number(profile.delivery_fee ?? 0) || 0,
+        praia_referencia: profile.praia_referencia || null,
+        ponto_referencia: profile.ponto_referencia || null,
+        modalidades:
+          Array.isArray(profile.modalidades) && profile.modalidades.length > 0
+            ? profile.modalidades
+            : ["entrega", "retirada"],
+        updated_at: new Date().toISOString(),
+      };
+      if (coords) {
+        payload.lat = coords.lat;
+        payload.lng = coords.lng;
+      }
+
+      const { error } = await supabase
+        .from("ambulante_sessions")
+        .upsert(payload, { onConflict: "id" });
+
+      if (error) throw error;
+
+      setIsOnline(nextOnline);
+      showToast(nextOnline ? "Você está ONLINE na praia!" : "Você ficou offline.");
+    } catch (err: any) {
+      console.error("Erro ao alternar online do ambulante:", err);
+      showToast(err?.message || "Não foi possível alterar seu status online.");
+    } finally {
+      setToggling(false);
+    }
   };
 
-  const aceitarPedido = async () => {
-    if (!activeOrder) return;
-    if (!activeOrder.id.startsWith("demo-")) {
-      const { data, error } = await supabase.from('pedidos')
-        .update({ status: "confirmed" })
-        .eq('id', activeOrder.id)
-        .eq('status', 'pending')
-        .select('id')
-        .single();
+  const handleSaveDeliveryFee = async () => {
+    const parsed = Number(feeDraft.replace(",", ".").trim());
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      showToast("Informe uma taxa válida (0,00 ou maior).");
+      return;
+    }
+    setSavingFee(true);
+    try {
+      const cleanFee = Number(parsed.toFixed(2));
+      const { error } = await supabase.rpc("update_my_ambulante_delivery_fee", {
+        p_delivery_fee: cleanFee,
+      });
+      if (error) throw error;
+      setProfile((prev) => (prev ? { ...prev, delivery_fee: cleanFee } : prev));
+      setEditingFee(false);
+      showToast("Taxa de entrega atualizada ✓");
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao salvar taxa de entrega.");
+    } finally {
+      setSavingFee(false);
+    }
+  };
 
-      if (error || !data) {
-        alert("Este pedido já foi aceito ou cancelado.");
-        setShowOrderModal(false);
-        setActiveOrder(null);
+  const handleAcceptOrder = async (pedidoId: string) => {
+    setBusyOrderId(pedidoId);
+    try {
+      const { error } = await supabase.rpc("confirm_ambulante_order", {
+        p_pedido_id: pedidoId,
+      });
+      if (error) {
+        const msg = String(error.message || "");
+        if (/estoque|stock|insuficiente|insufficient/i.test(msg)) {
+          showToast("Estoque insuficiente para aceitar este pedido. Atualize seu cardápio.");
+        } else {
+          showToast(msg || "Não foi possível aceitar o pedido.");
+        }
         return;
       }
+      showToast("Pedido aceito e estoque reservado ✓");
+      await fetchOrdersAndStats();
+      navigate(`/app/prestador/ambulantes/pedido/${pedidoId}`);
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao confirmar pedido.");
+    } finally {
+      setBusyOrderId(null);
     }
-    setShowOrderModal(false);
-    navigate(`/app/prestador/ambulantes/pedido/${activeOrder.id}`);
   };
 
-  const recusarPedido = () => {
-    if (!activeOrder) return;
-    if (!activeOrder.id.startsWith("demo-")) {
-      supabase.from('pedidos')
-        .update({ status: "cancelled" })
-        .eq('id', activeOrder.id)
-        .then(({ error }) => {
-          if (error) console.error("Erro ao recusar pedido no Supabase:", error);
-        });
+  const handleRejectOrder = async (pedidoId: string) => {
+    setBusyOrderId(pedidoId);
+    try {
+      const { error } = await supabase.rpc("cancel_ambulante_order", {
+        p_pedido_id: pedidoId,
+        p_reason: "Recusado pelo ambulante",
+      });
+      if (error) throw error;
+      showToast("Pedido recusado/cancelado.");
+      await fetchOrdersAndStats();
+    } catch (err: any) {
+      showToast(err?.message || "Erro ao recusar pedido.");
+    } finally {
+      setBusyOrderId(null);
     }
-    setShowOrderModal(false);
-    setActiveOrder(null);
   };
 
-  const dash = 188.5;
-  const offset = dash * (1 - secondsLeft / 120);
+  if (loading) {
+    return (
+      <div className="min-h-[100svh] bg-[#0B1B3E] text-white/60 flex items-center justify-center font-sans text-sm">
+        Carregando painel do Ambulante...
+      </div>
+    );
+  }
+
+  const isKycApproved = profile?.kyc_status === "approved";
 
   return (
-    <div className="relative" style={{ height: "100svh", overflow: "hidden", background: "var(--prestador-bg)" }}>
-      <div className="absolute inset-0">
-        <PrestadorMapLight myLocation={myLocation} providerType="ambulante" />
-      </div>
+    <div
+      className="min-h-[100svh] overflow-y-auto text-white"
+      style={{ background: "#0B1B3E", padding: 20, paddingBottom: 60 }}
+    >
+      <Toast message={toast} />
 
-      <button
-        type="button"
-        onClick={() => navigate("/app/prestador/home")}
-        className="absolute top-4 left-4 z-10 flex items-center justify-center"
-        style={{
-          width: 40, height: 40, borderRadius: 999,
-          background: "rgba(39,39,42,0.90)", border: "1px solid var(--prestador-border)",
-        }}
-        aria-label="Voltar"
-      >
-        <ChevronLeft size={20} color="#FFFFFF" />
-      </button>
-
-      {/* Bottom sheet white */}
-      <div
-        className="absolute left-0 right-0 bottom-0 z-40"
-        style={{
-          background: "var(--prestador-card)",
-          borderTop: "1px solid var(--prestador-border)",
-          borderRadius: "24px 24px 0 0",
-          padding: "10px 20px 96px",
-          maxHeight: "62vh",
-          overflowY: "auto",
-          boxShadow: "0 -10px 40px rgba(0,0,0,0.50)",
-          zIndex: 1000
-        }}
-      >
-        <div style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.15)", margin: "0 auto 14px" }} />
-
-        {/* Online/Offline */}
-        <div
-          className="rounded-2xl"
-          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: 20 }}
+      {/* Header */}
+      <header className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/app/prestador/home")}
+          aria-label="Voltar"
+          className="w-10 h-10 rounded-full bg-white/10 border-none text-white flex items-center justify-center cursor-pointer"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-display" style={{ fontSize: 16, fontWeight: 700, color: isOnline ? "#00FF66" : "#A1A1AA", margin: 0 }}>
-                {isOnline ? "Você está ONLINE" : "Você está OFFLINE"}
-              </p>
-              <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", marginTop: 4 }}>
-                {isOnline ? "Aparecendo no mapa para clientes" : "Invisível para clientes"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => (isOnline ? goOffline() : goOnline())}
-              aria-label="toggle online"
-              className="rounded-full relative"
-              style={{ width: 60, height: 32, background: isOnline ? "#00FF66" : "rgba(255,255,255,0.10)", border: "none", cursor: "pointer" }}
-            >
-              <span
-                className="block rounded-full bg-white"
-                style={{
-                  width: 28, height: 28, margin: 2,
-                  boxShadow: "0 2px 4px rgba(11,27,62,0.20)",
-                  transition: "transform 300ms",
-                  transform: isOnline ? "translateX(28px)" : "translateX(0)",
-                }}
-              />
-            </button>
-          </div>
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display text-[18px] font-bold truncate">
+            {profile?.nome_comercial || "Painel Ambulante"}
+          </h1>
+          <p className="font-sans text-[12px] text-white/60 flex items-center gap-1 truncate">
+            <MapPin size={12} color="#0DB87E" />
+            {[profile?.praia_referencia, profile?.ponto_referencia].filter(Boolean).join(" • ") ||
+              "Ubatuba, SP"}
+          </p>
         </div>
-
-        {/* Endereço (local fixo) */}
-        {(modalidade === "local_fixo" || modalidade === "both") && (
-          <div
-            className="rounded-2xl"
-            style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", marginTop: 12, display: "flex", alignItems: "center", gap: 10, padding: 14 }}
-          >
-            <MapPin size={16} color="#00FF66" />
-            {editEndereco ? (
-              <input
-                value={endereco}
-                onChange={(e) => setEndereco(e.target.value)}
-                onBlur={() => {
-                  setEditEndereco(false);
-                  updateEnderecoNoBanco(endereco);
-                }}
-                autoFocus
-                className="flex-1 outline-none font-sans"
-                style={{ fontSize: 14, color: "#FFFFFF" }}
-              />
-            ) : (
-              <span className="font-sans flex-1" style={{ fontSize: 14, color: "#FFFFFF" }}>{endereco}</span>
-            )}
-            <button
-              type="button"
-              onClick={() => setEditEndereco(true)}
-              className="font-sans"
-              style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer" }}
-            >
-              Alterar
-            </button>
-          </div>
-        )}
-
-        {/* Fila de pedidos (Next in queue) */}
-        <div
-          className="rounded-2xl"
-          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", padding: 16, marginTop: 12, cursor: "pointer" }}
-          onClick={() => setShowQueueModal(true)}
+        <button
+          type="button"
+          onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
+          className="px-3 py-2 rounded-xl bg-white/10 border border-white/15 font-sans text-[12px] font-semibold text-white cursor-pointer"
         >
-            <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-              <p className="font-sans uppercase" style={{ fontSize: 12, fontWeight: 700, color: "#9399AD", letterSpacing: 0.5, margin: 0 }}>
-                Fila de Pedidos ({allOrders.filter(o => o.status !== "finished" && o.status !== "cancelled").length})
-              </p>
-              <span style={{ fontSize: 12, color: "#00FF66", fontWeight: 600 }}>Ver todos</span>
-            </div>
-            {(() => {
-              const next = allOrders.find(o => o.status === "confirmed" || o.status === "preparing" || o.status === "pending");
-              if (!next) return <p className="font-sans" style={{ fontSize: 13, color: "#A1A1AA", margin: 0 }}>Nenhum pedido em andamento.</p>;
-              return (
-                <div className="flex items-center gap-3">
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(0,255,102,0.15)", display: "flex", alignItems: "center", justifyService: "center" }}>
-                    <span style={{ fontSize: 20 }}>🍽️</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: 0 }}>Pedido #{next.id.slice(-4)}</p>
-                    <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", margin: 0 }}>{next.itens.length} {next.itens.length === 1 ? "item" : "itens"} · R$ {next.total.toFixed(2)}</p>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          Cardápio
+        </button>
+      </header>
 
-        {/* Cardápio */}
-        <div
+      {/* KYC Gate Banner if not approved */}
+      {!isKycApproved && (
+        <section
+          className="mt-5 rounded-2xl p-4 flex items-start gap-3"
           style={{
-            background: "var(--prestador-bg)",
-            border: "1px solid var(--prestador-border)",
-            borderRadius: 14, padding: 16, marginTop: 12,
+            background: "rgba(245,166,35,0.12)",
+            border: "1px solid rgba(245,166,35,0.35)",
           }}
         >
-          <div className="flex items-center justify-between" style={{ margin: "0 0 10px" }}>
-            <p className="font-sans uppercase" style={{ fontSize: 12, fontWeight: 600, color: "#9399AD", letterSpacing: 0.5, margin: 0 }}>
-              Meu cardápio
+          <ShieldAlert size={22} color="#F5A623" className="shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h2 className="font-display text-[15px] font-bold text-[#F5A623]">
+              {profile?.kyc_status === "pending"
+                ? "Cadastro KYC em análise"
+                : profile?.kyc_status === "rejected"
+                  ? "Cadastro KYC precisa de revisão"
+                  : "Complete seu cadastro KYC"}
+            </h2>
+            <p className="font-sans text-[12px] text-white/80 mt-1">
+              Para ficar online e receber pedidos na praia, seu KYC de identidade precisa estar aprovado.
             </p>
             <button
               type="button"
-              onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
-              className="font-sans"
-              style={{ background: "none", border: "none", color: "#00FF66", fontSize: 12, cursor: "pointer", fontWeight: 600 }}
+              onClick={() =>
+                navigate(
+                  profile?.kyc_status === "pending"
+                    ? "/app/prestador/ambulantes/kyc-pending"
+                    : "/app/prestador/ambulantes/onboarding",
+                )
+              }
+              className="mt-3 px-4 py-2 rounded-xl bg-[#F5A623] text-black font-display font-bold text-[12px] border-none cursor-pointer"
             >
-              Editar
+              {profile?.kyc_status === "pending" ? "Ver status do KYC" : "Completar KYC agora"}
             </button>
           </div>
-          {Object.keys(produtos).length === 0 ? (
-            <div className="py-4 text-center">
-              <p className="font-sans" style={{ fontSize: 13, color: "#9399AD", margin: "0 0 10px" }}>
-                Seu carrinho está vazio hoje. Edite seu cardápio.
-              </p>
+        </section>
+      )}
+
+      {/* Online Toggle Card */}
+      <section
+        className="mt-5 rounded-2xl p-5 flex items-center justify-between gap-4"
+        style={{
+          background: isOnline ? "rgba(13,184,126,0.16)" : "rgba(255,255,255,0.06)",
+          border: `1.5px solid ${isOnline ? "#0DB87E" : "rgba(255,255,255,0.10)"}`,
+        }}
+      >
+        <div>
+          <span
+            className="inline-flex items-center gap-1.5 font-sans text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: isOnline ? "#0DB87E" : "rgba(255,255,255,0.55)" }}
+          >
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ background: isOnline ? "#0DB87E" : "rgba(255,255,255,0.35)" }}
+            />
+            {isOnline ? "Online · Visível aos clientes" : "Offline · Oculto na busca"}
+          </span>
+          <p className="font-display text-[17px] font-bold mt-1">
+            {isOnline ? "Recebendo pedidos na praia" : "Toque para iniciar vendas"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={toggling || !isKycApproved}
+          onClick={handleToggleOnline}
+          className="w-14 h-14 rounded-2xl border-none flex items-center justify-center shrink-0 transition-transform active:scale-95"
+          style={{
+            background: isOnline ? "#0DB87E" : "rgba(255,255,255,0.12)",
+            color: "#fff",
+            opacity: !isKycApproved ? 0.4 : 1,
+            cursor: !isKycApproved ? "not-allowed" : "pointer",
+          }}
+          aria-label={isOnline ? "Ficar offline" : "Ficar online"}
+        >
+          <Power size={24} />
+        </button>
+      </section>
+
+      {/* Real Today Metrics + Delivery Fee Quick Edit */}
+      <section className="mt-4 grid grid-cols-2 gap-3">
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
+        >
+          <p className="font-sans text-[11px] text-white/55 uppercase tracking-wider">Hoje</p>
+          <p className="font-display text-[20px] font-extrabold text-[#0DB87E] mt-1">
+            R$ {todayStats.total.toFixed(2).replace(".", ",")}
+          </p>
+          <p className="font-sans text-[12px] text-white/65 mt-0.5">
+            {todayStats.count} {todayStats.count === 1 ? "pedido concluído" : "pedidos concluídos"}
+          </p>
+        </div>
+
+        <div
+          className="rounded-2xl p-4 flex flex-col justify-between"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-sans text-[11px] text-white/55 uppercase tracking-wider flex items-center gap-1">
+              <Truck size={12} color="#0DB87E" /> Taxa Entrega
+            </span>
+            {isKycApproved && !editingFee && (
               <button
                 type="button"
-                onClick={() => navigate("/app/prestador/ambulantes/cardapio")}
-                className="font-sans inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                style={{
-                  background: "rgba(0,255,102,0.12)",
-                  color: "#00FF66",
-                  border: "1px solid rgba(0,255,102,0.30)",
-                }}
+                onClick={() => setEditingFee(true)}
+                className="text-[11px] font-semibold text-[#0DB87E] bg-transparent border-none cursor-pointer"
               >
-                + Adicionar Produtos
+                Editar
+              </button>
+            )}
+          </div>
+
+          {editingFee ? (
+            <div className="mt-2 flex gap-1.5">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={feeDraft}
+                onChange={(e) => setFeeDraft(e.target.value)}
+                className="w-full rounded-lg px-2 py-1 bg-white/10 border border-white/15 text-white text-[13px] outline-none"
+              />
+              <button
+                type="button"
+                disabled={savingFee}
+                onClick={handleSaveDeliveryFee}
+                className="px-2.5 rounded-lg bg-[#0DB87E] text-white text-[12px] font-bold border-none cursor-pointer"
+              >
+                OK
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {Object.entries(produtos).map(([id, p]) => (
-                <div key={id} className="flex items-center gap-2">
-                  {p.foto ? (
-                    <img src={p.foto} alt={p.nome} style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
-                  ) : (
-                    <span style={{ fontSize: 16 }}>{p.emoji}</span>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <span className="font-sans truncate block" style={{ fontSize: 13, color: "#FFFFFF" }}>{p.nome}</span>
-                    {p.quantidade !== undefined && (
-                      <span className="font-sans text-[11px] text-[#9399AD] block">
-                        {p.quantidade} un em estoque
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-sans" style={{ fontSize: 13, color: "#00FF66", fontWeight: 600 }}>
-                    {p.variosValores ? "Diversos valores" : `R$ ${p.preco.toFixed(2)}`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleProdDisponivel(id, !p.disponivel)}
-                    className="rounded-full relative"
-                    style={{ width: 36, height: 20, background: p.disponivel ? "#00FF66" : "rgba(255,255,255,0.10)", border: "none", cursor: "pointer" }}
-                    aria-label={p.disponivel ? "Disponível" : "Esgotado"}
-                  >
-                    <span
-                      className="block rounded-full bg-white"
-                      style={{
-                        width: 16, height: 16, margin: 2,
-                        transition: "transform 250ms",
-                        transform: p.disponivel ? "translateX(16px)" : "translateX(0)",
-                      }}
-                    />
-                  </button>
-                </div>
-              ))}
-            </div>
+            <>
+              <p className="font-display text-[18px] font-bold text-white mt-1">
+                {formatDeliveryFeeLabel(profile?.delivery_fee ?? 0)}
+              </p>
+              <p className="font-sans text-[11px] text-white/50">Retirada: R$ 0,00</p>
+            </>
           )}
         </div>
+      </section>
 
-        {/* Mini ganhos */}
-        <div
-          className="flex items-center justify-between"
-          style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", borderRadius: 12, padding: "12px 16px", marginTop: 12 }}
-        >
-          <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF", fontWeight: 600 }}>Hoje: R$ 0,00</span>
-          <span className="font-sans" style={{ fontSize: 12, color: "#A1A1AA" }}>0 pedidos</span>
-        </div>
-      </div>
-
-      {/* Modal de novo pedido */}
-      {showOrderModal && activeOrder && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 10000,
-            background: "rgba(0,0,0,0.50)", backdropFilter: "blur(4px)",
-            display: "flex", alignItems: "flex-end",
-          }}
-        >
-          <div
-            style={{
-              width: "100%", background: "var(--prestador-card)",
-              borderTop: "2px solid var(--prestador-border)",
-              borderRadius: "24px 24px 0 0",
-              padding: 24, animation: "ubt-slide-up 300ms ease",
-              maxHeight: "85vh", overflowY: "auto",
-            }}
+      {/* Active Orders Queue */}
+      <section className="mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display text-[16px] font-bold text-white flex items-center gap-2">
+            <ClipboardList size={18} color="#0DB87E" />
+            Pedidos Ativos ({activeOrders.length})
+          </h2>
+          <button
+            type="button"
+            onClick={() => navigate("/app/prestador/ambulantes/onboarding")}
+            className="text-[12px] font-sans text-white/60 bg-transparent border-none cursor-pointer"
           >
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.15)", margin: "0 auto 14px" }} />
+            Meus dados
+          </button>
+        </div>
 
-            <div className="flex items-start justify-between">
-              <h2 className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF", margin: 0 }}>
-                Novo pedido! 🛍️
-              </h2>
-              <button
-                type="button"
-                onClick={recusarPedido}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#A1A1AA" }}
-                aria-label="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex justify-center mt-3">
-              <svg width="64" height="64" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="4" />
-                <circle
-                  cx="32" cy="32" r="30"
-                  fill="none" stroke="#00FF66" strokeWidth="4"
-                  strokeDasharray={dash} strokeDashoffset={offset}
-                  strokeLinecap="round" transform="rotate(-90 32 32)"
-                  style={{ transition: "stroke-dashoffset 1s linear" }}
-                />
-                <text x="32" y="38" textAnchor="middle" fontSize="14" fill="#FFFFFF" fontFamily="DM Sans" fontWeight="600">
-                  {secondsLeft}s
-                </text>
-              </svg>
-            </div>
-
-            <div
-              style={{
-                background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)",
-                padding: 20, marginTop: 16,
-              }}
-            >
-              <span
-                className="font-sans"
-                style={{
-                  background: "rgba(0,255,102,0.10)", border: "1px solid #00FF66",
-                  color: "#00FF66", fontSize: 11, fontWeight: 600,
-                  padding: "3px 10px", borderRadius: 999,
-                }}
-              >
-                {activeOrder.modalidade === "delivery" ? "🛵 Delivery" : "📍 Retirar"}
-              </span>
-              <div style={{ marginTop: 12 }}>
-                {activeOrder.itens.map((i) => (
-                  <div key={i.prodId} className="flex items-center justify-between" style={{ padding: "4px 0" }}>
-                    <span className="font-sans" style={{ fontSize: 14, color: "#FFFFFF" }}>
-                      {i.emoji} {i.nome}{" "}
-                      <span style={{ color: "#A1A1AA", fontSize: 12 }}>×{i.qty}</span>
-                    </span>
-                    <span className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#00FF66" }}>
-                      R$ {i.subtotal.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ height: 1, background: "var(--prestador-border)", margin: "10px 0" }} />
-              <div className="flex items-center justify-between">
-                <span className="font-sans" style={{ fontSize: 13, color: "#A1A1AA" }}>Total do pedido</span>
-                <span className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#00FF66" }}>
-                  R$ {activeOrder.total.toFixed(2)}
-                </span>
-              </div>
-              {activeOrder.modalidade === "delivery" && activeOrder.tomadorLocation && (
-                <div className="flex items-center gap-2 mt-2">
-                  <MapPin size={14} color="#E84040" />
-                  <span className="font-sans" style={{ fontSize: 13, color: "#A1A1AA" }}>
-                    {activeOrder.tomadorLocation.address}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3" style={{ marginTop: 24 }}>
-              <button
-                type="button"
-                onClick={recusarPedido}
-                className="flex-1 font-sans"
-                style={{
-                  border: "1px solid var(--prestador-border)", borderRadius: 999,
-                  background: "rgba(255,255,255,0.05)", padding: 14,
-                  color: "#A1A1AA", fontSize: 14, fontWeight: 500, cursor: "pointer",
-                }}
-              >
-                Recusar
-              </button>
-              <button
-                type="button"
-                onClick={aceitarPedido}
-                className="flex-1 font-display text-navy animate-pulse"
-                style={{
-                  background: "#00FF66", border: "none", borderRadius: 999,
-                  padding: 14, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                }}
-              >
-                Aceitar
-              </button>
-            </div>
+        {activeOrders.length === 0 ? (
+          <div
+            className="rounded-2xl p-8 text-center"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <Package size={36} className="mx-auto text-white/30 mb-2" />
+            <p className="font-display text-[15px] font-bold text-white">
+              Nenhum pedido ativo no momento
+            </p>
+            <p className="font-sans text-[12px] text-white/55 mt-1">
+              {isOnline
+                ? "Os novos pedidos dos banhistas aparecerão aqui instantaneamente."
+                : "Fique online para começar a receber pedidos."}
+            </p>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-col gap-3">
+            {activeOrders.map((order) => {
+              const badge = STATUS_BADGE[order.status] || STATUS_BADGE.pending;
+              const isDelivery = isDeliveryModalidade(order.modalidade);
+              const isBusy = busyOrderId === order.id;
 
-      <style>{`
-        @keyframes ubt-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-      `}</style>
+              return (
+                <div
+                  key={order.id}
+                  className="rounded-2xl p-4 space-y-3"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    border: `1px solid ${order.status === "pending" ? "rgba(245,166,35,0.45)" : "rgba(255,255,255,0.10)"}`,
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span
+                        className="inline-block rounded-full px-2.5 py-0.5 font-sans text-[11px] font-bold"
+                        style={{ background: badge.bg, color: badge.color }}
+                      >
+                        {badge.label}
+                      </span>
+                      <p className="font-display text-[15px] font-bold text-white mt-1.5">
+                        Pedido #{order.id.slice(0, 8).toUpperCase()}
+                      </p>
+                      <p className="font-sans text-[12px] text-white/60 flex items-center gap-1">
+                        <Clock size={11} />
+                        {isDelivery ? "Entrega na areia" : "Retirada no ponto"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display text-[17px] font-extrabold text-[#0DB87E]">
+                        R$ {Number(order.total).toFixed(2).replace(".", ",")}
+                      </p>
+                      <p className="font-sans text-[11px] text-white/50">
+                        {order.pedido_itens?.reduce((s, i) => s + i.qty, 0) || 0} itens
+                      </p>
+                    </div>
+                  </div>
 
-      
-      {/* Modal Fila de Pedidos */}
-      <BottomSheet open={showQueueModal} onClose={() => setShowQueueModal(false)}>
-        <h3 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF", marginBottom: 16 }}>Todos os pedidos</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: "60vh", overflowY: "auto", paddingRight: 4 }}>
-          {allOrders.length === 0 && (
-            <p className="font-sans text-center" style={{ fontSize: 14, color: "#A1A1AA", padding: "20px 0" }}>Nenhum pedido recebido ainda.</p>
-          )}
-          {allOrders.map((o) => (
-            <div
-              key={o.id}
-              onClick={() => {
-                if (o.status !== "finished" && o.status !== "cancelled") {
-                  navigate(`/app/prestador/ambulantes/pedido/${o.id}`);
-                }
-              }}
-              className="flex items-center justify-between"
-              style={{
-                padding: 12, borderRadius: 12, border: "1px solid var(--prestador-border)",
-                background: o.status === "pending" ? "rgba(245,166,35,0.15)" : o.status === "confirmed" || o.status === "preparing" ? "rgba(0,255,102,0.10)" : "var(--prestador-bg)",
-                opacity: o.status === "finished" || o.status === "cancelled" ? 0.6 : 1,
-                cursor: o.status !== "finished" && o.status !== "cancelled" ? "pointer" : "default"
-              }}
-            >
-              <div>
-                <p className="font-sans" style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", margin: 0 }}>Pedido #{o.id.slice(-4)}</p>
-                <p className="font-sans" style={{ fontSize: 12, color: "#A1A1AA", margin: 0 }}>
-                  {o.status === "pending" && "Pendente"}
-                  {(o.status === "confirmed" || o.status === "preparing") && "Em preparo"}
-                  {o.status === "finished" && "Concluído"}
-                  {o.status === "cancelled" && "Cancelado"}
-                  {' · '}
-                  R$ {o.total.toFixed(2)}
-                </p>
-              </div>
-              <ChevronLeft size={16} color="#9399AD" style={{ transform: "rotate(180deg)" }} />
-            </div>
-          ))}
-        </div>
-      </BottomSheet>
+                  {/* Items preview */}
+                  {order.pedido_itens && order.pedido_itens.length > 0 && (
+                    <div className="rounded-xl p-2.5 bg-white/5 space-y-1">
+                      {order.pedido_itens.map((item) => (
+                        <p key={item.id} className="font-sans text-[12px] text-white/85">
+                          {item.emoji || "🛍️"} {item.qty}x {item.nome}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {isDelivery && order.delivery_address && (
+                    <p className="font-sans text-[12px] text-white/70 flex items-center gap-1.5">
+                      <MapPin size={13} color="#0DB87E" className="shrink-0" />
+                      <span className="truncate">
+                        {order.delivery_address}
+                        {order.delivery_referencia ? ` · ${order.delivery_referencia}` : ""}
+                      </span>
+                    </p>
+                  )}
+
+                  {order.status === "pending" ? (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleRejectOrder(order.id)}
+                        className="rounded-xl py-2.5 px-3 font-sans text-[13px] font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        style={{
+                          background: "rgba(232,64,64,0.14)",
+                          border: "1px solid rgba(232,64,64,0.35)",
+                          color: "#F87171",
+                        }}
+                      >
+                        <XCircle size={15} /> Recusar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleAcceptOrder(order.id)}
+                        className="rounded-xl py-2.5 px-3 font-display text-[13px] font-bold bg-[#0DB87E] text-white border-none flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={15} /> {isBusy ? "Confirmando..." : "Aceitar"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/app/prestador/ambulantes/pedido/${order.id}`)}
+                      className="w-full rounded-xl py-2.5 px-3 bg-white/10 border border-white/10 text-white font-display text-[13px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Gerenciar Pedido <ChevronRight size={15} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
-};
-
-export default AmbulantesOnlinePage;
+}

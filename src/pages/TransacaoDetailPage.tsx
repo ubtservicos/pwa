@@ -191,6 +191,31 @@ const TransacaoDetailPage = () => {
                 ),
               };
             }
+          } else if (payment.service_type === "ambulante") {
+            const { data: pedido, error: pedError } = await supabase
+              .from("pedidos")
+              .select("id, modalidade, delivery_address, delivery_referencia, prestador_snapshot, pedido_itens(nome, qty)")
+              .eq("id", payment.service_id)
+              .maybeSingle();
+
+            if (!pedError && pedido) {
+              const snap = (pedido.prestador_snapshot || {}) as Record<string, any>;
+              const vendorLabel = [snap.nome_comercial, snap.praia_referencia]
+                .filter(Boolean)
+                .join(" · ");
+              const itensLabel = Array.isArray(pedido.pedido_itens) && pedido.pedido_itens.length > 0
+                ? pedido.pedido_itens.map((i: any) => `${i.qty}x ${i.nome}`).join(", ")
+                : undefined;
+              const destLabel = pedido.delivery_address
+                ? `${pedido.delivery_address}${pedido.delivery_referencia ? ` (${pedido.delivery_referencia})` : ""}`
+                : "Retirada no ponto";
+
+              transaction = {
+                ...transaction,
+                origin: vendorLabel || "Ambulante UBT",
+                destination: itensLabel ? `${destLabel} · Itens: ${itensLabel}` : destLabel,
+              };
+            }
           }
 
           setTx(transaction);
@@ -198,11 +223,11 @@ const TransacaoDetailPage = () => {
         }
 
         // Fetch and build the list of transactions
-        // 1. Fetch orders (Ambulantes)
+        // 1. Fetch orders (Ambulantes — Tomador e Prestador)
         const { data: pedidos, error: errPed } = await supabase
           .from('pedidos')
-          .select('*')
-          .eq('prestador_id', user.uid);
+          .select('*, pedido_itens(nome, qty)')
+          .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`);
 
         // 2. Fetch diarista cleanings
         const { data: cleanings, error: errClean } = await supabase
@@ -224,29 +249,33 @@ const TransacaoDetailPage = () => {
 
         const list: Transaction[] = [];
 
-        // Add orders (Ambulantes)
+        // Add orders (Ambulantes — sem split fabricado localmente; splits reais vêm de pagamentos_split)
         if (pedidos && !errPed) {
           pedidos.forEach(p => {
-            const isCompleted = p.status === 'completed';
-            const statusMapped = p.status === 'completed' ? 'confirmed' : (p.status === 'cancelled' ? 'cancelled' : 'pending');
-            
+            const statusMapped = p.status === 'paid' ? 'confirmed' : (p.status === 'cancelled' ? 'cancelled' : 'pending');
+            const snap = (p.prestador_snapshot || {}) as Record<string, any>;
+            const vendorLabel = [snap.nome_comercial, snap.praia_referencia].filter(Boolean).join(" · ");
+            const itensLabel = Array.isArray(p.pedido_itens) && p.pedido_itens.length > 0
+              ? p.pedido_itens.map((i: any) => `${i.qty}x ${i.nome}`).join(", ")
+              : undefined;
+            const destLabel = p.delivery_address
+              ? `${p.delivery_address}${p.delivery_referencia ? ` (${p.delivery_referencia})` : ""}`
+              : "Retirada no ponto";
+            const shortId = p.id ? ` · #${String(p.id).slice(0, 8).toUpperCase()}` : "";
+
             list.push({
               id: p.id,
-              type: 'entrada',
+              type: p.tomador_id === user.uid ? 'saida' : 'entrada',
               date: p.created_at,
-              description: 'Venda de Produtos UBT',
-              amount: Number(p.total),
-              status: statusMapped
+              description: `Pedido Ambulantes UBT${shortId}`,
+              amount: Number(p.total || 0),
+              status: statusMapped,
+              serviceId: p.id,
+              serviceType: 'ambulante',
+              origin: vendorLabel || "Ambulante UBT",
+              destination: itensLabel ? `${destLabel} · Itens: ${itensLabel}` : destLabel,
+              paymentMethod: p.payment_method || undefined,
             });
-
-            if (isCompleted) {
-              list.push(
-                { id: `${p.id}-split-comunidade`, type: 'split', date: p.created_at, description: 'Split UBT - Comunidade', amount: +(Number(p.total) * 0.02).toFixed(2), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 2 },
-                { id: `${p.id}-split-trabalhador`, type: 'split', date: p.created_at, description: 'Split UBT - Prêmio Trabalhador', amount: +(Number(p.total) * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 1.5 },
-                { id: `${p.id}-split-tomador`, type: 'split', date: p.created_at, description: 'Split UBT - Prêmio Tomador', amount: +(Number(p.total) * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 1.5 },
-                { id: `${p.id}-split-padrinho`, type: 'split', date: p.created_at, description: 'Split UBT - Padrinho/Madrinha', amount: +(Number(p.total) * 0.01).toFixed(2), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1 }
-              );
-            }
           });
         }
 

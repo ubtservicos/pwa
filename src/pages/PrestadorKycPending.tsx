@@ -17,7 +17,7 @@ export default function PrestadorKycPending() {
     setChecking(true);
     setStatusMessage(null);
     try {
-      const [{ data: motoData }, { data: carroData }, { data: userData }] = await Promise.all([
+      const [{ data: motoData }, { data: carroData }, { data: ambData }, { data: userData }] = await Promise.all([
         supabase
           .from("prestador_mototaxi")
           .select("kyc_status")
@@ -29,6 +29,11 @@ export default function PrestadorKycPending() {
           .eq("user_id", user.uid)
           .maybeSingle(),
         supabase
+          .from("prestador_ambulante")
+          .select("kyc_status")
+          .eq("user_id", user.uid)
+          .maybeSingle(),
+        supabase
           .from("usuarios")
           .select("role, status, under_review")
           .eq("id", user.uid)
@@ -36,14 +41,21 @@ export default function PrestadorKycPending() {
       ]);
 
       const hasPending =
-        motoData?.kyc_status === "pending" || carroData?.kyc_status === "pending";
+        motoData?.kyc_status === "pending" ||
+        carroData?.kyc_status === "pending" ||
+        ambData?.kyc_status === "pending";
       const hasRejected =
-        motoData?.kyc_status === "rejected" || carroData?.kyc_status === "rejected";
+        motoData?.kyc_status === "rejected" ||
+        carroData?.kyc_status === "rejected" ||
+        ambData?.kyc_status === "rejected";
       const isApproved =
-        (!hasPending && (motoData?.kyc_status === "approved" || carroData?.kyc_status === "approved")) ||
-        (userData?.role === "prestador" && !userData?.under_review && userData?.status === "active");
+        (!hasPending &&
+          (motoData?.kyc_status === "approved" ||
+            carroData?.kyc_status === "approved" ||
+            ambData?.kyc_status === "approved")) ||
+        (!hasPending && userData?.role === "prestador" && !userData?.under_review && userData?.status === "active");
 
-      const hasNoPendingRecord = !motoData && !carroData && !userData?.under_review;
+      const hasNoPendingRecord = !motoData && !carroData && !ambData && !userData?.under_review;
 
       if (isApproved || hasNoPendingRecord) {
         navigate("/app/prestador/home", { replace: true });

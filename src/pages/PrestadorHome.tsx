@@ -146,6 +146,7 @@ const PrestadorHome = () => {
   const ambulantesEnabled = isVerticalEnabled("ambulantes");
   const diaristasEnabled = isVerticalEnabled("diaristas");
   const hasAmbulante = ambulantesEnabled && !!registeredServices.ambulante;
+  const isAmbulantePending = user.ambulanteKycStatus === "pending";
   const hasDiarista = diaristasEnabled && !!registeredServices.diarista;
   const hasCoco = !!registeredServices.coco;
 
@@ -164,6 +165,7 @@ const PrestadorHome = () => {
           { data: carroData },
           { data: carroPerfil },
           { data: ambData },
+          { data: ambPerfil },
           { data: diaData },
           { data: cocoColab }
         ] = await Promise.all([
@@ -172,6 +174,7 @@ const PrestadorHome = () => {
           supabase.from("carro_sessoes").select("is_online").eq("prestador_id", user.uid).maybeSingle(),
           supabase.from("prestador_carro").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
           supabase.from("ambulante_sessions").select("is_online").eq("id", user.uid).maybeSingle(),
+          supabase.from("prestador_ambulante").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
           supabase.from("diarista_perfis").select("is_online").eq("user_id", user.uid).maybeSingle(),
           supabase
             .from("coco_colaboradores")
@@ -184,7 +187,7 @@ const PrestadorHome = () => {
 
         const hasMoto = !!motoPerfil || !!motoData || user.role === "mototaxista" || user.role === "mototaxi" || user.kycStatus === "approved" || localStorage.getItem(`moto_session_${user.uid}`) === "1";
         const hasCar = Boolean(carroPerfil?.kyc_status === "approved" || carroData || user.carroKycStatus === "approved");
-        const hasAmb = !!ambData || user.role === "ambulante" || localStorage.getItem(`amb_session_${user.uid}`) === "1";
+        const hasAmb = Boolean(ambPerfil?.kyc_status === "approved" || user.ambulanteKycStatus === "approved");
         const hasDia = !!diaData || user.role === "diarista" || localStorage.getItem(`diarista_perfil_${user.uid}`) === "1";
         // Botão Côco & Cia só aparece para usuários efetivamente cadastrados e ativos em coco_colaboradores
         const hasCc = Boolean(cocoColab);
@@ -228,7 +231,7 @@ const PrestadorHome = () => {
     };
 
     fetchAllServiceStatuses();
-  }, [user.uid, user.role, user.kycStatus, user.carroKycStatus]);
+  }, [user.uid, user.role, user.kycStatus, user.carroKycStatus, user.ambulanteKycStatus]);
 
   useEffect(() => {
     const caminhaoId = localStorage.getItem("caminhaoId");
@@ -339,6 +342,15 @@ const PrestadorHome = () => {
           .update({ is_online: nextStatus, updated_at: new Date().toISOString() })
           .eq('user_id', user.uid);
       } else if (key === 'ambulante') {
+        if (nextStatus && user.ambulanteKycStatus !== 'approved') {
+          setActiveServices((prev) => ({ ...prev, ambulante: false }));
+          navigate(
+            user.ambulanteKycStatus === 'pending'
+              ? '/app/prestador/ambulantes/kyc-pending'
+              : '/app/prestador/ambulantes/onboarding',
+          );
+          return;
+        }
         const { data: existing } = await supabase
           .from('ambulante_sessions')
           .select('id')
@@ -346,14 +358,16 @@ const PrestadorHome = () => {
           .maybeSingle();
 
         if (existing) {
-          await supabase
+          const { error } = await supabase
             .from('ambulante_sessions')
-            .update({ is_online: nextStatus })
+            .update({ is_online: nextStatus, updated_at: new Date().toISOString() })
             .eq('id', user.uid);
+          if (error) throw error;
         } else {
-          await supabase
+          const { error } = await supabase
             .from('ambulante_sessions')
-            .insert({ id: user.uid, is_online: nextStatus });
+            .insert({ id: user.uid, is_online: nextStatus, updated_at: new Date().toISOString() });
+          if (error) throw error;
         }
       } else if (key === 'diarista') {
         const { data: existing } = await supabase
@@ -598,7 +612,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {registeredServices.ambulante && (
+          {hasAmbulante && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
               style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
@@ -710,14 +724,16 @@ const PrestadorHome = () => {
                   </div>
                   <div>
                     <p className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Venda Ambulante</p>
-                    <p className="font-sans text-[12px]" style={{ color: theme.subtle }}>{p.pedido_itens?.length || 0} itens • {p.modalidade === 'delivery' ? 'Entrega' : 'Retirada'}</p>
+                    <p className="font-sans text-[12px]" style={{ color: theme.subtle }}>
+                      {p.pedido_itens?.length || 0} itens • {(p.modalidade === 'delivery' || p.modalidade === 'entrega') ? 'Entrega' : 'Retirada'}
+                    </p>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="font-display text-[16px] font-bold text-[#0DB87E]">R$ {p.total.toFixed(2)}</p>
+                    <p className="font-display text-[16px] font-bold text-[#0DB87E]">R$ {Number(p.total || 0).toFixed(2)}</p>
                   </div>
                 </div>
                 
-                {p.modalidade === 'delivery' && (
+                {(p.modalidade === 'delivery' || p.modalidade === 'entrega') && (
                   <div className="rounded-xl p-3 mb-3" style={{ background: theme.bg }}>
                     <p className="font-sans text-[12px] flex items-center gap-1" style={{ color: theme.subtle }}>
                       <MapPin size={14} color="#E84040"/> {p.delivery_address || "Endereço não informado"}
@@ -849,24 +865,61 @@ const PrestadorHome = () => {
               disabled={!ambulantesEnabled}
               aria-disabled={!ambulantesEnabled}
               onClick={() => {
-                if (ambulantesEnabled) handleServiceNavigate("/app/prestador/ambulantes/onboarding");
+                if (ambulantesEnabled) {
+                  handleServiceNavigate(
+                    isAmbulantePending
+                      ? "/app/prestador/ambulantes/kyc-pending"
+                      : "/app/prestador/ambulantes/onboarding",
+                  );
+                }
               }}
               className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left"
               style={{
-                borderColor: theme.border,
+                borderColor:
+                  ambulantesEnabled && isAmbulantePending ? "rgba(245,166,35,0.4)" : theme.border,
                 opacity: ambulantesEnabled ? 1 : 0.45,
                 cursor: ambulantesEnabled ? "pointer" : "not-allowed",
               }}
             >
-              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><ShoppingBag size={20} color={theme.muted} /></div>
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{
+                  background:
+                    ambulantesEnabled && isAmbulantePending ? "rgba(245,166,35,0.12)" : theme.bg,
+                }}
+              >
+                <ShoppingBag
+                  size={20}
+                  color={ambulantesEnabled && isAmbulantePending ? "#F5A623" : theme.muted}
+                />
+              </div>
               <div className="ml-3 flex-1">
-                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Ambulante</h3>
-                <p className="font-sans text-[12px]" style={{ color: theme.muted }}>
-                  {ambulantesEnabled ? "Configurar vendas" : "Disponível em breve"}
-                </p>
+                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>
+                  Ambulante
+                </h3>
+                {!ambulantesEnabled ? (
+                  <p className="font-sans text-[12px]" style={{ color: theme.muted }}>
+                    Disponível em breve
+                  </p>
+                ) : isAmbulantePending ? (
+                  <p
+                    className="font-sans text-[12px] font-medium flex items-center gap-1.5"
+                    style={{ color: "#F5A623" }}
+                  >
+                    <span>Em análise</span>
+                    <span style={{ fontSize: 10 }}>⏳</span>
+                  </p>
+                ) : (
+                  <p className="font-sans text-[12px]" style={{ color: theme.muted }}>
+                    Configurar vendas
+                  </p>
+                )}
               </div>
               {ambulantesEnabled ? (
-                <ChevronRight size={18} color={theme.border} />
+                <ChevronRight
+                  size={18}
+                  color={isAmbulantePending ? "#F5A623" : theme.border}
+                />
               ) : (
                 <span
                   className="px-2 py-0.5 rounded-full font-sans text-[10px] font-semibold"

@@ -234,11 +234,11 @@ const GerenciarPage = () => {
     const fetchAllData = async () => {
       setLoading(true);
       try {
-        // 1. Fetch orders (Ambulantes)
+        // 1. Fetch orders (Ambulantes — Tomador e Prestador)
         const { data: pedidos, error: errPed } = await supabase
           .from('pedidos')
           .select('*')
-          .eq('prestador_id', user.uid);
+          .or(`prestador_id.eq.${user.uid},tomador_id.eq.${user.uid}`);
 
         // 2. Fetch diarista cleanings
         const { data: cleanings, error: errClean } = await supabase
@@ -263,32 +263,6 @@ const GerenciarPage = () => {
         await reloadReferralSummary(user.uid);
 
         const list: Transaction[] = [];
-
-        // Add orders (Ambulantes)
-        if (pedidos && !errPed) {
-          pedidos.forEach(p => {
-            const isCompleted = p.status === 'completed';
-            const statusMapped = p.status === 'completed' ? 'confirmed' : (p.status === 'cancelled' ? 'cancelled' : 'pending');
-            
-            list.push({
-              id: p.id,
-              type: 'entrada',
-              date: p.created_at,
-              description: 'Venda de Produtos UBT',
-              amount: Number(p.total),
-              status: statusMapped
-            });
-
-            if (isCompleted) {
-              list.push(
-                { id: `${p.id}-split-comunidade`, type: 'split', date: p.created_at, description: 'Split UBT - Comunidade', amount: +(Number(p.total) * 0.02).toFixed(2), status: 'confirmed', splitDestino: 'comunidade', splitPercent: 2 },
-                { id: `${p.id}-split-trabalhador`, type: 'split', date: p.created_at, description: 'Split UBT - Prêmio Trabalhador', amount: +(Number(p.total) * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTrabalhador', splitPercent: 1.5 },
-                { id: `${p.id}-split-tomador`, type: 'split', date: p.created_at, description: 'Split UBT - Prêmio Tomador', amount: +(Number(p.total) * 0.015).toFixed(2), status: 'confirmed', splitDestino: 'premioTomador', splitPercent: 1.5 },
-                { id: `${p.id}-split-padrinho`, type: 'split', date: p.created_at, description: 'Split UBT - Padrinho/Madrinha', amount: +(Number(p.total) * 0.01).toFixed(2), status: 'confirmed', splitDestino: 'padrinho', splitPercent: 1 }
-              );
-            }
-          });
-        }
 
         // Add diarista cleanings
         if (cleanings && !errClean) {
@@ -336,6 +310,27 @@ const GerenciarPage = () => {
             );
           }
         });
+
+        // Keep unpaid/in-progress Ambulantes orders visible without duplicating settled ledger rows or fabricating splits
+        if (pedidos && !errPed) {
+          pedidos
+            .filter((p) => !paidServiceIds.has(p.id) && p.status !== 'cancelled')
+            .forEach((p) => {
+              const shortId = p.id ? ` · #${String(p.id).slice(0, 8).toUpperCase()}` : "";
+              list.push({
+                id: p.id,
+                type: p.tomador_id === user.uid ? 'saida' : 'entrada',
+                date: p.created_at,
+                description: `Pedido Ambulantes UBT${shortId}`,
+                amount: Number(p.total || 0),
+                status: p.status === 'paid' ? 'confirmed' : 'pending',
+                serviceId: p.id,
+                serviceType: 'ambulante',
+                destination: p.delivery_address || (p.modalidade === 'retirada' || p.modalidade === 'local_fixo' ? 'Retirada no ponto' : undefined),
+                paymentMethod: p.payment_method || undefined,
+              });
+            });
+        }
 
         // Keep unpaid/in-progress rides visible without duplicating ledger rows or polluting with cancelled rides.
         if (rides && !errRides) {

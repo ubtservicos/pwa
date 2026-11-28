@@ -1,282 +1,253 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Search,
-  ShoppingBag,
-  MapPin,
-  ChevronRight,
-  Sparkles,
-  Compass,
-  Store,
-  Layers
-} from "lucide-react";
+import { ArrowLeft, MapPin, Search, X, ShoppingBag } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { reverseGeocode } from "@/lib/geoService";
+import { UBATUBA_CENTER } from "@/lib/googleMapsConfig";
 
-export const CATEGORIAS_MACRO = [
-  {
-    nome: "Açaí",
-    slug: "acai",
-    emoji: "🍧",
-    desc: "Tigelas, copos montados e barcas de praia",
-    badge: "Refrescante",
-    cor: "from-purple-900/40 to-purple-950/80",
-    borderCor: "hover:border-purple-500/50"
-  },
-  {
-    nome: "Bebidas",
-    slug: "bebidas",
-    emoji: "🥤",
-    desc: "Água de coco na fruta, refrigerantes, sucos e cervejas",
-    badge: "Geladas",
-    cor: "from-cyan-900/40 to-cyan-950/80",
-    borderCor: "hover:border-cyan-500/50"
-  },
-  {
-    nome: "Churrasco",
-    slug: "churrasco",
-    emoji: "🍢",
-    desc: "Espetinhos grelhados, queijo coalho e acompanhamentos",
-    badge: "Na Brasa",
-    cor: "from-orange-900/40 to-orange-950/80",
-    borderCor: "hover:border-orange-500/50"
-  },
-  {
-    nome: "Itens de Praia (Cadeiras, Mesas, Guarda-sóis)",
-    slug: "itens-de-praia",
-    emoji: "⛱️",
-    desc: "Aluguel e venda de cadeiras, barracas e esteiras",
-    badge: "Conforto",
-    cor: "from-sky-900/40 to-sky-950/80",
-    borderCor: "hover:border-sky-500/50"
-  },
-  {
-    nome: "Milho",
-    slug: "milho",
-    emoji: "🌽",
-    desc: "Milho verde cozido no prato ou palha, pamonha e curau",
-    badge: "Tradicional",
-    cor: "from-yellow-900/40 to-yellow-950/80",
-    borderCor: "hover:border-yellow-500/50"
-  },
-  {
-    nome: "Porções",
-    slug: "porcoes",
-    emoji: "🍤",
-    desc: "Iscas de peixe, camarão crocante, lula e batata frita",
-    badge: "Petiscos",
-    cor: "from-amber-900/40 to-amber-950/80",
-    borderCor: "hover:border-amber-500/50"
-  },
-  {
-    nome: "Sobremesas",
-    slug: "sobremesas",
-    emoji: "🍰",
-    desc: "Churros recheados, bolos de pote e doces artesanais",
-    badge: "Guloseimas",
-    cor: "from-pink-900/40 to-pink-950/80",
-    borderCor: "hover:border-pink-500/50"
-  },
-  {
-    nome: "Sorvete",
-    slug: "sorvete",
-    emoji: "🍦",
-    desc: "Picolés artesanais, paletas mexicanas e potes",
-    badge: "Artesanal",
-    cor: "from-emerald-900/40 to-emerald-950/80",
-    borderCor: "hover:border-emerald-500/50"
-  },
-  {
-    nome: "Vestuário",
-    slug: "vestuario",
-    emoji: "🩳",
-    desc: "Moda praia, cangas estampadas, biquínis e óculos",
-    badge: "Moda Praia",
-    cor: "from-indigo-900/40 to-indigo-950/80",
-    borderCor: "hover:border-indigo-500/50"
-  },
-] as const;
-
-export default function AmbulantesDiscoveryPage() {
+const AmbulantesDiscoveryPage = () => {
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [locationLabel, setLocationLabel] = useState("Localizando em Ubatuba...");
+  const [categorias, setCategorias] = useState<
+    Array<{ id: string; nome: string; slug: string; emoji: string; count: number }>
+  >([]);
+  const [loading, setLoading] = useState(true);
 
-  const [busca, setBusca] = useState("");
-  const [userLocationName, setUserLocationName] = useState("Ubatuba, SP");
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-
-  // Tenta obter geolocalização do cliente
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setUserLocationName("Praia Grande, Ubatuba");
-      },
-      () => {
-        setUserLocationName("Ubatuba, SP");
-      },
-      { timeout: 5000 }
-    );
+    let active = true;
+    const resolveUserLocation = async (lat: number, lng: number) => {
+      try {
+        const label = await reverseGeocode(lat, lng);
+        if (active) {
+          setLocationLabel(label || "Ubatuba, SP");
+        }
+      } catch {
+        if (active) setLocationLabel("Ubatuba, SP");
+      }
+    };
+
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolveUserLocation(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          resolveUserLocation(UBATUBA_CENTER.lat, UBATUBA_CENTER.lng);
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
+      );
+    } else {
+      resolveUserLocation(UBATUBA_CENTER.lat, UBATUBA_CENTER.lng);
+    }
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Filtra as categorias caso o cliente digite na busca
-  const categoriasFiltradas = useMemo(() => {
-    if (!busca.trim()) return CATEGORIAS_MACRO;
-    const q = busca.toLowerCase();
-    return CATEGORIAS_MACRO.filter(
+  useEffect(() => {
+    const fetchCategorias = async () => {
+      setLoading(true);
+      try {
+        const [{ data: cats, error }, { data: onlineSessions }, { data: approvedProfiles }] =
+          await Promise.all([
+            supabase.from("categorias_ambulante").select("*").order("nome"),
+            supabase.from("ambulante_sessions").select("id, categoria_slug").eq("is_online", true),
+            supabase.from("prestador_ambulante").select("user_id").eq("kyc_status", "approved"),
+          ]);
+
+        if (error) throw error;
+
+        const approvedSet = new Set((approvedProfiles || []).map((p: any) => p.user_id));
+        const onlineApprovedIds = (onlineSessions || [])
+          .filter((s: any) => approvedSet.has(s.id))
+          .map((s: any) => s.id);
+
+        // Count online + KYC-approved vendors that have active stock > 0 per category
+        const vendorIdsWithStock = new Set<string>();
+        const categoryVendors = new Map<string, Set<string>>();
+
+        if (onlineApprovedIds.length > 0) {
+          const { data: stockRows } = await supabase
+            .from("estoque_ambulante")
+            .select("prestador_id, quantidade, disponivel, produtos_padrao(categoria_id)")
+            .in("prestador_id", onlineApprovedIds)
+            .eq("disponivel", true)
+            .gt("quantidade", 0);
+
+          (stockRows || []).forEach((row: any) => {
+            if (!row?.prestador_id) return;
+            vendorIdsWithStock.add(row.prestador_id);
+            const catId = row?.produtos_padrao?.categoria_id;
+            if (catId) {
+              if (!categoryVendors.has(catId)) categoryVendors.set(catId, new Set());
+              categoryVendors.get(catId)!.add(row.prestador_id);
+            }
+          });
+        }
+
+        if (cats) {
+          setCategorias(
+            cats.map((c: any) => {
+              const fromStock = categoryVendors.get(c.id)?.size ?? 0;
+              const fromSlug = (onlineSessions || []).filter(
+                (s: any) =>
+                  approvedSet.has(s.id) &&
+                  vendorIdsWithStock.has(s.id) &&
+                  s.categoria_slug === c.slug,
+              ).length;
+              return {
+                ...c,
+                count: Math.max(fromStock, fromSlug),
+              };
+            }),
+          );
+        }
+      } catch (err) {
+        console.error("Erro ao carregar categorias de ambulantes:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategorias();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return categorias;
+    return categorias.filter(
       (c) =>
         c.nome.toLowerCase().includes(q) ||
-        c.desc.toLowerCase().includes(q) ||
-        c.badge.toLowerCase().includes(q)
+        c.slug.toLowerCase().includes(q),
     );
-  }, [busca]);
+  }, [query, categorias]);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans pb-28">
-      {/* ========================================================================= */}
-      {/* HEADER SUPERIOR DO TOMADOR                                               */}
-      {/* ========================================================================= */}
-      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate("/app/home")}
-            className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer active:scale-95"
-            aria-label="Voltar"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <h1 className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
-              <span>Praia & Ambulantes</span>
-              <span className="w-2 h-2 rounded-full bg-[#00FF66] shadow-[0_0_8px_#00FF66]" />
-            </h1>
-            <div className="flex items-center gap-1 text-xs text-zinc-400">
-              <MapPin size={12} className="text-[#00FF66]" />
-              <span className="truncate max-w-[180px]">{userLocationName}</span>
-            </div>
-          </div>
-        </div>
-
+    <div
+      className="min-h-[100svh] overflow-y-auto"
+      style={{ background: "#0B1B3E", padding: 24, paddingBottom: 48 }}
+    >
+      {/* Header */}
+      <header className="flex items-center justify-between gap-3">
         <button
           type="button"
-          onClick={() => navigate("/app/ambulantes/carrinho")}
-          className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer"
-          aria-label="Carrinho"
+          onClick={() => navigate("/app/home")}
+          aria-label="Voltar"
+          className="flex items-center justify-center rounded-full border-none cursor-pointer shrink-0"
+          style={{ width: 40, height: 40, background: "rgba(255,255,255,0.08)", color: "#fff" }}
         >
-          <ShoppingBag size={18} />
+          <ArrowLeft size={20} />
         </button>
+
+        <h1 className="font-display text-[20px] font-bold text-white flex-1 text-center">
+          Ambulantes
+        </h1>
+
+        <div
+          className="inline-flex items-center gap-1.5 rounded-full font-sans text-[12px] shrink-0 max-w-[165px]"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            color: "rgba(255,255,255,0.75)",
+            padding: "6px 12px",
+          }}
+        >
+          <MapPin size={13} color="#0DB87E" className="shrink-0" />
+          <span className="truncate">{locationLabel}</span>
+        </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
-        {/* ========================================================================= */}
-        {/* BARRA DE BUSCA GENEROSA                                                  */}
-        {/* ========================================================================= */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="O que você quer pedir na praia hoje? (ex: Sorvete, Água de coco...)"
-            className="w-full pl-10 pr-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#00FF66] transition shadow-inner"
-          />
-          {busca && (
-            <button
-              type="button"
-              onClick={() => setBusca("")}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white font-bold"
-            >
-              Limpar
-            </button>
-          )}
+      {/* Search */}
+      <div
+        className="mt-5 flex items-center gap-2.5"
+        style={{
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          borderRadius: 12,
+          padding: "0 14px",
+          height: 48,
+        }}
+      >
+        <Search size={18} color="rgba(255,255,255,0.45)" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar produto ou ambulante..."
+          className="flex-1 bg-transparent border-none outline-none font-sans text-[14px] text-white placeholder:text-white/40"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label="Limpar busca"
+            className="bg-transparent border-none cursor-pointer p-1"
+            style={{ color: "rgba(255,255,255,0.55)" }}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      {/* Category grid */}
+      {loading ? (
+        <div className="mt-16 text-center text-white/50 font-sans text-[14px]">
+          Buscando categorias na região...
         </div>
-
-        {/* ========================================================================= */}
-        {/* HERO BANNER: SHOPPING DA PRAIA                                           */}
-        {/* ========================================================================= */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-zinc-800 p-5 shadow-2xl">
-          <div className="flex items-start justify-between relative z-10">
-            <div className="max-w-[70%]">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#00FF66]/15 text-[#00FF66] border border-[#00FF66]/30 mb-2">
-                <Sparkles size={11} /> Entrega na sua Cadeira
-              </span>
-              <h2 className="text-xl font-black text-white leading-tight">
-                Peça direto da areia
-              </h2>
-              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                Descubra ambulantes credenciados com estoque diário e receba onde estiver.
-              </p>
-            </div>
-            <div className="w-14 h-14 rounded-2xl bg-[#00FF66]/10 border border-[#00FF66]/20 flex items-center justify-center text-3xl">
-              🏖️
-            </div>
-          </div>
+      ) : filtered.length === 0 ? (
+        <div className="mt-16 flex flex-col items-center text-center">
+          <ShoppingBag size={40} color="rgba(255,255,255,0.28)" />
+          <p className="font-display text-[17px] font-bold text-white mt-3">
+            Nenhum ambulante encontrado
+          </p>
+          <p className="font-sans text-[13px] mt-1" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Tente buscar outro termo ou categoria
+          </p>
         </div>
-
-        {/* ========================================================================= */}
-        {/* MENU DE SHOPPING: BOXES DAS 9 MACRO CATEGORIAS (GRID GENEROSO)           */}
-        {/* ========================================================================= */}
-        <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h3 className="text-sm font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <Layers size={15} className="text-[#00FF66]" />
-              Categorias na Areia ({categoriasFiltradas.length})
-            </h3>
-            <span className="text-xs text-zinc-500 font-mono">Escolha para ver os ambulantes</span>
-          </div>
-
-          {categoriasFiltradas.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-zinc-900 border border-dashed border-zinc-800 text-center my-4">
-              <p className="text-sm font-bold text-white mb-1">Nenhuma categoria encontrada para "{busca}"</p>
-              <p className="text-xs text-zinc-400 mb-3">Tente buscar por termos mais genéricos como "sorvete", "bebidas" ou "açaí".</p>
+      ) : (
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {filtered.map((cat) => {
+            const hasOnline = cat.count > 0;
+            return (
               <button
+                key={cat.id}
                 type="button"
-                onClick={() => setBusca("")}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition cursor-pointer"
+                onClick={() => navigate(`/app/ambulantes/categoria/${cat.slug}`)}
+                className="flex flex-col items-start text-left cursor-pointer transition-transform active:scale-[0.98]"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 16,
+                  padding: 16,
+                }}
               >
-                Limpar busca
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-              {categoriasFiltradas.map((cat) => (
-                <div
-                  key={cat.slug}
-                  onClick={() => navigate(`/app/ambulantes/categoria/${cat.slug}`)}
-                  className={`group relative p-4 rounded-2xl bg-gradient-to-b ${cat.cor} border border-zinc-800/90 ${cat.borderCor} hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[148px] shadow-lg shadow-black/40`}
-                >
-                  {/* Topo do Card: Emoji e Badge */}
-                  <div className="flex items-start justify-between">
-                    <span className="text-3xl filter drop-shadow-md group-hover:scale-110 transition-transform">
-                      {cat.emoji}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/60 border border-white/10 text-zinc-300">
-                      {cat.badge}
-                    </span>
-                  </div>
-
-                  {/* Base do Card: Título e Descrição */}
-                  <div className="mt-3">
-                    <h4 className="text-sm font-black text-white group-hover:text-[#00FF66] transition-colors leading-tight line-clamp-1 mb-1">
-                      {cat.nome}
-                    </h4>
-                    <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                      {cat.desc}
-                    </p>
-                    <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-white/5">
-                      <span className="text-[10px] font-bold text-[#00FF66] flex items-center gap-0.5">
-                        Ver ambulantes
-                      </span>
-                      <ChevronRight size={13} className="text-zinc-500 group-hover:text-[#00FF66] group-hover:translate-x-0.5 transition-all" />
-                    </div>
-                  </div>
+                <span style={{ fontSize: 32, lineHeight: 1 }}>{cat.emoji}</span>
+                <span className="font-display text-[14px] font-bold text-white mt-2.5 leading-snug">
+                  {cat.nome}
+                </span>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span
+                    className="block rounded-full"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      background: hasOnline ? "#0DB87E" : "rgba(255,255,255,0.25)",
+                    }}
+                  />
+                  <span
+                    className="font-sans text-[12px]"
+                    style={{ color: hasOnline ? "#0DB87E" : "rgba(255,255,255,0.45)" }}
+                  >
+                    {cat.count} {cat.count === 1 ? "online" : "online"}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+              </button>
+            );
+          })}
         </div>
-      </main>
+      )}
     </div>
   );
-}
+};
+
+export default AmbulantesDiscoveryPage;

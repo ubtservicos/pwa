@@ -31,8 +31,8 @@ const DELETE_CLIENT_PATH = path.join(
   "index.ts",
 );
 
-const migrationSql = fs.readFileSync(MIGRATION_PATH, "utf8");
-const gatewaySrc = fs.readFileSync(GATEWAY_PATH, "utf8");
+const migrationSql = fs.readFileSync(MIGRATION_PATH, "utf8").replace(/\r\n/g, "\n");
+const gatewaySrc = fs.readFileSync(GATEWAY_PATH, "utf8").replace(/\r\n/g, "\n");
 const webhookSrc = fs.readFileSync(WEBHOOK_PATH, "utf8");
 const deleteClientSrc = fs.readFileSync(DELETE_CLIENT_PATH, "utf8");
 

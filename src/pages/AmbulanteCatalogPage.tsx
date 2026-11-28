@@ -1,436 +1,420 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin, Minus, Plus, Star } from "lucide-react";
-import { MOCK_SESSIONS, MOCK_FALLBACK_SESSIONS, getCategoriaIcon } from "@/mocks/ambulantesSessions";
-import { findProduto } from "@/mocks/ambulantesProdutos";
-import { useAmbulantePedido } from "@/contexts/AmbulantePedidoContext";
+import { ArrowLeft, Star, Plus, Minus, ShoppingCart, Package } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect } from "react";
+import { useAmbulantePedido } from "@/contexts/AmbulantePedidoContext";
+import { UBATUBA_CENTER } from "@/lib/googleMapsConfig";
+import AmbulanteTrustBadges, {
+  formatDistanceLabel,
+  haversineDistanceKm,
+} from "@/components/ambulantes/AmbulanteTrustBadges";
 
-interface ProdutoData {
+interface CatalogVendor {
+  id: string;
   nome: string;
   emoji: string;
-  preco: number;
-  descricao?: string;
-  disponivel: boolean;
-  categoria?: string;
-  foto?: string;
+  rating: number;
+  isOnline: boolean;
+  kycApproved: boolean;
+  deliveryFee: number;
+  modalidades: string[];
+  praiaReferencia: string | null;
+  pontoReferencia: string | null;
+  tipoEstrutura: string | null;
+  estruturaPhotoUrl: string | null;
+  possuiAlvara: boolean;
+  possuiVigilanciaSanitaria: boolean;
+  lat: number | null;
+  lng: number | null;
 }
 
-interface SessionData {
-  sessionId: string;
+interface CatalogProduct {
+  prodId: string;
   nome: string;
-  modalidade: "local_fixo" | "delivery" | "both";
-  location: { lat: number; lng: number; address?: string };
-  produtos: Record<string, ProdutoData> | string[];
-  rating: number;
-  totalPedidos: number;
+  emoji: string;
+  foto_url: string | null;
+  categoriaNome: string;
+  preco: number;
+  estoque: number;
 }
 
 const AmbulanteCatalogPage = () => {
-  const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { state, addItem, removeItem, setSession } = useAmbulantePedido();
-
-  const [session, setSessionData] = useState<SessionData | null>(null);
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const { state, setSession, addItem, removeItem } = useAmbulantePedido();
+  const [vendor, setVendor] = useState<CatalogVendor | null>(null);
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>(UBATUBA_CENTER);
 
   useEffect(() => {
-    if (!sessionId) return;
-    async function load() {
-      // 1. Carrega dados cadastrais da sessão do ambulante
-      const { data, error } = await supabase
-        .from('ambulante_sessions')
-        .select(`
-          id, modalidade, lat, lng, is_online, rating, total_pedidos, address,
-          usuarios ( nome ),
-          ambulante_session_produtos (
-            preco, disponivel,
-            produtos ( id, nome, emoji, descricao, categoria )
-          )
-        `)
-        .eq('id', sessionId)
-        .maybeSingle();
-        
-      if (error || !data) {
-        setSessionData(null);
-        setLoading(false);
-        return;
-      }
-
-      type SPType = { disponivel: boolean; preco: number; produtos: { id: string; nome: string; emoji: string; descricao: string; categoria: string; preco: number } };
-      
-      const row = data as unknown as {
-        id: string;
-        modalidade: "local_fixo" | "delivery" | "both";
-        lat: number;
-        lng: number;
-        is_online: boolean;
-        rating: number;
-        total_pedidos: number;
-        address?: string;
-        usuarios: { nome: string } | { nome: string }[] | null;
-        ambulante_session_produtos?: SPType[];
-      };
-
-      const userName = Array.isArray(row.usuarios) ? row.usuarios[0]?.nome : row.usuarios?.nome;
-      const produtosData: Record<string, ProdutoData> = {};
-
-      // 2. Consulta itens reais do estoque_ambulante
-      const { data: estoqueRows } = await supabase
-        .from('estoque_ambulante')
-        .select(`
-          id_produto_padrao,
-          preco_venda,
-          quantidade,
-          disponivel,
-          produtos_padrao (
-            id,
-            nome_produto,
-            descricao,
-            preco_sugerido,
-            imagem_url,
-            categoria
-          )
-        `)
-        .eq('id_ambulante', sessionId)
-        .gt('quantidade', 0)
-        .eq('disponivel', true);
-
-      if (estoqueRows && estoqueRows.length > 0) {
-        estoqueRows.forEach((item: any) => {
-          if (item.produtos_padrao) {
-            produtosData[item.id_produto_padrao] = {
-              nome: item.produtos_padrao.nome_produto,
-              emoji: "🏖️",
-              preco: Number(item.preco_venda) > 0 ? Number(item.preco_venda) : Number(item.produtos_padrao.preco_sugerido) || 0,
-              descricao: item.produtos_padrao.descricao || "",
-              disponivel: true,
-              categoria: item.produtos_padrao.categoria,
-              foto: item.produtos_padrao.imagem_url,
-            };
-          }
-        });
-      } else if (row.ambulante_session_produtos) {
-        // Fallback para tabela legada se houver
-        row.ambulante_session_produtos.forEach((sp) => {
-          if (sp.disponivel && sp.produtos) {
-            produtosData[sp.produtos.id] = {
-              nome: sp.produtos.nome,
-              emoji: sp.produtos.emoji,
-              preco: sp.preco || sp.produtos.preco,
-              descricao: sp.produtos.descricao,
-              disponivel: true,
-              categoria: sp.produtos.categoria
-            };
-          }
-        });
-      }
-      
-      setSessionData({
-        sessionId: row.id,
-        nome: userName || "Ambulante Credenciado",
-        modalidade: row.modalidade || "local_fixo",
-        location: { lat: row.lat || -23.4332, lng: row.lng || -45.0834, address: row.address },
-        produtos: produtosData,
-        rating: row.rating || 5.0,
-        totalPedidos: row.total_pedidos || 0
-      });
-      setLoading(false);
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
+      );
     }
-    load();
-    
-    const channel = supabase
-      .channel('public:ambulante_sessions:'+sessionId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ambulante_sessions', filter: `id=eq.${sessionId}` }, () => {
-        load();
-      })
-      .subscribe();
+  }, []);
 
-    return () => {
-      supabase.removeChannel(channel);
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      if (!sessionId) return;
+      setLoading(true);
+      try {
+        const [{ data: sess }, { data: profile }, { data: estoqueRows }, { data: ratingRows }] =
+          await Promise.all([
+            supabase
+              .from("ambulante_sessions")
+              .select("id, is_online, categoria_slug, modalidades, lat, lng, delivery_fee, praia_referencia, ponto_referencia, usuarios(nome)")
+              .eq("id", sessionId)
+              .maybeSingle(),
+            supabase
+              .from("prestador_ambulante")
+              .select(
+                "user_id, nome_comercial, delivery_fee, modalidades, praia_referencia, ponto_referencia, tipo_estrutura, estrutura_photo_url, possui_alvara, possui_vigilancia_sanitaria, kyc_status",
+              )
+              .eq("user_id", sessionId)
+              .maybeSingle(),
+            supabase
+              .from("estoque_ambulante")
+              .select("produto_id, preco_venda, quantidade, disponivel, produtos_padrao(id, nome, foto_url, categorias_ambulante(nome, emoji))")
+              .eq("prestador_id", sessionId)
+              .eq("disponivel", true)
+              .gt("quantidade", 0),
+            supabase
+              .from("ambulante_avaliacoes")
+              .select("nota")
+              .eq("avaliado_id", sessionId),
+          ]);
+
+        if (!sess && !profile) {
+          setVendor(null);
+          return;
+        }
+
+        const avgRating =
+          ratingRows && ratingRows.length > 0
+            ? +(
+                ratingRows.reduce((acc: number, r: any) => acc + Number(r.nota || 0), 0) /
+                ratingRows.length
+              ).toFixed(1)
+            : 5.0;
+
+        const firstCatEmoji =
+          (estoqueRows || []).find((r: any) => r?.produtos_padrao?.categorias_ambulante?.emoji)
+            ?.produtos_padrao?.categorias_ambulante?.emoji || "🛍️";
+
+        const modalidades: string[] =
+          Array.isArray(profile?.modalidades) && profile.modalidades.length > 0
+            ? profile.modalidades
+            : Array.isArray(sess?.modalidades) && sess.modalidades.length > 0
+              ? sess.modalidades
+              : ["entrega", "retirada"];
+
+        const deliveryFee = Math.max(
+          0,
+          Number(sess?.delivery_fee ?? profile?.delivery_fee ?? 0) || 0,
+        );
+
+        const vendorObj: CatalogVendor = {
+          id: sessionId,
+          nome: profile?.nome_comercial || (sess as any)?.usuarios?.nome || "Ambulante UBT",
+          emoji: firstCatEmoji,
+          rating: avgRating,
+          isOnline: Boolean(sess?.is_online),
+          kycApproved: profile?.kyc_status === "approved",
+          deliveryFee,
+          modalidades,
+          praiaReferencia: sess?.praia_referencia || profile?.praia_referencia || null,
+          pontoReferencia: sess?.ponto_referencia || profile?.ponto_referencia || null,
+          tipoEstrutura: profile?.tipo_estrutura || null,
+          estruturaPhotoUrl: profile?.estrutura_photo_url || null,
+          possuiAlvara: Boolean(profile?.possui_alvara),
+          possuiVigilanciaSanitaria: Boolean(profile?.possui_vigilancia_sanitaria),
+          lat: sess?.lat !== null && sess?.lat !== undefined ? Number(sess.lat) : null,
+          lng: sess?.lng !== null && sess?.lng !== undefined ? Number(sess.lng) : null,
+        };
+
+        setVendor(vendorObj);
+
+        setSession(sessionId, {
+          prestadorId: sessionId,
+          nome: vendorObj.nome,
+          emoji: vendorObj.emoji,
+          rating: vendorObj.rating,
+          deliveryFee: vendorObj.deliveryFee,
+          modalidades: vendorObj.modalidades,
+          praiaReferencia: vendorObj.praiaReferencia,
+          pontoReferencia: vendorObj.pontoReferencia,
+          tipoEstrutura: vendorObj.tipoEstrutura,
+          estruturaPhotoUrl: vendorObj.estruturaPhotoUrl,
+          possuiAlvara: vendorObj.possuiAlvara,
+          possuiVigilanciaSanitaria: vendorObj.possuiVigilanciaSanitaria,
+          lat: vendorObj.lat,
+          lng: vendorObj.lng,
+        });
+
+        const mappedProducts: CatalogProduct[] = (estoqueRows || [])
+          .filter((r: any) => r?.produtos_padrao)
+          .map((r: any) => ({
+            prodId: r.produto_id || r.produtos_padrao.id,
+            nome: r.produtos_padrao.nome,
+            emoji: r.produtos_padrao.categorias_ambulante?.emoji || "🛍️",
+            foto_url: r.produtos_padrao.foto_url || null,
+            categoriaNome: r.produtos_padrao.categorias_ambulante?.nome || "Produtos",
+            preco: Number(r.preco_venda || 0),
+            estoque: Math.max(0, Number(r.quantidade || 0)),
+          }));
+
+        setProducts(mappedProducts);
+      } catch (err) {
+        console.error("Erro ao carregar catálogo do ambulante:", err);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    fetchCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // Hydrate session in context once
-  useEffect(() => {
-    if (session && state.sessionId !== sessionId) {
-      const cat = getCategoriaIcon(session.produtos);
-      setSession(session.sessionId, { nome: session.nome, emoji: cat.emoji, rating: session.rating });
-    }
-  }, [session, state.sessionId, sessionId, setSession]);
+  const totalQty = state.itens.reduce((acc, i) => acc + i.qty, 0);
+  const distKm = vendor ? haversineDistanceKm(userCoords.lat, userCoords.lng, vendor.lat, vendor.lng) : null;
+  const distLabel = formatDistanceLabel(distKm);
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100svh", background: "#09090B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p className="font-display">Carregando...</p>
+      <div
+        className="min-h-[100svh] flex items-center justify-center text-white/60 font-sans text-[14px]"
+        style={{ background: "#0B1B3E" }}
+      >
+        Carregando cardápio...
       </div>
     );
   }
 
-  if (!session) {
+  if (!vendor) {
     return (
-      <div style={{ minHeight: "100svh", background: "#09090B", color: "#fff", padding: 24 }}>
-        <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer" }}>
-          <ArrowLeft size={20} />
+      <div
+        className="min-h-[100svh] flex flex-col items-center justify-center p-6 text-center text-white"
+        style={{ background: "#0B1B3E" }}
+      >
+        <p className="font-display text-[18px] font-bold">Ambulante não encontrado</p>
+        <button
+          type="button"
+          onClick={() => navigate("/app/ambulantes")}
+          className="mt-4 px-5 py-2.5 rounded-xl bg-[#0DB87E] text-white font-display font-bold text-[14px] border-none cursor-pointer"
+        >
+          Voltar à busca
         </button>
-        <p className="font-display mt-4" style={{ fontSize: 18 }}>Ambulante não encontrado.</p>
       </div>
     );
   }
-
-  const initials = session.nome.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
-
-  const qtyOf = (prodId: string) =>
-    state.itens.find((i) => i.prodId === prodId)?.qty ?? 0;
-
-  const totalCarrinho = state.total;
-  const totalItens = state.itens.reduce((a, i) => a + i.qty, 0);
 
   return (
-    <div style={{ minHeight: "100svh", background: "#09090B", paddingBottom: 160 }}>
+    <div
+      className="min-h-[100svh] overflow-y-auto"
+      style={{ background: "#0B1B3E", padding: 24, paddingBottom: totalQty > 0 ? 110 : 48 }}
+    >
       {/* Header */}
-      <header className="flex items-center gap-4" style={{ height: 56, padding: "0 20px" }}>
+      <header className="flex items-center gap-3">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#fff" }}
           aria-label="Voltar"
+          className="flex items-center justify-center rounded-full border-none cursor-pointer shrink-0"
+          style={{ width: 40, height: 40, background: "rgba(255,255,255,0.08)", color: "#fff" }}
         >
-          <ArrowLeft size={24} />
+          <ArrowLeft size={20} />
         </button>
-        <h1 className="font-display flex-1" style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0 }}>
-          Cardápio
-        </h1>
-        <span className="font-sans" style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>
-          ~1.2km
-        </span>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display text-[19px] font-bold text-white truncate">{vendor.nome}</h1>
+          <div className="flex items-center gap-2 text-[12px] font-sans text-white/65">
+            <span className="inline-flex items-center gap-1 font-bold text-[#F5A623]">
+              <Star size={12} fill="#F5A623" color="#F5A623" />
+              {vendor.rating.toFixed(1)}
+            </span>
+            {distLabel && <span>• {distLabel}</span>}
+            <span className={vendor.isOnline ? "text-[#0DB87E] font-semibold" : "text-white/45"}>
+              • {vendor.isOnline ? "Online agora" : "Offline"}
+            </span>
+          </div>
+        </div>
       </header>
 
-      {/* Banner */}
-      <div
+      {/* Vendor info card with optional structure photo & trust badges */}
+      <section
+        className="mt-4 rounded-2xl overflow-hidden"
         style={{
-          position: "relative", height: 130,
-          background: "linear-gradient(135deg, #132348, #1C3261)",
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.10)",
         }}
       >
-        <div
-          style={{
-            position: "absolute", bottom: -28, left: 24,
-            width: 56, height: 56, borderRadius: 999,
-            border: "2px solid #0DB87E",
-            background: "rgba(13,184,126,0.20)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <span className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#0DB87E" }}>
-            {initials}
-          </span>
-        </div>
-        <span
-          className="font-sans"
-          style={{
-            position: "absolute", top: 12, right: 16,
-            fontSize: 11, color: "rgba(255,255,255,0.85)",
-            background: "rgba(0,0,0,0.30)", padding: "4px 10px", borderRadius: 999,
-          }}
-        >
-          {session.modalidade === "both" ? "🛵 Delivery & 📍 Local Fixo" : session.modalidade === "delivery" ? "🛵 Delivery" : "📍 Local Fixo"}
-        </span>
-      </div>
-
-      {/* Info */}
-      <div style={{ padding: "0 24px", marginTop: 36 }}>
-        <h2 className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0 }}>
-          {session.nome}
-        </h2>
-        {(session.modalidade === "local_fixo" || session.modalidade === "both") && (
-          <div className="mt-1 flex items-center gap-1.5">
-            <MapPin size={14} color="#0DB87E" />
-            <span className="font-sans" style={{ fontSize: 13, color: "rgba(255,255,255,0.65)" }}>
-              {session.location.address ?? "Ubatuba"}
-            </span>
-            <button
-              type="button"
-              onClick={() => window.open(`https://maps.google.com/?q=${session.location.lat},${session.location.lng}`)}
-              className="font-sans"
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: "#0DB87E", fontSize: 12, textDecoration: "underline",
-              }}
-            >
-              Ver no mapa
-            </button>
-          </div>
+        {vendor.estruturaPhotoUrl && (
+          <img
+            src={vendor.estruturaPhotoUrl}
+            alt={`Estrutura de ${vendor.nome}`}
+            className="w-full h-36 object-cover"
+          />
         )}
-        <div className="mt-1 flex items-center gap-1">
-          <Star size={14} fill="#F5A623" stroke="#F5A623" />
-          <span className="font-sans" style={{ fontSize: 12, color: "rgba(255,255,255,0.85)" }}>
-            {session.rating.toFixed(1)}
-          </span>
-          <span className="font-sans" style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
-            ({session.totalPedidos} pedidos)
-          </span>
+        <div className="p-4">
+          <AmbulanteTrustBadges
+            info={{
+              possuiAlvara: vendor.possuiAlvara,
+              possuiVigilanciaSanitaria: vendor.possuiVigilanciaSanitaria,
+              tipoEstrutura: vendor.tipoEstrutura,
+              praiaReferencia: vendor.praiaReferencia,
+              pontoReferencia: vendor.pontoReferencia,
+              deliveryFee: vendor.deliveryFee,
+              modalidades: vendor.modalidades,
+            }}
+          />
         </div>
-      </div>
+      </section>
 
-      {/* Catálogo */}
-      <div style={{ padding: "0 24px", marginTop: 20 }}>
-        <p
-          className="font-sans uppercase"
-          style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.40)", letterSpacing: 1.5, margin: 0 }}
+      {(!vendor.isOnline || !vendor.kycApproved) && (
+        <div
+          className="mt-4 rounded-xl p-3 font-sans text-[13px]"
+          style={{
+            background: "rgba(245,166,35,0.12)",
+            border: "1px solid rgba(245,166,35,0.35)",
+            color: "#F5A623",
+          }}
         >
-          Disponíveis agora
-        </p>
+          Este ambulante não está recebendo pedidos no momento.
+        </div>
+      )}
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          {(() => {
-            let items: Array<{ id: string; nome: string; descricao: string; emoji: string; preco: number; foto?: string }> = [];
-            if (Array.isArray(session.produtos)) {
-              items = session.produtos.map((pid: string) => {
-                const p = findProduto(pid);
-                if (!p) return null;
-                return { id: pid, nome: p.nome, descricao: p.descricao, emoji: p.emoji, preco: p.precoSugerido };
-              }).filter((v): v is NonNullable<typeof v> => v !== null);
-            } else {
-              items = Object.entries(session.produtos as Record<string, ProdutoData>).map(([pid, pData]) => {
-                if (!pData.disponivel) return null;
-                return { id: pid, nome: pData.nome, descricao: pData.descricao || "", emoji: pData.emoji, preco: pData.preco, foto: pData.foto };
-              }).filter(Boolean);
-            }
+      {/* Products */}
+      <section className="mt-6">
+        <h2 className="font-display text-[16px] font-bold text-white mb-3">Cardápio disponível</h2>
 
-            return items.map((prod) => {
-              const qty = qtyOf(prod.id);
+        {products.length === 0 ? (
+          <div
+            className="rounded-2xl p-6 text-center"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <Package size={32} className="mx-auto text-white/30 mb-2" />
+            <p className="font-sans text-[13px] text-white/60">
+              Nenhum produto com estoque disponível no momento.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {products.map((prod) => {
+              const inCart = state.itens.find((i) => i.prodId === prod.prodId);
+              const qty = inCart?.qty || 0;
+              const atMaxStock = qty >= prod.estoque;
+              const canOrder = vendor.isOnline && vendor.kycApproved;
+
               return (
                 <div
-                  key={prod.id}
+                  key={prod.prodId}
+                  className="flex items-center gap-3 rounded-2xl p-3.5"
                   style={{
                     background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 16,
-                    overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,0.09)",
                   }}
                 >
-                  <div
-                    style={{
-                      height: 88,
-                      background: "rgba(255,255,255,0.04)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 40,
-                      overflow: "hidden"
-                    }}
-                  >
-                    {prod.foto ? (
-                      <img src={prod.foto} alt={prod.nome} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      prod.emoji
-                    )}
-                  </div>
-                  <div style={{ padding: "10px 12px" }}>
-                    <p className="font-sans truncate" style={{ fontSize: 14, fontWeight: 600, color: "#fff", margin: 0 }}>
+                  {prod.foto_url ? (
+                    <img
+                      src={prod.foto_url}
+                      alt={prod.nome}
+                      className="w-14 h-14 rounded-xl object-cover shrink-0 border border-white/10"
+                    />
+                  ) : (
+                    <div
+                      className="w-14 h-14 rounded-xl flex items-center justify-center text-[26px] shrink-0"
+                      style={{ background: "rgba(255,255,255,0.08)" }}
+                    >
+                      {prod.emoji}
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-[15px] font-bold text-white truncate">
                       {prod.nome}
                     </p>
-                    {prod.descricao && (
-                      <p
-                        className="font-sans truncate"
-                        style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "2px 0 0" }}
-                      >
-                        {prod.descricao}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
-                      <span className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#0DB87E" }}>
-                        R$ {prod.preco.toFixed(2)}
-                      </span>
-                      {qty === 0 ? (
+                    <p className="font-sans text-[12px] text-white/55">
+                      Disponível: {prod.estoque} {prod.estoque === 1 ? "un." : "un."}
+                    </p>
+                    <p className="font-display text-[15px] font-bold text-[#0DB87E] mt-0.5">
+                      R$ {prod.preco.toFixed(2).replace(".", ",")}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {qty > 0 && (
+                      <>
                         <button
                           type="button"
-                          onClick={() => addItem(prod.id, prod.preco, prod.nome, prod.emoji)}
-                          style={{
-                            width: 28, height: 28, borderRadius: 999,
-                            background: "#0DB87E", border: "none", cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                          }}
-                          aria-label="Adicionar"
+                          onClick={() => removeItem(prod.prodId)}
+                          aria-label={`Remover ${prod.nome}`}
+                          className="w-8 h-8 rounded-full flex items-center justify-center border-none cursor-pointer"
+                          style={{ background: "rgba(255,255,255,0.12)", color: "#fff" }}
                         >
-                          <Plus size={14} color="#fff" />
+                          <Minus size={14} />
                         </button>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => removeItem(prod.id)}
-                            style={{
-                              width: 28, height: 28, borderRadius: 999,
-                              background: "rgba(255,255,255,0.10)", border: "none", cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            aria-label="Remover"
-                          >
-                            <Minus size={14} color="#fff" />
-                          </button>
-                          <span
-                            className="font-display"
-                            style={{ fontSize: 15, fontWeight: 700, color: "#fff", minWidth: 16, textAlign: "center" }}
-                          >
-                            {qty}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => addItem(prod.id, prod.preco, prod.nome, prod.emoji)}
-                            style={{
-                              width: 28, height: 28, borderRadius: 999,
-                              background: "#0DB87E", border: "none", cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            aria-label="Adicionar"
-                          >
-                            <Plus size={14} color="#fff" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                        <span className="font-display text-[15px] font-bold text-white min-w-[20px] text-center">
+                          {qty}
+                        </span>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      disabled={!canOrder || atMaxStock}
+                      onClick={() =>
+                        addItem(prod.prodId, prod.preco, prod.nome, prod.emoji, prod.estoque)
+                      }
+                      aria-label={`Adicionar ${prod.nome}`}
+                      className="w-8 h-8 rounded-full flex items-center justify-center border-none transition-opacity"
+                      style={{
+                        background: !canOrder || atMaxStock ? "rgba(255,255,255,0.15)" : "#0DB87E",
+                        color: "#fff",
+                        cursor: !canOrder || atMaxStock ? "not-allowed" : "pointer",
+                        opacity: !canOrder || atMaxStock ? 0.5 : 1,
+                      }}
+                    >
+                      <Plus size={15} />
+                    </button>
                   </div>
                 </div>
               );
-            });
-          })()}
-        </div>
-      </div>
+            })}
+          </div>
+        )}
+      </section>
 
-      {/* Cart bar */}
-      <div
-        onClick={() => navigate("/app/ambulantes/carrinho")}
-        style={{
-          position: "fixed", left: 0, right: 0, bottom: 64, zIndex: 20,
-          background: "#0DB87E",
-          borderRadius: "16px 16px 0 0",
-          padding: "16px 24px",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          cursor: "pointer",
-          transform: `translateY(${totalCarrinho > 0 ? "0" : "100%"})`,
-          transition: "transform 250ms ease",
-        }}
-      >
-        <span
-          className="font-sans"
-          style={{
-            background: "rgba(255,255,255,0.20)",
-            borderRadius: 999, padding: "4px 10px",
-            fontSize: 13, fontWeight: 600, color: "#fff",
-          }}
+      {/* Floating Cart Bar */}
+      {totalQty > 0 && (
+        <div
+          className="fixed left-4 right-4 bottom-5 z-30"
+          style={{ maxWidth: 480, margin: "0 auto" }}
         >
-          {totalItens} {totalItens === 1 ? "item" : "itens"}
-        </span>
-        <span className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
-          Ver carrinho
-        </span>
-        <span className="font-display" style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
-          R$ {totalCarrinho.toFixed(2)}
-        </span>
-      </div>
-
-      
+          <button
+            type="button"
+            onClick={() => navigate("/app/ambulantes/carrinho")}
+            className="w-full flex items-center justify-between rounded-2xl border-none cursor-pointer shadow-xl"
+            style={{
+              background: "#0DB87E",
+              color: "#fff",
+              padding: "16px 20px",
+              boxShadow: "0 10px 30px rgba(13,184,126,0.35)",
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <ShoppingCart size={20} />
+              <span className="font-display text-[15px] font-bold">
+                Ver carrinho ({totalQty})
+              </span>
+            </div>
+            <span className="font-display text-[16px] font-extrabold">
+              R$ {state.total.toFixed(2).replace(".", ",")}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

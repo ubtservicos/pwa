@@ -1,385 +1,485 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  Truck,
-  MapPin,
-  Store,
-  Phone,
-  FileText,
-  ShieldCheck,
+  Bike,
   CheckCircle2,
-  AlertCircle,
+  FileText,
+  MapPin,
+  ShieldCheck,
+  Store,
+  Truck,
   UploadCloud,
-  ChevronRight,
-  DollarSign
+  Sparkles,
+  Camera,
 } from "lucide-react";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
-
-type Modalidade = "delivery" | "local_fixo" | "both";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { maskCPF, maskPhone } from "@/utils/masks";
+import Toast from "@/components/auth/Toast";
+import { useSimpleToast } from "@/hooks/useToast2";
 
 const PRAIAS_UBATUBA = [
   "Praia Grande",
   "Praia do Tenório",
-  "Praia das Toninhas",
-  "Praia da Enseada",
-  "Praia do Perequê-Açu",
-  "Praia do Itaguá",
-  "Praia de Itamambuca",
-  "Praia de Ubatumirim",
-  "Praia do Lázaro",
-  "Praia da Maranduba",
-  "Praia do Félix",
-  "Praia Vermelha do Norte",
-  "Outra / Itinerante"
+  "Praia Vermelha do Centro",
+  "Itaguá",
+  "Perequê-Açu",
+  "Toninhas",
+  "Enseada",
+  "Lázaro",
+  "Sununga",
+  "Domingas Dias",
+  "Praia Dura",
+  "Maranduba",
+  "Lagoinha",
+  "Itamambuca",
+  "Félix",
+  "Prumirim",
+  "Centro / Calçadão",
+  "Outra região de Ubatuba",
 ];
+
+const TIPOS_ESTRUTURA = [
+  { value: "", label: "Selecione (opcional)" },
+  { value: "carrinho", label: "Carrinho de Praia" },
+  { value: "barraca", label: "Barraca" },
+  { value: "isopor", label: "Isopor / Caixa Térmica" },
+  { value: "ponto_fixo", label: "Ponto Fixo / Quiosque" },
+  { value: "outro", label: "Outro" },
+];
+
+type UploadFieldKey =
+  | "rg_frente"
+  | "rg_verso"
+  | "selfie"
+  | "alvara_photo"
+  | "vigilancia_photo"
+  | "estrutura_photo";
 
 export default function AmbulantesOnboardingPage() {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const { toast, showToast } = useSimpleToast();
 
-  // Dados Cadastrais
+  // Mandatory identity & operational fields
   const [nomeComercial, setNomeComercial] = useState("");
+  const [cpf, setCpf] = useState("");
   const [telefone, setTelefone] = useState("");
   const [chavePix, setChavePix] = useState("");
-  const [modalidades, setModalidades] = useState<Array<"delivery" | "local_fixo">>(["delivery"]);
-  const [praiaReferencia, setPraiaReferencia] = useState(PRAIAS_UBATUBA[0]);
+  const [modalidades, setModalidades] = useState<string[]>(["entrega", "retirada"]);
+  const [praiaReferencia, setPraiaReferencia] = useState("Praia Grande");
   const [pontoReferencia, setPontoReferencia] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState("0,00");
 
-  // Documentação específica de Ambulante
+  // Mandatory KYC docs (uploaded strictly to kyc-documents bucket)
+  const [rgFrenteUrl, setRgFrenteUrl] = useState("");
+  const [rgVersoUrl, setRgVersoUrl] = useState("");
+  const [selfieUrl, setSelfieUrl] = useState("");
+
+  // Optional non-blocking trust badges & structure
+  const [possuiAlvara, setPossuiAlvara] = useState(false);
   const [alvaraNumero, setAlvaraNumero] = useState("");
-  const [cpf, setCpf] = useState("");
-  const [possuiAlvara, setPossuiAlvara] = useState<"sim" | "protocolo">("sim");
-  const [docFile, setDocFile] = useState<File | null>(null);
-  const [docPreviewUrl, setDocPreviewUrl] = useState<string>("");
-  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [alvaraValidade, setAlvaraValidade] = useState("");
+  const [alvaraPhotoUrl, setAlvaraPhotoUrl] = useState("");
+  const [possuiVigilancia, setPossuiVigilancia] = useState(false);
+  const [vigilanciaPhotoUrl, setVigilanciaPhotoUrl] = useState("");
+  const [tipoEstrutura, setTipoEstrutura] = useState("");
+  const [estruturaPhotoUrl, setEstruturaPhotoUrl] = useState("");
+  const [meiCnpj, setMeiCnpj] = useState("");
 
-  // Estados de controle
+  const [existingKycStatus, setExistingKycStatus] = useState<string>("none");
+  const [uploadingKey, setUploadingKey] = useState<UploadFieldKey | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    if (user.name && !nomeComercial) {
-      setNomeComercial(user.name);
-    }
-    loadExistingSession();
-  }, [user.uid]);
-
-  async function loadExistingSession() {
     if (!user.uid) return;
-    try {
-      const { data, error } = await supabase
-        .from("ambulante_sessions")
-        .select("modalidade, address")
-        .eq("id", user.uid)
-        .maybeSingle();
+    let active = true;
 
-      if (!error && data) {
-        if (data.modalidade === "both") {
-          setModalidades(["delivery", "local_fixo"]);
-        } else if (data.modalidade === "delivery" || data.modalidade === "local_fixo") {
-          setModalidades([data.modalidade]);
+    const loadExisting = async () => {
+      setLoadingInitial(true);
+      try {
+        const [ambRpcRes, cadRpcRes] = await Promise.all([
+          Promise.resolve(supabase.rpc("get_my_ambulante_profile")).catch(() => ({
+            data: null,
+            error: null,
+          })),
+          Promise.resolve(supabase.rpc("get_my_cadastral_profile")).catch(() => ({
+            data: null,
+            error: null,
+          })),
+        ]);
+
+        if (!active) return;
+
+        const cad = (cadRpcRes as any)?.data;
+        const ambRaw = (ambRpcRes as any)?.data;
+        const amb = ambRaw && typeof ambRaw === "object" ? ambRaw.record ?? ambRaw : null;
+
+        if (amb && (amb.user_id || amb.nome_comercial)) {
+          setExistingKycStatus(amb.kyc_status || "none");
+          setNomeComercial(amb.nome_comercial || "");
+          setCpf(amb.cpf ? maskCPF(String(amb.cpf)) : "");
+          setTelefone(amb.telefone ? maskPhone(String(amb.telefone)) : "");
+          setChavePix(amb.chave_pix || "");
+          if (Array.isArray(amb.modalidades) && amb.modalidades.length > 0) {
+            setModalidades(amb.modalidades);
+          }
+          if (amb.praia_referencia) setPraiaReferencia(amb.praia_referencia);
+          setPontoReferencia(amb.ponto_referencia || "");
+          setDeliveryFee(Number(amb.delivery_fee ?? 0).toFixed(2).replace(".", ","));
+          setRgFrenteUrl(amb.rg_cnh_frente_url || "");
+          setRgVersoUrl(amb.rg_cnh_verso_url || "");
+          setSelfieUrl(amb.selfie_url || "");
+          setPossuiAlvara(Boolean(amb.possui_alvara));
+          setAlvaraNumero(amb.alvara_numero || "");
+          setAlvaraValidade(amb.alvara_validade || "");
+          setAlvaraPhotoUrl(amb.alvara_photo_url || "");
+          setPossuiVigilancia(Boolean(amb.possui_vigilancia_sanitaria));
+          setVigilanciaPhotoUrl(amb.vigilancia_photo_url || "");
+          setTipoEstrutura(amb.tipo_estrutura || "");
+          setEstruturaPhotoUrl(amb.estrutura_photo_url || "");
+          setMeiCnpj(amb.mei_cnpj || "");
+        } else if (cad && typeof cad === "object") {
+          setNomeComercial((prev) => prev || cad.nome || user.name || "");
+          setCpf((prev) => prev || (cad.cpf ? maskCPF(String(cad.cpf)) : ""));
+          setTelefone((prev) => prev || (cad.telefone ? maskPhone(String(cad.telefone)) : ""));
+          setChavePix((prev) => prev || cad.chave_pix || "");
         }
-        if (data.address) {
-          setPontoReferencia(data.address);
-        }
+      } catch (err) {
+        console.error("Erro ao carregar perfil de ambulante:", err);
+      } finally {
+        if (active) setLoadingInitial(false);
       }
-    } catch {
-      // Ignora erro inicial
-    }
-  }
+    };
 
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setFeedbackMsg({ text, type });
-    setTimeout(() => setFeedbackMsg(null), 3500);
+    loadExisting();
+    return () => {
+      active = false;
+    };
+  }, [user.uid, user.name]);
+
+  const toggleModalidade = (mod: "entrega" | "retirada") => {
+    setModalidades((prev) => {
+      if (prev.includes(mod)) {
+        if (prev.length === 1) return prev; // Keep at least one
+        return prev.filter((m) => m !== mod);
+      }
+      return [...prev, mod];
+    });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (key: UploadFieldKey, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setDocFile(file);
-      setDocPreviewUrl(URL.createObjectURL(file));
+    if (!file || !user.uid) return;
+
+    setUploadingKey(key);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const filePath = `ambulante/${user.uid}/${key}_${Date.now()}.${ext}`;
+
+      // Strictly upload to kyc-documents bucket (NEVER catalogo-ambulantes!)
+      const { error: uploadErr } = await supabase.storage
+        .from("kyc-documents")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: pubData } = supabase.storage.from("kyc-documents").getPublicUrl(filePath);
+      const storedRef = pubData?.publicUrl || filePath;
+
+      if (key === "rg_frente") setRgFrenteUrl(storedRef);
+      if (key === "rg_verso") setRgVersoUrl(storedRef);
+      if (key === "selfie") setSelfieUrl(storedRef);
+      if (key === "alvara_photo") setAlvaraPhotoUrl(storedRef);
+      if (key === "vigilancia_photo") setVigilanciaPhotoUrl(storedRef);
+      if (key === "estrutura_photo") setEstruturaPhotoUrl(storedRef);
+
+      showToast("Arquivo enviado com segurança ✓");
+    } catch (err: any) {
+      console.error("Erro no upload KYC ambulante:", err);
+      showToast(err?.message || "Erro ao enviar arquivo. Tente novamente.");
+    } finally {
+      setUploadingKey(null);
+      e.target.value = "";
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (!user.uid) return;
 
-    if (!user.uid) {
-      showToast("Você precisa estar autenticado para concluir o cadastro.", "error");
-      return;
-    }
+    const cleanCpf = cpf.replace(/\D/g, "");
+    const cleanPhone = telefone.replace(/\D/g, "");
+    const parsedFee = Number(deliveryFee.replace(",", ".").trim());
 
     if (!nomeComercial.trim()) {
-      showToast("Informe o nome comercial ou identificação da sua atividade.", "error");
+      showToast("Informe seu Nome Comercial / Barraca.");
       return;
     }
-
-    if (modalidades.length === 0) {
-      showToast("Selecione ao menos uma forma de atendimento (Delivery ou Fixo).", "error");
+    if (cleanCpf.length < 11) {
+      showToast("Informe um CPF válido com 11 dígitos.");
+      return;
+    }
+    if (cleanPhone.length < 10) {
+      showToast("Informe um telefone/WhatsApp válido.");
+      return;
+    }
+    if (!chavePix.trim()) {
+      showToast("Informe sua chave PIX para recebimentos.");
+      return;
+    }
+    if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+      showToast("Informe uma taxa de entrega válida (0,00 ou maior).");
+      return;
+    }
+    if (!rgFrenteUrl || !rgVersoUrl || !selfieUrl) {
+      showToast("Envie os 3 documentos obrigatórios de identidade (RG/CNH Frente, Verso e Selfie).");
       return;
     }
 
     setSubmitting(true);
-
     try {
-      let docUrl = docPreviewUrl;
-
-      // Upload do documento se fornecido
-      if (docFile) {
-        setUploadingDoc(true);
-        const fileExt = docFile.name.split(".").pop() || "jpg";
-        const fileName = `alvaras/${user.uid}_${Date.now()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("catalogo-ambulantes")
-          .upload(fileName, docFile, { upsert: true });
-
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from("catalogo-ambulantes")
-            .getPublicUrl(fileName);
-          if (urlData?.publicUrl) {
-            docUrl = urlData.publicUrl;
-          }
-        }
-      }
-
-      // 1. Atualizar dados na tabela de usuários
-      await supabase.from("usuarios").upsert({
-        id: user.uid,
-        nome: nomeComercial.trim(),
-        role: "prestador",
+      const { error } = await supabase.rpc("submit_ambulante_kyc", {
+        p_nome_comercial: nomeComercial.trim(),
+        p_cpf: cleanCpf,
+        p_telefone: cleanPhone,
+        p_chave_pix: chavePix.trim(),
+        p_modalidades: modalidades,
+        p_praia_referencia: praiaReferencia.trim() || "Praia Grande",
+        p_ponto_referencia: pontoReferencia.trim() || null,
+        p_delivery_fee: Number(parsedFee.toFixed(2)),
+        p_rg_cnh_frente_url: rgFrenteUrl,
+        p_rg_cnh_verso_url: rgVersoUrl,
+        p_selfie_url: selfieUrl,
+        // Non-blocking optional trust badges & structure
+        p_possui_alvara: possuiAlvara,
+        p_alvara_numero: alvaraNumero.trim() || null,
+        p_alvara_validade: alvaraValidade.trim() || null,
+        p_alvara_photo_url: alvaraPhotoUrl || null,
+        p_possui_vigilancia_sanitaria: possuiVigilancia,
+        p_vigilancia_photo_url: vigilanciaPhotoUrl || null,
+        p_tipo_estrutura: tipoEstrutura || null,
+        p_estrutura_photo_url: estruturaPhotoUrl || null,
+        p_mei_cnpj: meiCnpj.replace(/\D/g, "") || null,
       });
 
-      // 2. Determinar modalidade combinada
-      let modalidadeSalvar: Modalidade = "delivery";
-      if (modalidades.length === 2) {
-        modalidadeSalvar = "both";
-      } else if (modalidades.length === 1) {
-        modalidadeSalvar = modalidades[0];
+      if (error) throw error;
+
+      showToast("Cadastro KYC de Ambulante enviado com sucesso!");
+      if (existingKycStatus === "approved") {
+        navigate("/app/prestador/ambulantes/online", { replace: true });
+      } else {
+        navigate("/app/prestador/ambulantes/kyc-pending", { replace: true });
       }
-
-      const fullAddress = `${praiaReferencia}${pontoReferencia ? ` (${pontoReferencia})` : ""}, Ubatuba - SP`;
-
-      // 3. Salvar sessão cadastral do ambulante
-      const { error: sessionError } = await supabase
-        .from("ambulante_sessions")
-        .upsert({
-          id: user.uid,
-          prestador_id: user.uid,
-          modalidade: modalidadeSalvar,
-          lat: -23.432,
-          lng: -45.083,
-          address: fullAddress,
-          is_online: false,
-        });
-
-      if (sessionError) throw sessionError;
-
-      try {
-        localStorage.setItem(`amb_session_${user.uid}`, "1");
-      } catch {
-        /* noop */
-      }
-
-      showToast("Alterações salvas com sucesso!", "success");
     } catch (err: any) {
-      console.error("Erro ao salvar cadastro de ambulante:", err);
-      showToast("Erro ao salvar seus dados. Verifique sua conexão.", "error");
+      console.error("Erro ao enviar KYC ambulante:", err);
+      showToast(err?.message || "Erro ao salvar cadastro KYC. Tente novamente.");
     } finally {
       setSubmitting(false);
-      setUploadingDoc(false);
     }
   };
 
+  if (loadingInitial) {
+    return (
+      <div className="min-h-[100svh] bg-[#09090B] text-white flex items-center justify-center font-sans text-sm">
+        Carregando cadastro de Ambulante...
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#09090B] text-zinc-100 font-sans pb-32">
-      {/* Toast Feedback */}
-      {feedbackMsg && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-sm font-semibold border ${
-            feedbackMsg.type === "success"
-              ? "bg-[#0DB87E]/20 text-[#00FF66] border-[#0DB87E]/50"
-              : "bg-red-950/80 text-red-300 border-red-800"
-          }`}
+    <div className="min-h-[100svh] bg-[#09090B] text-zinc-100 pb-24">
+      <Toast message={toast} />
+
+      <header className="sticky top-0 z-20 bg-[#09090B]/95 backdrop-blur-md border-b border-[#27272A] px-4 py-3.5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/app/prestador/home")}
+          aria-label="Voltar"
+          className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white cursor-pointer"
         >
-          {feedbackMsg.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-          {feedbackMsg.text}
+          <ArrowLeft size={18} />
+        </button>
+        <div>
+          <h1 className="font-display text-[17px] font-bold text-white leading-tight">
+            Cadastro de Ambulante (KYC)
+          </h1>
+          <p className="text-[11px] text-zinc-400">
+            Identidade obrigatória + selos opcionais de confiança
+          </p>
         </div>
-      )}
-
-      {/* Header Sticky */}
-      <header className="sticky top-0 z-40 bg-[#09090B]/90 backdrop-blur-md border-b border-[#27272A] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-xl bg-[#18181B] border border-[#27272A] flex items-center justify-center text-zinc-300 active:scale-95 transition-all"
-            aria-label="Voltar"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-white font-display">
-              Onboarding do Ambulante
-            </h1>
-            <p className="text-xs text-zinc-400">
-              Passo 1: Credenciamento e Documentação
-            </p>
-          </div>
-        </div>
-
-        <span className="font-display text-sm font-extrabold text-[#00FF66]">
-          UBT.
-        </span>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 pt-6 space-y-6">
-        {/* Banner Informativo de Separação de Conceitos */}
-        <div className="p-4 rounded-2xl bg-[#18181B] border border-[#27272A] flex items-start gap-3.5">
-          <div className="w-9 h-9 rounded-xl bg-[#0DB87E]/10 border border-[#0DB87E]/30 flex items-center justify-center text-[#00FF66] shrink-0 mt-0.5">
-            <ShieldCheck size={20} />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-white">
-              Cadastre sua atividade comercial
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              Preencha os dados e documentação de identificação do ambulante. Os produtos e estoque serão configurados no próximo passo, na sua nova área de <strong>Gestão de Cardápio</strong>.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* SEÇÃO 1: DADOS OPERACIONAIS */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
+      <main className="max-w-xl mx-auto px-4 pt-5">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* SEÇÃO 1: IDENTIFICAÇÃO & DADOS BANCÁRIOS (OBRIGATÓRIOS) */}
+          <section className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-3.5">
             <div className="flex items-center gap-2 text-white font-semibold text-sm border-b border-[#27272A] pb-2">
-              <Store size={18} className="text-[#00FF66]" />
-              Identificação do Ambulante
+              <ShieldCheck size={18} className="text-[#00FF66]" />
+              1. Identidade & Recebimento (Obrigatório)
             </div>
 
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Nome Comercial / Fantasia do Carrinho ou Barraca *
+                Nome Comercial / Barraca *
               </label>
               <input
                 type="text"
                 value={nomeComercial}
                 onChange={(e) => setNomeComercial(e.target.value)}
-                placeholder="Ex: Sorvetes do Zé, Barraca Sol & Areia"
-                required
-                className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E] transition-all"
+                placeholder="Ex: Barraca do João - Pastel e Caldo"
+                className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
-                  WhatsApp de Atendimento
+                  CPF do Titular *
                 </label>
-                <div className="relative">
-                  <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    type="tel"
-                    value={telefone}
-                    onChange={(e) => setTelefone(e.target.value)}
-                    placeholder="(12) 99999-9999"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(e) => setCpf(maskCPF(e.target.value))}
+                  placeholder="000.000.000-00"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
+                />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
-                  Chave Pix (para repasses)
+                  WhatsApp / Telefone *
                 </label>
-                <div className="relative">
-                  <DollarSign size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    type="text"
-                    value={chavePix}
-                    onChange={(e) => setChavePix(e.target.value)}
-                    placeholder="CPF, telefone ou e-mail"
-                    className="w-full bg-[#09090B] border border-[#27272A] rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={telefone}
+                  onChange={(e) => setTelefone(maskPhone(e.target.value))}
+                  placeholder="(12) 99999-9999"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
+                />
               </div>
             </div>
-          </div>
 
-          {/* SEÇÃO 2: MODALIDADE DE TRABALHO */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
-            <div className="flex items-center gap-2 text-white font-semibold text-sm border-b border-[#27272A] pb-2">
-              <Truck size={18} className="text-[#00FF66]" />
-              Modalidade de Atendimento na Praia
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                Chave PIX para Repasses *
+              </label>
+              <input
+                type="text"
+                value={chavePix}
+                onChange={(e) => setChavePix(e.target.value)}
+                placeholder="CPF, celular, e-mail ou chave aleatória"
+                className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
+              />
             </div>
 
-            <p className="text-xs text-zinc-400">
-              Selecione como os banhistas e clientes encontrarão você:
-            </p>
+            {/* 3 Mandatory KYC document uploads */}
+            <div className="pt-2 space-y-2.5">
+              <p className="text-xs font-semibold text-zinc-300">
+                Documentos de Identidade Obrigatórios (bucket seguro kyc-documents):
+              </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(
+                [
+                  { key: "rg_frente" as const, label: "RG ou CNH (Frente) *", value: rgFrenteUrl },
+                  { key: "rg_verso" as const, label: "RG ou CNH (Verso) *", value: rgVersoUrl },
+                  { key: "selfie" as const, label: "Selfie segurando o documento *", value: selfieUrl },
+                ] as const
+              ).map((doc) => (
+                <label
+                  key={doc.key}
+                  className="flex items-center justify-between gap-3 border border-dashed rounded-xl px-3.5 py-3 bg-[#09090B] cursor-pointer transition-colors"
+                  style={{ borderColor: doc.value ? "#0DB87E" : "#27272A" }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {doc.value ? (
+                      <CheckCircle2 size={18} className="text-[#0DB87E] shrink-0" />
+                    ) : (
+                      <Camera size={18} className="text-zinc-400 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{doc.label}</p>
+                      <p className="text-[11px] text-zinc-400">
+                        {uploadingKey === doc.key
+                          ? "Enviando..."
+                          : doc.value
+                            ? "Documento anexado ✓"
+                            : "Toque para fotografar ou enviar"}
+                      </p>
+                    </div>
+                  </div>
+                  <UploadCloud size={18} className="text-zinc-400 shrink-0" />
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(ev) => handleUpload(doc.key, ev)}
+                    className="hidden"
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* SEÇÃO 2: ATUAÇÃO NA PRAIA, MODALIDADES & TAXA DE ENTREGA */}
+          <section className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
+            <div className="flex items-center gap-2 text-white font-semibold text-sm border-b border-[#27272A] pb-2">
+              <MapPin size={18} className="text-[#00FF66]" />
+              2. Praia, Modalidades & Taxa de Entrega
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               {[
                 {
-                  key: "delivery" as const,
-                  title: "Itinerante / Delivery na Areia",
-                  desc: "Você circula pela praia e entrega no guarda-sol do cliente",
-                  icon: Truck,
+                  id: "entrega" as const,
+                  title: "Entrega na Areia",
+                  desc: "Você leva até o guarda-sol",
+                  Icon: Bike,
                 },
                 {
-                  key: "local_fixo" as const,
-                  title: "Ponto Fixo / Barraca",
-                  desc: "O cliente vai até o seu ponto fixo ou carrinho demarcado",
-                  icon: MapPin,
+                  id: "retirada" as const,
+                  title: "Retirada no Ponto",
+                  desc: "Cliente retira (taxa R$ 0,00)",
+                  Icon: Store,
                 },
-              ].map(({ key, title, desc, icon: Icon }) => {
-                const active = modalidades.includes(key);
+              ].map(({ id, title, desc, Icon }) => {
+                const active = modalidades.includes(id);
                 return (
                   <button
-                    key={key}
+                    key={id}
                     type="button"
-                    onClick={() => {
-                      setModalidades((prev) =>
-                        prev.includes(key)
-                          ? prev.filter((x) => x !== key)
-                          : [...prev, key]
-                      );
-                    }}
-                    className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[110px] ${
+                    onClick={() => toggleModalidade(id)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       active
                         ? "border-[#0DB87E] bg-[#0DB87E]/10"
-                        : "border-[#27272A] bg-[#09090B] hover:border-zinc-700"
+                        : "border-[#27272A] bg-[#09090B]"
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <Icon size={20} className={active ? "text-[#00FF66]" : "text-zinc-400"} />
-                      <div
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                          active ? "border-[#00FF66] bg-[#00FF66]" : "border-zinc-600"
-                        }`}
-                      >
-                        {active && <span className="w-1.5 h-1.5 bg-black rounded-full" />}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">{title}</p>
-                      <p className="text-[11px] text-zinc-400 mt-0.5">{desc}</p>
-                    </div>
+                    <Icon size={18} className={active ? "text-[#00FF66]" : "text-zinc-400"} />
+                    <p className="text-xs font-bold text-white mt-2">{title}</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{desc}</p>
                   </button>
                 );
               })}
             </div>
-          </div>
 
-          {/* SEÇÃO 3: LOCALIZAÇÃO & PONTO DE ATUAÇÃO */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
-            <div className="flex items-center gap-2 text-white font-semibold text-sm border-b border-[#27272A] pb-2">
-              <MapPin size={18} className="text-[#00FF66]" />
-              Praia e Ponto de Atuação em Ubatuba
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1 flex items-center gap-1.5">
+                <Truck size={14} className="text-[#0DB87E]" />
+                Sua Taxa de Entrega Individual (R$) *
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={deliveryFee}
+                onChange={(e) => setDeliveryFee(e.target.value)}
+                placeholder="0,00"
+                className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
+              />
+              <p className="text-[11px] text-zinc-500 mt-1">
+                Deixe <strong>0,00</strong> para aparecer como "Entrega grátis". Retiradas no ponto são sempre R$ 0,00.
+              </p>
             </div>
 
             <div>
@@ -401,115 +501,180 @@ export default function AmbulantesOnboardingPage() {
 
             <div>
               <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Ponto de Referência ou Posto Salva-Vidas (Opcional)
+                Ponto de Referência (Ex: Posto 3, em frente ao Quiosque X)
               </label>
               <input
                 type="text"
                 value={pontoReferencia}
                 onChange={(e) => setPontoReferencia(e.target.value)}
-                placeholder="Ex: Em frente ao quiosque X, Posto 3"
+                placeholder="Ex: Próximo ao Posto 3"
                 className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
               />
             </div>
-          </div>
+          </section>
 
-          {/* SEÇÃO 4: DOCUMENTAÇÃO & ALVARÁ MUNICIPAL */}
-          <div className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
-            <div className="flex items-center gap-2 text-white font-semibold text-sm border-b border-[#27272A] pb-2">
-              <FileText size={18} className="text-[#00FF66]" />
-              Documentação e Alvará Municipal
+          {/* SEÇÃO 3: SELOS DE CONFIANÇA & ESTRUTURA (OPCIONAIS — NÃO IMPEDITIVOS) */}
+          <section className="bg-[#18181B] border border-[#27272A] rounded-2xl p-4 space-y-4">
+            <div className="border-b border-[#27272A] pb-2">
+              <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                <Sparkles size={18} className="text-[#0DB87E]" />
+                3. Selos de Confiança & Estrutura (opcionais — exibidos ao cliente na praia)
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Nenhum campo abaixo bloqueia seu cadastro ou aprovação. Preencha os que possuir para exibir selos no seu cardápio.
+              </p>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPossuiAlvara("sim")}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
-                  possuiAlvara === "sim"
-                    ? "bg-[#0DB87E]/20 text-[#00FF66] border-[#0DB87E]"
-                    : "bg-[#09090B] text-zinc-400 border-[#27272A]"
-                }`}
-              >
-                Possuo Alvará Emitido
-              </button>
-              <button
-                type="button"
-                onClick={() => setPossuiAlvara("protocolo")}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
-                  possuiAlvara === "protocolo"
-                    ? "bg-[#0DB87E]/20 text-[#00FF66] border-[#0DB87E]"
-                    : "bg-[#09090B] text-zinc-400 border-[#27272A]"
-                }`}
-              >
-                Protocolo em Andamento
-              </button>
+            {/* Alvará Municipal */}
+            <div className="space-y-3 rounded-xl p-3 bg-[#09090B] border border-[#27272A]">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-semibold text-white">Possuo Alvará Municipal</span>
+                <input
+                  type="checkbox"
+                  checked={possuiAlvara}
+                  onChange={(e) => setPossuiAlvara(e.target.checked)}
+                  className="w-4 h-4 accent-[#0DB87E]"
+                />
+              </label>
+
+              {possuiAlvara && (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Número do Alvará</label>
+                      <input
+                        type="text"
+                        value={alvaraNumero}
+                        onChange={(e) => setAlvaraNumero(e.target.value)}
+                        placeholder="Ex: PMU-2026/0491"
+                        className="w-full bg-[#18181B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Validade do Alvará</label>
+                      <input
+                        type="date"
+                        value={alvaraValidade}
+                        onChange={(e) => setAlvaraValidade(e.target.value)}
+                        className="w-full bg-[#18181B] border border-[#27272A] rounded-lg px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-center justify-between gap-2 border border-dashed border-[#27272A] rounded-lg px-3 py-2 cursor-pointer">
+                    <span className="text-xs text-zinc-300">
+                      {uploadingKey === "alvara_photo"
+                        ? "Enviando foto do alvará..."
+                        : alvaraPhotoUrl
+                          ? "Foto do alvará anexada ✓"
+                          : "Anexar foto do Alvará (opcional)"}
+                    </span>
+                    <FileText size={16} className="text-zinc-400" />
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(ev) => handleUpload("alvara_photo", ev)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
 
+            {/* Vigilância Sanitária */}
+            <div className="space-y-3 rounded-xl p-3 bg-[#09090B] border border-[#27272A]">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-semibold text-white">
+                  Possuo Certificado da Vigilância Sanitária
+                </span>
+                <input
+                  type="checkbox"
+                  checked={possuiVigilancia}
+                  onChange={(e) => setPossuiVigilancia(e.target.checked)}
+                  className="w-4 h-4 accent-[#0DB87E]"
+                />
+              </label>
+
+              {possuiVigilancia && (
+                <label className="flex items-center justify-between gap-2 border border-dashed border-[#27272A] rounded-lg px-3 py-2 cursor-pointer">
+                  <span className="text-xs text-zinc-300">
+                    {uploadingKey === "vigilancia_photo"
+                      ? "Enviando certificado..."
+                      : vigilanciaPhotoUrl
+                        ? "Certificado anexado ✓"
+                        : "Anexar foto do Certificado (opcional)"}
+                  </span>
+                  <FileText size={16} className="text-zinc-400" />
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(ev) => handleUpload("vigilancia_photo", ev)}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Estrutura & MEI */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
-                  {possuiAlvara === "sim" ? "Número do Alvará / Licença" : "Número do Protocolo"}
+                  Tipo de Estrutura (Opcional)
                 </label>
-                <input
-                  type="text"
-                  value={alvaraNumero}
-                  onChange={(e) => setAlvaraNumero(e.target.value)}
-                  placeholder="Ex: PMU-2026/0491"
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
-                />
+                <select
+                  value={tipoEstrutura}
+                  onChange={(e) => setTipoEstrutura(e.target.value)}
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2.5 text-xs text-white"
+                >
+                  {TIPOS_ESTRUTURA.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-zinc-300 mb-1">
-                  CPF do Titular
+                  MEI / CNPJ (Opcional)
                 </label>
                 <input
                   type="text"
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#0DB87E]"
+                  value={meiCnpj}
+                  onChange={(e) => setMeiCnpj(e.target.value)}
+                  placeholder="00.000.000/0001-00"
+                  className="w-full bg-[#09090B] border border-[#27272A] rounded-xl px-3 py-2.5 text-xs text-white"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1">
-                Foto do Alvará ou Documento de Identidade
-              </label>
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-[#27272A] rounded-xl p-4 bg-[#09090B] hover:border-[#0DB87E] cursor-pointer transition-all">
-                <UploadCloud size={24} className="text-zinc-400 mb-1" />
-                <span className="text-xs text-zinc-300 font-medium">
-                  {docFile ? docFile.name : "Clique para anexar foto do documento"}
-                </span>
-                <span className="text-[10px] text-zinc-500 mt-0.5">JPG, PNG ou PDF (máx. 10MB)</span>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
+            <label className="flex items-center justify-between gap-3 border border-dashed border-[#27272A] rounded-xl px-3.5 py-3 bg-[#09090B] cursor-pointer">
+              <span className="text-xs text-zinc-300">
+                {uploadingKey === "estrutura_photo"
+                  ? "Enviando foto da barraca/carrinho..."
+                  : estruturaPhotoUrl
+                    ? "Foto da barraca/carrinho anexada ✓"
+                    : "Foto da sua barraca ou carrinho (opcional)"}
+              </span>
+              <UploadCloud size={18} className="text-zinc-400" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(ev) => handleUpload("estrutura_photo", ev)}
+                className="hidden"
+              />
+            </label>
+          </section>
 
-          {/* BOTÃO DE SUBMISSÃO */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={submitting || uploadingDoc}
-              className="w-full bg-[#00FF66] text-black font-extrabold py-3.5 px-4 rounded-xl shadow-lg shadow-[#00FF66]/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {submitting ? (
-                <span>Salvando alterações...</span>
-              ) : (
-                <span>Salvar alterações</span>
-              )}
-            </button>
-            <p className="text-[11px] text-center text-zinc-500 mt-2">
-              Seus dados cadastrais ficam salvos com segurança na infraestrutura UBT.
-            </p>
-          </div>
+          <button
+            type="submit"
+            disabled={submitting || uploadingKey !== null}
+            className="w-full bg-[#00FF66] text-black font-extrabold py-3.5 px-4 rounded-xl shadow-lg shadow-[#00FF66]/20 hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+          >
+            {submitting
+              ? "Enviando cadastro KYC..."
+              : existingKycStatus === "approved"
+                ? "Atualizar Cadastro de Ambulante"
+                : "Enviar KYC para Aprovação"}
+          </button>
         </form>
       </main>
     </div>
